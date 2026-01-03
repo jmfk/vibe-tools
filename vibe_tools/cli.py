@@ -255,9 +255,9 @@ def ralph(ctx, review, tests, auto_merge):
 @click.pass_context
 def test_fix(ctx):
     """Run the test and fix loop."""
-    from vibe_tools.test_fix import test_fix_loop
+    from vibe_tools.fixer import run_test_fix_loop
 
-    test_fix_loop(agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False))
+    run_test_fix_loop(agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False))
 
 
 @cli.command()

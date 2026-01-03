@@ -4,7 +4,7 @@ import re
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
-from vibe_tools.tester import Tester
+from vibe_tools.testing import ProjectTester
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -14,7 +14,7 @@ COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 def get_coverage_report(caffeinate=False):
     """Runs coverage and returns the full report and total coverage percentage."""
-    tester = Tester()
+    tester = ProjectTester()
     return tester.get_coverage_report(caffeinate=caffeinate)
 
 

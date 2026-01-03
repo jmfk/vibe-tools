@@ -4,7 +4,7 @@ import json
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
-from vibe_tools.tester import Tester
+from vibe_tools.testing import ProjectTester
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -41,11 +41,11 @@ def clear_state():
 
 def run_tests(caffeinate=False):
     """Runs backend and frontend tests."""
-    tester = Tester()
+    tester = ProjectTester()
     return tester.run_tests(caffeinate=caffeinate)
 
 
-def test_fix_loop(agent="cursor-agent", caffeinate=False):
+def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
     print("--- Starting Test and Fix Loop ---")
 
     if not PROMPTS_DIR.exists():

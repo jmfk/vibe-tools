@@ -3,7 +3,8 @@ import subprocess
 import re
 from vibe_tools.utils import run_command, logger
 
-class Tester:
+class ProjectTester:
+    __test__ = False
     def __init__(self, backend_root="src", frontend_root="frontend"):
         self.backend_root = pathlib.Path(backend_root)
         self.frontend_root = pathlib.Path(frontend_root)

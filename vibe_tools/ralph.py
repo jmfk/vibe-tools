@@ -13,7 +13,7 @@ from vibe_tools.utils import (
     STATE_FILE,
     logger,
 )
-from vibe_tools.tester import Tester
+from vibe_tools.testing import ProjectTester
 
 BACKEND_ROOT = pathlib.Path("src")
 FRONTEND_ROOT = pathlib.Path("frontend")
@@ -98,7 +98,7 @@ Include {COMPLETION_PROMISE} when you are done.
 
 def run_tests_logic(caffeinate=False):
     """Runs backend and frontend tests."""
-    tester = Tester()
+    tester = ProjectTester()
     return tester.run_tests(caffeinate=caffeinate)
 
 
