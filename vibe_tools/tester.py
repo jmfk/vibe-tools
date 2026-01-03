@@ -73,7 +73,13 @@ class Tester:
         return None
 
     def run_tests(self, caffeinate=False):
-        """Runs backend tests and frontend linting, returning combined output and success status."""
+        """Runs tests, prioritizing 'make test' if available, otherwise discovering components."""
+        if self.has_make_target("test"):
+            print("Running all tests via 'make test'...")
+            output, code = run_command(["make", "test"], check=False, caffeinate=caffeinate)
+            return output, code == 0
+
+        # Fallback to component discovery
         backend_cmd = self.discover_backend_test_cmd()
         frontend_lint_cmd = self.discover_frontend_lint_cmd()
 
@@ -115,4 +121,5 @@ class Tester:
             total_cov = 0
 
         return output, total_cov
+
 

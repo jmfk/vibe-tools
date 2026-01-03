@@ -8,6 +8,7 @@ from vibe_tools.utils import (
     run_agent,
     get_agent_command,
     ensure_dir,
+    is_merged,
 )
 from vibe_tools.tester import Tester
 
@@ -131,6 +132,17 @@ def ralph_loop(
         PRD_DIR.mkdir(exist_ok=True)
         print("No PRDs found. Exiting.")
         return
+
+    # Ensure Makefile exists if tests are enabled
+    if tests and not pathlib.Path("Makefile").exists():
+        print("Makefile not found. Initializing with default templates...")
+        from vibe_tools.templates import TEMPLATES
+        makefile_content = TEMPLATES.get("Makefile")
+        if makefile_content:
+            pathlib.Path("Makefile").write_text(makefile_content)
+            print("✅ Created default Makefile.")
+        else:
+            print("Warning: Could not find Makefile template. Tests might fail if not configured.")
 
     ensure_dir(BACKEND_ROOT)
     ensure_dir(FRONTEND_ROOT)
