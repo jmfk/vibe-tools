@@ -26,14 +26,6 @@ MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 
-def is_merged(branch_name):
-    """Checks if a branch is merged into main."""
-    _, code = run_command(
-        ["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False
-    )
-    return code == 0
-
-
 def save_state(prd_name, iteration, output, context):
     """Saves the current state to a file."""
     state = {
