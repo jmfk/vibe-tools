@@ -2,7 +2,7 @@ import pathlib
 import click
 import json
 import subprocess
-from vibe_tools.utils import ensure_dir
+from vibe_tools.utils import ensure_dir, ensure_gitignore
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 
@@ -18,6 +18,7 @@ def load_config():
 
 def save_config(config):
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    ensure_gitignore(".vibe_config.json")
 
 
 def maybe_init_git():
@@ -30,6 +31,7 @@ def maybe_init_git():
             try:
                 subprocess.run(["git", "init"], check=True)
                 click.echo("✅ Initialized empty Git repository.")
+                ensure_gitignore(".vibe_config.json")
             except Exception as e:
                 click.echo(f"❌ Failed to initialize Git repository: {e}")
 
@@ -297,38 +299,52 @@ def ralph(ctx, review, tests, auto_merge):
     # If everything is still False (and we have no config file), prompt the user
     if not CONFIG_FILE.exists() and not any([review, tests, auto_merge]):
         click.echo("\n⚠️ Ralph is not yet configured for quality gates.")
-        if click.confirm(
-            "Would you like to enable Tests and Agentic Review for better quality control?",
+        
+        tests = click.confirm(
+            "Enable Tests (run 'make test' and 'make frontend-lint' on completion)?",
             default=True,
-        ):
-            tests = True
-            review = True
-            click.echo("✅ Enabled Tests and Review.")
+        )
+        if tests:
+            click.echo("✅ Tests enabled.")
 
-            caffeinate = ctx.obj.get("caffeinate", False)
-            if not caffeinate:
-                if click.confirm(
-                    "Would you like to use 'caffeinate' to prevent system sleep during long runs?",
-                    default=True,
-                ):
-                    caffeinate = True
-                    ctx.obj["caffeinate"] = caffeinate
-                    click.echo("✅ Enabled Caffeinate.")
+        review = click.confirm(
+            "Enable Agentic Review (agent verifies changes against PRD)?",
+            default=True,
+        )
+        if review:
+            click.echo("✅ Agentic Review enabled.")
 
+        auto_merge = click.confirm(
+            "Enable Auto-merge (automatically merge into main if quality gates pass)?",
+            default=False,
+        )
+        if auto_merge:
+            click.echo("✅ Auto-merge enabled.")
+
+        caffeinate = ctx.obj.get("caffeinate", False)
+        if not caffeinate:
             if click.confirm(
-                "Save these settings as default in .vibe_config.json?", default=True
+                "Would you like to use 'caffeinate' to prevent system sleep during long runs?",
+                default=True,
             ):
-                save_config(
-                    {
-                        "ralph": {
-                            "review": review,
-                            "tests": tests,
-                            "auto_merge": auto_merge,
-                        },
-                        "caffeinate": caffeinate,
-                    }
-                )
-                click.echo("✅ Configuration saved.")
+                caffeinate = True
+                ctx.obj["caffeinate"] = caffeinate
+                click.echo("✅ Enabled Caffeinate.")
+
+        if click.confirm(
+            "Save these settings as default in .vibe_config.json?", default=True
+        ):
+            save_config(
+                {
+                    "ralph": {
+                        "review": review,
+                        "tests": tests,
+                        "auto_merge": auto_merge,
+                    },
+                    "caffeinate": caffeinate,
+                }
+            )
+            click.echo("✅ Configuration saved.")
 
     click.echo("\n--- Ralph Loop Configuration ---")
     click.echo(f"Agent:      {agent}")

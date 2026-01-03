@@ -83,3 +83,18 @@ def is_git_repo():
     except FileNotFoundError:
         # git command not found
         return False
+
+
+def ensure_gitignore(entry: str):
+    """Ensures that a specific entry exists in .gitignore."""
+    gitignore = pathlib.Path(".gitignore")
+    if not gitignore.exists():
+        gitignore.write_text(f"{entry}\n")
+        print(f"Added {entry} to new .gitignore")
+        return
+
+    content = gitignore.read_text()
+    if entry not in content.splitlines():
+        with gitignore.open("a") as f:
+            f.write(f"\n{entry}\n")
+        print(f"Added {entry} to .gitignore")
