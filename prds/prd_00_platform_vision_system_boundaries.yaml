@@ -1,0 +1,65 @@
+SYSTEM_CONTRACT:
+  VISION: Build a professional-grade casting operating system for casting directors and productions to discover and manage talent, run projects end-to-end, collaborate securely, and handle modern casting workflows.
+  TYPE: Private, professional tool; single authoritative system of record; multi-tenant by design.
+  PRICIPLES:
+    - Single Source of Truth
+    - Privacy by Default
+    - Global Identity, Local Control
+    - Workflow First, Not Social
+    - Extensibility Over Perfection
+    - Auditability
+  LEGAL_ASSUMPTIONS:
+    - GDPR compliance is mandatory
+    - Explicit consent for media submission
+    - Right-to-delete must be enforceable
+    - Access logs may be required by clients
+    - Legal compliance tooling is a platform responsibility
+  SUCCESS_CRITERIA:
+    - Casting teams run projects without email or shared folders
+    - Clients review/decide without internal notes visibility
+    - Actors submit materials without friction
+    - Casting data remains reusable across projects
+  FAILURE_MODES:
+    - Clients seeing rejected candidates
+    - Candidates accessing other candidates’ data
+    - Media links leaking publicly
+    - Duplicate identities proliferating unchecked
+    - Projects becoming data silos
+  TRADEOFFS:
+    - Correctness over convenience
+    - Privacy over virality
+    - Professional UX over consumer polish
+    - Explicit workflows over “magic”
+DOMAIN_MODEL:
+  TENANT: Represents a casting company or organization; isolated at data level; owns projects, evaluations, communications, and uploaded media.
+  USER_ROLES:
+    PRIMARY: Casting Directors, Casting Assistants
+    SECONDARY: Producers, Directors, Production clients
+    TERTIARY: Actors (as candidates), Extras / participants / experts, Other film workers (later phase)
+  GLOBAL_PEOPLE_DIRECTORY: Global identity graph and normalized talent metadata to avoid duplication; platform owned.
+  PEOPLE: Exist globally; opinions, notes, and decisions are tenant-scoped (tenant-specific overlays).
+CAPABILITIES:
+  IN_SCOPE:
+    - Talent database (actors first)
+    - Casting projects and roles
+    - Candidate funnel and evaluation
+    - Auditions (selftape, online, in‑person)
+    - Client review portals
+    - Ads and application intake
+    - Calendars and scheduling
+    - Media management (casting-related)
+    - Billing for casting companies
+  OUT_OF_SCOPE:
+    - Public actor profiles / discovery marketplace
+    - Talent representation (agents, contracts)
+    - Payroll or payment processing to talent
+    - Rights management beyond casting consent
+    - Union compliance automation
+    - AI-based casting decisions (assistive tools only later)
+OUTPUT_TARGETS:
+  RESOURCES:
+    - Casting Database
+    - Casting Project Platform
+    - Client review portals
+    - Media management
+  NEXT_PRD: PRD-01 — Multi-Tenant Architecture & Identity (defines isolation model, auth boundaries, global vs tenant data split, identity resolution rules).

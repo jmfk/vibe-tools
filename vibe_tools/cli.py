@@ -61,9 +61,11 @@ Rules:
 - Do NOT rephrase intent.
 - Extract only what is explicitly stated.
 - If information is missing, mark it as: MISSING.
+- If a section explicitly states there are NONE or NO items, mark it as: []
 - Preserve ambiguity; do not resolve it.
 - Use only the section headers defined below.
 - Output valid YAML only.
+- DO NOT wrap the output in markdown code blocks (e.g., no ```yaml).
 - No explanations.
 
 REQUIRED SECTIONS (in this exact order):

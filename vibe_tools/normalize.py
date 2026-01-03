@@ -56,7 +56,11 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False):
     prompt_base = NORMALIZATION_PROMPT_TEMPLATE.read_text()
 
     for spec_path in files_to_process:
-        output_filename = f"prd_{spec_path.stem}.yaml"
+        stem = spec_path.stem
+        if stem.startswith("prd_"):
+            output_filename = f"{stem}.yaml"
+        else:
+            output_filename = f"prd_{stem}.yaml"
         output_path = PRDS_DIR / output_filename
 
         if output_path.exists() and not overwrite_all:
@@ -72,7 +76,19 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False):
         output, code = run_agent(cmd)
         
         if code == 0:
-            output_path.write_text(output)
+            # Strip markdown code fences if present
+            clean_output = output.strip()
+            if clean_output.startswith("```"):
+                # Remove first line
+                lines = clean_output.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                # Remove last line if it's a closing fence
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_output = "\n".join(lines).strip()
+
+            output_path.write_text(clean_output)
             print(f"✅ Saved: {output_path}")
         else:
             print(f"❌ Failed to normalize {spec_path.name}")
