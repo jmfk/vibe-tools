@@ -1,7 +1,7 @@
 import pathlib
 import subprocess
 import re
-from vibe_tools.utils import run_command
+from vibe_tools.utils import run_command, logger
 
 class Tester:
     def __init__(self, backend_root="src", frontend_root="frontend"):
@@ -90,7 +90,7 @@ class Tester:
 
         for target in targets:
             if self.has_make_target(target):
-                print(f"Running target: make {target}")
+                logger.info(f"Running target: make {target}")
                 output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
                 outputs.append(f"--- TARGET: {target} ---\n{output}")
                 if code != 0:
@@ -108,7 +108,7 @@ class Tester:
         if not cmd:
             return "No coverage command discovered.", 0
 
-        print(f"Running Coverage: {' '.join(cmd)}")
+        logger.info(f"Running Coverage: {' '.join(cmd)}")
         output, _ = run_command(cmd, check=False, caffeinate=caffeinate)
 
         # Extract total coverage from the last line like 'TOTAL ... 68%'

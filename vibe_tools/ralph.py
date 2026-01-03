@@ -11,6 +11,7 @@ from vibe_tools.utils import (
     is_merged,
     PRD_DIR,
     STATE_FILE,
+    logger,
 )
 from vibe_tools.tester import Tester
 
@@ -43,7 +44,7 @@ def load_state():
         try:
             return json.loads(STATE_FILE.read_text())
         except Exception as e:
-            print(f"Warning: Failed to load state file: {e}")
+            logger.warning(f"Failed to load state file: {e}")
             return None
     return None
 
@@ -103,10 +104,10 @@ def run_tests_logic(caffeinate=False):
 
 def run_review_logic(agent_type, prd_path, caffeinate=False):
     """Asks an agent to review the changes against the PRD."""
-    print("Running Agentic Review...")
+    logger.info("Running Agentic Review...")
     if not REVIEW_PROMPT_TEMPLATE.exists():
-        print(
-            f"Warning: Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review."
+        logger.warning(
+            f"Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review."
         )
         return "", True
 
@@ -122,13 +123,13 @@ def ralph_loop(
     agent="cursor-agent", review=False, tests=False, auto_merge=False, caffeinate=False
 ):
     if not PROMPTS_DIR.exists():
-        print("Error: prompts directory not found. Please run 'vibe init' first.")
+        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
 
     if not PRD_DIR.exists():
-        print(f"Warning: PRD directory {PRD_DIR} not found. Creating it.")
+        logger.warning(f"PRD directory {PRD_DIR} not found. Creating it.")
         PRD_DIR.mkdir(exist_ok=True)
-        print("No PRDs found. Exiting.")
+        logger.info("No PRDs found. Exiting.")
         return
 
     # Ensure Makefile and dummy tests exist if tests are enabled
@@ -137,25 +138,25 @@ def ralph_loop(
         from vibe_tools.templates import TEMPLATES
         
         if not makefile_path.exists():
-            print("Makefile not found. Initializing with default templates...")
+            logger.info("Makefile not found. Initializing with default templates...")
             makefile_content = TEMPLATES.get("Makefile")
             if makefile_content:
                 makefile_path.write_text(makefile_content)
-                print("✅ Created default Makefile.")
+                logger.info("✅ Created default Makefile.")
         
         # Ensure dummy tests exist
         backend_test_dir = pathlib.Path("tests")
         ensure_dir(backend_test_dir)
         dummy_backend = backend_test_dir / "test_dummy.py"
         if not any(backend_test_dir.glob("test_*.py")):
-            print(f"No backend tests found. Creating {dummy_backend}")
+            logger.info(f"No backend tests found. Creating {dummy_backend}")
             dummy_backend.write_text(TEMPLATES["dummy_backend_test"])
 
         frontend_test_dir = FRONTEND_ROOT / "src"
         ensure_dir(frontend_test_dir)
         dummy_frontend = frontend_test_dir / "dummy.test.ts"
         if not any(frontend_test_dir.glob("*.test.*")) and not any(frontend_test_dir.glob("*.spec.*")):
-            print(f"No frontend tests found. Creating {dummy_frontend}")
+            logger.info(f"No frontend tests found. Creating {dummy_frontend}")
             dummy_frontend.write_text(TEMPLATES["dummy_frontend_test"])
 
     ensure_dir(BACKEND_ROOT)
@@ -167,13 +168,13 @@ def ralph_loop(
     resume_iteration = saved_state["iteration"] if saved_state else 1
 
     # Ensure we are on main branch
-    print("Ensuring we are on 'main' branch...")
+    logger.info("Ensuring we are on 'main' branch...")
     run_command(["git", "checkout", "main"])
 
     # Iterate only over numbered PRDs, excluding architecture, index, and overview
     prds = sorted(PRD_DIR.glob("prd_*.yaml"))
     if not prds:
-        print("No PRD files found (matching 'prd_*.yaml').")
+        logger.info("No PRD files found (matching 'prd_*.yaml').")
         return
 
     for prd_file in prds:
@@ -182,16 +183,16 @@ def ralph_loop(
 
         # If we are resuming, skip until we reach the resume target
         if resume_prd and project_name != resume_prd:
-            print(f"Skipping {project_name} (resuming from {resume_prd})...")
+            logger.info(f"Skipping {project_name} (resuming from {resume_prd})...")
             continue
 
         # Once we reach the resume target, we don't need to skip anymore
         resume_prd = None
 
-        print(f"\n--- Running Ralph Loop for {project_name} ---")
+        logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
         if is_merged(branch_name):
-            print(f"Branch {branch_name} already merged into main. Skipping...")
+            logger.info(f"Branch {branch_name} already merged into main. Skipping...")
             continue
 
         # Check if branch exists
@@ -200,15 +201,15 @@ def ralph_loop(
         )
 
         if check_branch == 0:
-            print(f"Branch {branch_name} already exists. Switching to it...")
+            logger.info(f"Branch {branch_name} already exists. Switching to it...")
             run_command(["git", "checkout", branch_name])
         else:
-            print(f"Creating and switching to branch: {branch_name}")
+            logger.info(f"Creating and switching to branch: {branch_name}")
             run_command(["git", "checkout", "-b", branch_name])
 
         if not BASE_PROMPT_TEMPLATE.exists():
-            print(
-                f"Error: Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'."
+            logger.error(
+                f"Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'."
             )
             sys.exit(1)
 
@@ -224,7 +225,7 @@ def ralph_loop(
         success = False
 
         for i in range(start_iteration, MAX_ITERATIONS + 1):
-            print(f"[RALPH LOOP] Iteration {i}")
+            logger.info(f"[RALPH LOOP] Iteration {i}")
 
             prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
@@ -242,7 +243,7 @@ def ralph_loop(
             iteration_output = output
 
             if COMPLETION_PROMISE in output:
-                print(
+                logger.info(
                     f"COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
                 )
                 save_state(project_name, i, output, additional_context)
@@ -251,15 +252,15 @@ def ralph_loop(
                 if tests:
                     test_output, tests_passed = run_tests_logic(caffeinate=caffeinate)
                     if not tests_passed:
-                        print("❌ Tests failed. Feeding back to agent...")
+                        logger.error("❌ Tests failed. Feeding back to agent...")
                         additional_context = (
                             f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
                         )
                         save_state(project_name, i + 1, output, additional_context)
                         continue
-                    print("✅ Tests passed.")
+                    logger.info("✅ Tests passed.")
                 else:
-                    print("⏩ Skipping tests as requested.")
+                    logger.info("⏩ Skipping tests as requested.")
 
                 # 2. Run Review
                 if review:
@@ -267,15 +268,15 @@ def ralph_loop(
                         agent, prd_file, caffeinate=caffeinate
                     )
                     if not review_passed:
-                        print("❌ Review failed. Feeding back to agent...")
+                        logger.error("❌ Review failed. Feeding back to agent...")
                         additional_context = (
                             f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
                         )
                         save_state(project_name, i + 1, output, additional_context)
                         continue
-                    print("✅ Review passed.")
+                    logger.info("✅ Review passed.")
                 else:
-                    print("⏩ Skipping agentic review as requested.")
+                    logger.info("⏩ Skipping agentic review as requested.")
 
                 success = True
                 break
@@ -284,25 +285,25 @@ def ralph_loop(
             save_state(project_name, i + 1, output, additional_context)
 
         if success:
-            print(f"Committing changes for: {project_name}")
+            logger.info(f"Committing changes for: {project_name}")
             commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
             commit_cmd = get_agent_command(agent, commit_prompt)
             run_agent(commit_cmd, caffeinate=caffeinate)
 
             if auto_merge:
-                print(f"Merging {branch_name} into main...")
+                logger.info(f"Merging {branch_name} into main...")
                 run_command(["git", "checkout", "main"])
                 run_command(["git", "merge", branch_name])
             else:
-                print(f"Auto-merge is OFF. Changes remain on branch {branch_name}.")
+                logger.info(f"Auto-merge is OFF. Changes remain on branch {branch_name}.")
                 run_command(["git", "checkout", "main"])
 
             clear_state()
         else:
-            print(
+            logger.error(
                 f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations."
             )
-            print("Reverting to 'main' branch.")
+            logger.info("Reverting to 'main' branch.")
             run_command(["git", "checkout", "main"])
             sys.exit(1)
 

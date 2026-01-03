@@ -3,9 +3,25 @@ import time
 import sys
 import pathlib
 import json
+import logging
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
+LOG_FILE = pathlib.Path("vibe.log")
+
+# Setup logger
+logger = logging.getLogger("vibe")
+logger.setLevel(logging.INFO)
+
+# File handler
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(file_handler)
+
+# Stream handler
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(logging.Formatter("%(message)s"))
+logger.addHandler(stream_handler)
 
 
 def is_merged(branch_name):
@@ -20,11 +36,13 @@ def run_command(cmd, check=True, caffeinate=False):
     """Utility to run a command and return its output."""
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
+    
+    logger.info(f"Running command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if check and result.returncode != 0:
-        print(f"Error running command: {' '.join(cmd)}")
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
+        logger.error(f"Error running command: {' '.join(cmd)}")
+        logger.error(f"STDOUT: {result.stdout}")
+        logger.error(f"STDERR: {result.stderr}")
         return result.stdout.strip(), result.returncode
     return result.stdout.strip(), result.returncode
 
@@ -33,26 +51,35 @@ def run_agent(cmd, caffeinate=False):
     """Runs an agent with a live progress indicator."""
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
+    
+    logger.info(f"Running agent: {' '.join(cmd)}")
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
     full_output, start_time = [], time.time()
-    print("\n\n", end="")
     try:
         for line in iter(process.stdout.readline, ""):
             full_output.append(line)
             elapsed = int(time.time() - start_time)
             preview = line.strip()[:80]
+            # Live progress to stdout (bypassing file log for spammy progress)
             sys.stdout.write(
-                f"\033[2A\r\033[K⏳ Agent working ({elapsed}s)...\n\033[K{preview}"
+                f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}"
             )
             sys.stdout.flush()
     finally:
         process.stdout.close()
         process.wait()
-    sys.stdout.write("\033[2A\r\033[K\n\033[K\r\033[A")
+    sys.stdout.write("\r\033[K")
     sys.stdout.flush()
-    return "".join(full_output), process.returncode
+    
+    output = "".join(full_output)
+    logger.info(f"Agent finished with exit code: {process.returncode}")
+    # Log full agent output to file only to avoid cluttering terminal
+    with open(LOG_FILE, "a") as f:
+        f.write(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+    
+    return output, process.returncode
 
 
 def get_agent_command(agent_type, prompt):
@@ -79,7 +106,7 @@ def get_agent_command(agent_type, prompt):
 
 def ensure_dir(path: pathlib.Path):
     if not path.exists():
-        print(f"Creating directory: {path}")
+        logger.info(f"Creating directory: {path}")
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -102,11 +129,11 @@ def ensure_gitignore(entry: str):
     gitignore = pathlib.Path(".gitignore")
     if not gitignore.exists():
         gitignore.write_text(f"{entry}\n")
-        print(f"Added {entry} to new .gitignore")
+        logger.info(f"Added {entry} to new .gitignore")
         return
 
     content = gitignore.read_text()
     if entry not in content.splitlines():
         with gitignore.open("a") as f:
             f.write(f"\n{entry}\n")
-        print(f"Added {entry} to .gitignore")
+        logger.info(f"Added {entry} to .gitignore")
