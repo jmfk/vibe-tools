@@ -4,6 +4,7 @@ import json
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
+from vibe_tools.tester import Tester
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -40,20 +41,8 @@ def clear_state():
 
 def run_tests(caffeinate=False):
     """Runs backend and frontend tests."""
-    print("Running Backend Tests...")
-    backend_output, backend_code = run_command(
-        ["make", "test"], check=False, caffeinate=caffeinate
-    )
-
-    print("Running Frontend Lint...")
-    frontend_output, frontend_code = run_command(
-        ["make", "frontend-lint"], check=False, caffeinate=caffeinate
-    )
-
-    passed = backend_code == 0 and frontend_code == 0
-    combined_output = f"BACKEND TEST OUTPUT:\n{backend_output}\n\nFRONTEND LINT OUTPUT:\n{frontend_output}"
-
-    return combined_output, passed
+    tester = Tester()
+    return tester.run_tests(caffeinate=caffeinate)
 
 
 def test_fix_loop(agent="cursor-agent", caffeinate=False):

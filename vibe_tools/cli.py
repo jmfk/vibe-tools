@@ -42,13 +42,13 @@ TEMPLATES = {
 This prompt will be executed repeatedly until you emit the completion promise.
 
 TASK:
-Generate full-stack code (Backend FastAPI and Frontend React/TypeScript) strictly according to the provided PRD.
+Generate full-stack code strictly according to the provided PRD.
 Follow all constraints in the PRD and system instructions.
 
 INTEGRATION RULES:
-- Ensure the Frontend uses the `apiClient` in `frontend/src/api/client.ts`.
-- Generate TypeScript interfaces in the frontend that match Pydantic schemas in the backend.
-- Create or update backend tests in `tests/` using the established `pytest` patterns.
+- Ensure the Frontend correctly integrates with the Backend.
+- Generate TypeScript interfaces in the frontend that match data schemas in the backend.
+- Create or update tests using established patterns.
 - Ensure the Frontend is modern, responsive, and matches the platform vision.
 
 GENERAL RULES:
@@ -64,8 +64,8 @@ You must emit the exact string:
 <promise>DONE</promise>
 
 ONLY when:
-- Backend implementation (models, schemas, services, endpoints) is complete.
-- Frontend implementation (pages, components, api integration) is complete.
+- Backend implementation is complete.
+- Frontend implementation is complete.
 - Appropriate tests have been added/updated.
 - No BLOCKER comments remain.
 - Output is internally consistent.
@@ -136,7 +136,7 @@ ERROR OUTPUT:
 
 TASK:
 1. Analyze the errors provided above.
-2. Fix the underlying issues in the backend (FastAPI) or frontend (React).
+2. Fix the underlying issues in the backend or frontend.
 3. Ensure that after your changes, the project builds and tests pass.
 4. Include <promise>DONE</promise> in your response once you believe the issues are fixed.
 """,
@@ -148,13 +148,12 @@ CURRENT COVERAGE REPORT:
 TASK:
 Improve the test coverage of the backend implementation. 
 Focus on the files with the highest number of 'Missing' lines as shown in the report.
-Create new test files in 'tests/' or update existing ones to cover the missing lines.
+Create new test files or update existing ones to cover the missing lines.
 Your goal is to increase the total coverage from {current_cov}% towards the target of {target_cov:.1f}%.
 
 RULES:
-- Do not break existing tests (run 'make test' to verify).
-- Use pytest and tortoise-orm testing patterns as established in 'tests/conftest.py'.
-- Work directly in the 'tests/' and 'src/' directories if needed (but primarily 'tests/').
+- Do not break existing tests.
+- Use established testing patterns for the project.
 - Once you have added/updated tests that you believe significantly improve coverage, include <promise>DONE</promise> in your final response.
 
 Output code only. No extra text.
@@ -301,7 +300,7 @@ def ralph(ctx, review, tests, auto_merge):
         click.echo("\n⚠️ Ralph is not yet configured for quality gates.")
         
         tests = click.confirm(
-            "Enable Tests (run 'make test' and 'make frontend-lint' on completion)?",
+            "Enable Tests (auto-discover backend and frontend tests)?",
             default=True,
         )
         if tests:

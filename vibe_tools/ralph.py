@@ -9,6 +9,7 @@ from vibe_tools.utils import (
     get_agent_command,
     ensure_dir,
 )
+from vibe_tools.tester import Tester
 
 PRD_DIR = pathlib.Path("prds")
 BACKEND_ROOT = pathlib.Path("src")
@@ -97,20 +98,8 @@ Include {COMPLETION_PROMISE} when you are done.
 
 def run_tests_logic(caffeinate=False):
     """Runs backend and frontend tests."""
-    print("Running Backend Tests...")
-    backend_output, backend_code = run_command(
-        ["make", "test"], check=False, caffeinate=caffeinate
-    )
-
-    print("Running Frontend Lint...")
-    frontend_output, frontend_code = run_command(
-        ["make", "frontend-lint"], check=False, caffeinate=caffeinate
-    )
-
-    return (
-        backend_output + "\n" + frontend_output,
-        backend_code == 0 and frontend_code == 0,
-    )
+    tester = Tester()
+    return tester.run_tests(caffeinate=caffeinate)
 
 
 def run_review_logic(agent_type, prd_path, caffeinate=False):

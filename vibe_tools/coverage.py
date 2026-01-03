@@ -4,6 +4,7 @@ import re
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
+from vibe_tools.tester import Tester
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -12,17 +13,9 @@ COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 
 def get_coverage_report(caffeinate=False):
-    """Runs make coverage and returns the full report and total coverage percentage."""
-    output, _ = run_command(["make", "coverage"], check=False, caffeinate=caffeinate)
-
-    # Extract total coverage from the last line like 'TOTAL ... 68%'
-    match = re.search(r"TOTAL\s+\d+\s+\d+\s+(\d+)%", output)
-    if match:
-        total_cov = int(match.group(1))
-    else:
-        total_cov = 0
-
-    return output, total_cov
+    """Runs coverage and returns the full report and total coverage percentage."""
+    tester = Tester()
+    return tester.get_coverage_report(caffeinate=caffeinate)
 
 
 def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
