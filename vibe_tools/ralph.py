@@ -9,10 +9,11 @@ from vibe_tools.utils import (
     get_agent_command,
     ensure_dir,
     is_merged,
+    PRD_DIR,
+    STATE_FILE,
 )
 from vibe_tools.tester import Tester
 
-PRD_DIR = pathlib.Path("prds")
 BACKEND_ROOT = pathlib.Path("src")
 FRONTEND_ROOT = pathlib.Path("frontend")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -20,7 +21,6 @@ BASE_PROMPT_TEMPLATE = PROMPTS_DIR / "ralph_base_prompt.txt"
 REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 ARCHITECTURE = pathlib.Path("prds/architecture.yaml")
 OVERVIEW = pathlib.Path("prds/project_overview.yaml")
-STATE_FILE = pathlib.Path(".ralph_state.json")
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
@@ -78,6 +78,12 @@ TARGET DIRECTORIES:
 - Backend: {backend_dir}
 - Frontend: {frontend_dir}
 
+TESTING & QUALITY:
+- The project uses a Makefile for testing and linting.
+- Key targets: test-backend, test-frontend, test-infra, test-integration, test-regression, lint-backend, lint-frontend, lint-infra.
+- INITIAL STATE: Dummy tests have been created in `tests/` and `frontend/src/` to ensure the pipeline passes.
+- YOUR TASK: As you develop features, replace these dummy tests with real ones. Update the Makefile targets to run your actual test suites (e.g., changing `@exit 0` to `pytest` or `npm test`).
+
 TASK:
 Process the above according to the instructions. You are responsible for BOTH the backend (FastAPI) and the frontend (React). 
 Update existing files or create new ones in either directory as needed to fulfill the PRD requirements.
@@ -125,16 +131,32 @@ def ralph_loop(
         print("No PRDs found. Exiting.")
         return
 
-    # Ensure Makefile exists if tests are enabled
-    if tests and not pathlib.Path("Makefile").exists():
-        print("Makefile not found. Initializing with default templates...")
+    # Ensure Makefile and dummy tests exist if tests are enabled
+    if tests:
+        makefile_path = pathlib.Path("Makefile")
         from vibe_tools.templates import TEMPLATES
-        makefile_content = TEMPLATES.get("Makefile")
-        if makefile_content:
-            pathlib.Path("Makefile").write_text(makefile_content)
-            print("✅ Created default Makefile.")
-        else:
-            print("Warning: Could not find Makefile template. Tests might fail if not configured.")
+        
+        if not makefile_path.exists():
+            print("Makefile not found. Initializing with default templates...")
+            makefile_content = TEMPLATES.get("Makefile")
+            if makefile_content:
+                makefile_path.write_text(makefile_content)
+                print("✅ Created default Makefile.")
+        
+        # Ensure dummy tests exist
+        backend_test_dir = pathlib.Path("tests")
+        ensure_dir(backend_test_dir)
+        dummy_backend = backend_test_dir / "test_dummy.py"
+        if not any(backend_test_dir.glob("test_*.py")):
+            print(f"No backend tests found. Creating {dummy_backend}")
+            dummy_backend.write_text(TEMPLATES["dummy_backend_test"])
+
+        frontend_test_dir = FRONTEND_ROOT / "src"
+        ensure_dir(frontend_test_dir)
+        dummy_frontend = frontend_test_dir / "dummy.test.ts"
+        if not any(frontend_test_dir.glob("*.test.*")) and not any(frontend_test_dir.glob("*.spec.*")):
+            print(f"No frontend tests found. Creating {dummy_frontend}")
+            dummy_frontend.write_text(TEMPLATES["dummy_frontend_test"])
 
     ensure_dir(BACKEND_ROOT)
     ensure_dir(FRONTEND_ROOT)

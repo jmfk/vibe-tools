@@ -2,11 +2,17 @@ import pathlib
 import click
 import json
 import subprocess
-from vibe_tools.utils import ensure_dir, ensure_gitignore, is_merged, run_command
+from vibe_tools.utils import (
+    ensure_dir,
+    ensure_gitignore,
+    PRD_DIR,
+    is_merged,
+    run_command,
+    STATE_FILE,
+)
 from vibe_tools.templates import TEMPLATES
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
-STATE_FILE = pathlib.Path(".ralph_state.json")
 
 
 def load_config():
@@ -260,120 +266,6 @@ def coverage(ctx):
 
 
 @cli.command()
-@click.pass_context
-def history(ctx):
-    """List all PRDs and their current status."""
-    maybe_init_git()
-    prd_dir = pathlib.Path("prds")
-    if not prd_dir.exists():
-        click.echo("PRD directory 'prds/' not found.")
-        return
-
-    prds = sorted(prd_dir.glob("prd_*.yaml"))
-    if not prds:
-        click.echo("No PRD files found in 'prds/'.")
-        return
-
-    click.echo("\nPRD Status History:")
-    click.echo(f"{'ID':<5} {'PRD Name':<40} {'Status':<15}")
-    click.echo("-" * 65)
-
-    for prd_file in prds:
-        project_name = prd_file.stem
-        # Extract ID if possible (e.g., prd_00 -> 00)
-        prd_id = project_name.split("_")[1] if "_" in project_name else "??"
-        branch_name = f"feature/{project_name}"
-
-        # Determine status
-        if is_merged(branch_name):
-            status = "✅ COMPLETED"
-        else:
-            _, check_branch = run_command(
-                ["git", "rev-parse", "--verify", branch_name], check=False
-            )
-            if check_branch == 0:
-                status = "⏳ IN_PROGRESS"
-            else:
-                status = "⚪️ PENDING"
-
-        click.echo(f"{prd_id:<5} {project_name:<40} {status:<15}")
-    click.echo("")
-
-
-@cli.command()
-@click.argument("prd_identifier")
-@click.option("--force", "-f", is_flag=True, help="Don't ask for confirmation.")
-@click.pass_context
-def rerun(ctx, prd_identifier, force):
-    """Set a PRD to be rerun by resetting its branch and state."""
-    maybe_init_git()
-    prd_dir = pathlib.Path("prds")
-    if not prd_dir.exists():
-        click.echo("PRD directory 'prds/' not found.")
-        return
-
-    # Find the PRD file
-    prds = list(prd_dir.glob("prd_*.yaml"))
-    target_prd = None
-
-    # Try exact match, then by ID
-    for prd in prds:
-        if prd.stem == prd_identifier or (
-            "_" in prd.stem and prd.stem.split("_")[1] == prd_identifier
-        ):
-            target_prd = prd
-            break
-
-    if not target_prd:
-        click.echo(f"Could not find PRD matching '{prd_identifier}'.")
-        return
-
-    project_name = target_prd.stem
-    branch_name = f"feature/{project_name}"
-
-    click.echo(f"Resetting state for: {project_name}")
-
-    # Check branch status
-    if is_merged(branch_name):
-        click.echo(f"⚠️  Warning: Branch '{branch_name}' is already merged into main.")
-        if not force and not click.confirm("Are you sure you want to rerun it?", default=False):
-            click.echo("Aborted.")
-            return
-
-    # Check if branch exists
-    _, check_branch = run_command(
-        ["git", "rev-parse", "--verify", branch_name], check=False
-    )
-
-    if check_branch == 0:
-        if not force and not click.confirm(
-            f"Branch '{branch_name}' exists. Delete it to rerun from scratch?", default=True
-        ):
-            click.echo("Aborted.")
-            return
-
-        # Delete branch
-        current_branch, _ = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-        if current_branch == branch_name:
-            run_command(["git", "checkout", "main"])
-
-        run_command(["git", "branch", "-D", branch_name])
-        click.echo(f"✅ Deleted branch '{branch_name}'.")
-
-    # Clear state if it belongs to this PRD
-    if STATE_FILE.exists():
-        try:
-            state = json.loads(STATE_FILE.read_text())
-            if state.get("prd_name") == project_name:
-                STATE_FILE.unlink()
-                click.echo("✅ Cleared Ralph state for this PRD.")
-        except Exception:
-            pass
-
-    click.echo(f"🚀 {project_name} is ready to be rerun with 'vibe ralph'.")
-
-
-@cli.command()
 @click.argument("input_file", required=False)
 @click.option(
     "--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs."
@@ -405,6 +297,103 @@ def monitor(ctx, interval):
     from vibe_tools.monitor import run_monitor
 
     run_monitor(agent=ctx.obj["agent"], interval=interval)
+
+
+@cli.command()
+def history():
+    """List the status of all PRDs."""
+    if not PRD_DIR.exists():
+        click.echo(f"PRD directory {PRD_DIR} not found.")
+        return
+
+    prds = sorted(PRD_DIR.glob("prd_*.yaml"))
+    if not prds:
+        click.echo("No PRD files found.")
+        return
+
+    click.echo(f"{'PRD':<40} {'Status':<15}")
+    click.echo("-" * 56)
+
+    for prd_file in prds:
+        project_name = prd_file.stem
+        branch_name = f"feature/{project_name}"
+
+        if is_merged(branch_name):
+            status = "✅ DONE"
+        else:
+            # Check if branch exists
+            _, check_branch = run_command(
+                ["git", "rev-parse", "--verify", branch_name], check=False
+            )
+            if check_branch == 0:
+                status = "⏳ IN_PROGRESS"
+            else:
+                status = "⚪️ PENDING"
+
+        click.echo(f"{project_name:<40} {status:<15}")
+
+
+@cli.command()
+@click.argument("prd_id")
+def rerun(prd_id):
+    """Reset a PRD's state and branch to allow rerunning."""
+    # Try to find the PRD file
+    prd_file = None
+    if prd_id.startswith("prd_") and prd_id.endswith(".yaml"):
+        prd_file = PRD_DIR / prd_id
+    elif prd_id.startswith("prd_"):
+        prd_file = PRD_DIR / f"{prd_id}.yaml"
+    else:
+        # Check if it's just the number/name part
+        potential_files = list(PRD_DIR.glob(f"prd_*{prd_id}*.yaml"))
+        if len(potential_files) == 1:
+            prd_file = potential_files[0]
+        elif len(potential_files) > 1:
+            click.echo(f"Multiple PRDs found matching '{prd_id}':")
+            for f in potential_files:
+                click.echo(f"  - {f.name}")
+            return
+
+    if not prd_file or not prd_file.exists():
+        click.echo(f"PRD '{prd_id}' not found.")
+        return
+
+    project_name = prd_file.stem
+    branch_name = f"feature/{project_name}"
+
+    click.echo(f"Rerunning PRD: {project_name}")
+
+    # 1. Clear saved state if it matches this PRD
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            if state.get("prd_name") == project_name:
+                STATE_FILE.unlink()
+                click.echo("✅ Cleared saved progress state.")
+        except Exception:
+            pass
+
+    # 2. Delete the branch if it exists
+    _, check_branch = run_command(
+        ["git", "rev-parse", "--verify", branch_name], check=False
+    )
+    if check_branch == 0:
+        # Check if we are currently on that branch
+        stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
+        if stdout.strip() == branch_name:
+            click.echo(f"Currently on branch {branch_name}. Switching to main...")
+            run_command(["git", "checkout", "main"])
+
+        # Delete branch
+        _, code = run_command(["git", "branch", "-D", branch_name], check=False)
+        if code == 0:
+            click.echo(f"✅ Deleted branch {branch_name}.")
+        else:
+            click.echo(f"❌ Failed to delete branch {branch_name}.")
+    else:
+        click.echo(f"Branch {branch_name} does not exist. Nothing to delete.")
+
+    click.echo(f"\nReady to rerun: 'vibe ralph' will now pick up {project_name} again.")
 
 
 if __name__ == "__main__":
