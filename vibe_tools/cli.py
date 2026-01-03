@@ -320,11 +320,15 @@ def history():
     click.echo(f"{'PRD':<40} {'Status':<15}")
     click.echo("-" * 56)
 
+    from vibe_tools.ralph import load_state
+    state = load_state()
+    completed_prds = state.get("completed_prds", [])
+
     for prd_file in prds:
         project_name = prd_file.stem
         branch_name = f"feature/{project_name}"
 
-        if is_merged(branch_name):
+        if is_merged(branch_name) or project_name in completed_prds:
             status = "✅ DONE"
         else:
             # Check if branch exists
@@ -369,15 +373,26 @@ def rerun(prd_id):
 
     click.echo(f"Rerunning PRD: {project_name}")
 
-    # 1. Clear saved state if it matches this PRD
-    if STATE_FILE.exists():
-        try:
-            state = json.loads(STATE_FILE.read_text())
-            if state.get("prd_name") == project_name:
-                STATE_FILE.unlink()
-                click.echo("✅ Cleared saved progress state.")
-        except Exception:
-            pass
+    # 1. Clear saved state if it matches this PRD or is in completed_prds
+    from vibe_tools.ralph import load_state
+    state = load_state()
+    state_changed = False
+
+    # Check active task
+    active_task = state.get("active_task")
+    if active_task and active_task.get("prd_name") == project_name:
+        state["active_task"] = None
+        state_changed = True
+        click.echo("✅ Cleared saved active task state.")
+
+    # Check completed prds
+    if project_name in state.get("completed_prds", []):
+        state["completed_prds"].remove(project_name)
+        state_changed = True
+        click.echo("✅ Removed from completed PRDs list.")
+
+    if state_changed:
+        STATE_FILE.write_text(json.dumps(state, indent=2))
 
     # 2. Delete the branch if it exists
     _, check_branch = run_command(
