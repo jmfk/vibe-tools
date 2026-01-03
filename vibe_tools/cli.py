@@ -144,8 +144,11 @@ TASK:
 }
 
 @click.group()
-def cli():
-    pass
+@click.option("--agent", type=click.Choice(["cursor-agent", "claude", "antigravity"]), default="cursor-agent", help="Select the agent to use.")
+@click.pass_context
+def cli(ctx, agent):
+    ctx.ensure_object(dict)
+    ctx.obj['agent'] = agent
 
 @cli.command()
 def init():
@@ -165,30 +168,41 @@ def init():
 @click.option("--review", is_flag=True, default=False, help="Enable agentic review (default: off).")
 @click.option("--no-tests", "tests", flag_value=False, default=True, help="Disable running tests (default: tests on).")
 @click.option("--auto-merge", is_flag=True, default=False, help="Automatically merge branches into main (default: off).")
-def ralph(review, tests, auto_merge):
+@click.pass_context
+def ralph(ctx, review, tests, auto_merge):
     """Run the Ralph loop for processing PRDs."""
     from vibe_tools.ralph import ralph_loop
-    ralph_loop(review=review, tests=tests, auto_merge=auto_merge)
+    ralph_loop(agent=ctx.obj['agent'], review=review, tests=tests, auto_merge=auto_merge)
 
 @cli.command()
-def test_fix():
+@click.pass_context
+def test_fix(ctx):
     """Run the test and fix loop."""
     from vibe_tools.test_fix import test_fix_loop
-    test_fix_loop()
+    test_fix_loop(agent=ctx.obj['agent'])
 
 @cli.command()
-def coverage():
+@click.pass_context
+def coverage(ctx):
     """Run the coverage improvement loop."""
     from vibe_tools.coverage import improve_coverage_loop
-    improve_coverage_loop()
+    improve_coverage_loop(agent=ctx.obj['agent'])
+
+@cli.command()
+@click.argument("input_file")
+@click.pass_context
+def normalize(ctx, input_file):
+    """Normalize a human-written PRD into machine-consumable YAML."""
+    from vibe_tools.normalize import normalize_prd
+    normalize_prd(agent=ctx.obj['agent'], input_file=input_file)
 
 @cli.command()
 @click.option("--interval", type=int, default=60, help="Monitoring interval in seconds (default: 60).")
-def monitor(interval):
+@click.pass_context
+def monitor(ctx, interval):
     """Monitor the progress of automated generation."""
     from vibe_tools.monitor import run_monitor
-    run_monitor(interval)
+    run_monitor(agent=ctx.obj['agent'], interval=interval)
 
 if __name__ == "__main__":
     cli()
-

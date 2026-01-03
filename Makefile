@@ -25,7 +25,7 @@ help:
 	@echo "  make clean        - Remove generated files"
 
 install:
-	pip install -r requirements.txt
+	./install.sh
 
 batch:
 	python3 run_cursor_batch.py
@@ -34,7 +34,7 @@ loop:
 	vibe ralph
 
 monitor:
-	python3 monitor.py --interval 60
+	vibe monitor --interval 60
 
 run:
 	uvicorn src.main:app --reload --port 8000
@@ -54,10 +54,10 @@ coverage:
 	pytest --cov=src --cov-report=term-missing tests/
 
 coverage-loop:
-	python3 run_coverage_improvement_loop.py
+	vibe coverage
 
 test-fix:
-	python3 run_test_fix_loop.py
+	vibe test-fix
 
 frontend-install:
 	cd frontend && npm install

@@ -13,8 +13,8 @@ def run_command(cmd, check=True):
         return result.stdout.strip(), result.returncode
     return result.stdout.strip(), result.returncode
 
-def run_cursor_agent(cmd):
-    """Runs cursor-agent with a live progress indicator."""
+def run_agent(cmd):
+    """Runs an agent with a live progress indicator."""
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
@@ -36,8 +36,28 @@ def run_cursor_agent(cmd):
     sys.stdout.flush()
     return "".join(full_output), process.returncode
 
+def get_agent_command(agent_type, prompt):
+    """Returns the command list for the specified agent and prompt."""
+    if agent_type == "cursor-agent":
+        return [
+            "cursor-agent",
+            "--model",
+            "gemini-3-flash",
+            "--print",
+            "--force",
+            "--approve-mcps",
+            prompt,
+        ]
+    elif agent_type == "claude":
+        # Assuming 'claude' command for Claude Code
+        return ["claude", "-p", prompt]
+    elif agent_type == "antigravity":
+        # Assuming 'antigravity' command
+        return ["antigravity", prompt]
+    else:
+        raise ValueError(f"Unknown agent type: {agent_type}")
+
 def ensure_dir(path: pathlib.Path):
     if not path.exists():
         print(f"Creating directory: {path}")
         path.mkdir(parents=True, exist_ok=True)
-

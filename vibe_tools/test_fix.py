@@ -2,7 +2,7 @@ import pathlib
 import sys
 import json
 import click
-from vibe_tools.utils import run_command, run_cursor_agent
+from vibe_tools.utils import run_command, run_agent, get_agent_command
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -46,7 +46,7 @@ def run_tests():
 
     return combined_output, passed
 
-def test_fix_loop():
+def test_fix_loop(agent="cursor-agent"):
     print("--- Starting Test and Fix Loop ---")
     
     if not PROMPTS_DIR.exists():
@@ -67,7 +67,7 @@ def test_fix_loop():
             clear_state()
             break
 
-        print("❌ Tests or linting failed. Asking Cursor Agent to fix...")
+        print(f"❌ Tests or linting failed. Asking {agent} to fix...")
 
         if not TEST_FIX_PROMPT_TEMPLATE.exists():
             print(f"Error: Test fix prompt template not found at {TEST_FIX_PROMPT_TEMPLATE}. Please run 'vibe init'.")
@@ -76,17 +76,8 @@ def test_fix_loop():
         prompt_base = TEST_FIX_PROMPT_TEMPLATE.read_text()
         prompt = prompt_base.replace("{test_output}", test_output)
 
-        cmd = [
-            "cursor-agent",
-            "--model",
-            "gemini-3-flash",
-            "--print",
-            "--force",
-            "--approve-mcps",
-            prompt,
-        ]
-
-        agent_output, _ = run_cursor_agent(cmd)
+        cmd = get_agent_command(agent, prompt)
+        agent_output, _ = run_agent(cmd)
 
         save_state(i + 1, test_output)
 
@@ -95,4 +86,3 @@ def test_fix_loop():
             sys.exit(1)
 
     print("--- Test and Fix Loop Finished ---")
-

@@ -4,7 +4,7 @@ import sys
 import json
 import time
 import click
-from vibe_tools.utils import run_command, run_cursor_agent, ensure_dir
+from vibe_tools.utils import run_command, run_agent, get_agent_command, ensure_dir
 
 PRD_DIR = pathlib.Path("prds")
 BACKEND_ROOT = pathlib.Path("src")
@@ -51,11 +51,11 @@ def clear_state():
     if STATE_FILE.exists():
         STATE_FILE.unlink()
 
-def cursor_agent_ralph_run(
-    prompt_text, prd_path, architecture_path, overview_path, backend_dir, frontend_dir
+def run_ralph_agent(
+    agent_type, prompt_text, prd_path, architecture_path, overview_path, backend_dir, frontend_dir
 ):
     """
-    Calls cursor-agent with the combined prompt and context.
+    Calls the configured agent with the combined prompt and context.
     """
     combined_prompt = f"""{prompt_text}
 
@@ -74,17 +74,8 @@ Update existing files or create new ones in either directory as needed to fulfil
 Include {COMPLETION_PROMISE} when you are done.
 """
 
-    cmd = [
-        "cursor-agent",
-        "--model",
-        "gemini-3-flash",
-        "--print",
-        "--force",
-        "--approve-mcps",
-        combined_prompt,
-    ]
-
-    output, _ = run_cursor_agent(cmd)
+    cmd = get_agent_command(agent_type, combined_prompt)
+    output, _ = run_agent(cmd)
     return output
 
 def run_tests_logic():
@@ -100,7 +91,7 @@ def run_tests_logic():
         backend_code == 0 and frontend_code == 0,
     )
 
-def run_review_logic(prd_path):
+def run_review_logic(agent_type, prd_path):
     """Asks an agent to review the changes against the PRD."""
     print("Running Agentic Review...")
     if not REVIEW_PROMPT_TEMPLATE.exists():
@@ -110,19 +101,11 @@ def run_review_logic(prd_path):
     review_prompt_base = REVIEW_PROMPT_TEMPLATE.read_text()
     review_prompt = review_prompt_base.replace("{prd_path}", str(prd_path))
     
-    cmd = [
-        "cursor-agent",
-        "--model",
-        "gemini-3-flash",
-        "--print",
-        "--force",
-        "--approve-mcps",
-        review_prompt,
-    ]
-    output, _ = run_cursor_agent(cmd)
+    cmd = get_agent_command(agent_type, review_prompt)
+    output, _ = run_agent(cmd)
     return output, "<review>PASSED</review>" in output
 
-def ralph_loop(review=False, tests=True, auto_merge=False):
+def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False):
     if not PROMPTS_DIR.exists():
         print("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
@@ -201,7 +184,8 @@ def ralph_loop(review=False, tests=True, auto_merge=False):
 
             prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
-            output = cursor_agent_ralph_run(
+            output = run_ralph_agent(
+                agent,
                 prompt_for_iteration,
                 prd_file,
                 ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
@@ -230,7 +214,7 @@ def ralph_loop(review=False, tests=True, auto_merge=False):
 
                 # 2. Run Review
                 if review:
-                    review_output, review_passed = run_review_logic(prd_file)
+                    review_output, review_passed = run_review_logic(agent, prd_file)
                     if not review_passed:
                         print("❌ Review failed. Feeding back to agent...")
                         additional_context = f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
@@ -249,16 +233,8 @@ def ralph_loop(review=False, tests=True, auto_merge=False):
         if success:
             print(f"Committing changes for: {project_name}")
             commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
-            commit_cmd = [
-                "cursor-agent",
-                "--model",
-                "gemini-3-flash",
-                "--print",
-                "--force",
-                "--approve-mcps",
-                commit_prompt,
-            ]
-            run_cursor_agent(commit_cmd)
+            commit_cmd = get_agent_command(agent, commit_prompt)
+            run_agent(commit_cmd)
 
             if auto_merge:
                 print(f"Merging {branch_name} into main...")
@@ -276,4 +252,3 @@ def ralph_loop(review=False, tests=True, auto_merge=False):
             sys.exit(1)
 
     print("All PRDs processed successfully.")
-

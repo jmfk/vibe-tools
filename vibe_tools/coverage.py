@@ -3,7 +3,7 @@ import pathlib
 import sys
 import re
 import click
-from vibe_tools.utils import run_command, run_cursor_agent
+from vibe_tools.utils import run_command, run_agent, get_agent_command
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -23,7 +23,7 @@ def get_coverage_report():
 
     return output, total_cov
 
-def improve_coverage_loop():
+def improve_coverage_loop(agent="cursor-agent"):
     print("--- Starting Coverage Improvement Loop ---")
 
     if not PROMPTS_DIR.exists():
@@ -48,33 +48,17 @@ def improve_coverage_loop():
         prompt_base = COVERAGE_PROMPT_TEMPLATE.read_text()
         prompt = prompt_base.replace("{report}", report).replace("{current_cov}", str(current_cov)).replace("{target_cov}", f"{target_cov:.1f}")
 
-        print(f"Calling Cursor Agent to improve coverage...")
-        cmd = [
-            "cursor-agent",
-            "--model",
-            "gemini-3-flash",
-            "--print",
-            "--force",
-            "--approve-mcps",
-            prompt,
-        ]
-        output, _ = run_cursor_agent(cmd)
+        print(f"Calling agent to improve coverage...")
+        cmd = get_agent_command(agent, prompt)
+        output, _ = run_agent(cmd)
 
         # Verify if tests still pass
         _, test_exit_code = run_command(["make", "test"], check=False)
         if test_exit_code != 0:
-            print("⚠️ Warning: Tests are failing after Cursor Agent changes! Asking agent to fix...")
+            print("⚠️ Warning: Tests are failing after agent changes! Asking agent to fix...")
             fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
-            cmd_fix = [
-                "cursor-agent",
-                "--model",
-                "gemini-3-flash",
-                "--print",
-                "--force",
-                "--approve-mcps",
-                fix_prompt,
-            ]
-            run_cursor_agent(cmd_fix)
+            cmd_fix = get_agent_command(agent, fix_prompt)
+            run_agent(cmd_fix)
 
         new_report, new_cov = get_coverage_report()
         print(f"New Total Coverage: {new_cov}%")
@@ -100,4 +84,3 @@ def improve_coverage_loop():
             )
 
     print("\n--- Coverage Improvement Loop Finished ---")
-
