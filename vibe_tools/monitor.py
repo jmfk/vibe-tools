@@ -10,15 +10,22 @@ MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
 
 def get_status_report(agent, interval):
     """Gathers context and calls agent to inspect progress."""
-    current_branch_out = run_command(["git", "branch", "--show-current"])[0]
-    git_status_out = run_command(["git", "status", "--short"])[0]
-    last_diff_out = run_command(["git", "diff", "HEAD", "src/"])[0]
+    # Check if we are in a git repository
+    stdout, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
+    if code != 0:
+        print("Error: Not in a git repository. Status report requires a git project.")
+        return
+
+    current_branch_out, _ = run_command(["git", "branch", "--show-current"], check=False)
+    git_status_out, _ = run_command(["git", "status", "--short"], check=False)
+    last_diff_out, _ = run_command(["git", "diff", "HEAD", "src/"], check=False)
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     if not MONITOR_PROMPT_TEMPLATE.exists():
-        print(f"Error: Monitor prompt template not found at {MONITOR_PROMPT_TEMPLATE}. Please run 'vibe init'.")
-        sys.exit(1)
+        print(f"Error: prompts/ directory not found or monitor_prompt.txt is missing.")
+        print("Please run 'vibe init' to initialize the project.")
+        return
 
     prompt_base = MONITOR_PROMPT_TEMPLATE.read_text()
     inspection_prompt = prompt_base.format(

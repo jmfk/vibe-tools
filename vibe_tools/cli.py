@@ -143,12 +143,33 @@ TASK:
 """
 }
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option("--agent", type=click.Choice(["cursor-agent", "claude", "antigravity"]), default="cursor-agent", help="Select the agent to use.")
+@click.version_option(version="0.1.0")
 @click.pass_context
 def cli(ctx, agent):
     ctx.ensure_object(dict)
     ctx.obj['agent'] = agent
+    
+    if ctx.invoked_subcommand is None:
+        click.echo("vibe-tools configuration:")
+        click.echo(f"  Agent: {agent}")
+        
+        prompts_init = pathlib.Path("prompts").exists()
+        click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
+        
+        specs_dir = pathlib.Path("specs") if pathlib.Path("specs").exists() else pathlib.Path("spec")
+        click.echo(f"  Specs Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to specs/)'}")
+        
+        if not prompts_init:
+            click.echo("\nRun 'vibe init' to set up templates.")
+        
+        click.echo("\nAvailable commands:")
+        for command in sorted(cli.list_commands(ctx)):
+            cmd_obj = cli.get_command(ctx, command)
+            click.echo(f"  {command:<10} {cmd_obj.get_short_help_str()}")
+        
+        click.echo("\nRun 'vibe --help' for full options.")
 
 @cli.command()
 def init():
@@ -189,12 +210,13 @@ def coverage(ctx):
     improve_coverage_loop(agent=ctx.obj['agent'])
 
 @cli.command()
-@click.argument("input_file")
+@click.argument("input_file", required=False)
+@click.option("--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs.")
 @click.pass_context
-def normalize(ctx, input_file):
-    """Normalize a human-written PRD into machine-consumable YAML."""
+def normalize(ctx, input_file, yes):
+    """Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     from vibe_tools.normalize import normalize_prd
-    normalize_prd(agent=ctx.obj['agent'], input_file=input_file)
+    normalize_prd(agent=ctx.obj['agent'], input_file=input_file, auto_overwrite=yes)
 
 @cli.command()
 @click.option("--interval", type=int, default=60, help="Monitoring interval in seconds (default: 60).")
