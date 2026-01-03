@@ -8,13 +8,16 @@ NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
 DEFAULT_SPECS_DIR = pathlib.Path("specs")
 PRDS_DIR = pathlib.Path("prds")
 
-def normalize_prd(agent, input_file=None, auto_overwrite=False):
+
+def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False):
     if not PROMPTS_DIR.exists():
         print("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
 
     if not NORMALIZATION_PROMPT_TEMPLATE.exists():
-        print(f"Error: Normalization prompt template not found at {NORMALIZATION_PROMPT_TEMPLATE}. Please run 'vibe init'.")
+        print(
+            f"Error: Normalization prompt template not found at {NORMALIZATION_PROMPT_TEMPLATE}. Please run 'vibe init'."
+        )
         sys.exit(1)
 
     specs_dir = DEFAULT_SPECS_DIR
@@ -27,7 +30,7 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False):
         else:
             print(f"Creating directory: {specs_dir}")
             specs_dir.mkdir(exist_ok=True)
-    
+
     # Ensure prds directory exists
     PRDS_DIR.mkdir(exist_ok=True)
 
@@ -43,22 +46,28 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False):
         # Find all markdown files in specs
         files_to_process = list(specs_dir.glob("*.md"))
         if not files_to_process:
-            print(f"No markdown files found in {specs_dir}/. Please add your PRDs as .md files there.")
+            print(
+                f"No markdown files found in {specs_dir}/. Please add your PRDs as .md files there."
+            )
             return
 
     # Check for existing normalized files
     existing_prds = list(PRDS_DIR.glob("prd_*.yaml"))
     overwrite_all = auto_overwrite
     if existing_prds and not auto_overwrite:
-        if click.confirm(f"Found {len(existing_prds)} existing files in {PRDS_DIR}/. Overwrite all?", default=False):
+        if click.confirm(
+            f"Found {len(existing_prds)} existing files in {PRDS_DIR}/. Overwrite all?",
+            default=False,
+        ):
             overwrite_all = True
 
     prompt_base = NORMALIZATION_PROMPT_TEMPLATE.read_text()
 
     for spec_path in files_to_process:
         stem = spec_path.stem
-        if stem.startswith("prd_"):
-            output_filename = f"{stem}.yaml"
+        # Handle case-insensitive "prd_" prefix normalization
+        if stem.lower().startswith("prd_"):
+            output_filename = f"prd_{stem[4:]}.yaml"
         else:
             output_filename = f"prd_{stem}.yaml"
         output_path = PRDS_DIR / output_filename
@@ -68,13 +77,13 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False):
             continue
 
         print(f"Normalizing: {spec_path.name} -> {output_path.name} using {agent}...")
-        
+
         human_prd = spec_path.read_text()
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)
-        
+
         cmd = get_agent_command(agent, prompt)
-        output, code = run_agent(cmd)
-        
+        output, code = run_agent(cmd, caffeinate=caffeinate)
+
         if code == 0:
             # Strip markdown code fences if present
             clean_output = output.strip()

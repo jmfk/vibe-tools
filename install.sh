@@ -27,3 +27,4 @@ echo "--- Installation Complete ---"
 echo "You can now use the 'vibe' command."
 echo "Try running: vibe --help"
 
+

@@ -1,10 +1,14 @@
-import subprocess
 import pathlib
 import sys
 import json
-import time
-import click
-from vibe_tools.utils import run_command, run_agent, get_agent_command, ensure_dir
+
+
+from vibe_tools.utils import (
+    run_command,
+    run_agent,
+    get_agent_command,
+    ensure_dir,
+)
 
 PRD_DIR = pathlib.Path("prds")
 BACKEND_ROOT = pathlib.Path("src")
@@ -19,12 +23,14 @@ STATE_FILE = pathlib.Path(".ralph_state.json")
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
+
 def is_merged(branch_name):
     """Checks if a branch is merged into main."""
     _, code = run_command(
         ["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False
     )
     return code == 0
+
 
 def save_state(prd_name, iteration, output, context):
     """Saves the current state to a file."""
@@ -36,6 +42,7 @@ def save_state(prd_name, iteration, output, context):
     }
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
+
 def load_state():
     """Loads state from the state file if it exists."""
     if STATE_FILE.exists():
@@ -46,13 +53,22 @@ def load_state():
             return None
     return None
 
+
 def clear_state():
     """Deletes the state file."""
     if STATE_FILE.exists():
         STATE_FILE.unlink()
 
+
 def run_ralph_agent(
-    agent_type, prompt_text, prd_path, architecture_path, overview_path, backend_dir, frontend_dir
+    agent_type,
+    prompt_text,
+    prd_path,
+    architecture_path,
+    overview_path,
+    backend_dir,
+    frontend_dir,
+    caffeinate=False,
 ):
     """
     Calls the configured agent with the combined prompt and context.
@@ -75,41 +91,52 @@ Include {COMPLETION_PROMISE} when you are done.
 """
 
     cmd = get_agent_command(agent_type, combined_prompt)
-    output, _ = run_agent(cmd)
+    output, _ = run_agent(cmd, caffeinate=caffeinate)
     return output
 
-def run_tests_logic():
+
+def run_tests_logic(caffeinate=False):
     """Runs backend and frontend tests."""
     print("Running Backend Tests...")
-    backend_output, backend_code = run_command(["make", "test"], check=False)
+    backend_output, backend_code = run_command(
+        ["make", "test"], check=False, caffeinate=caffeinate
+    )
 
     print("Running Frontend Lint...")
-    frontend_output, frontend_code = run_command(["make", "frontend-lint"], check=False)
+    frontend_output, frontend_code = run_command(
+        ["make", "frontend-lint"], check=False, caffeinate=caffeinate
+    )
 
     return (
         backend_output + "\n" + frontend_output,
         backend_code == 0 and frontend_code == 0,
     )
 
-def run_review_logic(agent_type, prd_path):
+
+def run_review_logic(agent_type, prd_path, caffeinate=False):
     """Asks an agent to review the changes against the PRD."""
     print("Running Agentic Review...")
     if not REVIEW_PROMPT_TEMPLATE.exists():
-        print(f"Warning: Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review.")
+        print(
+            f"Warning: Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review."
+        )
         return "", True
 
     review_prompt_base = REVIEW_PROMPT_TEMPLATE.read_text()
     review_prompt = review_prompt_base.replace("{prd_path}", str(prd_path))
-    
+
     cmd = get_agent_command(agent_type, review_prompt)
-    output, _ = run_agent(cmd)
+    output, _ = run_agent(cmd, caffeinate=caffeinate)
     return output, "<review>PASSED</review>" in output
 
-def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False):
+
+def ralph_loop(
+    agent="cursor-agent", review=False, tests=False, auto_merge=False, caffeinate=False
+):
     if not PROMPTS_DIR.exists():
         print("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
-    
+
     if not PRD_DIR.exists():
         print(f"Warning: PRD directory {PRD_DIR} not found. Creating it.")
         PRD_DIR.mkdir(exist_ok=True)
@@ -165,7 +192,9 @@ def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False)
             run_command(["git", "checkout", "-b", branch_name])
 
         if not BASE_PROMPT_TEMPLATE.exists():
-            print(f"Error: Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'.")
+            print(
+                f"Error: Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'."
+            )
             sys.exit(1)
 
         base_prompt = BASE_PROMPT_TEMPLATE.read_text()
@@ -192,20 +221,25 @@ def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False)
                 OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
                 BACKEND_ROOT,
                 FRONTEND_ROOT,
+                caffeinate=caffeinate,
             )
 
             iteration_output = output
 
             if COMPLETION_PROMISE in output:
-                print(f"COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates.")
+                print(
+                    f"COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
+                )
                 save_state(project_name, i, output, additional_context)
 
                 # 1. Run Tests
                 if tests:
-                    test_output, tests_passed = run_tests_logic()
+                    test_output, tests_passed = run_tests_logic(caffeinate=caffeinate)
                     if not tests_passed:
                         print("❌ Tests failed. Feeding back to agent...")
-                        additional_context = f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
+                        additional_context = (
+                            f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
+                        )
                         save_state(project_name, i + 1, output, additional_context)
                         continue
                     print("✅ Tests passed.")
@@ -214,10 +248,14 @@ def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False)
 
                 # 2. Run Review
                 if review:
-                    review_output, review_passed = run_review_logic(agent, prd_file)
+                    review_output, review_passed = run_review_logic(
+                        agent, prd_file, caffeinate=caffeinate
+                    )
                     if not review_passed:
                         print("❌ Review failed. Feeding back to agent...")
-                        additional_context = f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
+                        additional_context = (
+                            f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
+                        )
                         save_state(project_name, i + 1, output, additional_context)
                         continue
                     print("✅ Review passed.")
@@ -234,7 +272,7 @@ def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False)
             print(f"Committing changes for: {project_name}")
             commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
             commit_cmd = get_agent_command(agent, commit_prompt)
-            run_agent(commit_cmd)
+            run_agent(commit_cmd, caffeinate=caffeinate)
 
             if auto_merge:
                 print(f"Merging {branch_name} into main...")
@@ -246,8 +284,10 @@ def ralph_loop(agent="cursor-agent", review=False, tests=True, auto_merge=False)
 
             clear_state()
         else:
-            print(f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations.")
-            print(f"Reverting to 'main' branch.")
+            print(
+                f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations."
+            )
+            print("Reverting to 'main' branch.")
             run_command(["git", "checkout", "main"])
             sys.exit(1)
 
