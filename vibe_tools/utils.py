@@ -4,6 +4,7 @@ import sys
 import pathlib
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
@@ -14,7 +15,7 @@ logger = logging.getLogger("vibe")
 logger.setLevel(logging.INFO)
 
 # File handler
-file_handler = logging.FileHandler(LOG_FILE)
+file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
 file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(file_handler)
 
@@ -22,6 +23,12 @@ logger.addHandler(file_handler)
 stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(stream_handler)
+
+
+def rotate_log():
+    """Rotates the log file if it exists and is not empty."""
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
+        file_handler.doRollover()
 
 
 def is_merged(branch_name):

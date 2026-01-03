@@ -29,7 +29,10 @@ COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 def save_state(prd_name, iteration, output, context):
     """Saves the current state to a file."""
-    state = {
+    # Load existing state to preserve completed_prds
+    state = load_state() or {"completed_prds": [], "active_task": None}
+
+    state["active_task"] = {
         "prd_name": prd_name,
         "iteration": iteration,
         "output": output,
@@ -38,19 +41,53 @@ def save_state(prd_name, iteration, output, context):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def mark_prd_completed(prd_name):
+    """Marks a PRD as completed in the state file."""
+    state = load_state() or {"completed_prds": [], "active_task": None}
+    if prd_name not in state["completed_prds"]:
+        state["completed_prds"].append(prd_name)
+    state["active_task"] = None
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
 def load_state():
     """Loads state from the state file if it exists."""
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            data = json.loads(STATE_FILE.read_text())
+            # Handle legacy format
+            if "prd_name" in data and "active_task" not in data:
+                return {
+                    "completed_prds": [],
+                    "active_task": {
+                        "prd_name": data.get("prd_name"),
+                        "iteration": data.get("iteration", 1),
+                        "output": data.get("output", ""),
+                        "context": data.get("context", ""),
+                    },
+                }
+            # Ensure new structure
+            if "completed_prds" not in data:
+                data["completed_prds"] = []
+            if "active_task" not in data:
+                data["active_task"] = None
+            return data
         except Exception as e:
             logger.warning(f"Failed to load state file: {e}")
             return None
-    return None
+    return {"completed_prds": [], "active_task": None}
+
+
+def clear_active_state():
+    """Clears only the active task from the state file."""
+    state = load_state()
+    if state:
+        state["active_task"] = None
+        STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
 def clear_state():
-    """Deletes the state file."""
+    """Deletes the entire state file."""
     if STATE_FILE.exists():
         STATE_FILE.unlink()
 
@@ -122,8 +159,14 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
 def ralph_loop(
     agent="cursor-agent", review=False, tests=False, auto_merge=False, caffeinate=False
 ):
+    from vibe_tools.utils import rotate_log
+
+    rotate_log()
+
     if not PROMPTS_DIR.exists():
-        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
+        logger.error(
+            "Error: prompts directory not found. Please run 'vibe init' first."
+        )
         sys.exit(1)
 
     if not PRD_DIR.exists():
@@ -136,14 +179,14 @@ def ralph_loop(
     if tests:
         makefile_path = pathlib.Path("Makefile")
         from vibe_tools.templates import TEMPLATES
-        
+
         if not makefile_path.exists():
             logger.info("Makefile not found. Initializing with default templates...")
             makefile_content = TEMPLATES.get("Makefile")
             if makefile_content:
                 makefile_path.write_text(makefile_content)
                 logger.info("✅ Created default Makefile.")
-        
+
         # Ensure dummy tests exist
         backend_test_dir = pathlib.Path("tests")
         ensure_dir(backend_test_dir)
@@ -155,7 +198,9 @@ def ralph_loop(
         frontend_test_dir = FRONTEND_ROOT / "src"
         ensure_dir(frontend_test_dir)
         dummy_frontend = frontend_test_dir / "dummy.test.ts"
-        if not any(frontend_test_dir.glob("*.test.*")) and not any(frontend_test_dir.glob("*.spec.*")):
+        if not any(frontend_test_dir.glob("*.test.*")) and not any(
+            frontend_test_dir.glob("*.spec.*")
+        ):
             logger.info(f"No frontend tests found. Creating {dummy_frontend}")
             dummy_frontend.write_text(TEMPLATES["dummy_frontend_test"])
 
@@ -163,9 +208,12 @@ def ralph_loop(
     ensure_dir(FRONTEND_ROOT)
 
     # Load existing state
-    saved_state = load_state()
-    resume_prd = saved_state["prd_name"] if saved_state else None
-    resume_iteration = saved_state["iteration"] if saved_state else 1
+    state = load_state()
+    completed_prds = state.get("completed_prds", [])
+    active_task = state.get("active_task")
+
+    resume_prd = active_task["prd_name"] if active_task else None
+    resume_iteration = active_task["iteration"] if active_task else 1
 
     # Ensure we are on main branch
     logger.info("Ensuring we are on 'main' branch...")
@@ -186,6 +234,13 @@ def ralph_loop(
             logger.info(f"Skipping {project_name} (resuming from {resume_prd})...")
             continue
 
+        # Check if already done (merged or in completed_prds)
+        if project_name in completed_prds:
+            logger.info(
+                f"PRD {project_name} already marked as completed in state file. Skipping..."
+            )
+            continue
+
         # Once we reach the resume target, we don't need to skip anymore
         resume_prd = None
 
@@ -193,6 +248,9 @@ def ralph_loop(
 
         if is_merged(branch_name):
             logger.info(f"Branch {branch_name} already merged into main. Skipping...")
+            # Also mark as completed if it's merged but not in state
+            if project_name not in completed_prds:
+                mark_prd_completed(project_name)
             continue
 
         # Check if branch exists
@@ -214,12 +272,12 @@ def ralph_loop(
             sys.exit(1)
 
         base_prompt = BASE_PROMPT_TEMPLATE.read_text()
-        iteration_output = saved_state["output"] if saved_state else ""
-        additional_context = saved_state["context"] if saved_state else ""
+        iteration_output = active_task["output"] if active_task else ""
+        additional_context = active_task["context"] if active_task else ""
         start_iteration = resume_iteration
 
-        # Clear saved_state once it's been consumed
-        saved_state = None
+        # Clear active_task once it's been consumed
+        active_task = None
         resume_iteration = 1
 
         success = False
@@ -295,10 +353,12 @@ def ralph_loop(
                 run_command(["git", "checkout", "main"])
                 run_command(["git", "merge", branch_name])
             else:
-                logger.info(f"Auto-merge is OFF. Changes remain on branch {branch_name}.")
+                logger.info(
+                    f"Auto-merge is OFF. Changes remain on branch {branch_name}."
+                )
                 run_command(["git", "checkout", "main"])
 
-            clear_state()
+            mark_prd_completed(project_name)
         else:
             logger.error(
                 f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations."
