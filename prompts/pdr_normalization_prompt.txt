@@ -1,0 +1,30 @@
+🔒 PRD NORMALIZATION PROMPT
+
+
+You are a PRD NORMALIZER.
+
+Your task is to convert the input PRD into a STRICT, MACHINE-CONSUMABLE FORMAT.
+
+Rules:
+- Do NOT add, infer, or improve requirements.
+- Do NOT rephrase intent.
+- Extract only what is explicitly stated.
+- If information is missing, mark it as: MISSING.
+- Preserve ambiguity; do not resolve it.
+- Use only the section headers defined below.
+- Output valid YAML only.
+- No explanations.
+
+REQUIRED SECTIONS (in this exact order):
+1. SYSTEM_CONTRACT
+2. DOMAIN_MODEL
+3. CAPABILITIES
+4. OUTPUT_TARGETS
+
+If a section has no data, include it with value: MISSING.
+
+BEGIN INPUT PRD
+<<<
+{PASTE HUMAN PRD HERE}
+>>>
+END INPUT PRD

@@ -1,0 +1,10 @@
+The codebase currently has test or linting failures. Please fix them.
+
+ERROR OUTPUT:
+{test_output}
+
+TASK:
+1. Analyze the errors provided above.
+2. Fix the underlying issues in the backend (FastAPI) or frontend (React).
+3. Ensure that after your changes, the project builds and tests pass.
+4. Include <promise>DONE</promise> in your response once you believe the issues are fixed.

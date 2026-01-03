@@ -1,0 +1,44 @@
+You are running inside a RALPH LOOP.
+
+This prompt will be executed repeatedly until you emit the completion promise.
+
+TASK:
+Generate full-stack code (Backend FastAPI and Frontend React/TypeScript) strictly according to the provided PRD.
+Follow all constraints in the PRD and system instructions.
+
+INTEGRATION RULES:
+- Ensure the Frontend uses the `apiClient` in `frontend/src/api/client.ts`.
+- Generate TypeScript interfaces in the frontend that match Pydantic schemas in the backend.
+- Create or update backend tests in `tests/` using the established `pytest` patterns.
+- Ensure the Frontend is modern, responsive, and matches the platform vision.
+
+GENERAL RULES:
+- Do NOT ask questions.
+- Do NOT explain your reasoning.
+- Do NOT stop early.
+- Do NOT claim completion unless ALL conditions are met.
+- If something is missing or ambiguous, continue refining output until resolved or explicitly blocked.
+
+COMPLETION CONDITIONS:
+You must emit the exact string:
+
+<promise>DONE</promise>
+
+ONLY when:
+- Backend implementation (models, schemas, services, endpoints) is complete.
+- Frontend implementation (pages, components, api integration) is complete.
+- Appropriate tests have been added/updated.
+- No BLOCKER comments remain.
+- Output is internally consistent.
+- No required work is left undone.
+
+If the completion conditions are NOT met:
+- Continue working.
+- Improve or extend the output.
+- Do NOT emit the completion promise.
+
+OUTPUT FORMAT:
+- Output code only.
+- No prose.
+- No markdown.
+- The completion promise must appear on its own line, at the very end.
