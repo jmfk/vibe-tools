@@ -73,36 +73,34 @@ class Tester:
         return None
 
     def run_tests(self, caffeinate=False):
-        """Runs tests, prioritizing 'make test' if available, otherwise discovering components."""
-        if self.has_make_target("test"):
-            print("Running all tests via 'make test'...")
-            output, code = run_command(["make", "test"], check=False, caffeinate=caffeinate)
-            return output, code == 0
+        """Runs all generalized test and lint targets from the Makefile."""
+        targets = [
+            "test-backend",
+            "test-frontend",
+            "test-infra",
+            "test-integration",
+            "test-regression",
+            "lint-backend",
+            "lint-frontend",
+            "lint-infra",
+        ]
 
-        # Fallback to component discovery
-        backend_cmd = self.discover_backend_test_cmd()
-        frontend_lint_cmd = self.discover_frontend_lint_cmd()
+        outputs = []
+        all_passed = True
 
-        backend_output = ""
-        backend_code = 0
-        if backend_cmd:
-            print(f"Running Backend Tests: {' '.join(backend_cmd)}")
-            backend_output, backend_code = run_command(backend_cmd, check=False, caffeinate=caffeinate)
-        else:
-            print("No backend test command discovered.")
+        for target in targets:
+            if self.has_make_target(target):
+                print(f"Running target: make {target}")
+                output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
+                outputs.append(f"--- TARGET: {target} ---\n{output}")
+                if code != 0:
+                    all_passed = False
+            else:
+                # If target is missing, we don't fail, but we log it
+                outputs.append(f"--- TARGET: {target} (NOT FOUND) ---")
 
-        frontend_output = ""
-        frontend_code = 0
-        if frontend_lint_cmd:
-            print(f"Running Frontend Lint: {' '.join(frontend_lint_cmd)}")
-            frontend_output, frontend_code = run_command(frontend_lint_cmd, check=False, caffeinate=caffeinate)
-        else:
-            print("No frontend lint command discovered.")
-
-        passed = backend_code == 0 and frontend_code == 0
-        combined_output = f"BACKEND TEST OUTPUT:\n{backend_output}\n\nFRONTEND LINT OUTPUT:\n{frontend_output}"
-        
-        return combined_output, passed
+        combined_output = "\n\n".join(outputs)
+        return combined_output, all_passed
 
     def get_coverage_report(self, caffeinate=False):
         """Runs coverage and returns the full report and total coverage percentage."""

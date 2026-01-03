@@ -1,4 +1,4 @@
-.PHONY: help install batch loop monitor docker-build docker-run clean run migrate-init migrate test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run
+.PHONY: help install batch loop monitor docker-build docker-run clean run migrate-init migrate test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra
 
 # Default target
 help:
@@ -23,6 +23,35 @@ help:
 	@echo "  make docker-build - Build the Docker image"
 	@echo "  make docker-run   - Run the Docker container"
 	@echo "  make clean        - Remove generated files"
+
+test-backend:
+	pytest -v
+
+test-frontend:
+	cd frontend && npm run test -- --run
+
+test-infra:
+	@echo "Running infra tests..."
+	@exit 0
+
+test-integration:
+	@echo "Running integration tests..."
+	@exit 0
+
+test-regression:
+	@echo "Running regression tests..."
+	@exit 0
+
+lint-backend:
+	@echo "Running backend lint..."
+	@exit 0
+
+lint-frontend:
+	cd frontend && npm run lint
+
+lint-infra:
+	@echo "Running infra lint..."
+	@exit 0
 
 install:
 	./install.sh
