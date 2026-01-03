@@ -119,6 +119,9 @@ def init():
     ensure_dir(prompts_dir)
 
     for filename, content in TEMPLATES.items():
+        if filename in ["dummy_backend_test", "dummy_frontend_test"]:
+            continue
+
         if filename == "Makefile":
             file_path = pathlib.Path(filename)
         else:

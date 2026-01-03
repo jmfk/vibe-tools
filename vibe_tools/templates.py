@@ -177,5 +177,14 @@ lint-frontend:
 	@echo "Running frontend linting... (dummy)"
 	@exit 0
 """,
+    "dummy_backend_test": """def test_dummy():
+    assert True
+""",
+    "dummy_frontend_test": """describe('dummy test', () => {
+  it('should pass', () => {
+    expect(true).toBe(true);
+  });
+});
+""",
 }
 
