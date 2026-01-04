@@ -3,25 +3,15 @@
     "review": true,
     "tests": true,
     "coverage": true,
-    "auto_merge": false
+    "auto_merge": false,
+    "fast": true
   },
-  "caffeinate": true,
-  "google_sheet_id": "vibe-tools",
-  "use_google_sheets": false,
-  "verbose": false,
   "default_budget": 5.0,
+  "caffeinate": true,
+  "verbose": false,
   "coverage_targets": {
     "backend": 85,
     "frontend": 85,
     "infra": 85
-  },
-  "services": {
-    "postgres": {
-      "host": "localhost",
-      "port": 5432,
-      "user": "postgres",
-      "password": "postgres",
-      "database": "vibe-tools"
-    }
   }
 }

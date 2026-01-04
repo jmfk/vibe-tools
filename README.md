@@ -74,6 +74,7 @@ Use the `vibe-setup` command to record connection details for the supporting ser
 - `vibe-setup elasticsearch`
 - `vibe-setup api`
 - `vibe-setup google`
+- `vibe-setup test`: Verify connectivity for all configured services.
 
 Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `.vibe_config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
 

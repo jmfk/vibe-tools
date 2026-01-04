@@ -1,15 +1,22 @@
 import click
 import json
 import pathlib
+import socket
 import subprocess
 from typing import Any, Dict, Optional
+from dotenv import load_dotenv, find_dotenv
+
+# Load environment variables from .env file at startup
+load_dotenv(find_dotenv() or ".env")
 
 from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_gitignore,
+    get_google_api_key,
     load_config,
     run_command,
     save_config,
+    save_google_api_key,
 )
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
@@ -193,10 +200,48 @@ def prompt_service_config(service_key: str) -> Dict[str, Any]:
     return responses
 
 
+def check_connection(service_key: str, details: Dict[str, Any]) -> bool:
+    """Verifies if a service is reachable."""
+    host = details.get("host", "localhost")
+    port = details.get("port")
+    if not port:
+        return False
+
+    # Special handling for HTTP-based services
+    if service_key == "elasticsearch":
+        scheme = details.get("scheme", "http")
+        url = f"{scheme}://{host}:{port}"
+        try:
+            import httpx
+            with httpx.Client(timeout=2.0) as client:
+                # Basic check for ES - it should return a 200 with JSON
+                response = client.get(url)
+                return response.status_code == 200
+        except Exception:
+            # Fall back to socket check if httpx fails or is missing
+            pass
+
+    try:
+        with socket.create_connection((host, int(port)), timeout=2.0):
+            return True
+    except (socket.error, ValueError):
+        return False
+
+
 def configure_service(service_key: str):
     metadata = SERVICE_DEFINITIONS[service_key]
     config = load_config()
     details = prompt_service_config(service_key)
+    
+    click.echo(f"Checking connection to {metadata['display']}...")
+    if check_connection(service_key, details):
+        click.echo(f"✅ Connection successful!")
+    else:
+        click.echo(f"⚠️  Warning: Could not connect to {metadata['display']} at {details.get('host')}:{details.get('port')}.")
+        if not click.confirm("Save configuration anyway?", default=True):
+            click.echo("Aborted.")
+            return
+
     services = config.setdefault("services", {})
     services[service_key] = details
     save_config(config)
@@ -226,12 +271,35 @@ def setup_cli():
 
 
 @setup_cli.command()
+def test():
+    """Verify connectivity for all configured services."""
+    config = load_config()
+    services = config.get("services", {})
+    
+    if not services:
+        click.echo("No services configured. Run 'vibe-setup <service>' first.")
+        return
+
+    click.echo("\n--- Service Connectivity Test ---")
+    for service_key, details in services.items():
+        metadata = SERVICE_DEFINITIONS.get(service_key, {})
+        display = metadata.get("display", service_key.capitalize())
+        
+        click.echo(f"{display:<15}: ", nl=False)
+        if check_connection(service_key, details):
+            click.echo("✅ Connected")
+        else:
+            host = details.get("host", "unknown")
+            port = details.get("port", "unknown")
+            click.echo(f"❌ Failed (could not reach {host}:{port})")
+
+
+@setup_cli.command()
 def api():
     """Configure API keys for LLM access."""
     click.echo("\n--- API Key Configuration ---")
-    config = load_config()
-
-    current_google_key = config.get("google_api_key", "")
+    
+    current_google_key = get_google_api_key() or ""
     new_google_key = click.prompt(
         "Enter Google API Key (for Gemini/DSPy)",
         default=current_google_key,
@@ -239,9 +307,13 @@ def api():
     )
 
     if new_google_key:
-        config["google_api_key"] = new_google_key
-        save_config(config)
-        click.echo("✅ Google API Key saved.")
+        save_google_api_key(new_google_key)
+        # Also ensure it's removed from the old location in .vibe_config.json if present
+        config = load_config()
+        if "google_api_key" in config:
+            del config["google_api_key"]
+            save_config(config)
+        click.echo("✅ Google API Key saved to .env (and removed from .vibe_config.json)")
     else:
         click.echo("⏩ Google API Key skipped.")
 

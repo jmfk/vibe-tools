@@ -16,3 +16,26 @@ def silence_vibe_side_effects():
          patch("atexit.register"):
         yield
 
+
+@pytest.fixture(autouse=True)
+def safeguard_llm_calls(request):
+    """
+    Ensure all LLM calls are mocked during testing.
+    Raises RuntimeError if run_agent or _execute_dspy are called without a local mock.
+    """
+    # Skip safeguard for tests that specifically test these low-level functions
+    if "test_run_agent" in request.node.name or "test_execute_dspy" in request.node.name:
+        yield
+        return
+
+    def forbidden_call(*args, **kwargs):
+        raise RuntimeError(
+            f"Forbidden real LLM call detected in test '{request.node.name}'! "
+            "You must mock 'vibe_tools.utils.run_agent' or 'vibe_tools.prd_writer.PRDWriter._execute_dspy' "
+            "to prevent hitting real LLMs during tests."
+        )
+
+    with patch("vibe_tools.utils.run_agent", side_effect=forbidden_call), \
+         patch("vibe_tools.prd_writer.PRDWriter._execute_dspy", side_effect=forbidden_call):
+        yield
+

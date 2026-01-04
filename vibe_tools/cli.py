@@ -17,6 +17,7 @@ from vibe_tools.utils import (
     ensure_dir,
     ensure_gitignore,
     get_agent_command,
+    get_google_api_key,
     load_config,
     run_agent,
     run_command,
@@ -24,6 +25,10 @@ from vibe_tools.utils import (
     setup_logging,
 )
 from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
+from dotenv import load_dotenv, find_dotenv
+
+# Load environment variables from .env file at startup
+load_dotenv(find_dotenv() or ".env")
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -104,16 +109,27 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         ralph_config = config.get("ralph", {})
         if ralph_config:
             click.echo("  Ralph Default Config:")
-            click.echo(f"    Tests:      {'ON' if ralph_config.get('tests') else 'OFF'}")
-            click.echo(f"    Review:     {'ON' if ralph_config.get('review') else 'OFF'}")
-            click.echo(f"    Auto-merge: {'ON' if ralph_config.get('auto_merge') else 'OFF'}")
+            click.echo(
+                f"    Tests:      {'ON' if ralph_config.get('tests') else 'OFF'}"
+            )
+            click.echo(
+                f"    Review:     {'ON' if ralph_config.get('review') else 'OFF'}"
+            )
+            click.echo(
+                f"    Auto-merge: {'ON' if ralph_config.get('auto_merge') else 'OFF'}"
+            )
         else:
             click.echo("  Ralph Default Config: Not set (will prompt on first run)")
 
         prompts_init = pathlib.Path("prompts").exists()
         click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
 
-        coverage_targets = config.get("coverage_targets", {"backend": 85, "frontend": 85, "infra": 85})
+        google_api_key = get_google_api_key()
+        click.echo(f"  Google API Key: {'SET' if google_api_key else 'NOT SET'}")
+
+        coverage_targets = config.get(
+            "coverage_targets", {"backend": 85, "frontend": 85, "infra": 85}
+        )
         click.echo("  Coverage Targets:")
         click.echo(f"    Backend:    {coverage_targets.get('backend', 85)}%")
         click.echo(f"    Frontend:   {coverage_targets.get('frontend', 85)}%")
@@ -131,7 +147,9 @@ def cli(ctx, debug, verbose, agent, caffeinate):
                 click.echo(f"    {display_name}: {host}:{port}")
 
         specs_dir = (
-            pathlib.Path("specs") if pathlib.Path("specs").exists() else pathlib.Path("spec")
+            pathlib.Path("specs")
+            if pathlib.Path("specs").exists()
+            else pathlib.Path("spec")
         )
         click.echo(
             f"  Specs Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to specs/)'}"
@@ -160,6 +178,7 @@ def init():
 
     # Create new directories for instructions and specs
     from vibe_tools.utils import INSTRUCTIONS_DIR
+
     ensure_dir(INSTRUCTIONS_DIR)
     ensure_dir(pathlib.Path("specs") / "infra")
     ensure_dir(pathlib.Path("specs") / "cicd")
@@ -304,7 +323,9 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
                 ctx.obj["caffeinate"] = caffeinate
                 click.echo("✅ Enabled Caffeinate.")
 
-        if click.confirm("Save these settings as default in .vibe_config.json?", default=True):
+        if click.confirm(
+            "Save these settings as default in .vibe_config.json?", default=True
+        ):
             save_config(
                 {
                     "ralph": {
@@ -338,7 +359,9 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
     click.echo("\nWorkflow:")
     click.echo("1. Ensure 'main' branch.")
     click.echo("2. Sequentially process all 'prd_*.yaml' in 'prds/'.")
-    click.echo("3. Create feature branch, run up to 10 agent iterations for implementation.")
+    click.echo(
+        "3. Create feature branch, run up to 10 agent iterations for implementation."
+    )
     click.echo("4. Run quality gates (tests/review) if enabled.")
     click.echo("5. Commit and optionally merge changes.")
 
@@ -359,7 +382,9 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
             total_initial_cost += est["cost_estimate"]
 
         click.echo(f"\nTotal Estimated Initial Cost: ${total_initial_cost:.6f} USD")
-        click.echo("(Note: Subsequent iterations and output tokens will incur additional costs.)")
+        click.echo(
+            "(Note: Subsequent iterations and output tokens will incur additional costs.)"
+        )
 
         if total_initial_cost > budget:
             click.echo(
@@ -409,12 +434,16 @@ def coverage(ctx):
     """Run the coverage improvement loop."""
     from vibe_tools.coverage import improve_coverage_loop
 
-    improve_coverage_loop(agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False))
+    improve_coverage_loop(
+        agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False)
+    )
 
 
 @cli.command()
 @click.argument("input_file", required=False)
-@click.option("--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs.")
+@click.option(
+    "--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs."
+)
 @click.pass_context
 def normalize(ctx, input_file, yes):
     """Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
@@ -454,7 +483,9 @@ def monitor(ctx, interval):
 @click.pass_context
 def review_prd(ctx, review):
     """[DEPRECATED] List specs PRDs, display one, and optionally run the Gemini review prompt."""
-    click.echo("⚠️ 'review-prd' is deprecated. 'vibe prd' now includes a /review command during creation.")
+    click.echo(
+        "⚠️ 'review-prd' is deprecated. 'vibe prd' now includes a /review command during creation."
+    )
     ensure_dir(SPECS_DIR)
 
     prd_files = _list_spec_files()
@@ -499,7 +530,9 @@ def _prompt_for_prd(prd_paths: List[pathlib.Path]) -> pathlib.Path:
         click.echo("Invalid selection. Please choose a number from the list.")
 
 
-def _run_agent_review(agent_type: str, prd_path: pathlib.Path, caffeinate: bool) -> None:
+def _run_agent_review(
+    agent_type: str, prd_path: pathlib.Path, caffeinate: bool
+) -> None:
     if not REVIEW_PROMPT_TEMPLATE.exists():
         click.echo("Review prompt template missing; skipping agentic review.")
         return
@@ -534,12 +567,14 @@ def prd(ctx, title, type):
     """Interactive PRD writer with slash commands."""
     from vibe_tools.prd_writer import InteractivePRD
 
-    initial_prompt = title or click.prompt(f"Describe the {type} PRD you'd like to write")
-    
+    initial_prompt = title or click.prompt(
+        f"Describe the {type} PRD you'd like to write"
+    )
+
     # Base specs dir
     specs_base = pathlib.Path("specs")
     ensure_dir(specs_base)
-    
+
     # Target dir based on type
     target_specs_dir = specs_base
     if type in ["infra", "cicd"]:
@@ -549,7 +584,7 @@ def prd(ctx, title, type):
     writer = InteractivePRD(
         agent_type=ctx.obj.get("agent", "cursor-agent"),
         specs_dir=target_specs_dir,
-        prd_type=type
+        prd_type=type,
     )
     writer.run_loop(initial_prompt)
 
@@ -570,15 +605,19 @@ def prd(ctx, title, type):
 @click.pass_context
 def write_prd(ctx, title, type):
     """[DEPRECATED] Use 'vibe prd' instead. Runs the legacy dspy interview loop."""
-    click.echo("⚠️ 'write-prd' is deprecated. Please use 'vibe prd' for the new interactive experience.")
+    click.echo(
+        "⚠️ 'write-prd' is deprecated. Please use 'vibe prd' for the new interactive experience."
+    )
     from vibe_tools.prd_writer import PRDWriter
 
-    initial_prompt = title or click.prompt(f"Describe the {type} PRD you'd like to write")
-    
+    initial_prompt = title or click.prompt(
+        f"Describe the {type} PRD you'd like to write"
+    )
+
     # Base specs dir
     specs_base = pathlib.Path("specs")
     ensure_dir(specs_base)
-    
+
     # Target dir based on type
     target_specs_dir = specs_base
     if type in ["infra", "cicd"]:
@@ -588,7 +627,7 @@ def write_prd(ctx, title, type):
     writer = PRDWriter(
         agent_type=ctx.obj.get("agent", "cursor-agent"),
         specs_dir=target_specs_dir,
-        prd_type=type
+        prd_type=type,
     )
     writer.create_prd(initial_prompt)
 
@@ -601,6 +640,7 @@ def history():
         return
 
     from vibe_tools.utils import collect_prd_files
+
     prds = collect_prd_files()
     if not prds:
         click.echo("No PRD files found.")
@@ -659,12 +699,17 @@ def cleanup():
 
 @cli.command()
 @click.argument("text", required=False)
-@click.option("--list", "-l", "list_memories", is_flag=True, help="List all saved memories.")
-@click.option("--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index.")
+@click.option(
+    "--list", "-l", "list_memories", is_flag=True, help="List all saved memories."
+)
+@click.option(
+    "--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index."
+)
 @click.option("--clear", is_flag=True, help="Clear all saved memories.")
 def memory(text, list_memories, delete_idx, clear):
     """Save a 'memory' (global instruction) that is always sent to the agent."""
     from vibe_tools.utils import INSTRUCTIONS_DIR
+
     ensure_dir(INSTRUCTIONS_DIR)
 
     if clear:
@@ -706,6 +751,7 @@ def memory(text, list_memories, delete_idx, clear):
 
     if text:
         import datetime
+
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         # slugify text for filename
         slug = "".join(c if c.isalnum() else "_" for c in text[:30]).lower()
@@ -717,13 +763,23 @@ def memory(text, list_memories, delete_idx, clear):
 
 @cli.command()
 @click.argument("text", required=False)
-@click.option("--list", "-l", "list_memories", is_flag=True, help="List all saved memories.")
-@click.option("--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index.")
+@click.option(
+    "--list", "-l", "list_memories", is_flag=True, help="List all saved memories."
+)
+@click.option(
+    "--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index."
+)
 @click.option("--clear", is_flag=True, help="Clear all saved memories.")
 @click.pass_context
 def remember(ctx, text, list_memories, delete_idx, clear):
     """Alias for 'vibe memory'."""
-    ctx.invoke(memory, text=text, list_memories=list_memories, delete_idx=delete_idx, clear=clear)
+    ctx.invoke(
+        memory,
+        text=text,
+        list_memories=list_memories,
+        delete_idx=delete_idx,
+        clear=clear,
+    )
 
 
 @cli.command()
@@ -785,7 +841,9 @@ def rerun(prd_id):
         STATE_FILE.write_text(json.dumps(state, indent=2))
 
     # 2. Delete the branch if it exists
-    _, check_branch = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
+    _, check_branch = run_command(
+        ["git", "rev-parse", "--verify", branch_name], check=False
+    )
     if check_branch == 0:
         # Check if we are currently on that branch
         stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
