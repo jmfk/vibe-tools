@@ -683,12 +683,9 @@ def status():
 @cli.command()
 def docs():
     """Display the project documentation (README.md)."""
-    readme_path = pathlib.Path("README.md")
-    if not readme_path.exists():
-        click.echo("README.md not found.")
-        return
+    from vibe_tools.templates import TEMPLATES
 
-    content = readme_path.read_text()
+    content = TEMPLATES.get("README", "Documentation not found in templates.")
     click.echo_via_pager(content)
 
 
