@@ -147,14 +147,29 @@ class CostLogger:
             elif creds_path.exists():
                 gc = gspread.service_account(filename=str(creds_path))
             else:
-                logger.warning("⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe setup-google'.")
+                logger.warning(
+                    "⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe setup-google'."
+                )
                 return
 
-            sh = gc.open_by_key(self.google_sheet_id)
+            try:
+                sh = gc.open_by_key(self.google_sheet_id)
+            except gspread.exceptions.APIError as e:
+                # If 404, try opening by name instead
+                if hasattr(e, "response") and e.response.status_code == 404:
+                    sh = gc.open(self.google_sheet_id)
+                else:
+                    raise
+            except gspread.exceptions.SpreadsheetNotFound:
+                # Some versions/configurations might raise SpreadsheetNotFound
+                sh = gc.open(self.google_sheet_id)
+
             worksheet = sh.get_worksheet(0)
             worksheet.append_row(row)
         except Exception as e:
-            logger.warning(f"⚠️ Failed to log to Google Sheets: {e}. Logging locally to CSV instead.")
+            logger.warning(
+                f"⚠️ Failed to log to Google Sheets: {e}. Logging locally to CSV instead."
+            )
 
 
 def get_total_cost():

@@ -2,6 +2,7 @@ import pathlib
 import click
 import json
 import subprocess
+import logging
 from vibe_tools.utils import (
     ensure_dir,
     ensure_gitignore,
@@ -441,7 +442,9 @@ def setup_google():
     click.echo("\nTo log costs to Google Sheets, you need to configure access.")
 
     current_id = config.get("google_sheet_id", "")
-    new_id = click.prompt("\nEnter Google Sheet ID", default=current_id)
+    click.echo("\nThe Sheet ID is the long string in the Google Sheet URL:")
+    click.echo("https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit")
+    new_id = click.prompt("Enter Google Sheet ID (or the Sheet Name)", default=current_id)
 
     if not new_id:
         click.echo("Operation cancelled.")
