@@ -420,7 +420,7 @@ def setup_google():
             click.echo("2. Create a Project (or select an existing one).")
             click.echo("3. Enable 'Google Sheets API' for your project.")
             click.echo("4. Go to 'Credentials' -> 'Create Credentials' -> 'OAuth client ID'.")
-            click.echo("5. Choose 'Desktop App' and download the JSON file.")
+            click.echo("5. Choose 'Desktop App' and download the client JSON file.")
             click.echo(f"6. Rename it to '{client_secrets_path}' and place it in this directory.")
             
             if not click.confirm("\nHave you placed the file?", default=False):
