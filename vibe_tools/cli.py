@@ -117,11 +117,15 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         caffeinate = config.get("caffeinate", False)
     ctx.obj["caffeinate"] = caffeinate
 
+    default_budget = config.get("default_budget", 5.0)
+    ctx.obj["default_budget"] = default_budget
+
     if ctx.invoked_subcommand is None:
         click.echo("vibe-tools configuration:")
         click.echo(f"  Agent: {agent}")
         click.echo(f"  Caffeinate: {'ON' if caffeinate else 'OFF'}")
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
+        click.echo(f"  Default Budget: ${default_budget:.2f} USD")
 
         ralph_config = config.get("ralph", {})
         if ralph_config:
@@ -218,7 +222,9 @@ def ralph(ctx, review, tests, auto_merge, budget):
     if auto_merge is None:
         auto_merge = config.get("auto_merge", False)
     if budget is None:
-        budget = config.get("budget", 5.0)  # Default $5 budget if not set
+        budget = config.get("budget")
+    if budget is None:
+        budget = ctx.obj.get("default_budget", 5.0)
 
     # If everything is still False (and we have no config file), prompt the user
     if not CONFIG_FILE.exists() and not any([review, tests, auto_merge]):
@@ -276,8 +282,8 @@ def ralph(ctx, review, tests, auto_merge, budget):
                         "review": review,
                         "tests": tests,
                         "auto_merge": auto_merge,
-                        "budget": budget,
                     },
+                    "default_budget": budget,
                     "caffeinate": caffeinate,
                     "verbose": verbose,
                 }
