@@ -67,12 +67,22 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
 }
 
 def get_server_configs() -> Dict[str, Any]:
-    """Returns global server configurations, initializing if necessary."""
-    configs = load_global_servers()
-    if not configs:
-        configs = DEFAULT_SERVER_CONFIGS
+    """Returns global server configurations, merging defaults with saved ones."""
+    configs = DEFAULT_SERVER_CONFIGS.copy()
+    saved = load_global_servers()
+    if saved:
+        # Update defaults with saved configurations (preserving user changes)
+        # But ensure new default services are added
+        for key, value in saved.items():
+            if key in configs:
+                configs[key].update(value)
+            else:
+                configs[key] = value
+    
+    # Save the merged version if it's different (optional, but ensures persistence)
+    if configs != saved:
         save_global_servers(configs)
-        logger.info(f"Initialized global server definitions at {GLOBAL_SERVERS_FILE}")
+        
     return configs
 
 def get_container_status(container_name: str) -> str:
@@ -108,12 +118,23 @@ def list_servers():
         }.get(status, f"❓ {status}")
         
         click.echo(f"{name:<15} {status_display:<15} {config['description']}")
+    
+    click.echo("\nRun 'vibe-servers install <service>' to set up a new server.")
 
 @servers_cli.command()
 @click.argument("service")
 def install(service):
     """Install and start a development server."""
     configs = get_server_configs()
+    
+    # Handle generic 'minio' alias
+    if service == "minio":
+        click.echo("Which MinIO version would you like to install?")
+        click.echo("1. Linode-style (port 9000, path-style addressing)")
+        click.echo("2. AWS-style (port 9010, virtual-style addressing)")
+        choice = click.prompt("Select option", type=int, default=1)
+        service = "minio-linode" if choice == 1 else "minio-aws"
+
     if service not in configs:
         click.echo(f"❌ Unknown service: {service}. Available: {', '.join(configs.keys())}")
         return
