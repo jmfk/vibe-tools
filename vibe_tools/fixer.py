@@ -39,13 +39,13 @@ def clear_state():
         STATE_FILE.unlink()
 
 
-def run_tests(caffeinate=False):
+def run_tests(caffeinate=False, fast=False):
     """Runs backend and frontend tests."""
     tester = ProjectTester()
-    return tester.run_tests(caffeinate=caffeinate)
+    return tester.run_tests(caffeinate=caffeinate, changed_only=fast)
 
 
-def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
+def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False):
     from vibe_tools.cli import load_config
 
     logger.info("--- Starting Test and Fix Loop ---")
@@ -66,7 +66,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
     for i in range(start_iteration, MAX_ITERATIONS + 1):
         logger.info(f"\n[TEST_FIX LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})")
 
-        test_output, tests_passed, env_failures = run_tests(caffeinate=caffeinate)
+        test_output, tests_passed, env_failures = run_tests(caffeinate=caffeinate, fast=fast)
 
         if env_failures:
             logger.error(
