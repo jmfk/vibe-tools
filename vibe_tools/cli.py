@@ -180,8 +180,7 @@ def init():
     from vibe_tools.utils import INSTRUCTIONS_DIR
 
     ensure_dir(INSTRUCTIONS_DIR)
-    ensure_dir(pathlib.Path("specs") / "infra")
-    ensure_dir(pathlib.Path("specs") / "cicd")
+    ensure_dir(pathlib.Path("specs"))
     ensure_dir(pathlib.Path("prds"))
 
     for filename, content in TEMPLATES.items():
@@ -575,15 +574,9 @@ def prd(ctx, title, type):
     specs_base = pathlib.Path("specs")
     ensure_dir(specs_base)
 
-    # Target dir based on type
-    target_specs_dir = specs_base
-    if type in ["infra", "cicd"]:
-        target_specs_dir = specs_base / type
-        ensure_dir(target_specs_dir)
-
     writer = InteractivePRD(
         agent_type=ctx.obj.get("agent", "cursor-agent"),
-        specs_dir=target_specs_dir,
+        specs_dir=specs_base,
         prd_type=type,
     )
     writer.run_loop(initial_prompt)
@@ -618,15 +611,9 @@ def write_prd(ctx, title, type):
     specs_base = pathlib.Path("specs")
     ensure_dir(specs_base)
 
-    # Target dir based on type
-    target_specs_dir = specs_base
-    if type in ["infra", "cicd"]:
-        target_specs_dir = specs_base / type
-        ensure_dir(target_specs_dir)
-
     writer = PRDWriter(
         agent_type=ctx.obj.get("agent", "cursor-agent"),
-        specs_dir=target_specs_dir,
+        specs_dir=specs_base,
         prd_type=type,
     )
     writer.create_prd(initial_prompt)
@@ -689,22 +676,24 @@ def docs():
     from rich.theme import Theme
 
     content = TEMPLATES.get("README", "Documentation not found in templates.")
-    
+
     # Custom milder theme
-    custom_theme = Theme({
-        "markdown.header": "bold white",
-        "markdown.h1": "bold white",
-        "markdown.h2": "bold white",
-        "markdown.h3": "bold white",
-        "markdown.link": "blue",
-        "markdown.link_url": "dim blue",
-        "markdown.code": "cyan",
-        "markdown.code_block": "cyan",
-        "markdown.item.bullet": "white",
-        "markdown.item.number": "white",
-        "markdown.block_quote": "dim white",
-    })
-    
+    custom_theme = Theme(
+        {
+            "markdown.header": "bold white",
+            "markdown.h1": "bold white",
+            "markdown.h2": "bold white",
+            "markdown.h3": "bold white",
+            "markdown.link": "blue",
+            "markdown.link_url": "dim blue",
+            "markdown.code": "cyan",
+            "markdown.code_block": "cyan",
+            "markdown.item.bullet": "white",
+            "markdown.item.number": "white",
+            "markdown.block_quote": "dim white",
+        }
+    )
+
     console = Console(theme=custom_theme)
     # Using a milder code theme for syntax highlighting
     md = Markdown(content, code_theme="friendly")

@@ -1,4 +1,5 @@
 import pathlib
+import re
 import sys
 
 import click
@@ -75,23 +76,25 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
     for spec_path in files_to_process:
         stem = spec_path.stem
 
-        # Determine target PRD directory based on spec location
+        # Determine target PRD directory (no subdirectories)
         target_prd_dir = PRDS_DIR
-        try:
-            relative_path = spec_path.relative_to(specs_dir)
-            if len(relative_path.parts) > 1:
-                subdir = relative_path.parts[0]
-                if subdir in ["infra", "cicd"]:
-                    target_prd_dir = PRDS_DIR / subdir
-                    target_prd_dir.mkdir(exist_ok=True)
-        except ValueError:
-            pass
 
-        # Handle case-insensitive "prd_" prefix normalization
-        if stem.lower().startswith("prd_"):
-            output_filename = f"prd_{stem[4:]}.yaml"
+        # Determine output filename with normalized prefix and format
+        # 1. Special case for shared global context files ("global truths")
+        global_truths = ["architecture", "project_overview", "infrastructure", "cicd"]
+        if stem.lower() in global_truths:
+            output_filename = f"{stem.lower()}.yaml"
         else:
-            output_filename = f"prd_{stem}.yaml"
+            # 2. Handle PRD prefixes and format
+            # Strip case-insensitive "prd" or "PRD" prefix if followed by -, _, or space
+            normalized_stem = re.sub(r"^(prd|PRD)[-_ ]?", "", stem)
+            
+            # Replace remaining dashes with underscores for consistency
+            normalized_stem = normalized_stem.replace("-", "_")
+            
+            # Ensure it starts with prd_
+            output_filename = f"prd_{normalized_stem.lower()}.yaml"
+        
         output_path = target_prd_dir / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD
