@@ -122,7 +122,7 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         ],
     },
     "s3": {
-        "display": "S3 Object Store (MinIO)",
+        "display": "S3 Object Store (MinIO/Linode)",
         "default_port": 9000,
         "docker_keywords": ["minio"],
         "fields": [
@@ -136,6 +136,16 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
                 "hide_input": True,
             },
             {"name": "region", "prompt": "S3 Region", "default": "us-east-1"},
+            {
+                "name": "addressing_style",
+                "prompt": "Addressing Style (path/virtual)",
+                "default": "path",
+            },
+            {
+                "name": "signature_version",
+                "prompt": "Signature Version",
+                "default": "s3v4",
+            },
             {"name": "console_port", "prompt": "S3 Console port", "type": int, "default": 9001},
         ],
     },

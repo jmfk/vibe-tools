@@ -360,6 +360,15 @@ Manage local development servers via Docker using `vibe-servers`:
 - `vibe-servers status`: Show detailed status and port mappings.
 - `vibe-servers remove <service>`: Remove a service container.
 
+### Linode Object Storage Compatibility
+
+The local MinIO setup is configured to be "Linode-first," ensuring that development on MinIO seamlessly transitions to Linode Object Storage:
+
+- **Path-Style Addressing**: Uses `endpoint/bucket/file` format (standard for Linode).
+- **Signature Version**: Enforces `s3v4` authentication.
+- **Protocol Detection**: Supports both `http` (local) and `https` (production) via endpoint URL configuration.
+- **S3 Protocol URLs**: Overrides default behavior to support `s3://` protocol for internal services like `imgproxy`.
+
 ### Loop Scripts
 
 - `vibe ralph`: Run the Ralph loop for automated coding.

@@ -172,6 +172,8 @@ def install(service):
         if service == "minio":
             save_key = "s3"
             service_details["region"] = "us-east-1"
+            service_details["addressing_style"] = "path"
+            service_details["signature_version"] = "s3v4"
             if "9001/tcp" in config.get("ports", {}):
                 service_details["console_port"] = config["ports"]["9001/tcp"]
                 
