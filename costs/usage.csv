@@ -1,0 +1,7 @@
+Timestamp,PRD,Phase,Iteration,Model,Input Tokens,Output Tokens,Cost (USD),Purpose
+2026-01-04 08:13:28,N/A,coverage,1,cursor-agent,4,7,0.000011,improving_coverage
+2026-01-04 08:13:28,N/A,test_fix,1,cursor-agent,3,1,0.000004,fixing_test_failures
+2026-01-04 08:13:28,prd_01_test,normalize,1,cursor-agent,200,3,0.000203,normalizing_prd
+2026-01-04 08:13:28,prd_01_test,build,1,cursor-agent,409,7,0.000416,implementation
+2026-01-04 08:13:28,prd_01_test,build,2,cursor-agent,428,7,0.000435,implementation
+2026-01-04 08:13:28,prd_01_test,commit,1,cursor-agent,61,2,0.000063,committing_changes

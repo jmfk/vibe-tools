@@ -16,3 +16,7 @@ prds/
 .ralph_state.json
 logs/
 vibe.log*
+
+.vibe_google_creds.json
+
+.vibe_google_token.json

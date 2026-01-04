@@ -10,8 +10,10 @@ from vibe_tools.utils import (
     run_command,
     STATE_FILE,
     enable_console_debug,
+    COSTS_DIR,
 )
 from vibe_tools.templates import TEMPLATES
+from vibe_tools.cost import get_total_cost
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 
@@ -29,6 +31,8 @@ def save_config(config):
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
     ensure_gitignore(".vibe_config.json")
     ensure_gitignore("logs/")
+    ensure_gitignore(".vibe_google_creds.json")
+    ensure_gitignore(".vibe_google_token.json")
 
 
 def maybe_init_git():
@@ -351,6 +355,45 @@ def history():
                 status = "⚪️ PENDING"
 
         click.echo(f"{project_name:<40} {status:<15}")
+
+
+@cli.command()
+def cost():
+    """Display the total estimated cost of LLM usage for this project."""
+    total = get_total_cost()
+    click.echo(f"\nTotal estimated cost: ${total:.4f} USD")
+    click.echo(f"Detailed log available at: {COSTS_DIR}/usage.csv")
+
+
+@cli.command()
+def setup_google():
+    """Set up Google Sheets connection for cost logging."""
+    click.echo("\n--- Google Sheets Setup ---")
+    click.echo("To log costs to Google Sheets, you need:")
+    click.echo("1. A Google Cloud Project with the Google Sheets API enabled.")
+    click.echo("2. A Service Account with a JSON key saved as '.vibe_google_creds.json'.")
+    click.echo("3. A Google Sheet ID (found in the URL: .../d/ID/edit).")
+    click.echo("4. The Service Account email shared with the Google Sheet (Editor access).")
+
+    config = load_config()
+    current_id = config.get("google_sheet_id", "")
+
+    new_id = click.prompt("\nEnter Google Sheet ID", default=current_id)
+
+    if new_id:
+        config["google_sheet_id"] = new_id
+        save_config(config)
+        click.echo(f"✅ Google Sheet ID saved to {CONFIG_FILE}")
+
+        creds_path = pathlib.Path(".vibe_google_creds.json")
+        if not creds_path.exists():
+            click.echo(
+                f"\n⚠️  Reminder: Please place your service account key at {creds_path}"
+            )
+        else:
+            click.echo(f"✅ Found {creds_path}")
+    else:
+        click.echo("Operation cancelled.")
 
 
 @cli.command()
