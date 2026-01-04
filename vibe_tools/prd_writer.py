@@ -1,4 +1,5 @@
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -27,7 +28,7 @@ class PRDWriter:
         prompts_dir: Optional[pathlib.Path] = None,
         dspy_runner: Optional[DspyRunner] = None,
         agent_runner: Optional[AgentRunner] = None,
-        prd_type: str = "feature"
+        prd_type: str = "feature",
     ):
         self.agent_type = agent_type
         self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("specs"))
@@ -40,7 +41,9 @@ class PRDWriter:
         """Run the interview and write the resulting markdown PRD."""
         prompt = (initial_request or "").strip()
         if not prompt:
-            raise click.ClickException("A feature description is required to write a PRD.")
+            raise click.ClickException(
+                "A feature description is required to write a PRD."
+            )
 
         self._ensure_dspy_available()
         interview = self.run_interview(prompt)
@@ -100,18 +103,22 @@ class PRDWriter:
             )
         template = template_path.read_text()
         qa_section = self._render_history(interview.get("history", []))
-        
+
         # Inject type guidance into context
-        type_context = f"This is a {self.prd_type.upper()} PRD. Please focus on relevant sections."
+        type_context = (
+            f"This is a {self.prd_type.upper()} PRD. Please focus on relevant sections."
+        )
         if self.prd_type == "infra":
-            type_context += " Focus heavily on the Infrastructure and Architecture sections."
+            type_context += (
+                " Focus heavily on the Infrastructure and Architecture sections."
+            )
         elif self.prd_type == "cicd":
             type_context += " Focus on deployment, automation, and CI/CD pipelines in the Infrastructure section."
         elif self.prd_type == "architecture":
             type_context += " Focus on the Architecture and Constraints section."
 
         context = f"{type_context}\n\n{interview.get('context', '')}"
-        
+
         prompt = template.format(
             title=title,
             summary=interview.get("summary", ""),
@@ -138,11 +145,11 @@ class PRDWriter:
         ensure_dir(self.specs_dir)
         next_number = self._next_spec_number()
         slug = self._slugify(title)
-        
+
         prefix = "prd"
         if self.prd_type != "feature":
             prefix = f"prd_{self.prd_type}"
-            
+
         filename = f"{prefix}_{next_number:02d}_{slug}.md"
         return self.specs_dir / filename
 
@@ -150,11 +157,11 @@ class PRDWriter:
         """Return the next sequential spec number based on existing files."""
         ensure_dir(self.specs_dir)
         highest = 0
-        
+
         prefix = "prd"
         if self.prd_type != "feature":
             prefix = f"prd_{self.prd_type}"
-            
+
         pattern = f"{prefix}_*.md"
         for child in self.specs_dir.glob(pattern):
             parts = child.stem.split("_")
@@ -189,6 +196,19 @@ class PRDWriter:
             raise click.ClickException("`dspy` is required but was not found in PATH.")
 
     def _execute_dspy(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from vibe_tools.cli import load_config
+
+        config = load_config()
+        api_key = config.get("google_api_key")
+
+        env = os.environ.copy()
+        if api_key:
+            env["GOOGLE_API_KEY"] = api_key
+        elif "GOOGLE_API_KEY" not in env:
+            raise click.ClickException(
+                "Google API Key is missing. Please run `vibe setup-api` first."
+            )
+
         command = ["dspy", "--model", "gemini-3-flash", "--json"]
         try:
             result = subprocess.run(
@@ -196,6 +216,7 @@ class PRDWriter:
                 input=json.dumps(payload),
                 capture_output=True,
                 text=True,
+                env=env,
             )
         except FileNotFoundError as exc:
             raise click.ClickException("Failed to run dspy.") from exc
@@ -221,4 +242,3 @@ class PRDWriter:
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
         return run_agent(command, caffeinate=False)
-

@@ -60,7 +60,7 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             return
 
     # Check for existing normalized files
-    existing_prds = list(PRDS_DIR.glob("*.yaml"))
+    existing_prds = list(PRDS_DIR.rglob("prd_*.yaml"))
 
     overwrite_all = auto_overwrite
     if existing_prds and not auto_overwrite:
@@ -75,24 +75,24 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
     for spec_path in files_to_process:
         stem = spec_path.stem
 
-        # Determine prefix based on spec location
-        parent_name = spec_path.parent.name.lower()
-        if parent_name in ["infra", "cicd"]:
-            prefix = f"{parent_name}_"
-        else:
-            prefix = "prd_"
+        # Determine target PRD directory based on spec location
+        target_prd_dir = PRDS_DIR
+        try:
+            relative_path = spec_path.relative_to(specs_dir)
+            if len(relative_path.parts) > 1:
+                subdir = relative_path.parts[0]
+                if subdir in ["infra", "cicd"]:
+                    target_prd_dir = PRDS_DIR / subdir
+                    target_prd_dir.mkdir(exist_ok=True)
+        except ValueError:
+            pass
 
-        # Handle case-insensitive prefixes to avoid double prefixing
-        clean_stem = stem.lower()
-        if clean_stem.startswith("prd_"):
-            clean_stem = clean_stem[4:]
-        elif clean_stem.startswith("infra_"):
-            clean_stem = clean_stem[6:]
-        elif clean_stem.startswith("cicd_"):
-            clean_stem = clean_stem[5:]
-        
-        output_filename = f"{prefix}{clean_stem}.yaml"
-        output_path = PRDS_DIR / output_filename
+        # Handle case-insensitive "prd_" prefix normalization
+        if stem.lower().startswith("prd_"):
+            output_filename = f"prd_{stem[4:]}.yaml"
+        else:
+            output_filename = f"prd_{stem}.yaml"
+        output_path = target_prd_dir / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD
         if output_path.exists():

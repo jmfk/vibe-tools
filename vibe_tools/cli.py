@@ -17,8 +17,10 @@ from vibe_tools.utils import (
     ensure_dir,
     ensure_gitignore,
     get_agent_command,
+    load_config,
     run_agent,
     run_command,
+    save_config,
     setup_logging,
 )
 
@@ -831,6 +833,27 @@ def cost():
 
 
 @cli.command()
+def setup_api():
+    """Configure API keys for LLM access."""
+    click.echo("\n--- API Key Configuration ---")
+    config = load_config()
+
+    current_google_key = config.get("google_api_key", "")
+    new_google_key = click.prompt(
+        "Enter Google API Key (for Gemini/DSPy)",
+        default=current_google_key,
+        hide_input=True,
+    )
+
+    if new_google_key:
+        config["google_api_key"] = new_google_key
+        save_config(config)
+        click.echo("✅ Google API Key saved.")
+    else:
+        click.echo("⏩ Google API Key skipped.")
+
+
+@cli.command()
 def setup_google():
     """Set up Google Sheets connection for cost logging."""
     click.echo("\n--- Google Sheets Setup ---")
@@ -923,6 +946,25 @@ def setup_google():
             click.echo(f"✅ Found {creds_path}")
     else:
         click.echo("Invalid choice.")
+
+
+@cli.command("setup-api")
+def setup_api():
+    """Configure API keys for LLM services (e.g., Google Gemini)."""
+    click.echo("\n--- API Configuration ---")
+    config = load_config()
+    
+    current_key = config.get("google_api_key", "")
+    if current_key:
+        click.echo(f"Current Google API Key: {'*' * 8}{current_key[-4:] if len(current_key) > 4 else ''}")
+    
+    new_key = click.prompt("Enter Google API Key", default=current_key, hide_input=True)
+    if new_key:
+        config["google_api_key"] = new_key
+        save_config(config)
+        click.echo("✅ Google API Key saved to .vibe_config.json")
+    else:
+        click.echo("No changes made.")
 
 
 @cli.command("setup-postgres")
