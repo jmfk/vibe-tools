@@ -12,17 +12,25 @@ LOG_FILE = pathlib.Path("vibe.log")
 
 # Setup logger
 logger = logging.getLogger("vibe")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # File handler
 file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
+file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(file_handler)
 
 # Stream handler
 stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(stream_handler)
+
+
+def enable_console_debug():
+    """Sets the console output level to DEBUG."""
+    stream_handler.setLevel(logging.DEBUG)
+    logger.debug("Console debug logging enabled.")
 
 
 def rotate_log():
@@ -46,10 +54,20 @@ def run_command(cmd, check=True, caffeinate=False):
     
     logger.info(f"Running command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    # Debug level logging for full command output
+    logger.debug(f"Command finished with return code: {result.returncode}")
+    if result.stdout:
+        logger.debug(f"STDOUT:\n{result.stdout.strip()}")
+    if result.stderr:
+        logger.debug(f"STDERR:\n{result.stderr.strip()}")
+
     if check and result.returncode != 0:
         logger.error(f"Error running command: {' '.join(cmd)}")
-        logger.error(f"STDOUT: {result.stdout}")
-        logger.error(f"STDERR: {result.stderr}")
+        if not logger.isEnabledFor(logging.DEBUG):
+            # If not in debug mode, at least log the error output to info/error
+            logger.error(f"STDOUT: {result.stdout.strip()}")
+            logger.error(f"STDERR: {result.stderr.strip()}")
         return result.stdout.strip(), result.returncode
     return result.stdout.strip(), result.returncode
 
@@ -74,6 +92,8 @@ def run_agent(cmd, caffeinate=False):
                 f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}"
             )
             sys.stdout.flush()
+            # Also log to debug file immediately
+            logger.debug(f"AGENT_LIVE: {line.strip()}")
     finally:
         process.stdout.close()
         process.wait()
@@ -82,9 +102,9 @@ def run_agent(cmd, caffeinate=False):
     
     output = "".join(full_output)
     logger.info(f"Agent finished with exit code: {process.returncode}")
-    # Log full agent output to file only to avoid cluttering terminal
-    with open(LOG_FILE, "a") as f:
-        f.write(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+    
+    # Log full agent output to debug level (which goes to file)
+    logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
     
     return output, process.returncode
 

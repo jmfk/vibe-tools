@@ -3,7 +3,7 @@ import sys
 import json
 
 
-from vibe_tools.utils import run_command, run_agent, get_agent_command
+from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
@@ -46,26 +46,29 @@ def run_tests(caffeinate=False):
 
 
 def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
-    print("--- Starting Test and Fix Loop ---")
+    logger.info("--- Starting Test and Fix Loop ---")
 
     if not PROMPTS_DIR.exists():
-        print("Error: prompts directory not found. Please run 'vibe init' first.")
+        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
 
     saved_state = load_state()
     start_iteration = saved_state["iteration"] if saved_state else 1
+    
+    if saved_state:
+        logger.info(f"[RESTART] Resuming Test and Fix loop at iteration {start_iteration}")
 
     for i in range(start_iteration, MAX_ITERATIONS + 1):
-        print(f"\n[Iteration {i}/{MAX_ITERATIONS}]")
+        logger.info(f"\n[TEST_FIX LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})")
 
         test_output, tests_passed = run_tests(caffeinate=caffeinate)
 
         if tests_passed:
-            print("✅ All tests and linting passed!")
+            logger.info("✅ All tests and linting passed!")
             clear_state()
             break
 
-        print(f"❌ Tests or linting failed. Asking {agent} to fix...")
+        logger.info(f"❌ Tests or linting failed. [PHASE: fix] Asking {agent} to fix...")
 
         if not TEST_FIX_PROMPT_TEMPLATE.exists():
             print(
@@ -82,9 +85,9 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
         save_state(i + 1, test_output)
 
         if i == MAX_ITERATIONS:
-            print(
+            logger.error(
                 f"FAILED: Could not fix all errors within {MAX_ITERATIONS} iterations."
             )
             sys.exit(1)
 
-    print("--- Test and Fix Loop Finished ---")
+    logger.info("--- Test and Fix Loop Finished ---")

@@ -3,7 +3,7 @@ import sys
 import re
 
 
-from vibe_tools.utils import run_command, run_agent, get_agent_command
+from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
 
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -19,25 +19,25 @@ def get_coverage_report(caffeinate=False):
 
 
 def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
-    print("--- Starting Coverage Improvement Loop ---")
+    logger.info("--- Starting Coverage Improvement Loop ---")
 
     if not PROMPTS_DIR.exists():
-        print("Error: prompts directory not found. Please run 'vibe init' first.")
+        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
 
     for i in range(1, MAX_ITERATIONS + 1):
         report, current_cov = get_coverage_report(caffeinate=caffeinate)
-        print(f"\n[Iteration {i}] Current Total Coverage: {current_cov}%")
+        logger.info(f"\n[COVERAGE LOOP] [PHASE: report] (Iteration {i}) Current Total Coverage: {current_cov}%")
 
         if current_cov >= 100:
-            print("100% coverage achieved!")
+            logger.info("100% coverage achieved!")
             break
 
         target_cov = current_cov + (0.3 * (100 - current_cov))
-        print(f"Targeting improvement to at least {target_cov:.1f}%")
+        logger.info(f"Targeting improvement to at least {target_cov:.1f}%")
 
         if not COVERAGE_PROMPT_TEMPLATE.exists():
-            print(
+            logger.error(
                 f"Error: Coverage prompt template not found at {COVERAGE_PROMPT_TEMPLATE}. Please run 'vibe init'."
             )
             sys.exit(1)
@@ -49,16 +49,17 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             .replace("{target_cov}", f"{target_cov:.1f}")
         )
 
-        print("Calling agent to improve coverage...")
+        logger.info(f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage...")
         cmd = get_agent_command(agent, prompt)
         output, _ = run_agent(cmd, caffeinate=caffeinate)
 
         # Verify if tests still pass
+        logger.info(f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests...")
         _, test_exit_code = run_command(
             ["make", "test"], check=False, caffeinate=caffeinate
         )
         if test_exit_code != 0:
-            print(
+            logger.warning(
                 "⚠️ Warning: Tests are failing after agent changes! Asking agent to fix..."
             )
             fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
@@ -66,18 +67,18 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             run_agent(cmd_fix, caffeinate=caffeinate)
 
         new_report, new_cov = get_coverage_report(caffeinate=caffeinate)
-        print(f"New Total Coverage: {new_cov}%")
+        logger.info(f"New Total Coverage: {new_cov}%")
 
         if new_cov > current_cov:
-            print(f"✅ Coverage improved by {new_cov - current_cov}%!")
+            logger.info(f"✅ Coverage improved by {new_cov - current_cov}%!")
         else:
-            print("❌ Coverage did not improve in this iteration.")
+            logger.info("❌ Coverage did not improve in this iteration.")
 
         if COMPLETION_PROMISE in output:
-            print("Agent signaled completion.")
+            logger.info("Agent signaled completion.")
 
         if new_cov > current_cov and test_exit_code == 0:
-            print("Committing improvements...")
+            logger.info("Committing improvements...")
             run_command(["git", "add", "."], caffeinate=caffeinate)
             run_command(
                 [
@@ -89,4 +90,4 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
                 caffeinate=caffeinate,
             )
 
-    print("\n--- Coverage Improvement Loop Finished ---")
+    logger.info("\n--- Coverage Improvement Loop Finished ---")

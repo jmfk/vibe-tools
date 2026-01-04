@@ -27,7 +27,7 @@ MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 
-def save_state(prd_name, iteration, output, context):
+def save_state(prd_name, iteration, output, context, phase="build"):
     """Saves the current state to a file."""
     # Load existing state to preserve completed_prds
     state = load_state() or {"completed_prds": [], "active_task": None}
@@ -35,6 +35,7 @@ def save_state(prd_name, iteration, output, context):
     state["active_task"] = {
         "prd_name": prd_name,
         "iteration": iteration,
+        "phase": phase,
         "output": output,
         "context": context,
     }
@@ -62,6 +63,7 @@ def load_state():
                     "active_task": {
                         "prd_name": data.get("prd_name"),
                         "iteration": data.get("iteration", 1),
+                        "phase": data.get("phase", "build"),
                         "output": data.get("output", ""),
                         "context": data.get("context", ""),
                     },
@@ -214,6 +216,12 @@ def ralph_loop(
 
     resume_prd = active_task["prd_name"] if active_task else None
     resume_iteration = active_task["iteration"] if active_task else 1
+    resume_phase = active_task["phase"] if active_task else "build"
+
+    if resume_prd:
+        logger.info(
+            f"[RESTART] Resuming {resume_prd} at iteration {resume_iteration} in phase '{resume_phase}'"
+        )
 
     # Ensure we are on main branch
     logger.info("Ensuring we are on 'main' branch...")
@@ -275,38 +283,51 @@ def ralph_loop(
         iteration_output = active_task["output"] if active_task else ""
         additional_context = active_task["context"] if active_task else ""
         start_iteration = resume_iteration
+        start_phase = resume_phase
 
         # Clear active_task once it's been consumed
         active_task = None
         resume_iteration = 1
+        resume_phase = "build"
 
         success = False
 
         for i in range(start_iteration, MAX_ITERATIONS + 1):
-            logger.info(f"[RALPH LOOP] Iteration {i}")
+            # Phase 1: Build/Implementation
+            if start_phase == "build":
+                logger.info(f"[RALPH LOOP] [PHASE: build] (Iteration {i})")
 
-            prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
+                prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
-            output = run_ralph_agent(
-                agent,
-                prompt_for_iteration,
-                prd_file,
-                ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
-                OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
-                BACKEND_ROOT,
-                FRONTEND_ROOT,
-                caffeinate=caffeinate,
-            )
+                output = run_ralph_agent(
+                    agent,
+                    prompt_for_iteration,
+                    prd_file,
+                    ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
+                    OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
+                    BACKEND_ROOT,
+                    FRONTEND_ROOT,
+                    caffeinate=caffeinate,
+                )
 
-            iteration_output = output
+                iteration_output = output
 
-            if COMPLETION_PROMISE in output:
+                if COMPLETION_PROMISE not in output:
+                    additional_context = ""
+                    save_state(
+                        project_name, i + 1, output, additional_context, phase="build"
+                    )
+                    continue
+
                 logger.info(
                     f"COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
                 )
-                save_state(project_name, i, output, additional_context)
+                save_state(project_name, i, output, additional_context, phase="test")
+                start_phase = "test"
 
-                # 1. Run Tests
+            # Phase 2: Tests
+            if start_phase == "test":
+                logger.info(f"[RALPH LOOP] [PHASE: test] (Iteration {i})")
                 if tests:
                     test_output, tests_passed = run_tests_logic(caffeinate=caffeinate)
                     if not tests_passed:
@@ -314,13 +335,31 @@ def ralph_loop(
                         additional_context = (
                             f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
                         )
-                        save_state(project_name, i + 1, output, additional_context)
+                        save_state(
+                            project_name,
+                            i + 1,
+                            iteration_output,
+                            additional_context,
+                            phase="build",
+                        )
+                        start_phase = "build"
                         continue
                     logger.info("✅ Tests passed.")
                 else:
                     logger.info("⏩ Skipping tests as requested.")
 
-                # 2. Run Review
+                save_state(
+                    project_name,
+                    i,
+                    iteration_output,
+                    additional_context,
+                    phase="review",
+                )
+                start_phase = "review"
+
+            # Phase 3: Review
+            if start_phase == "review":
+                logger.info(f"[RALPH LOOP] [PHASE: review] (Iteration {i})")
                 if review:
                     review_output, review_passed = run_review_logic(
                         agent, prd_file, caffeinate=caffeinate
@@ -330,7 +369,14 @@ def ralph_loop(
                         additional_context = (
                             f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
                         )
-                        save_state(project_name, i + 1, output, additional_context)
+                        save_state(
+                            project_name,
+                            i + 1,
+                            iteration_output,
+                            additional_context,
+                            phase="build",
+                        )
+                        start_phase = "build"
                         continue
                     logger.info("✅ Review passed.")
                 else:
@@ -338,9 +384,6 @@ def ralph_loop(
 
                 success = True
                 break
-
-            additional_context = ""
-            save_state(project_name, i + 1, output, additional_context)
 
         if success:
             logger.info(f"Committing changes for: {project_name}")

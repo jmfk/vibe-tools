@@ -9,6 +9,7 @@ from vibe_tools.utils import (
     is_merged,
     run_command,
     STATE_FILE,
+    enable_console_debug,
 )
 from vibe_tools.templates import TEMPLATES
 
@@ -48,6 +49,12 @@ def maybe_init_git():
 
 @click.group(invoke_without_command=True)
 @click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable debug logging to console.",
+)
+@click.option(
     "--agent",
     type=click.Choice(["cursor-agent", "claude", "antigravity"]),
     default="cursor-agent",
@@ -61,9 +68,12 @@ def maybe_init_git():
 )
 @click.version_option(version="0.1.0")
 @click.pass_context
-def cli(ctx, agent, caffeinate):
+def cli(ctx, debug, agent, caffeinate):
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
+
+    if debug:
+        enable_console_debug()
 
     config = load_config()
     if caffeinate is None:
