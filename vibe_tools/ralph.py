@@ -96,6 +96,97 @@ def clear_state():
         STATE_FILE.unlink()
 
 
+def get_pending_prds_and_estimates(agent_type, config):
+    """
+    Returns a list of pending PRDs and their estimated initial prompt costs.
+    """
+    from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+
+    cost_logger = CostLogger(config)
+    model = AGENT_DEFAULT_MODEL.get(agent_type, "unknown")
+
+    state = load_state()
+    completed_prds = state.get("completed_prds", [])
+    active_task = state.get("active_task")
+
+    resume_prd = active_task["prd_name"] if active_task else None
+    resume_iteration = active_task["iteration"] if active_task else 1
+
+    prds = sorted(PRD_DIR.glob("prd_*.yaml"))
+    results = []
+
+    if not BASE_PROMPT_TEMPLATE.exists():
+        return results
+
+    base_prompt = BASE_PROMPT_TEMPLATE.read_text()
+    architecture_content = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
+
+    for prd_file in prds:
+        project_name = prd_file.stem
+        branch_name = f"feature/{project_name}"
+
+        if resume_prd and project_name != resume_prd:
+            continue
+        
+        if project_name in completed_prds:
+            continue
+
+        if is_merged(branch_name):
+            continue
+
+        # Simulate the prompt construction
+        prd_content = prd_file.read_text()
+        
+        iteration_output = ""
+        additional_context = ""
+        
+        if active_task and project_name == active_task.get("prd_name"):
+            iteration_output = active_task.get("output", "")
+            additional_context = active_task.get("context", "")
+        
+        # This matches the structure in run_ralph_agent and ralph_loop
+        prompt_text = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
+        
+        combined_prompt = f"""{prompt_text}
+
+CONTEXT FILES:
+- PRD: {prd_content}
+- Architecture: {architecture_content}
+- Project Overview: {overview_content}
+
+TARGET DIRECTORIES:
+- Backend: {BACKEND_ROOT}
+- Frontend: {FRONTEND_ROOT}
+
+TESTING & QUALITY:
+- The project uses a Makefile for testing and linting.
+- Key targets: test-backend, test-frontend, test-infra, test-integration, test-regression, lint-backend, lint-frontend, lint-infra.
+- INITIAL STATE: Dummy tests have been created in `tests/` and `frontend/src/` to ensure the pipeline passes.
+- YOUR TASK: As you develop features, replace these dummy tests with real ones. Update the Makefile targets to run your actual test suites (e.g., changing `@exit 0` to `pytest` or `npm test`).
+
+TASK:
+Process the above according to the instructions. You are responsible for BOTH the backend (FastAPI) and the frontend (React). 
+Update existing files or create new ones in either directory as needed to fulfill the PRD requirements.
+Include {COMPLETION_PROMISE} when you are done.
+"""
+        # We only estimate the initial prompt cost (input tokens)
+        input_tokens = cost_logger.estimate_tokens(combined_prompt)
+        cost = cost_logger.calculate_cost(model, input_tokens, 0)
+
+        results.append({
+            "prd_name": project_name,
+            "model": model,
+            "cost_estimate": cost,
+            "is_resume": project_name == resume_prd
+        })
+
+        # Once we found the resume PRD, stop skipping
+        resume_prd = None
+
+    return results
+
+
 def run_ralph_agent(
     agent_type,
     prompt_text,

@@ -32,7 +32,6 @@ def save_config(config):
     ensure_gitignore(".vibe_config.json")
     ensure_gitignore("logs/")
     ensure_gitignore(".vibe_google_creds.json")
-    ensure_gitignore(".vibe_google_token.json")
 
 
 def maybe_init_git():
@@ -250,11 +249,30 @@ def ralph(ctx, review, tests, auto_merge):
     click.echo("4. Run quality gates (tests/review) if enabled.")
     click.echo("5. Commit and optionally merge changes.")
 
+    from vibe_tools.ralph import ralph_loop, get_pending_prds_and_estimates
+
+    # Get estimates for pending PRDs
+    vibe_config = load_config()
+    pending_estimates = get_pending_prds_and_estimates(agent, vibe_config)
+
+    if pending_estimates:
+        click.echo("\nPending PRDs and Estimated Initial Costs:")
+        total_initial_cost = 0.0
+        for est in pending_estimates:
+            resume_suffix = " [RESUMING]" if est["is_resume"] else ""
+            click.echo(
+                f"  - {est['prd_name']}{resume_suffix} (Model: {est['model']}, Est. Initial Cost: ${est['cost_estimate']:.6f})"
+            )
+            total_initial_cost += est["cost_estimate"]
+        
+        click.echo(f"\nTotal Estimated Initial Cost: ${total_initial_cost:.6f} USD")
+        click.echo("(Note: Subsequent iterations and output tokens will incur additional costs.)")
+    else:
+        click.echo("\nNo pending PRDs found to process.")
+
     if not click.confirm("\nProceed with Ralph loop?", default=True):
         click.echo("Aborted.")
         return
-
-    from vibe_tools.ralph import ralph_loop
 
     ralph_loop(
         agent=agent,
