@@ -381,19 +381,38 @@ def history():
 def cost():
     """Display the total estimated cost of LLM usage for this project."""
     total = get_total_cost()
+    config = load_config()
+    use_google = config.get("use_google_sheets", False)
+    sheet_id = config.get("google_sheet_id")
+    
     click.echo(f"\nTotal estimated cost: ${total:.4f} USD")
     click.echo(f"Detailed log available at: {COSTS_DIR}/usage.csv")
+    
+    if use_google and sheet_id:
+        click.echo(f"Google Sheets Logging: ENABLED (ID: {sheet_id})")
+    else:
+        click.echo("Google Sheets Logging: DISABLED")
 
 
 @cli.command()
 def setup_google():
     """Set up Google Sheets connection for cost logging."""
     click.echo("\n--- Google Sheets Setup ---")
-    click.echo("To log costs to Google Sheets, you need to configure access.")
-
+    
     config = load_config()
-    current_id = config.get("google_sheet_id", "")
+    current_use = config.get("use_google_sheets", False)
+    
+    use_google = click.confirm("Enable logging costs to Google Sheets?", default=current_use)
+    config["use_google_sheets"] = use_google
+    
+    if not use_google:
+        save_config(config)
+        click.echo("✅ Google Sheets logging disabled.")
+        return
 
+    click.echo("\nTo log costs to Google Sheets, you need to configure access.")
+
+    current_id = config.get("google_sheet_id", "")
     new_id = click.prompt("\nEnter Google Sheet ID", default=current_id)
 
     if not new_id:

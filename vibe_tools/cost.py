@@ -32,7 +32,8 @@ class CostLogger:
     def __init__(self, config_data: dict):
         self.config = config_data
         self.google_sheet_id = config_data.get("google_sheet_id")
-        self.enabled_google = bool(self.google_sheet_id)
+        self.use_google_sheets = config_data.get("use_google_sheets", False)
+        self.enabled_google = self.use_google_sheets and bool(self.google_sheet_id)
 
     def estimate_tokens(self, text: str) -> int:
         """Estimates token count (~4 chars per token)."""
@@ -121,6 +122,8 @@ class CostLogger:
             writer.writerow(row)
 
     def _log_to_google(self, row):
+        from vibe_tools.utils import logger
+
         try:
             import gspread
 
@@ -144,15 +147,14 @@ class CostLogger:
             elif creds_path.exists():
                 gc = gspread.service_account(filename=str(creds_path))
             else:
+                logger.warning("⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe setup-google'.")
                 return
 
             sh = gc.open_by_key(self.google_sheet_id)
             worksheet = sh.get_worksheet(0)
             worksheet.append_row(row)
         except Exception as e:
-            from vibe_tools.utils import logger
-
-            logger.error(f"Failed to log to Google Sheets: {e}")
+            logger.warning(f"⚠️ Failed to log to Google Sheets: {e}. Logging locally to CSV instead.")
 
 
 def get_total_cost():
