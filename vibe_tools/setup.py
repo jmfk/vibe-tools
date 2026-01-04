@@ -627,9 +627,13 @@ def env(python_version):
 
     # 7. Install dependencies
     click.echo("Installing dependencies in managed environment...")
-    # We use python -m pip to ensure we use the venv's pip
-    run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
-    run_command(["python", "-m", "pip", "install", "-e", "."])
+    # Prefer make install-deps if available, otherwise fallback to pip
+    if pathlib.Path("Makefile").exists():
+        run_command(["make", "install-deps"])
+    else:
+        # We use python -m pip to ensure we use the venv's pip
+        run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
+        run_command(["python", "-m", "pip", "install", "-e", "."])
 
     # 8. Record in config
     config = load_config()
