@@ -2,6 +2,7 @@ import hashlib
 import json
 import pathlib
 import sys
+import click
 from typing import Any
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger, get_session_cost

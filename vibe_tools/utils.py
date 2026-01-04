@@ -354,11 +354,26 @@ def check_env_health() -> bool:
         venv_name = env_config.get("venv_name")
         if venv_name:
             current_prefix = sys.prefix
-            if venv_name not in current_prefix:
+            # If we are running via pipx, the sys.prefix will be the pipx venv
+            # but we want to know if the *active* pyenv environment is correct
+            # or if we are at least in a context where the project venv is intended
+            if "pipx" in current_prefix:
+                # We are running globally via pipx. We should check if the 
+                # user has activated their project venv or if we are in the project dir
+                # For now, let's look at the PYENV_VERSION or similar env vars
+                import os
+                pyenv_version = os.environ.get("PYENV_VERSION") or os.environ.get("VIRTUAL_ENV")
+                if venv_name not in str(pyenv_version) and venv_name not in current_prefix:
+                    logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
+                    logger.warning(f"   Note: You are running 'vibe' via pipx global install.")
+                    logger.warning(f"   Please run 'pyenv activate {venv_name}' or ensure it's set in .python-version")
+                    return False
+            elif venv_name not in current_prefix:
                 logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
                 logger.warning(f"   Current environment: {current_prefix}")
                 return False
-            logger.debug(f"✅ Running in managed environment: {venv_name}")
+            
+            logger.debug(f"✅ Environment check passed.")
 
     return True
 
