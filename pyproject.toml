@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["vibe_tools", "src"]
+packages = ["vibe_tools", "backend"]
 
 [project.scripts]
 vibe = "vibe_tools.cli:cli"
@@ -52,7 +52,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["E501"]
+"backend/tests/*" = ["E501"]
 "vibe_tools/*" = ["E501"] # Some long f-strings are better kept on one line for readability in CLI
 
 [tool.mypy]

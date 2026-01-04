@@ -9,7 +9,7 @@ Follow all constraints in the PRD and system instructions.
 INTEGRATION RULES:
 - Ensure the Frontend uses the `apiClient` in `frontend/src/api/client.ts`.
 - Generate TypeScript interfaces in the frontend that match Pydantic schemas in the backend.
-- Create or update backend tests in `tests/` using the established `pytest` patterns.
+- Create or update backend tests in `backend/tests/` using the established `pytest` patterns.
 - Ensure the Frontend is modern, responsive, and matches the platform vision.
 
 GENERAL RULES:

@@ -27,22 +27,22 @@ help:
 	@echo "  make git-reset    - Reset local main branch to match origin/main"
 
 test-backend:
-	PYTHONPATH=. pytest -v tests/
+	PYTHONPATH=.:backend pytest -v backend/tests/
 
 test-frontend:
 	cd frontend && npx vitest --run
 
 test-infra:
 	@echo "Running infra tests..."
-	pytest tests/test_cli.py
+	pytest backend/tests/test_cli.py
 
 test-integration:
 	@echo "Running integration tests..."
-	pytest tests/test_api.py
+	pytest backend/tests/test_api.py
 
 test-regression:
 	@echo "Running regression tests..."
-	pytest tests/test_utils.py
+	pytest backend/tests/test_utils.py
 
 lint-backend:
 	@echo "Running backend lint (ruff)..."
@@ -70,10 +70,10 @@ monitor:
 	vibe monitor --interval 60
 
 run:
-	uvicorn src.main:app --reload --port 8000
+	uvicorn backend.main:app --reload --port 8000
 
 migrate-init:
-	aerich init -t src.core.db.TORTOISE_ORM
+	aerich init -t backend.core.db.TORTOISE_ORM
 	aerich init-db
 
 migrate:
@@ -84,7 +84,7 @@ test:
 	PYTHONPATH=. pytest -v
 
 coverage:
-	pytest --cov=src --cov=vibe_tools --cov-report=term-missing tests/
+	pytest --cov=backend --cov=vibe_tools --cov-report=term-missing backend/tests/
 
 coverage-loop:
 	vibe coverage

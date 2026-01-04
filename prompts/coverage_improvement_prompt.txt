@@ -6,13 +6,13 @@ CURRENT COVERAGE REPORT:
 TASK:
 Improve the test coverage of the backend implementation. 
 Focus on the files with the highest number of 'Missing' lines as shown in the report.
-Create new test files in 'tests/' or update existing ones to cover the missing lines.
+Create new test files in 'backend/tests/' or update existing ones to cover the missing lines.
 Your goal is to increase the total coverage from {current_cov}% towards the target of {target_cov:.1f}%.
 
 RULES:
 - Do not break existing tests (run 'make test' to verify).
-- Use pytest and tortoise-orm testing patterns as established in 'tests/conftest.py'.
-- Work directly in the 'tests/' and 'src/' directories if needed (but primarily 'tests/').
+- Use pytest and tortoise-orm testing patterns as established in 'backend/tests/conftest.py'.
+- Work directly in the 'backend/tests/' and 'backend/' directories if needed (but primarily 'backend/tests/').
 - Once you have added/updated tests that you believe significantly improve coverage, include <promise>DONE</promise> in your final response.
 
 Output code only. No extra text.

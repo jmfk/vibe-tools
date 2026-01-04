@@ -47,8 +47,9 @@ def test_check_connection_failure():
     with patch("socket.create_connection", side_effect=ConnectionRefusedError):
         assert check_connection("postgres", {"host": "localhost", "port": 5432}) is False
 
-def test_setup_test_command(runner, mock_config, monkeypatch):
+def test_setup_test_command(runner, mock_config, monkeypatch, tmp_path):
     monkeypatch.setattr("vibe_tools.utils.CONFIG_FILE", mock_config)
+    monkeypatch.setattr("vibe_tools.utils.GLOBAL_CONFIG_FILE", tmp_path / "global_config.json")
     
     with patch("vibe_tools.setup.check_connection") as mock_check:
         mock_check.side_effect = [True, False] # postgres ok, redis fails

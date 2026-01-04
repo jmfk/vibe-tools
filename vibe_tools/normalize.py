@@ -76,8 +76,10 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
     for spec_path in files_to_process:
         stem = spec_path.stem
 
-        # Determine target PRD directory (no subdirectories)
-        target_prd_dir = PRDS_DIR
+        # Determine target PRD directory (preserving subdirectories)
+        rel_dir = spec_path.parent.relative_to(specs_dir)
+        target_prd_dir = PRDS_DIR / rel_dir
+        target_prd_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine output filename with normalized prefix and format
         # 1. Special case for shared global context files ("global truths")

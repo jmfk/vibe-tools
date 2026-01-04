@@ -20,7 +20,7 @@ def get_status_report(agent, interval, cost_logger=None):
 
     current_branch_out, _ = run_command(["git", "branch", "--show-current"], check=False)
     git_status_out, _ = run_command(["git", "status", "--short"], check=False)
-    last_diff_out, _ = run_command(["git", "diff", "HEAD", "src/"], check=False)
+    last_diff_out, _ = run_command(["git", "diff", "HEAD", "backend/"], check=False)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
