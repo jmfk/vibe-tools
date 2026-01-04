@@ -22,6 +22,7 @@ dependencies = [
     "ruff",
     "mypy",
     "python-dotenv",
+    "rich",
 ]
 
 [tool.setuptools]
