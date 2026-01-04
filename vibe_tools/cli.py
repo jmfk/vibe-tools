@@ -959,9 +959,9 @@ def cleanup():
 
 @cli.command()
 @click.argument("text", required=False)
-@click.option("--list", "-l", "list_memories", is_flag=True, help="List all memories.")
+@click.option("--list", "-l", "list_memories", is_flag=True, help="List all saved memories.")
 @click.option("--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index.")
-@click.option("--clear", is_flag=True, help="Clear all memories.")
+@click.option("--clear", is_flag=True, help="Clear all saved memories.")
 def memory(text, list_memories, delete_idx, clear):
     """Save a 'memory' (global instruction) that is always sent to the agent."""
     from vibe_tools.utils import INSTRUCTIONS_DIR
@@ -1013,6 +1013,17 @@ def memory(text, list_memories, delete_idx, clear):
         filepath = INSTRUCTIONS_DIR / filename
         filepath.write_text(text)
         click.echo(f"✅ Memory saved to {filepath}")
+
+
+@cli.command()
+@click.argument("text", required=False)
+@click.option("--list", "-l", "list_memories", is_flag=True, help="List all saved memories.")
+@click.option("--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index.")
+@click.option("--clear", is_flag=True, help="Clear all saved memories.")
+@click.pass_context
+def remember(ctx, text, list_memories, delete_idx, clear):
+    """Alias for 'vibe memory'."""
+    ctx.invoke(memory, text=text, list_memories=list_memories, delete_idx=delete_idx, clear=clear)
 
 
 @cli.command()

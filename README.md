@@ -94,10 +94,13 @@ vibe --help
 ### Key Commands
 
 - `vibe init`: Initialize templates and prompt directories.
+- `vibe write-prd`: Start an interactive interview to generate a new PRD spec.
+- `vibe review-prd`: List and view markdown specs with optional agentic review.
+- `vibe remember`: Save a global instruction ("memory") always sent to the agent.
 - `vibe ralph`: Run the main PRD processing loop.
+- `vibe history`: Check the status of all PRDs.
 - `vibe setup-google`: Configure Google Sheets for cost logging.
 - `vibe cost`: View total estimated cost of LLM usage.
-- `vibe history`: Check the status of all PRDs.
 
 ### Loop Scripts
 
@@ -112,7 +115,7 @@ vibe --help
 2. **Infrastructure and CI/CD Upgrades.** You can place infrastructure and CI/CD specs in `specs/infra/` and `specs/cicd/`. When normalized, these will be prefixed with `infra_` or `cicd_`. Ralph automatically finds the highest-numbered file for each and includes it as shared context in every prompt.
 3. **Convert the spec into a Ralph-ready PRD.** Ralph only reads `prds/prd_*.yaml`, `prds/infra_*.yaml`, and `prds/cicd_*.yaml`. Transform each spec into a YAML file using `vibe normalize`. Keep the numbered prefix so Ralph can process them in order or identify the latest version for context.
 4. **Provide shared context documents.** Ralph injects `prds/architecture.yaml` and `prds/project_overview.yaml` into every prompt. It also includes the latest `infra_*.yaml` and `cicd_*.yaml`.
-5. **Global Agent Instructions.** Place global guidelines (like syntax style, coding standards, or specific prompt instructions) in `prompts/instructions/`. Ralph reads all files in this directory and injects them into the agent's context.
+5. **Global Agent Instructions.** Use `vibe remember` to save global guidelines (like syntax style or coding standards) into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
 6. **Understand the Ralph loop.** `vibe_tools/ralph.py` reads the PRD directory, includes the context files, and prompts the agent until it emits `<promise>DONE</promise>` before moving on to quality gates.
 
 ## Development
