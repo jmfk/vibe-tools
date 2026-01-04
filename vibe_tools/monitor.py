@@ -10,7 +10,7 @@ PROMPTS_DIR = pathlib.Path("prompts")
 MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
 
 
-def get_status_report(agent, interval, cost_logger=None):
+def get_status_report(agent, interval, cost_logger=None, stream=False):
     """Gathers context and calls agent to inspect progress."""
     # Check if we are in a git repository
     stdout, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
@@ -40,7 +40,7 @@ def get_status_report(agent, interval, cost_logger=None):
     cmd = get_agent_command(agent, inspection_prompt)
 
     print(f"\n--- Monitoring Report [{timestamp}] ---")
-    output, returncode = run_agent(cmd)
+    output, returncode = run_agent(cmd, stream=stream)
 
     if cost_logger:
         cost_logger.log_run(
@@ -60,7 +60,7 @@ def get_status_report(agent, interval, cost_logger=None):
         print(f"Error calling agent (Exit Code {returncode}): {output}")
 
 
-def run_monitor(agent, interval):
+def run_monitor(agent, interval, stream=False):
     from vibe_tools.cli import load_config
 
     print(f"Starting monitor with {interval}s interval using agent {agent}. Press Ctrl+C to stop.")
@@ -70,7 +70,7 @@ def run_monitor(agent, interval):
 
     try:
         while True:
-            get_status_report(agent, interval, cost_logger=cost_logger)
+            get_status_report(agent, interval, cost_logger=cost_logger, stream=stream)
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nMonitoring stopped.")

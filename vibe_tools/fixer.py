@@ -45,7 +45,7 @@ def run_tests(caffeinate=False, fast=False):
     return tester.run_tests(caffeinate=caffeinate, changed_only=fast)
 
 
-def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False):
+def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream=False):
     from vibe_tools.cli import load_config
 
     logger.info("--- Starting Test and Fix Loop ---")
@@ -92,7 +92,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False):
         prompt = prompt_base.replace("{test_output}", test_output)
 
         cmd = get_agent_command(agent, prompt)
-        agent_output, _ = run_agent(cmd, caffeinate=caffeinate)
+        agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
         cost_logger.log_run(
             agent=agent,
