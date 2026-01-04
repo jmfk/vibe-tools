@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+from dotenv import load_dotenv, find_dotenv, set_key
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
 
@@ -36,10 +37,27 @@ def load_config():
 def save_config(config):
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
     ensure_gitignore(".vibe_config.json")
+    ensure_gitignore(".env")
     ensure_gitignore("logs/")
     ensure_gitignore(".vibe_google_creds.json")
     ensure_gitignore(".vibe_client_secrets.json")
     ensure_gitignore(".vibe_authorized_user.json")
+
+
+def get_google_api_key():
+    """Retrieves the Google API Key from .env or environment variables."""
+    load_dotenv(find_dotenv() or ".env")
+    return os.environ.get("GOOGLE_API_KEY")
+
+
+def save_google_api_key(key):
+    """Saves the Google API Key to the .env file."""
+    env_file = find_dotenv() or ".env"
+    if not os.path.exists(env_file):
+        with open(env_file, "w") as f:
+            f.write("")
+    set_key(env_file, "GOOGLE_API_KEY", key)
+    ensure_gitignore(".env")
 
 
 # Setup logger

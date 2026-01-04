@@ -8,7 +8,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import click
 
-from vibe_tools.utils import ensure_dir, get_agent_command, run_agent
+from vibe_tools.utils import (
+    ensure_dir,
+    get_agent_command,
+    run_agent,
+    get_google_api_key,
+)
 
 
 DspyRunner = Callable[[Dict[str, Any]], Dict[str, Any]]
@@ -196,10 +201,7 @@ class PRDWriter:
             raise click.ClickException("`dspy` is required but was not found in PATH.")
 
     def _execute_dspy(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        from vibe_tools.cli import load_config
-
-        config = load_config()
-        api_key = config.get("google_api_key")
+        api_key = get_google_api_key()
 
         env = os.environ.copy()
         if api_key:
