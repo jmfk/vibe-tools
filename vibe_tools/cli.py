@@ -231,6 +231,13 @@ def ralph(ctx, review, tests, auto_merge):
         if auto_merge:
             click.echo("✅ Auto-merge enabled.")
 
+        verbose = click.confirm(
+            "Enable verbose output (log prompts and commands to terminal)?",
+            default=False,
+        )
+        if verbose:
+            click.echo("✅ Verbose output enabled.")
+
         caffeinate = ctx.obj.get("caffeinate", False)
         if not caffeinate:
             if click.confirm(
@@ -252,6 +259,7 @@ def ralph(ctx, review, tests, auto_merge):
                         "auto_merge": auto_merge,
                     },
                     "caffeinate": caffeinate,
+                    "verbose": verbose,
                 }
             )
             click.echo("✅ Configuration saved.")
