@@ -24,7 +24,14 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "postgres": {
         "display": "PostgreSQL",
         "default_port": 5432,
-        "docker_keywords": ["postgres", "postgresql", "pgvector", "pg15", "pg16", "pg17"],
+        "docker_keywords": [
+            "postgres",
+            "postgresql",
+            "pgvector",
+            "pg15",
+            "pg16",
+            "pg17",
+        ],
         "fields": [
             {"name": "host", "prompt": "Postgres host", "default": "localhost"},
             {"name": "port", "prompt": "Postgres port", "type": int, "default": 5432},
@@ -117,11 +124,21 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docker_keywords": ["mailhog"],
         "fields": [
             {"name": "host", "prompt": "MailHog host", "default": "localhost"},
-            {"name": "port", "prompt": "MailHog SMTP port", "type": int, "default": 1025},
-            {"name": "web_port", "prompt": "MailHog Web port", "type": int, "default": 8025},
+            {
+                "name": "port",
+                "prompt": "MailHog SMTP port",
+                "type": int,
+                "default": 1025,
+            },
+            {
+                "name": "web_port",
+                "prompt": "MailHog Web port",
+                "type": int,
+                "default": 8025,
+            },
         ],
     },
-    "s3": {
+    "s3-linode": {
         "display": "S3 Object Store (MinIO/Linode)",
         "default_port": 9000,
         "docker_keywords": ["minio"],
@@ -146,7 +163,45 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
                 "prompt": "Signature Version",
                 "default": "s3v4",
             },
-            {"name": "console_port", "prompt": "S3 Console port", "type": int, "default": 9001},
+            {
+                "name": "console_port",
+                "prompt": "S3 Console port",
+                "type": int,
+                "default": 9001,
+            },
+        ],
+    },
+    "s3-aws": {
+        "display": "S3 Object Store (MinIO/AWS)",
+        "default_port": 9010,
+        "docker_keywords": ["minio"],
+        "fields": [
+            {"name": "host", "prompt": "S3 host", "default": "localhost"},
+            {"name": "port", "prompt": "S3 port", "type": int, "default": 9010},
+            {"name": "access_key", "prompt": "S3 Access Key", "default": "minioadmin"},
+            {
+                "name": "secret_key",
+                "prompt": "S3 Secret Key",
+                "default": "minioadmin",
+                "hide_input": True,
+            },
+            {"name": "region", "prompt": "S3 Region", "default": "us-east-1"},
+            {
+                "name": "addressing_style",
+                "prompt": "Addressing Style (path/virtual)",
+                "default": "virtual",
+            },
+            {
+                "name": "signature_version",
+                "prompt": "Signature Version",
+                "default": "s3v4",
+            },
+            {
+                "name": "console_port",
+                "prompt": "S3 Console port",
+                "type": int,
+                "default": 9011,
+            },
         ],
     },
 }
@@ -196,15 +251,15 @@ def detect_docker_service(service_key: str) -> Dict[str, Any]:
             continue
         container_name, image, ports = parts
         mapped_port = _parse_docker_port_mapping(ports, metadata["default_port"])
-        
+
         info = {
             "container_name": container_name,
             "image": image,
             "host": "localhost",
             "port": int(mapped_port) if mapped_port else metadata["default_port"],
-            "mapped": bool(mapped_port)
+            "mapped": bool(mapped_port),
         }
-        
+
         # Check for keyword match
         searchable = f"{container_name} {image}".lower()
         if any(keyword in searchable for keyword in metadata["docker_keywords"]):
@@ -262,6 +317,7 @@ def check_connection(service_key: str, details: Dict[str, Any]) -> bool:
         url = f"{scheme}://{host}:{port}"
         try:
             import httpx
+
             with httpx.Client(timeout=2.0) as client:
                 # Basic check for ES - it should return a 200 with JSON
                 response = client.get(url)
@@ -281,12 +337,14 @@ def configure_service(service_key: str):
     metadata = SERVICE_DEFINITIONS[service_key]
     config = load_config()
     details = prompt_service_config(service_key)
-    
+
     click.echo(f"Checking connection to {metadata['display']}...")
     if check_connection(service_key, details):
         click.echo(f"✅ Connection successful!")
     else:
-        click.echo(f"⚠️  Warning: Could not connect to {metadata['display']} at {details.get('host')}:{details.get('port')}.")
+        click.echo(
+            f"⚠️  Warning: Could not connect to {metadata['display']} at {details.get('host')}:{details.get('port')}."
+        )
         if not click.confirm("Save configuration anyway?", default=True):
             click.echo("Aborted.")
             return
@@ -324,7 +382,7 @@ def test():
     """Verify connectivity for all configured services."""
     config = load_config()
     services = config.get("services", {})
-    
+
     if not services:
         click.echo("No services configured. Run 'vibe-setup <service>' first.")
         return
@@ -333,7 +391,7 @@ def test():
     for service_key, details in services.items():
         metadata = SERVICE_DEFINITIONS.get(service_key, {})
         display = metadata.get("display", service_key.capitalize())
-        
+
         click.echo(f"{display:<15}: ", nl=False)
         if check_connection(service_key, details):
             click.echo("✅ Connected")
@@ -347,7 +405,7 @@ def test():
 def api():
     """Configure API keys for LLM access."""
     click.echo("\n--- API Key Configuration ---")
-    
+
     current_google_key = get_google_api_key() or ""
     new_google_key = click.prompt(
         "Enter Google API Key (for Gemini/DSPy)",
@@ -362,7 +420,9 @@ def api():
         if "google_api_key" in config:
             del config["google_api_key"]
             save_config(config)
-        click.echo("✅ Google API Key saved to .env (and removed from .vibe_config.json)")
+        click.echo(
+            "✅ Google API Key saved to .env (and removed from .vibe_config.json)"
+        )
     else:
         click.echo("⏩ Google API Key skipped.")
 
@@ -375,7 +435,9 @@ def google():
     config = load_config()
     current_use = config.get("use_google_sheets", False)
 
-    use_google = click.confirm("Enable logging costs to Google Sheets?", default=current_use)
+    use_google = click.confirm(
+        "Enable logging costs to Google Sheets?", default=current_use
+    )
     config["use_google_sheets"] = use_google
 
     if not use_google:
@@ -388,7 +450,9 @@ def google():
     current_id = config.get("google_sheet_id", "")
     click.echo("\nThe Sheet ID is the long string in the Google Sheet URL:")
     click.echo("https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit")
-    new_id = click.prompt("Enter Google Sheet ID (or the Sheet Name)", default=current_id)
+    new_id = click.prompt(
+        "Enter Google Sheet ID (or the Sheet Name)", default=current_id
+    )
 
     if not new_id:
         click.echo("Operation cancelled.")
@@ -410,9 +474,13 @@ def google():
         authorized_user_path = pathlib.Path(".vibe_authorized_user.json")
 
         if not client_secrets_path.exists():
-            click.echo("1. Go to Google Cloud Console (https://console.cloud.google.com).")
+            click.echo(
+                "1. Go to Google Cloud Console (https://console.cloud.google.com)."
+            )
             click.echo("2. Create a Project (or select an existing one).")
-            click.echo("3. In 'APIs & Services' > 'Library', enable 'Google Sheets API'.")
+            click.echo(
+                "3. In 'APIs & Services' > 'Library', enable 'Google Sheets API'."
+            )
             click.echo(
                 "4. In 'APIs & Services' > 'Google Auth Platform' (or OAuth consent screen):"
             )
@@ -425,7 +493,9 @@ def google():
             )
             click.echo("5. Under 'Clients': Click 'Create Client' > 'OAuth client ID'.")
             click.echo("6. Choose 'Desktop App', name it, and download the JSON file.")
-            click.echo(f"7. Rename it to '{client_secrets_path}' and place it in this directory.")
+            click.echo(
+                f"7. Rename it to '{client_secrets_path}' and place it in this directory."
+            )
 
             if not click.confirm("\nHave you placed the file?", default=False):
                 click.echo("Aborted. Please place the file and run again.")
@@ -441,7 +511,9 @@ def google():
                     credentials_filename=str(client_secrets_path),
                     authorized_user_filename=str(authorized_user_path),
                 )
-                click.echo(f"✅ Browser login successful. Tokens saved to {authorized_user_path}")
+                click.echo(
+                    f"✅ Browser login successful. Tokens saved to {authorized_user_path}"
+                )
             except Exception as e:
                 click.echo(f"❌ Login failed: {e}")
         else:
@@ -450,12 +522,18 @@ def google():
     elif choice == 2:
         click.echo("\n--- Service Account Setup ---")
         click.echo("1. A Google Cloud Project with the Google Sheets API enabled.")
-        click.echo("2. A Service Account with a JSON key saved as '.vibe_google_creds.json'.")
-        click.echo("3. The Service Account email shared with the Google Sheet (Editor access).")
+        click.echo(
+            "2. A Service Account with a JSON key saved as '.vibe_google_creds.json'."
+        )
+        click.echo(
+            "3. The Service Account email shared with the Google Sheet (Editor access)."
+        )
 
         creds_path = pathlib.Path(".vibe_google_creds.json")
         if not creds_path.exists():
-            click.echo(f"\n⚠️  Reminder: Please place your service account key at {creds_path}")
+            click.echo(
+                f"\n⚠️  Reminder: Please place your service account key at {creds_path}"
+            )
         else:
             click.echo(f"✅ Found {creds_path}")
     else:
@@ -493,11 +571,16 @@ def mailhog():
 
 
 @setup_cli.command()
-def s3():
-    """Collect S3 Object Store connection details."""
-    configure_service("s3")
+def s3_linode():
+    """Collect S3 Linode Object Store connection details."""
+    configure_service("s3-linode")
+
+
+@setup_cli.command()
+def s3_aws():
+    """Collect S3 AWS Object Store connection details."""
+    configure_service("s3-aws")
 
 
 if __name__ == "__main__":
     setup_cli()
-

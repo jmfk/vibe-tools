@@ -42,16 +42,27 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "ports": {"1025/tcp": 1025, "8025/tcp": 8025},
         "description": "MailHog email testing tool (SMTP: 1025, Web: 8025)",
     },
-    "minio": {
+    "minio-linode": {
         "image": "minio/minio",
-        "container_name": "vibe-minio",
+        "container_name": "vibe-minio-linode",
         "ports": {"9000/tcp": 9000, "9001/tcp": 9001},
         "env": {
             "MINIO_ROOT_USER": "minioadmin",
             "MINIO_ROOT_PASSWORD": "minioadmin",
         },
         "command": "server /data --console-address ':9001'",
-        "description": "MinIO S3-compatible object store (API: 9000, Console: 9001)",
+        "description": "MinIO S3-compatible (Linode-style path addressing)",
+    },
+    "minio-aws": {
+        "image": "minio/minio",
+        "container_name": "vibe-minio-aws",
+        "ports": {"9010/tcp": 9010, "9011/tcp": 9011},
+        "env": {
+            "MINIO_ROOT_USER": "minioadmin",
+            "MINIO_ROOT_PASSWORD": "minioadmin",
+        },
+        "command": "server /data --console-address ':9011'",
+        "description": "MinIO S3-compatible (AWS-style virtual addressing)",
     },
 }
 
@@ -169,13 +180,20 @@ def install(service):
                 
         # Handle service specific key names
         save_key = service
-        if service == "minio":
-            save_key = "s3"
+        if service == "minio-linode":
+            save_key = "s3-linode"
             service_details["region"] = "us-east-1"
             service_details["addressing_style"] = "path"
             service_details["signature_version"] = "s3v4"
             if "9001/tcp" in config.get("ports", {}):
                 service_details["console_port"] = config["ports"]["9001/tcp"]
+        elif service == "minio-aws":
+            save_key = "s3-aws"
+            service_details["region"] = "us-east-1"
+            service_details["addressing_style"] = "virtual"
+            service_details["signature_version"] = "s3v4"
+            if "9011/tcp" in config.get("ports", {}):
+                service_details["console_port"] = config["ports"]["9011/tcp"]
                 
         services[save_key] = service_details
         save_config(global_config, global_scope=True)

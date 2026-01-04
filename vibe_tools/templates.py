@@ -308,7 +308,8 @@ Use the `vibe-setup` command to record connection details for the supporting ser
 - `vibe-setup redis`
 - `vibe-setup rabbitmq`
 - `vibe-setup elasticsearch`
-- `vibe-setup s3`
+- `vibe-setup s3-linode`
+- `vibe-setup s3-aws`
 - `vibe-setup api`
 - `vibe-setup google`
 - `vibe-setup test`: Verify connectivity for all configured services.
@@ -353,7 +354,7 @@ vibe --help
 
 Manage local development servers via Docker using `vibe-servers`:
 
-- `vibe-servers list`: List supported servers (Postgres, Redis, RabbitMQ, Elasticsearch, MailHog, MinIO) and their status.
+- `vibe-servers list`: List supported servers (Postgres, Redis, RabbitMQ, Elasticsearch, MailHog, MinIO-Linode, MinIO-AWS) and their status.
 - `vibe-servers install <service>`: Pull and run the Docker container for a service and save connection details.
 - `vibe-servers start/stop <service>`: Start or stop one or all servers.
 - `vibe-servers logs <service>`: View logs for one or all servers.
