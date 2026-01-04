@@ -1,4 +1,4 @@
-.PHONY: help install batch loop monitor docker-build docker-run clean run migrate-init migrate test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra
+.PHONY: help install batch loop monitor docker-build docker-run clean run migrate-init migrate test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra cleanup
 
 # Default target
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make docker-build - Build the Docker image"
 	@echo "  make docker-run   - Run the Docker container"
 	@echo "  make clean        - Remove generated files"
+	@echo "  make cleanup      - Kill stale pytest and agent processes"
 
 test-backend:
 	pytest -v
@@ -114,4 +115,7 @@ docker-run:
 
 clean:
 	rm -rf generated/*
+
+cleanup:
+	vibe cleanup
 

@@ -6,6 +6,8 @@ import pathlib
 import json
 import logging
 import atexit
+import os
+import signal
 from logging.handlers import RotatingFileHandler
 
 PRD_DIR = pathlib.Path("prds")
@@ -109,10 +111,20 @@ def run_agent(cmd, caffeinate=False):
         cmd = ["caffeinate", "-dimsu"] + cmd
     
     logger.info(f"Running agent: {' '.join(cmd)}")
-    process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-    )
+    
+    # Use process groups to ensure children are killed on interrupt (Unix only)
+    popen_kwargs = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "bufsize": 1,
+    }
+    if os.name != "nt":
+        popen_kwargs["preexec_fn"] = os.setsid
+
+    process = subprocess.Popen(cmd, **popen_kwargs)
     full_output, start_time = [], time.time()
+    
     try:
         for line in iter(process.stdout.readline, ""):
             full_output.append(line)
@@ -125,9 +137,28 @@ def run_agent(cmd, caffeinate=False):
             sys.stdout.flush()
             # Also log to debug file immediately
             logger.debug(f"AGENT_LIVE: {line.strip()}")
-    finally:
-        process.stdout.close()
+    except KeyboardInterrupt:
+        logger.warning("\nInterrupted by user. Cleaning up agent process...")
+        if os.name != "nt":
+            try:
+                pgid = os.getpgid(process.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                # Wait a bit for graceful exit then force kill if needed
+                time.sleep(0.5)
+                if process.poll() is None:
+                    os.killpg(pgid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            process.terminate()
         process.wait()
+        sys.stdout.write("\n")
+        raise
+    finally:
+        if process.stdout:
+            process.stdout.close()
+        process.wait()
+    
     sys.stdout.write("\r\033[K")
     sys.stdout.flush()
     
@@ -138,6 +169,20 @@ def run_agent(cmd, caffeinate=False):
     logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
     
     return output, process.returncode
+
+
+def cleanup_stale_processes():
+    """Kills stale pytest, cursor-agent, and caffeinate processes."""
+    logger.info("Cleaning up stale processes associated with vibe-tools...")
+    
+    targets = ["pytest", "cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
+    
+    for target in targets:
+        logger.info(f"Killing '{target}' processes...")
+        # Use pkill with full string matching
+        subprocess.run(["pkill", "-f", target], check=False)
+    
+    logger.info("Cleanup complete.")
 
 
 def get_agent_command(agent_type, prompt):

@@ -397,6 +397,13 @@ def setup_google():
 
 
 @cli.command()
+def cleanup():
+    """Clean up stale pytest, cursor-agent, and caffeinate processes."""
+    from vibe_tools.utils import cleanup_stale_processes
+    cleanup_stale_processes()
+
+
+@cli.command()
 @click.argument("prd_id")
 def rerun(prd_id):
     """Reset a PRD's state and branch to allow rerunning."""
