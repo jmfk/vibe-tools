@@ -13,5 +13,15 @@
     "backend": 85,
     "frontend": 85,
     "infra": 85
+  },
+  "services": {
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "postgres",
+      "database": "vibe-tools",
+      "docker_container_name": "eceee-v4-db"
+    }
   }
 }

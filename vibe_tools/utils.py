@@ -19,29 +19,85 @@ COSTS_DIR = pathlib.Path("costs")
 SPECIAL_PRD_SUBDIRS = ["infra", "cicd"]
 INSTRUCTIONS_DIR = pathlib.Path("instructions")
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
+GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
+GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
+GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 # Ensure directories exist
 LOGS_DIR.mkdir(exist_ok=True)
 COSTS_DIR.mkdir(exist_ok=True)
+GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
+
+
+def get_project_name():
+    """Returns the project name in snake_case based on git remote or directory name."""
+    if is_git_repo():
+        stdout, code = run_command(["git", "remote", "get-url", "origin"], check=False)
+        if code == 0 and stdout.strip():
+            # Handle both https and ssh formats
+            url = stdout.strip()
+            if url.endswith(".git"):
+                url = url[:-4]
+            project_name = url.split("/")[-1].split(":")[-1]
+            return project_name.lower().replace("-", "_").replace(" ", "_")
+    
+    # Fallback to directory name
+    return pathlib.Path.cwd().name.lower().replace("-", "_").replace(" ", "_")
 
 
 def load_config():
+    """Loads and merges global and project-local configuration."""
+    config = {}
+    
+    # Load global config first
+    if GLOBAL_CONFIG_FILE.exists():
+        try:
+            config.update(json.loads(GLOBAL_CONFIG_FILE.read_text()))
+        except Exception as e:
+            logger.debug(f"Error loading global config: {e}")
+
+    # Merge with local config
     if CONFIG_FILE.exists():
         try:
-            return json.loads(CONFIG_FILE.read_text())
-        except Exception:
-            return {}
+            local_config = json.loads(CONFIG_FILE.read_text())
+            # Deep merge services if they exist in both
+            if "services" in local_config and "services" in config:
+                config["services"].update(local_config["services"])
+                del local_config["services"]
+            config.update(local_config)
+        except Exception as e:
+            logger.debug(f"Error loading local config: {e}")
+            
+    return config
+
+
+def save_config(config, global_scope=False):
+    """Saves configuration to either local or global file."""
+    if global_scope:
+        GLOBAL_CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    else:
+        CONFIG_FILE.write_text(json.dumps(config, indent=2))
+        ensure_gitignore(".vibe_config.json")
+        ensure_gitignore(".env")
+        ensure_gitignore("logs/")
+        ensure_gitignore(".vibe_google_creds.json")
+        ensure_gitignore(".vibe_client_secrets.json")
+        ensure_gitignore(".vibe_authorized_user.json")
+
+
+def load_global_servers() -> Dict[str, Any]:
+    """Loads server definitions from the global servers file."""
+    if GLOBAL_SERVERS_FILE.exists():
+        try:
+            return json.loads(GLOBAL_SERVERS_FILE.read_text())
+        except Exception as e:
+            logger.error(f"Error loading global servers: {e}")
     return {}
 
 
-def save_config(config):
-    CONFIG_FILE.write_text(json.dumps(config, indent=2))
-    ensure_gitignore(".vibe_config.json")
-    ensure_gitignore(".env")
-    ensure_gitignore("logs/")
-    ensure_gitignore(".vibe_google_creds.json")
-    ensure_gitignore(".vibe_client_secrets.json")
-    ensure_gitignore(".vibe_authorized_user.json")
+def save_global_servers(servers: Dict[str, Any]):
+    """Saves server definitions to the global servers file."""
+    GLOBAL_SERVERS_FILE.write_text(json.dumps(servers, indent=2))
 
 
 def get_google_api_key():
