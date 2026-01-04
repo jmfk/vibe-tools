@@ -354,6 +354,42 @@ def run_tests_logic(caffeinate=False, fast=False):
     return tester.run_tests(caffeinate=caffeinate, changed_only=fast)
 
 
+def ensure_project_dependencies(caffeinate=False):
+    """Ensures that project dependencies (npm, pip) are installed."""
+    # 1. Backend dependencies
+    if (
+        pathlib.Path("pyproject.toml").exists()
+        or pathlib.Path("requirements.txt").exists()
+    ):
+        logger.info("Checking backend dependencies...")
+        # Check if ruff or pytest is missing (common indicators)
+        _, ruff_code = run_command(["ruff", "--version"], check=False)
+        _, pytest_code = run_command(["pytest", "--version"], check=False)
+
+        if ruff_code != 0 or pytest_code != 0:
+            logger.info("Backend tools (ruff/pytest) missing. Attempting to install...")
+            if pathlib.Path("pyproject.toml").exists():
+                run_command(
+                    [sys.executable, "-m", "pip", "install", "-e", "."],
+                    caffeinate=caffeinate,
+                )
+            elif pathlib.Path("requirements.txt").exists():
+                run_command(
+                    [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+                    caffeinate=caffeinate,
+                )
+
+    # 2. Frontend dependencies
+    frontend_dir = pathlib.Path("frontend")
+    if frontend_dir.exists() and (frontend_dir / "package.json").exists():
+        node_modules = frontend_dir / "node_modules"
+        if not node_modules.exists():
+            logger.info("Frontend node_modules missing. Running npm install...")
+            run_command(
+                ["npm", "install", "--prefix", "frontend"], caffeinate=caffeinate
+            )
+
+
 def run_review_logic(agent_type, prd_path, caffeinate=False):
     """Asks an agent to review the changes against the PRD."""
     logger.info("Running Agentic Review...")
@@ -512,6 +548,9 @@ def ralph_loop(
 
     # Ensure Makefile and dummy tests exist if tests are enabled
     if tests:
+        # Ensure dependencies are installed before running tests
+        ensure_project_dependencies(caffeinate=caffeinate)
+
         makefile_path = pathlib.Path("Makefile")
         from vibe_tools.templates import TEMPLATES
 

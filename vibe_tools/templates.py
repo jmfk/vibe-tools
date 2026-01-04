@@ -18,6 +18,7 @@ MAKEFILE & TESTING RULES:
 - As you develop the system, you MUST update these targets in the `Makefile` to run the relevant test suite for the stack you are building.
 - Do NOT leave them as dummy echo commands if you have implemented the corresponding components.
 - The `test` target should remain as a wrapper that calls all other test targets.
+- DEPENDENCY MANAGEMENT: If you introduce new packages, update `pyproject.toml` (backend) or `package.json` (frontend). The system will automatically attempt to install them.
 
 GENERAL RULES:
 - Do NOT ask questions.
@@ -201,11 +202,11 @@ test-backend:
 
 test-frontend:
 	@echo "Running frontend tests..."
-	npm --prefix frontend test -- --run
+	cd frontend && npm test -- --run
 
 test-infra:
 	@echo "Running infra tests..."
-	pytest backend/tests/test_infra.py || echo "No infra tests found"
+	pytest backend/tests/test_infra.py
 
 test-integration:
 	@echo "Running integration tests..."
@@ -223,7 +224,7 @@ lint-backend:
 
 lint-frontend:
 	@echo "Running frontend linting..."
-	npm --prefix frontend run lint
+	cd frontend && npm run lint
 """,
     "dummy_backend_test": """def test_dummy():
     assert True
