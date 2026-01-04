@@ -354,6 +354,11 @@ def configure_service(service_key: str):
     save_config(config)
     click.echo(f"✅ {metadata['display']} configuration saved to {CONFIG_FILE}")
 
+    # Sync .env after any service configuration
+    from vibe_tools.utils import sync_env_file
+
+    sync_env_file()
+
 
 def maybe_init_git():
     from vibe_tools.utils import is_git_repo
@@ -538,6 +543,118 @@ def google():
             click.echo(f"✅ Found {creds_path}")
     else:
         click.echo("Invalid choice.")
+
+
+@setup_cli.command()
+@click.option("--python-version", default="3.11.10", help="Python version to install")
+def env(python_version):
+    """Set up and verify a managed Python environment."""
+    click.echo(f"\n--- Environment Setup & Verification (Python {python_version}) ---")
+
+    config = load_config()
+    env_config = config.get("env")
+
+    # If env is already configured, verify it
+    if env_config:
+        from vibe_tools.utils import check_env_health
+
+        if check_env_health():
+            click.echo("✅ Current environment is healthy and correctly configured.")
+            if not click.confirm("Re-run full setup anyway?", default=False):
+                return
+        else:
+            click.echo("⚠️  Current environment verification failed.")
+            if not click.confirm(
+                "Attempt to fix/re-setup the environment?", default=True
+            ):
+                return
+
+    # 1. Check for Homebrew
+    try:
+        subprocess.run(["brew", "--version"], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        click.echo("❌ Homebrew not found. Please install it from https://brew.sh/")
+        return
+
+    # 2. Check for pyenv
+    try:
+        subprocess.run(["pyenv", "--version"], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        if click.confirm("pyenv not found. Install it via Homebrew?", default=True):
+            run_command(["brew", "install", "pyenv"])
+        else:
+            return
+
+    # 3. Check for pyenv-virtualenv
+    try:
+        subprocess.run(
+            ["pyenv", "virtualenv", "--version"], check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        if click.confirm(
+            "pyenv-virtualenv not found. Install it via Homebrew?", default=True
+        ):
+            run_command(["brew", "install", "pyenv-virtualenv"])
+        else:
+            return
+
+    # 4. Install Python version
+    click.echo(f"Checking for Python {python_version}...")
+    output, code = run_command(["pyenv", "versions"], check=False)
+    if python_version not in output:
+        click.echo(
+            f"Installing Python {python_version} (this may take a few minutes)..."
+        )
+        run_command(["pyenv", "install", python_version], caffeinate=True)
+    else:
+        click.echo(f"✅ Python {python_version} already installed.")
+
+    # 5. Create Virtualenv
+    project_name = get_project_name().replace("_", "-")
+    venv_name = f"{project_name}-{python_version}"
+
+    output, code = run_command(["pyenv", "virtualenvs"], check=False)
+    if venv_name not in output:
+        click.echo(f"Creating virtualenv '{venv_name}'...")
+        run_command(["pyenv", "virtualenv", python_version, venv_name])
+    else:
+        click.echo(f"✅ Virtualenv '{venv_name}' already exists.")
+
+    # 6. Set local version
+    click.echo(f"Setting local python version to {venv_name}...")
+    run_command(["pyenv", "local", venv_name])
+
+    # 7. Install dependencies
+    click.echo("Installing dependencies in managed environment...")
+    # We use python -m pip to ensure we use the venv's pip
+    run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(["python", "-m", "pip", "install", "-e", "."])
+
+    # 8. Record in config
+    config = load_config()
+    config["env"] = {
+        "type": "pyenv-virtualenv",
+        "python_version": python_version,
+        "venv_name": venv_name,
+        "path": str(pathlib.Path.cwd()),
+        "last_setup": datetime.datetime.now().isoformat(),
+    }
+    save_config(config)
+
+    # 9. Sync .env file
+    from vibe_tools.utils import sync_env_file
+
+    sync_env_file()
+
+    click.echo(f"\n✅ Environment setup complete and recorded in {CONFIG_FILE}")
+    click.echo(f"Virtualenv: {venv_name}")
+    click.echo(
+        "\nTo ensure your shell is configured for pyenv, add these to your ~/.zshrc or ~/.bash_profile:"
+    )
+    click.echo('  export PYENV_ROOT="$HOME/.pyenv"')
+    click.echo('  [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"')
+    click.echo('  eval "$(pyenv init -)"')
+    click.echo('  eval "$(pyenv virtualenv-init -)"')
 
 
 @setup_cli.command()

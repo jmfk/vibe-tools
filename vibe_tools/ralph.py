@@ -393,6 +393,33 @@ def ralph_loop(
     config = load_config()
     cost_logger = CostLogger(config)
 
+    # Environment health check
+    from vibe_tools.utils import check_env_health
+
+    if not check_env_health():
+        logger.warning("\n⚠️  Environment health check failed!")
+        if click.confirm("Would you like to run 'vibe-setup env' now?", default=True):
+            # Run the env setup command logic
+            from vibe_tools.setup import env as setup_env
+
+            # Note: click.Context is needed if we want to call it exactly like the CLI
+            # but we can just call the function directly for simplicity here
+            try:
+                # We need to provide a default python version if not specified
+                setup_env.callback(python_version="3.11.10")
+                # Re-check after setup
+                if not check_env_health():
+                    logger.error(
+                        "❌ Environment still unhealthy after setup. Please fix it manually."
+                    )
+                    sys.exit(1)
+            except Exception as e:
+                logger.error(f"❌ Failed to setup environment: {e}")
+                sys.exit(1)
+        else:
+            logger.error("Aborting Ralph Loop due to unhealthy environment.")
+            sys.exit(1)
+
     if not PROMPTS_DIR.exists():
         logger.error(
             "Error: prompts directory not found. Please run 'vibe init' first."

@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["vibe_tools"]
+packages = ["vibe_tools", "src"]
 
 [project.scripts]
 vibe = "vibe_tools.cli:cli"
