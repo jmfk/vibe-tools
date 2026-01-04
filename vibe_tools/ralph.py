@@ -512,22 +512,31 @@ def ralph_loop(
 
     if not check_env_health():
         logger.warning("\n⚠️  Environment health check failed!")
-        
+
         # 1. Try quick fix first
-        if click.confirm("Would you like to run 'vibe-setup deps' to install missing tools?", default=True):
+        if click.confirm(
+            "Would you like to run 'vibe-setup deps' to install missing tools?",
+            default=True,
+        ):
             from vibe_tools.setup import deps as setup_deps
+
             try:
                 setup_deps.callback()
                 if check_env_health():
                     logger.info("✅ Environment is now healthy.")
                 else:
-                    logger.warning("⚠️  Environment still unhealthy after installing dependencies.")
+                    logger.warning(
+                        "⚠️  Environment still unhealthy after installing dependencies."
+                    )
             except Exception as e:
                 logger.error(f"❌ Failed to install dependencies: {e}")
 
         # 2. If still unhealthy, offer full setup
         if not check_env_health():
-            if click.confirm("Would you like to run 'vibe-setup env' for a full environment setup?", default=True):
+            if click.confirm(
+                "Would you like to run 'vibe-setup env' for a full environment setup?",
+                default=True,
+            ):
                 # Run the env setup command logic
                 from vibe_tools.setup import env as setup_env
 
