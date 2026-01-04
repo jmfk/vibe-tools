@@ -650,6 +650,7 @@ def ralph_loop(
             success = False
             last_error_hash = None
             error_repeat_count = 0
+            env_fix_attempts = 0
 
             for i in range(start_iteration, MAX_ITERATIONS + 1):
                 # Phase 1: Build/Implementation
@@ -718,6 +719,41 @@ def ralph_loop(
                         )
 
                         if env_failures:
+                            if env_fix_attempts < 2:
+                                logger.warning(
+                                    f"⚠️  ENVIRONMENT FAILURE DETECTED: {', '.join(env_failures)}"
+                                )
+                                logger.info(
+                                    "Attempting to self-heal environment issues..."
+                                )
+
+                                env_fix_prompt = f"""The following environment issues were detected while running quality gates:
+{test_output}
+
+TARGETS WITH FAILURES: {', '.join(env_failures)}
+
+TASK:
+1. Identify missing tools or configuration issues (e.g., 'ruff' missing, 'next' not found, incorrect node/python version).
+2. Fix the environment by installing missing packages, updating the Makefile, or adjusting paths.
+3. You may use terminal commands like 'pip install', 'npm install', or 'brew install'.
+4. Ensure the end state allows 'make {env_failures[0]}' (and other failed targets) to run successfully.
+5. Include <promise>DONE</promise> in your response once you have attempted the fix.
+"""
+                                cmd = get_agent_command(agent, env_fix_prompt)
+                                fix_output, _ = run_agent(cmd, caffeinate=caffeinate)
+
+                                env_fix_attempts += 1
+                                if COMPLETION_PROMISE in fix_output:
+                                    logger.info(
+                                        "✅ Agent claimed to fix the environment. Retrying tests..."
+                                    )
+                                    start_phase = "test"
+                                    continue
+                                else:
+                                    logger.error(
+                                        "❌ Agent was unable to resolve environment issues."
+                                    )
+
                             logger.error(
                                 f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
                             )

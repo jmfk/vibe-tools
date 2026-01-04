@@ -353,14 +353,14 @@ def check_env_health() -> bool:
     missing_tools = []
     
     # Backend tools
-    for tool in ["python3", "pip"]:
+    for tool in ["python3", "pip", "ruff", "pytest"]:
         _, code = run_command([tool, "--version"], check=False)
         if code != 0:
             missing_tools.append(tool)
             
     # Frontend tools (if frontend directory exists)
     if pathlib.Path("frontend").exists():
-        for tool in ["node", "npm"]:
+        for tool in ["node", "npm", "npx"]:
             _, code = run_command([tool, "--version"], check=False)
             if code != 0:
                 missing_tools.append(tool)

@@ -124,10 +124,19 @@ class ProjectTester:
                 env_failure = False
                 # Improved detection of command failures and environment issues
                 lower_output = output.lower()
-                if code == 127 or "command not found" in lower_output or "sh: " in lower_output or "not found" in lower_output:
+                tool_missing_indicators = [
+                    "command not found",
+                    "not found",
+                    "no module named",
+                    "sh: ",
+                    "pyenv: ",
+                ]
+                
+                if any(indicator in lower_output for indicator in tool_missing_indicators):
                     # Filter out cases where the target itself says it's skipping
                     if "skipping" not in lower_output:
-                        env_failure = True
+                        if code != 0 or "not found" in lower_output:
+                            env_failure = True
 
                 return {
                     "target": target,
