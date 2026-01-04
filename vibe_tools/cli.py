@@ -418,10 +418,14 @@ def setup_google():
         if not client_secrets_path.exists():
             click.echo("1. Go to Google Cloud Console (https://console.cloud.google.com).")
             click.echo("2. Create a Project (or select an existing one).")
-            click.echo("3. Enable 'Google Sheets API' for your project.")
-            click.echo("4. Go to 'Credentials' -> 'Create Credentials' -> 'OAuth client ID'.")
-            click.echo("5. Choose 'Desktop App' and download the client JSON file.")
-            click.echo(f"6. Rename it to '{client_secrets_path}' and place it in this directory.")
+            click.echo("3. In 'APIs & Services' > 'Library', enable 'Google Sheets API'.")
+            click.echo("4. In 'APIs & Services' > 'OAuth consent screen':")
+            click.echo("   - Set up the screen (User Type: External/Internal).")
+            click.echo("   - Add 'Google Sheets API' scopes if prompted.")
+            click.echo("   - Add your email as a 'Test user' if in 'Testing' mode.")
+            click.echo("5. In 'APIs & Services' > 'Credentials' > 'Create Credentials' > 'OAuth client ID'.")
+            click.echo("6. Choose 'Desktop App', name it, and download the JSON file.")
+            click.echo(f"7. Rename it to '{client_secrets_path}' and place it in this directory.")
             
             if not click.confirm("\nHave you placed the file?", default=False):
                 click.echo("Aborted. Please place the file and run again.")
