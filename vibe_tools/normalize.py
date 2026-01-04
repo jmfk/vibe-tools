@@ -2,6 +2,7 @@ import pathlib
 import sys
 import click
 from vibe_tools.utils import run_agent, get_agent_command
+from vibe_tools.cost import CostLogger
 
 PROMPTS_DIR = pathlib.Path("prompts")
 NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
@@ -10,9 +11,13 @@ PRDS_DIR = pathlib.Path("prds")
 
 
 def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False):
+    from vibe_tools.cli import load_config
     if not PROMPTS_DIR.exists():
         print("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
+    
+    config = load_config()
+    cost_logger = CostLogger(config)
 
     if not NORMALIZATION_PROMPT_TEMPLATE.exists():
         print(
@@ -83,6 +88,16 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
 
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, caffeinate=caffeinate)
+
+        cost_logger.log_run(
+            model=agent,
+            prompt=prompt,
+            output=output,
+            prd_name=stem,
+            iteration=1,
+            phase="normalize",
+            purpose="normalizing_prd",
+        )
 
         if code == 0:
             # Strip markdown code fences if present

@@ -12,8 +12,10 @@ from vibe_tools.utils import (
     PRD_DIR,
     STATE_FILE,
     logger,
+    rotate_log,
 )
 from vibe_tools.testing import ProjectTester
+from vibe_tools.cost import CostLogger
 
 BACKEND_ROOT = pathlib.Path("src")
 FRONTEND_ROOT = pathlib.Path("frontend")
@@ -161,9 +163,11 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
 def ralph_loop(
     agent="cursor-agent", review=False, tests=False, auto_merge=False, caffeinate=False
 ):
-    from vibe_tools.utils import rotate_log
+    from vibe_tools.cli import load_config
 
     rotate_log()
+    config = load_config()
+    cost_logger = CostLogger(config)
 
     if not PROMPTS_DIR.exists():
         logger.error(
@@ -310,6 +314,16 @@ def ralph_loop(
                     caffeinate=caffeinate,
                 )
 
+                cost_logger.log_run(
+                    model=agent,  # agent is the name/type
+                    prompt=prompt_for_iteration,
+                    output=output,
+                    prd_name=project_name,
+                    iteration=i,
+                    phase="build",
+                    purpose="implementation",
+                )
+
                 iteration_output = output
 
                 if COMPLETION_PROMISE not in output:
@@ -364,6 +378,15 @@ def ralph_loop(
                     review_output, review_passed = run_review_logic(
                         agent, prd_file, caffeinate=caffeinate
                     )
+                    cost_logger.log_run(
+                        model=agent,
+                        prompt=f"Review changes against {prd_file}",
+                        output=review_output,
+                        prd_name=project_name,
+                        iteration=i,
+                        phase="review",
+                        purpose="agentic_review",
+                    )
                     if not review_passed:
                         logger.error("❌ Review failed. Feeding back to agent...")
                         additional_context = (
@@ -389,7 +412,16 @@ def ralph_loop(
             logger.info(f"Committing changes for: {project_name}")
             commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
             commit_cmd = get_agent_command(agent, commit_prompt)
-            run_agent(commit_cmd, caffeinate=caffeinate)
+            commit_output, _ = run_agent(commit_cmd, caffeinate=caffeinate)
+            cost_logger.log_run(
+                model=agent,
+                prompt=commit_prompt,
+                output=commit_output,
+                prd_name=project_name,
+                iteration=1,
+                phase="commit",
+                purpose="committing_changes",
+            )
 
             if auto_merge:
                 logger.info(f"Merging {branch_name} into main...")

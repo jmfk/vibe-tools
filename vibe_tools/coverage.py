@@ -5,6 +5,7 @@ import re
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
+from vibe_tools.cost import CostLogger
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -19,7 +20,11 @@ def get_coverage_report(caffeinate=False):
 
 
 def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
+    from vibe_tools.cli import load_config
     logger.info("--- Starting Coverage Improvement Loop ---")
+
+    config = load_config()
+    cost_logger = CostLogger(config)
 
     if not PROMPTS_DIR.exists():
         logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
@@ -53,6 +58,16 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
         cmd = get_agent_command(agent, prompt)
         output, _ = run_agent(cmd, caffeinate=caffeinate)
 
+        cost_logger.log_run(
+            model=agent,
+            prompt=prompt,
+            output=output,
+            prd_name="N/A",
+            iteration=i,
+            phase="coverage",
+            purpose="improving_coverage",
+        )
+
         # Verify if tests still pass
         logger.info(f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests...")
         _, test_exit_code = run_command(
@@ -64,7 +79,16 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             )
             fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
             cmd_fix = get_agent_command(agent, fix_prompt)
-            run_agent(cmd_fix, caffeinate=caffeinate)
+            fix_output, _ = run_agent(cmd_fix, caffeinate=caffeinate)
+            cost_logger.log_run(
+                model=agent,
+                prompt=fix_prompt,
+                output=fix_output,
+                prd_name="N/A",
+                iteration=i,
+                phase="coverage_fix",
+                purpose="fixing_coverage_regressions",
+            )
 
         new_report, new_cov = get_coverage_report(caffeinate=caffeinate)
         logger.info(f"New Total Coverage: {new_cov}%")

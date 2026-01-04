@@ -5,6 +5,7 @@ import json
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
+from vibe_tools.cost import CostLogger
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -46,7 +47,11 @@ def run_tests(caffeinate=False):
 
 
 def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
+    from vibe_tools.cli import load_config
     logger.info("--- Starting Test and Fix Loop ---")
+
+    config = load_config()
+    cost_logger = CostLogger(config)
 
     if not PROMPTS_DIR.exists():
         logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
@@ -81,6 +86,16 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
 
         cmd = get_agent_command(agent, prompt)
         agent_output, _ = run_agent(cmd, caffeinate=caffeinate)
+
+        cost_logger.log_run(
+            model=agent,
+            prompt=prompt,
+            output=agent_output,
+            prd_name="N/A",
+            iteration=i,
+            phase="test_fix",
+            purpose="fixing_test_failures",
+        )
 
         save_state(i + 1, test_output)
 

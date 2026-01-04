@@ -5,12 +5,13 @@ import pathlib
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
+from vibe_tools.cost import CostLogger
 
 PROMPTS_DIR = pathlib.Path("prompts")
 MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
 
 
-def get_status_report(agent, interval):
+def get_status_report(agent, interval, cost_logger=None):
     """Gathers context and calls agent to inspect progress."""
     # Check if we are in a git repository
     stdout, code = run_command(
@@ -45,6 +46,18 @@ def get_status_report(agent, interval):
 
     print(f"\n--- Monitoring Report [{timestamp}] ---")
     output, returncode = run_agent(cmd)
+
+    if cost_logger:
+        cost_logger.log_run(
+            model=agent,
+            prompt=inspection_prompt,
+            output=output,
+            prd_name="N/A",
+            iteration=1,
+            phase="monitor",
+            purpose="monitoring_progress",
+        )
+
     if returncode == 0:
         print(output)
     else:
@@ -52,13 +65,17 @@ def get_status_report(agent, interval):
 
 
 def run_monitor(agent, interval):
+    from vibe_tools.cli import load_config
     print(
         f"Starting monitor with {interval}s interval using agent {agent}. Press Ctrl+C to stop."
     )
 
+    config = load_config()
+    cost_logger = CostLogger(config)
+
     try:
         while True:
-            get_status_report(agent, interval)
+            get_status_report(agent, interval, cost_logger=cost_logger)
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nMonitoring stopped.")
