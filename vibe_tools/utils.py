@@ -226,8 +226,8 @@ def run_command(cmd, check=True, caffeinate=False):
     return result.stdout.strip(), result.returncode
 
 
-def run_agent(cmd, caffeinate=False):
-    """Runs an agent with a live progress indicator."""
+def run_agent(cmd, caffeinate=False, stream=False):
+    """Runs an agent with a live progress indicator or streaming output."""
     global _agent_called
     _agent_called = True
     if caffeinate:
@@ -255,9 +255,16 @@ def run_agent(cmd, caffeinate=False):
             full_output.append(line)
             elapsed = int(time.time() - start_time)
             preview = line.strip()[:80]
-            # Live progress to stdout (bypassing file log for spammy progress)
-            sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}")
-            sys.stdout.flush()
+            
+            if stream:
+                # Direct streaming to stdout
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            else:
+                # Live progress to stdout (bypassing file log for spammy progress)
+                sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}")
+                sys.stdout.flush()
+            
             # Also log to debug file immediately
             logger.debug(f"AGENT_LIVE: {line.strip()}")
     except KeyboardInterrupt:

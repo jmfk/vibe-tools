@@ -13,7 +13,7 @@ DEFAULT_SPECS_DIR = pathlib.Path("specs")
 PRDS_DIR = pathlib.Path("prds")
 
 
-def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False):
+def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False):
     from vibe_tools.cli import load_config
 
     if not PROMPTS_DIR.exists():
@@ -117,7 +117,7 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)
 
         cmd = get_agent_command(agent, prompt)
-        output, code = run_agent(cmd, caffeinate=caffeinate)
+        output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
         cost_logger.log_run(
             agent=agent,

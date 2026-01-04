@@ -65,7 +65,7 @@ def _switch_to_main():
     run_command(["git", "checkout", "main"])
 
 
-def _switch_to_branch(branch_name, agent, project_name, caffeinate=False):
+def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream=False):
     """Robustly switches to a feature branch, using AI rescue if needed."""
     # Check if branch exists in git
     _, code = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
@@ -97,7 +97,7 @@ You may need to stash changes, commit them, reset the branch, or merge.
 Ensure the end state is that we are on branch '{branch_name}' and ready to work.
 """
         cmd = get_agent_command(agent, prompt)
-        run_agent(cmd, caffeinate=caffeinate)
+        run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
         # Final attempt after agent fix
         final_output, final_code = run_command(
@@ -303,6 +303,7 @@ def run_ralph_agent(
     backend_dir,
     frontend_dir,
     caffeinate=False,
+    stream=False,
 ):
     """
     Calls the configured agent with the combined prompt and context.
@@ -344,7 +345,7 @@ Include {COMPLETION_PROMISE} when you are done.
 """
 
     cmd = get_agent_command(agent_type, combined_prompt)
-    output, _ = run_agent(cmd, caffeinate=caffeinate)
+    output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
     return output
 
 
@@ -390,7 +391,7 @@ def ensure_project_dependencies(caffeinate=False):
             )
 
 
-def run_review_logic(agent_type, prd_path, caffeinate=False):
+def run_review_logic(agent_type, prd_path, caffeinate=False, stream=False):
     """Asks an agent to review the changes against the PRD."""
     logger.info("Running Agentic Review...")
     if not REVIEW_PROMPT_TEMPLATE.exists():
@@ -403,7 +404,7 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
     review_prompt = review_prompt_base.replace("{prd_path}", str(prd_path))
 
     cmd = get_agent_command(agent_type, review_prompt)
-    output, _ = run_agent(cmd, caffeinate=caffeinate)
+    output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
     return output, "<review>PASSED</review>" in output
 
 
@@ -501,6 +502,7 @@ def ralph_loop(
     caffeinate=False,
     budget=None,
     fast=False,
+    stream=False,
 ):
     from vibe_tools.cli import load_config
 
@@ -652,7 +654,9 @@ def ralph_loop(
             logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
             # Switch to feature branch
-            _switch_to_branch(branch_name, agent, project_name, caffeinate=caffeinate)
+            _switch_to_branch(
+                branch_name, agent, project_name, caffeinate=caffeinate, stream=stream
+            )
 
             if not BASE_PROMPT_TEMPLATE.exists():
                 logger.error(
@@ -695,6 +699,7 @@ def ralph_loop(
                         BACKEND_ROOT,
                         FRONTEND_ROOT,
                         caffeinate=caffeinate,
+                        stream=stream,
                     )
 
                     cost_logger.log_run(
@@ -765,7 +770,9 @@ TASK:
 5. Include <promise>DONE</promise> in your response once you have attempted the fix.
 """
                                 cmd = get_agent_command(agent, env_fix_prompt)
-                                fix_output, _ = run_agent(cmd, caffeinate=caffeinate)
+                                fix_output, _ = run_agent(
+                                    cmd, caffeinate=caffeinate, stream=stream
+                                )
 
                                 env_fix_attempts += 1
                                 if COMPLETION_PROMISE in fix_output:
@@ -886,7 +893,7 @@ TASK:
                     )
                     if review:
                         review_output, review_passed = run_review_logic(
-                            agent, prd_file, caffeinate=caffeinate
+                            agent, prd_file, caffeinate=caffeinate, stream=stream
                         )
                         cost_logger.log_run(
                             agent=agent,
@@ -924,7 +931,9 @@ TASK:
                 logger.info(f"Committing changes for: {project_name}")
                 commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
                 commit_cmd = get_agent_command(agent, commit_prompt)
-                commit_output, _ = run_agent(commit_cmd, caffeinate=caffeinate)
+                commit_output, _ = run_agent(
+                    commit_cmd, caffeinate=caffeinate, stream=stream
+                )
                 cost_logger.log_run(
                     agent=agent,
                     model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),

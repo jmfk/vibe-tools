@@ -17,7 +17,7 @@ def get_coverage_report(component=None, caffeinate=False):
     return tester.get_coverage_report(component=component, caffeinate=caffeinate)
 
 
-def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
+def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
     from vibe_tools.cli import load_config
 
     logger.info("--- Starting Coverage Improvement Loop ---")
@@ -59,7 +59,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage..."
         )
         cmd = get_agent_command(agent, prompt)
-        output, _ = run_agent(cmd, caffeinate=caffeinate)
+        output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
         cost_logger.log_run(
             agent=agent,
@@ -81,7 +81,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             )
             fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
             cmd_fix = get_agent_command(agent, fix_prompt)
-            fix_output, _ = run_agent(cmd_fix, caffeinate=caffeinate)
+            fix_output, _ = run_agent(cmd_fix, caffeinate=caffeinate, stream=stream)
             cost_logger.log_run(
                 agent=agent,
                 model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),

@@ -51,6 +51,12 @@ SPECS_DIR = pathlib.Path("specs")
     help="Output verbose information (like prompts) to the terminal.",
 )
 @click.option(
+    "--stream",
+    is_flag=True,
+    default=False,
+    help="Stream agent output in real-time to the console.",
+)
+@click.option(
     "--agent",
     type=click.Choice(["cursor-agent", "claude", "antigravity"]),
     default="cursor-agent",
@@ -64,7 +70,7 @@ SPECS_DIR = pathlib.Path("specs")
 )
 @click.version_option(version="0.1.0")
 @click.pass_context
-def cli(ctx, debug, verbose, agent, caffeinate):
+def cli(ctx, debug, verbose, stream, agent, caffeinate):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
@@ -74,6 +80,7 @@ def cli(ctx, debug, verbose, agent, caffeinate):
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
+    ctx.obj["stream"] = stream
 
     config = load_config()
 
@@ -103,6 +110,7 @@ def cli(ctx, debug, verbose, agent, caffeinate):
     if ctx.invoked_subcommand is None:
         click.echo("vibe-tools configuration:")
         click.echo(f"  Agent: {agent}")
+        click.echo(f"  Stream: {'ON' if stream else 'OFF'}")
         click.echo(f"  Caffeinate: {'ON' if caffeinate else 'OFF'}")
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
         click.echo(f"  Default Budget: ${default_budget:.2f} USD")
@@ -406,6 +414,7 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
         caffeinate=ctx.obj.get("caffeinate", False),
         budget=budget,
         fast=fast,
+        stream=ctx.obj.get("stream", False),
     )
 
 
@@ -425,6 +434,7 @@ def test_fix(ctx, fast):
         agent=ctx.obj["agent"],
         caffeinate=ctx.obj.get("caffeinate", False),
         fast=fast,
+        stream=ctx.obj.get("stream", False),
     )
 
 
@@ -435,7 +445,9 @@ def coverage(ctx):
     from vibe_tools.coverage import improve_coverage_loop
 
     improve_coverage_loop(
-        agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False)
+        agent=ctx.obj["agent"],
+        caffeinate=ctx.obj.get("caffeinate", False),
+        stream=ctx.obj.get("stream", False),
     )
 
 
@@ -455,6 +467,7 @@ def normalize(ctx, input_file, yes):
         input_file=input_file,
         auto_overwrite=yes,
         caffeinate=ctx.obj.get("caffeinate", False),
+        stream=ctx.obj.get("stream", False),
     )
 
 
@@ -470,7 +483,11 @@ def monitor(ctx, interval):
     """Monitor the progress of automated generation."""
     from vibe_tools.monitor import run_monitor
 
-    run_monitor(agent=ctx.obj["agent"], interval=interval)
+    run_monitor(
+        agent=ctx.obj["agent"],
+        interval=interval,
+        stream=ctx.obj.get("stream", False),
+    )
 
 
 @cli.command(name="review-prd")
@@ -507,6 +524,7 @@ def review_prd(ctx, review):
             agent_type=ctx.obj.get("agent", "cursor-agent"),
             prd_path=selected,
             caffeinate=ctx.obj.get("caffeinate", False),
+            stream=ctx.obj.get("stream", False),
         )
 
 
@@ -531,7 +549,7 @@ def _prompt_for_prd(prd_paths: List[pathlib.Path]) -> pathlib.Path:
 
 
 def _run_agent_review(
-    agent_type: str, prd_path: pathlib.Path, caffeinate: bool
+    agent_type: str, prd_path: pathlib.Path, caffeinate: bool, stream: bool = False
 ) -> None:
     if not REVIEW_PROMPT_TEMPLATE.exists():
         click.echo("Review prompt template missing; skipping agentic review.")
@@ -539,7 +557,7 @@ def _run_agent_review(
 
     prompt_text = REVIEW_PROMPT_TEMPLATE.read_text().format(prd_path=prd_path)
     command = get_agent_command(agent_type, prompt_text)
-    output, exit_code = run_agent(command, caffeinate=caffeinate)
+    output, exit_code = run_agent(command, caffeinate=caffeinate, stream=stream)
 
     if exit_code != 0:
         click.echo(f"Agentic review failed (exit {exit_code}).")
@@ -579,6 +597,7 @@ def prd(ctx, title, type):
         agent_type=ctx.obj.get("agent", "cursor-agent"),
         specs_dir=specs_base,
         prd_type=type,
+        stream=ctx.obj.get("stream", False),
     )
     writer.run_loop(initial_prompt)
 
@@ -616,6 +635,7 @@ def write_prd(ctx, title, type):
         agent_type=ctx.obj.get("agent", "cursor-agent"),
         specs_dir=specs_base,
         prd_type=type,
+        stream=ctx.obj.get("stream", False),
     )
     writer.create_prd(initial_prompt)
 

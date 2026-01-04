@@ -34,6 +34,7 @@ class PRDWriter:
         dspy_runner: Optional[DspyRunner] = None,
         agent_runner: Optional[AgentRunner] = None,
         prd_type: str = "feature",
+        stream: bool = False,
     ):
         self.agent_type = agent_type
         self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("specs"))
@@ -41,6 +42,7 @@ class PRDWriter:
         self.dspy_runner = dspy_runner or self._execute_dspy
         self.agent_runner = agent_runner or self._default_agent_runner
         self.prd_type = prd_type
+        self.stream = stream
 
     def create_prd(self, initial_request: str) -> pathlib.Path:
         """Run the interview and write the resulting markdown PRD."""
@@ -243,7 +245,7 @@ class PRDWriter:
 
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
-        return run_agent(command, caffeinate=False)
+        return run_agent(command, caffeinate=False, stream=self.stream)
 
 
 class InteractivePRD(PRDWriter):
