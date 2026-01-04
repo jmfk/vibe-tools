@@ -3,7 +3,9 @@
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make install      - Install Python dependencies"
+	@echo "  make install      - Install dependencies and setup environment"
+	@echo "  make install-deps - Install Python dependencies (pip install -e .)"
+	@echo "  make setup        - Run interactive environment setup"
 	@echo "  make batch        - Run the Cursor batch process (run_cursor_batch.py)"
 	@echo "  make loop         - Run the Ralph loop process (run_cursor_ralph_loop.py)"
 	@echo "  make monitor      - Run the progress monitor (monitor.py)"
@@ -56,6 +58,12 @@ lint-frontend:
 lint-infra:
 	@echo "Running infra lint..."
 	ruff check vibe_tools/
+
+install-deps:
+	pip install -e .
+
+setup:
+	vibe-setup env
 
 install:
 	./install.sh
