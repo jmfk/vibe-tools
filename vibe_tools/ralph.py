@@ -21,7 +21,7 @@ from vibe_tools.utils import (
     run_command,
 )
 
-BACKEND_ROOT = pathlib.Path("src")
+BACKEND_ROOT = pathlib.Path("backend")
 FRONTEND_ROOT = pathlib.Path("frontend")
 PROMPTS_DIR = pathlib.Path("prompts")
 BASE_PROMPT_TEMPLATE = PROMPTS_DIR / "ralph_base_prompt.txt"
@@ -193,8 +193,9 @@ TARGET DIRECTORIES:
 TESTING & QUALITY:
 - The project uses a Makefile for testing and linting.
 - Key targets: test-backend, test-frontend, test-infra, test-integration, test-regression, lint-backend, lint-frontend, lint-infra.
-- INITIAL STATE: Dummy tests have been created in `tests/` and `frontend/src/` to ensure the pipeline passes.
+- INITIAL STATE: Dummy tests have been created in `{BACKEND_ROOT}/tests/` and `frontend/src/` to ensure the pipeline passes.
 - YOUR TASK: As you develop features, replace these dummy tests with real ones. Update the Makefile targets to run your actual test suites (e.g., changing `@exit 0` to `pytest` or `npm test`).
+- BACKEND STRUCTURE: The backend source code lives in `{BACKEND_ROOT}/`. Tests must be placed in `{BACKEND_ROOT}/tests/`.
 
 TASK:
 Process the above according to the instructions. You are responsible for BOTH the backend (FastAPI) and the frontend (React).
@@ -257,8 +258,9 @@ TARGET DIRECTORIES:
 TESTING & QUALITY:
 - The project uses a Makefile for testing and linting.
 - Key targets: test-backend, test-frontend, test-infra, test-integration, test-regression, lint-backend, lint-frontend, lint-infra.
-- INITIAL STATE: Dummy tests have been created in `tests/` and `frontend/src/` to ensure the pipeline passes.
+- INITIAL STATE: Dummy tests have been created in `{backend_dir}/tests/` and `frontend/src/` to ensure the pipeline passes.
 - YOUR TASK: As you develop features, replace these dummy tests with real ones. Update the Makefile targets to run your actual test suites (e.g., changing `@exit 0` to `pytest` or `npm test`).
+- BACKEND STRUCTURE: The backend source code lives in `{backend_dir}/`. Tests must be placed in `{backend_dir}/tests/`.
 
 TASK:
 Process the above according to the instructions. You are responsible for BOTH the backend (FastAPI) and the frontend (React).
@@ -308,9 +310,9 @@ def run_coverage_logic(config, caffeinate=False):
 
     # Check each component that has a directory/config
     components = []
-    if pathlib.Path("src").exists():
+    if BACKEND_ROOT.exists():
         components.append("backend")
-    if pathlib.Path("frontend").exists():
+    if FRONTEND_ROOT.exists():
         components.append("frontend")
     if pathlib.Path("vibe_tools").exists():
         components.append("infra")
@@ -446,7 +448,7 @@ def ralph_loop(
                 logger.info("✅ Created default Makefile.")
 
         # Ensure dummy tests exist
-        backend_test_dir = pathlib.Path("tests")
+        backend_test_dir = BACKEND_ROOT / "tests"
         ensure_dir(backend_test_dir)
         dummy_backend = backend_test_dir / "test_dummy.py"
         if not any(backend_test_dir.glob("test_*.py")):

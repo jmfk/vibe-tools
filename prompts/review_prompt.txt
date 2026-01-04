@@ -1,4 +1,4 @@
-You are a Senior Full-Stack Developer. Review the recent changes in 'src/' and 'frontend/' against the provided PRD.
+You are a Senior Full-Stack Developer. Review the recent changes in 'backend/' and 'frontend/' against the provided PRD.
 
 CONTEXT:
 - PRD: {prd_path}

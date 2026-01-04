@@ -83,7 +83,7 @@ BEGIN INPUT PRD
 >>>
 END INPUT PRD
 """,
-    "review_prompt.txt": """You are a Senior Full-Stack Developer. Review the recent changes in 'src/' and 'frontend/' against the provided PRD.
+    "review_prompt.txt": """You are a Senior Full-Stack Developer. Review the recent changes in 'backend/' and 'frontend/' against the provided PRD.
 
 CONTEXT:
 - PRD: {prd_path}
@@ -181,12 +181,12 @@ Current Branch: {current_branch}
 GIT STATUS (short):
 {git_status}
 
-RECENT DIFFS (src/):
+RECENT DIFFS (backend/):
 {last_diff}
 
 TASK:
 1. Identify which PRD is likely being processed (look at branch name).
-2. Summarize the progress in 'src/'.
+2. Summarize the progress in 'backend/'.
 3. Detect any "BLOCKER" messages in files or signs of failure/stalling.
 4. Provide a HEALTH STATUS: [HEALTHY], [STALLED], or [FAILED].
 5. Keep it very concise (max 10 lines).
@@ -196,34 +196,34 @@ TASK:
 test: test-backend test-frontend test-infra test-integration test-regression lint
 
 test-backend:
-	@echo "Running backend tests... (dummy)"
-	@exit 0
+	@echo "Running backend tests..."
+	pytest backend/tests/
 
 test-frontend:
-	@echo "Running frontend tests... (dummy)"
-	@exit 0
+	@echo "Running frontend tests..."
+	npm --prefix frontend test -- --run
 
 test-infra:
-	@echo "Running infra tests... (dummy)"
-	@exit 0
+	@echo "Running infra tests..."
+	pytest backend/tests/test_infra.py || echo "No infra tests found"
 
 test-integration:
-	@echo "Running integration tests... (dummy)"
-	@exit 0
+	@echo "Running integration tests..."
+	pytest backend/tests/integration/
 
 test-regression:
-	@echo "Running regression tests... (dummy)"
-	@exit 0
+	@echo "Running regression tests..."
+	pytest backend/tests/regression/
 
 lint: lint-backend lint-frontend
 
 lint-backend:
-	@echo "Running backend linting... (dummy)"
-	@exit 0
+	@echo "Running backend linting..."
+	ruff check backend/
 
 lint-frontend:
-	@echo "Running frontend linting... (dummy)"
-	@exit 0
+	@echo "Running frontend linting..."
+	npm --prefix frontend run lint
 """,
     "dummy_backend_test": """def test_dummy():
     assert True

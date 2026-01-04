@@ -25,9 +25,11 @@ def test_discover_backend_test_cmd(tmp_path):
 
     # 2. No Makefile, but pytest in path
     tester.makefile.unlink()
+    tester.backend_root = tmp_path / "backend"
+    (tester.backend_root / "tests").mkdir(parents=True)
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
-        assert tester.discover_backend_test_cmd() == ["pytest", "-v"]
+        assert tester.discover_backend_test_cmd() == ["pytest", "-v", str(tester.backend_root / "tests")]
 
 
 def test_discover_frontend_test_cmd(tmp_path):
@@ -60,13 +62,13 @@ def test_discover_coverage_cmd(tmp_path):
     assert tester.discover_coverage_cmd() == ["make", "coverage"]
 
     tester.makefile.unlink()
-    tester.backend_root = tmp_path / "src"
+    tester.backend_root = tmp_path / "backend"
     tester.backend_root.mkdir()
     assert tester.discover_coverage_cmd() == [
         "pytest",
         f"--cov={tester.backend_root}",
         "--cov-report=term-missing",
-        "tests/",
+        f"{tester.backend_root}/tests/",
     ]
 
 

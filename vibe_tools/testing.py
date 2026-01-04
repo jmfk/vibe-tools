@@ -9,7 +9,7 @@ from vibe_tools.utils import get_changed_files, logger, run_command
 class ProjectTester:
     __test__ = False
 
-    def __init__(self, backend_root="src", frontend_root="frontend"):
+    def __init__(self, backend_root="backend", frontend_root="frontend"):
         self.backend_root = pathlib.Path(backend_root)
         self.frontend_root = pathlib.Path(frontend_root)
         self.makefile = pathlib.Path("Makefile")
@@ -30,10 +30,15 @@ class ProjectTester:
         if self.has_make_target("test"):
             return ["make", "test"]
 
+        # If backend/tests does not exist, skip testing
+        backend_tests = self.backend_root / "tests"
+        if not backend_tests.exists():
+            return None
+
         # Fallback to pytest if available
         try:
             subprocess.run(["pytest", "--version"], capture_output=True, check=True)
-            return ["pytest", "-v"]
+            return ["pytest", "-v", str(backend_tests)]
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
 
@@ -42,7 +47,7 @@ class ProjectTester:
             subprocess.run(
                 ["python3", "-m", "pytest", "--version"], capture_output=True, check=True
             )
-            return ["python3", "-m", "pytest", "-v"]
+            return ["python3", "-m", "pytest", "-v", str(backend_tests)]
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
 
@@ -79,13 +84,13 @@ class ProjectTester:
 
         if component == "infra":
             # Coverage for the tools themselves
-            return ["pytest", "--cov=vibe_tools", "--cov-report=term-missing", "tests/"]
+            return ["pytest", "--cov=vibe_tools", "--cov-report=term-missing", "backend/tests/"]
 
         if component == "backend" or component is None:
             if self.has_make_target("coverage"):
                 return ["make", "coverage"]
             if self.backend_root.exists():
-                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
+                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", f"{self.backend_root}/tests/"]
 
         return None
 
@@ -155,7 +160,7 @@ class ProjectTester:
         filtered = []
         
         has_backend_changes = any(
-            f.startswith("src/") or f.startswith("vibe_tools/") or f.startswith("tests/") or f == "pyproject.toml" or f == "Makefile"
+            f.startswith("backend/") or f.startswith("vibe_tools/") or f == "pyproject.toml" or f == "Makefile"
             for f in changed_files
         )
         has_frontend_changes = any(

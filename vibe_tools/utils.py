@@ -341,12 +341,12 @@ def check_env_health() -> bool:
     config = load_config()
     env_config = config.get("env")
     
-    # 1. Check if src is importable
+    # 1. Check if backend is importable
     try:
-        import src
-        logger.debug("✅ 'src' package is importable.")
+        import backend
+        logger.debug("✅ 'backend' package is importable.")
     except ImportError:
-        logger.warning("❌ 'src' package is NOT importable. Project structure may be broken.")
+        logger.warning("❌ 'backend' package is NOT importable. Project structure may be broken.")
         return False
 
     # 2. If managed env is configured, check if we're in it
