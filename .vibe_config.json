@@ -22,6 +22,47 @@
       "password": "postgres",
       "database": "vibe-tools",
       "docker_container_name": "eceee-v4-db"
+    },
+    "rabbitmq": {
+      "host": "localhost",
+      "port": 5672,
+      "user": "guest",
+      "password": "guest",
+      "virtual_host": "/",
+      "docker_container_name": "vibe-rabbitmq"
+    },
+    "mailhog": {
+      "host": "localhost",
+      "port": 1025,
+      "web_port": 8025,
+      "docker_container_name": "vibe-mailhog"
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "",
+      "database": 0,
+      "docker_container_name": "vibe-redis"
+    },
+    "s3-linode": {
+      "host": "localhost",
+      "port": 9000,
+      "docker_container_name": "vibe-minio-linode",
+      "access_key": "minioadmin",
+      "secret_key": "minioadmin",
+      "region": "us-east-1",
+      "addressing_style": "path",
+      "signature_version": "s3v4",
+      "console_port": 9001
     }
+  },
+  "google_sheet_id": "vibe-tools",
+  "use_google_sheets": false,
+  "env": {
+    "type": "pyenv-virtualenv",
+    "python_version": "3.11.10",
+    "venv_name": "vibe-tools-3.11.10",
+    "path": "/Users/jmfk/code/vibe-tools",
+    "last_setup": "2026-01-04T20:42:33.928587"
   }
 }
