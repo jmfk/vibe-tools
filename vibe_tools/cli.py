@@ -654,6 +654,24 @@ def monitor(ctx, interval):
 
 
 @cli.command()
+@click.option(
+    "--title",
+    "-t",
+    help="Short description of the PRD or feature you want to explore.",
+)
+@click.pass_context
+def write_prd(ctx, title):
+    """Run the dspy interview loop and generate a markdown PRD."""
+    from vibe_tools.prd_writer import PRDWriter
+
+    initial_prompt = title or click.prompt("Describe the PRD you'd like to write")
+    ensure_dir(pathlib.Path("specs"))
+
+    writer = PRDWriter(agent_type=ctx.obj.get("agent", "cursor-agent"))
+    writer.create_prd(initial_prompt)
+
+
+@cli.command()
 def history():
     """List the status of all PRDs."""
     if not PRD_DIR.exists():
