@@ -122,8 +122,11 @@ class ProjectTester:
                 output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
 
                 env_failure = False
-                if code == 127 or "command not found" in output.lower() or "sh: " in output:
-                    if "command not found" in output.lower() or "not found" in output.lower():
+                # Improved detection of command failures and environment issues
+                lower_output = output.lower()
+                if code == 127 or "command not found" in lower_output or "sh: " in lower_output or "not found" in lower_output:
+                    # Filter out cases where the target itself says it's skipping
+                    if "skipping" not in lower_output:
                         env_failure = True
 
                 return {

@@ -349,7 +349,27 @@ def check_env_health() -> bool:
         logger.warning("❌ 'backend' package is NOT importable. Project structure may be broken.")
         return False
 
-    # 2. If managed env is configured, check if we're in it
+    # 2. Check for essential tools
+    missing_tools = []
+    
+    # Backend tools
+    for tool in ["python3", "pip"]:
+        _, code = run_command([tool, "--version"], check=False)
+        if code != 0:
+            missing_tools.append(tool)
+            
+    # Frontend tools (if frontend directory exists)
+    if pathlib.Path("frontend").exists():
+        for tool in ["node", "npm"]:
+            _, code = run_command([tool, "--version"], check=False)
+            if code != 0:
+                missing_tools.append(tool)
+                
+    if missing_tools:
+        logger.warning(f"❌ Missing essential tools: {', '.join(missing_tools)}")
+        return False
+
+    # 3. If managed env is configured, check if we're in it
     if env_config:
         venv_name = env_config.get("venv_name")
         if venv_name:
