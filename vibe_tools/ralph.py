@@ -247,10 +247,10 @@ Include {COMPLETION_PROMISE} when you are done.
     return output
 
 
-def run_tests_logic(caffeinate=False):
+def run_tests_logic(caffeinate=False, fast=False):
     """Runs backend and frontend tests."""
     tester = ProjectTester()
-    return tester.run_tests(caffeinate=caffeinate)
+    return tester.run_tests(caffeinate=caffeinate, changed_only=fast)
 
 
 def run_review_logic(agent_type, prd_path, caffeinate=False):
@@ -268,6 +268,40 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
     cmd = get_agent_command(agent_type, review_prompt)
     output, _ = run_agent(cmd, caffeinate=caffeinate)
     return output, "<review>PASSED</review>" in output
+
+
+def run_coverage_logic(config, caffeinate=False):
+    """Checks if coverage targets are met for all components."""
+    logger.info("Checking coverage targets...")
+    tester = ProjectTester()
+    targets = config.get("coverage_targets", {"backend": 85, "frontend": 85, "infra": 85})
+
+    results = []
+    all_passed = True
+    combined_report = ""
+
+    # Check each component that has a directory/config
+    components = []
+    if pathlib.Path("src").exists():
+        components.append("backend")
+    if pathlib.Path("frontend").exists():
+        components.append("frontend")
+    if pathlib.Path("vibe_tools").exists():
+        components.append("infra")
+
+    for component in components:
+        target = targets.get(component, 85)
+        report, current = tester.get_coverage_report(component=component, caffeinate=caffeinate)
+        combined_report += f"\n--- COVERAGE REPORT: {component.upper()} ---\n{report}\n"
+
+        if current < target:
+            all_passed = False
+            results.append(f"❌ {component.capitalize()}: {current}% (Target: {target}%)")
+        else:
+            results.append(f"✅ {component.capitalize()}: {current}% (Target: {target}%)")
+
+    status_message = "\n".join(results)
+    return combined_report, status_message, all_passed
 
 
 def check_budget(budget):
@@ -317,9 +351,11 @@ def ralph_loop(
     agent="cursor-agent",
     review=False,
     tests=False,
+    coverage=False,
     auto_merge=False,
     caffeinate=False,
     budget=None,
+    fast=False,
 ):
     from vibe_tools.cli import load_config
 
@@ -572,11 +608,48 @@ def ralph_loop(
                         i,
                         iteration_output,
                         additional_context,
+                        phase="coverage",
+                    )
+                    start_phase = "coverage"
+
+                # Phase 3: Coverage
+                if start_phase == "coverage":
+                    logger.info(
+                        f"📊 [RALPH LOOP] [PHASE: coverage] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
+                    if coverage:
+                        cov_report, cov_status, cov_passed = run_coverage_logic(
+                            config, caffeinate=caffeinate
+                        )
+
+                        if not cov_passed:
+                            logger.error(
+                                f"❌ Coverage targets not met:\n{cov_status}\nFeeding back to agent..."
+                            )
+                            additional_context = f"THE PREVIOUS CHANGES DO NOT MEET COVERAGE TARGETS:\n{cov_status}\n\nDETAILED REPORT:\n{cov_report}"
+                            save_state(
+                                project_name,
+                                i + 1,
+                                iteration_output,
+                                additional_context,
+                                phase="build",
+                            )
+                            start_phase = "build"
+                            continue
+                        logger.info(f"✅ Coverage targets met:\n{cov_status}")
+                    else:
+                        logger.info("⏩ Skipping coverage enforcement as requested.")
+
+                    save_state(
+                        project_name,
+                        i,
+                        iteration_output,
+                        additional_context,
                         phase="review",
                     )
                     start_phase = "review"
 
-                # Phase 3: Review
+                # Phase 4: Review
                 if start_phase == "review":
                     # Check budget before agent call
                     budget = check_budget(budget)
