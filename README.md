@@ -51,6 +51,24 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
       "username": "",
       "password": "",
       "docker_container_name": "es-local"
+    },
+    "s3-linode": {
+      "host": "localhost",
+      "port": 9000,
+      "access_key": "minioadmin",
+      "secret_key": "minioadmin",
+      "region": "us-east-1",
+      "addressing_style": "path",
+      "signature_version": "s3v4"
+    },
+    "s3-aws": {
+      "host": "localhost",
+      "port": 9010,
+      "access_key": "minioadmin",
+      "secret_key": "minioadmin",
+      "region": "us-east-1",
+      "addressing_style": "virtual",
+      "signature_version": "s3v4"
     }
   }
 }
