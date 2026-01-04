@@ -153,6 +153,7 @@ def run_agent(cmd, caffeinate=False):
     process = subprocess.Popen(cmd, **popen_kwargs)
     full_output, start_time = [], time.time()
 
+    assert process.stdout is not None
     try:
         for line in iter(process.stdout.readline, ""):
             full_output.append(line)

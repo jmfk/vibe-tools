@@ -1,7 +1,7 @@
 import csv
 import datetime
 import pathlib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from vibe_tools.utils import COSTS_DIR, logger
 
@@ -42,7 +42,9 @@ class CostLogger:
             return 0
         return len(text) // 4
 
-    def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> float:
         pricing = PRICING.get(model, DEFAULT_PRICING)
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
@@ -158,7 +160,9 @@ class CostLogger:
                     )
                 else:
                     # gspread might still work with just authorized_user if already logged in
-                    gc = gspread.oauth(authorized_user_filename=str(authorized_user_path))
+                    gc = gspread.oauth(
+                        authorized_user_filename=str(authorized_user_path)
+                    )
             # 2. Fallback to Service Account
             elif creds_path.exists():
                 gc = gspread.service_account(filename=str(creds_path))

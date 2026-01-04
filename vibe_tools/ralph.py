@@ -119,7 +119,9 @@ def get_pending_prds_and_estimates(agent_type, config):
         return results
 
     base_prompt = BASE_PROMPT_TEMPLATE.read_text()
-    architecture_content = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    architecture_content = (
+        ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    )
     overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
 
     for prd_file in prds:
@@ -240,7 +242,9 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
     """Asks an agent to review the changes against the PRD."""
     logger.info("Running Agentic Review...")
     if not REVIEW_PROMPT_TEMPLATE.exists():
-        logger.warning(f"Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review.")
+        logger.warning(
+            f"Review template not found at {REVIEW_PROMPT_TEMPLATE}. Skipping review."
+        )
         return "", True
 
     review_prompt_base = REVIEW_PROMPT_TEMPLATE.read_text()
@@ -276,7 +280,9 @@ def check_budget(budget):
         click.echo(f"{'TOTAL:':<27} ${current_cost:>8.4f}")
         click.echo("=" * 40)
 
-        if click.confirm("\nWould you like to increase the budget and continue?", default=True):
+        if click.confirm(
+            "\nWould you like to increase the budget and continue?", default=True
+        ):
             add_amount = click.prompt(
                 "How much would you like to add to the budget (USD)?",
                 type=float,
@@ -306,7 +312,9 @@ def ralph_loop(
     cost_logger = CostLogger(config)
 
     if not PROMPTS_DIR.exists():
-        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
+        logger.error(
+            "Error: prompts directory not found. Please run 'vibe init' first."
+        )
         sys.exit(1)
 
     if not PRD_DIR.exists():
@@ -394,7 +402,9 @@ def ralph_loop(
             logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
             if is_merged(branch_name):
-                logger.info(f"Branch {branch_name} already merged into main. Skipping...")
+                logger.info(
+                    f"Branch {branch_name} already merged into main. Skipping..."
+                )
                 # Also mark as completed if it's merged but not in state
                 if project_name not in completed_prds:
                     mark_prd_completed(project_name)
@@ -439,7 +449,9 @@ def ralph_loop(
                     # Check budget before agent call
                     budget = check_budget(budget)
 
-                    logger.info(f"🚀 [RALPH LOOP] [PHASE: build] (Iteration {i}/{MAX_ITERATIONS})")
+                    logger.info(
+                        f"🚀 [RALPH LOOP] [PHASE: build] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
 
                     prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
@@ -468,7 +480,9 @@ def ralph_loop(
                     iteration_output = output
 
                     if COMPLETION_PROMISE not in output:
-                        logger.info("⏳ Agent is still working (no completion promise yet)...")
+                        logger.info(
+                            "⏳ Agent is still working (no completion promise yet)..."
+                        )
                         additional_context = ""
                         save_state(
                             project_name,
@@ -482,12 +496,16 @@ def ralph_loop(
                     logger.info(
                         f"✅ COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
                     )
-                    save_state(project_name, i, output, additional_context, phase="test")
+                    save_state(
+                        project_name, i, output, additional_context, phase="test"
+                    )
                     start_phase = "test"
 
                 # Phase 2: Tests
                 if start_phase == "test":
-                    logger.info(f"🧪 [RALPH LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})")
+                    logger.info(
+                        f"🧪 [RALPH LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
                     if tests:
                         test_output, tests_passed, env_failures = run_tests_logic(
                             caffeinate=caffeinate
@@ -528,10 +546,10 @@ def ralph_loop(
                                 logger.info(f"Last test output:\n{test_output}")
                                 sys.exit(1)
 
-                            logger.error("❌ Tests failed. Feeding back to agent for repair...")
-                            additional_context = (
-                                f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
+                            logger.error(
+                                "❌ Tests failed. Feeding back to agent for repair..."
                             )
+                            additional_context = f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
                             save_state(
                                 project_name,
                                 i + 1,
@@ -559,7 +577,9 @@ def ralph_loop(
                     # Check budget before agent call
                     budget = check_budget(budget)
 
-                    logger.info(f"🔎 [RALPH LOOP] [PHASE: review] (Iteration {i}/{MAX_ITERATIONS})")
+                    logger.info(
+                        f"🔎 [RALPH LOOP] [PHASE: review] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
                     if review:
                         review_output, review_passed = run_review_logic(
                             agent, prd_file, caffeinate=caffeinate
@@ -576,9 +596,7 @@ def ralph_loop(
                         )
                         if not review_passed:
                             logger.error("❌ Review failed. Feeding back to agent...")
-                            additional_context = (
-                                f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
-                            )
+                            additional_context = f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
                             save_state(
                                 project_name,
                                 i + 1,
@@ -619,7 +637,9 @@ def ralph_loop(
                     run_command(["git", "checkout", "main"])
                     run_command(["git", "merge", branch_name])
                 else:
-                    logger.info(f"Auto-merge is OFF. Changes remain on branch {branch_name}.")
+                    logger.info(
+                        f"Auto-merge is OFF. Changes remain on branch {branch_name}."
+                    )
                     run_command(["git", "checkout", "main"])
 
                 mark_prd_completed(project_name)
