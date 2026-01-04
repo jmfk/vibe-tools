@@ -18,6 +18,8 @@ dependencies = [
     "aerich",
     "pydantic[email]",
     "httpx",
+    "pytest",
+    "pytest-cov",
     "pytest-asyncio",
     "ruff",
     "mypy",
