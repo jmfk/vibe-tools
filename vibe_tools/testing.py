@@ -1,8 +1,9 @@
 import pathlib
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
-from vibe_tools.utils import logger, run_command
+from vibe_tools.utils import get_changed_files, logger, run_command
 
 
 class ProjectTester:
@@ -67,69 +68,132 @@ class ProjectTester:
 
         return None
 
-    def discover_coverage_cmd(self):
-        """Discovers the command to run coverage."""
-        if self.has_make_target("coverage"):
-            return ["make", "coverage"]
+    def discover_coverage_cmd(self, component=None):
+        """Discovers the command to run coverage for a specific component."""
+        if component == "frontend":
+            if self.has_make_target("frontend-coverage"):
+                return ["make", "frontend-coverage"]
+            if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
+                return ["npm", "--prefix", str(self.frontend_root), "run", "test:coverage"] # Standard Vitest/Jest coverage
+            return None
 
-        # Default to pytest --cov if src exists
-        if self.backend_root.exists():
-            return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
+        if component == "infra":
+            # Coverage for the tools themselves
+            return ["pytest", "--cov=vibe_tools", "--cov-report=term-missing", "tests/"]
+
+        if component == "backend" or component is None:
+            if self.has_make_target("coverage"):
+                return ["make", "coverage"]
+            if self.backend_root.exists():
+                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
 
         return None
 
-    def run_tests(self, caffeinate=False):
-        """Runs all generalized test and lint targets from the Makefile."""
-        targets = [
-            "test-backend",
-            "test-frontend",
-            "test-infra",
-            "test-integration",
-            "test-regression",
-            "lint-backend",
-            "lint-frontend",
-            "lint-infra",
-        ]
+    def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=True):
+        """Runs test and lint targets, optionally filtered by changed files."""
+        if targets is None:
+            targets = [
+                "test-backend",
+                "test-frontend",
+                "lint-backend",
+                "lint-frontend",
+            ]
 
-        outputs = []
-        all_passed = True
-        env_failures = []
+        if changed_only:
+            changed_files = get_changed_files()
+            if changed_files:
+                targets = self._filter_targets_by_changes(targets, changed_files)
+                logger.info(f"Filtered targets based on changes: {', '.join(targets)}")
+            else:
+                logger.info("No changes detected, skipping tests.")
+                return "No changes detected.", True, []
 
-        for target in targets:
+        if not targets:
+            return "No relevant tests to run.", True, []
+
+        def run_target(target):
             if self.has_make_target(target):
                 logger.info(f"Running target: make {target}")
                 output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
 
-                # Check for exit code 127 (Command not found)
-                # Note: 'make' might return 2 if the shell command within it returns 127
+                env_failure = False
                 if code == 127 or "command not found" in output.lower() or "sh: " in output:
-                    # Double check if it's really a command not found
                     if "command not found" in output.lower() or "not found" in output.lower():
-                        env_failures.append(target)
+                        env_failure = True
 
-                outputs.append(f"--- TARGET: {target} ---\n{output}")
-                if code != 0:
-                    all_passed = False
+                return {
+                    "target": target,
+                    "output": f"--- TARGET: {target} ---\n{output}",
+                    "passed": code == 0,
+                    "env_failure": env_failure,
+                }
             else:
-                # If target is missing, we don't fail, but we log it
-                outputs.append(f"--- TARGET: {target} (NOT FOUND) ---")
+                return {
+                    "target": target,
+                    "output": f"--- TARGET: {target} (NOT FOUND) ---",
+                    "passed": True,
+                    "env_failure": False,
+                }
+
+        results = []
+        if parallel and len(targets) > 1:
+            with ThreadPoolExecutor(max_workers=min(len(targets), 4)) as executor:
+                results = list(executor.map(run_target, targets))
+        else:
+            for target in targets:
+                results.append(run_target(target))
+
+        outputs = [r["output"] for r in results]
+        all_passed = all(r["passed"] for r in results)
+        env_failures = [r["target"] for r in results if r["env_failure"]]
 
         combined_output = "\n\n".join(outputs)
-
-        # If we have environment failures, return a special flag
         return combined_output, all_passed, env_failures
 
-    def get_coverage_report(self, caffeinate=False):
-        """Runs coverage and returns the full report and total coverage percentage."""
-        cmd = self.discover_coverage_cmd()
-        if not cmd:
-            return "No coverage command discovered.", 0
+    def _filter_targets_by_changes(self, targets, changed_files):
+        """Filters targets based on which files have changed."""
+        filtered = []
+        
+        has_backend_changes = any(
+            f.startswith("src/") or f.startswith("vibe_tools/") or f.startswith("tests/") or f == "pyproject.toml" or f == "Makefile"
+            for f in changed_files
+        )
+        has_frontend_changes = any(
+            f.startswith("frontend/") for f in changed_files
+        )
 
-        logger.info(f"Running Coverage: {' '.join(cmd)}")
+        for target in targets:
+            if "backend" in target or "infra" in target or "integration" in target or "regression" in target:
+                if has_backend_changes:
+                    filtered.append(target)
+            elif "frontend" in target:
+                if has_frontend_changes:
+                    filtered.append(target)
+            elif target == "test" or target == "coverage":
+                if has_backend_changes or has_frontend_changes:
+                    filtered.append(target)
+            else:
+                # If we don't know, play it safe and include it
+                filtered.append(target)
+                
+        return filtered
+
+    def get_coverage_report(self, component=None, caffeinate=False):
+        """Runs coverage for a component and returns the report and total percentage."""
+        cmd = self.discover_coverage_cmd(component=component)
+        if not cmd:
+            return f"No coverage command discovered for component: {component or 'default'}", 0
+
+        logger.info(f"Running Coverage ({component or 'default'}): {' '.join(cmd)}")
         output, _ = run_command(cmd, check=False, caffeinate=caffeinate)
 
         # Extract total coverage from the last line like 'TOTAL ... 68%'
-        match = re.search(r"TOTAL\s+\d+\s+\d+\s+(\d+)%", output)
+        # This works for both pytest-cov and vitest (standard istanbul report)
+        match = re.search(r"TOTAL\s+.*?\s+(\d+)%", output)
+        if not match:
+            # Fallback for vitest table format if it's different
+            match = re.search(r"All files\s+.*?\s+(\d+)\s+", output)
+            
         if match:
             total_cov = int(match.group(1))
         else:
