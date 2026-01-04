@@ -124,25 +124,29 @@ class ProjectTester:
                 env_failure = False
                 # Improved detection of command failures and environment issues
                 lower_output = output.lower()
-                tool_missing_indicators = [
-                    "command not found",
-                    "not found",
-                    "no module named",
-                    "sh: ",
-                    "pyenv: ",
-                ]
+                tool_missing_indicators = {
+                    "command not found": "The command was not found in the shell.",
+                    "not found": "A tool or file was not found.",
+                    "no module named": "A Python module is missing.",
+                    "sh: ": "Shell command error.",
+                    "pyenv: ": "Pyenv environment error.",
+                }
                 
-                if any(indicator in lower_output for indicator in tool_missing_indicators):
-                    # Filter out cases where the target itself says it's skipping
-                    if "skipping" not in lower_output:
-                        if code != 0 or "not found" in lower_output:
-                            env_failure = True
+                detected_reason = None
+                for indicator, reason in tool_missing_indicators.items():
+                    if indicator in lower_output:
+                        if "skipping" not in lower_output:
+                            if code != 0 or indicator == "no module named":
+                                env_failure = True
+                                detected_reason = reason
+                                break
 
                 return {
                     "target": target,
                     "output": f"--- TARGET: {target} ---\n{output}",
                     "passed": code == 0,
                     "env_failure": env_failure,
+                    "env_reason": detected_reason,
                 }
             else:
                 return {

@@ -744,8 +744,9 @@ def ralph_loop(
 
                         if env_failures:
                             if env_fix_attempts < 2:
+                                # Try to identify specific missing tools from the output
                                 logger.warning(
-                                    f"⚠️  ENVIRONMENT FAILURE DETECTED: {', '.join(env_failures)}"
+                                    f"⚠️  ENVIRONMENT FAILURE DETECTED in targets: {', '.join(env_failures)}"
                                 )
                                 logger.info(
                                     "Attempting to self-heal environment issues..."
