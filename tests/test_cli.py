@@ -80,12 +80,12 @@ def test_ralph_command_prompt(runner, tmp_path):
 
 
 def test_history_command(runner):
-    with patch("vibe_tools.cli.PRD_DIR") as mock_prd_dir:
-        mock_prd_dir.exists.return_value = True
-        mock_file = MagicMock()
-        mock_file.stem = "prd_01_test"
-        mock_prd_dir.glob.return_value = [mock_file]
+    mock_file = MagicMock()
+    mock_file.stem = "prd_01_test"
+    # mock_file.relative_to(PRD_DIR).with_suffix("").as_posix() should return "prd_01_test"
+    mock_file.relative_to.return_value.with_suffix.return_value.as_posix.return_value = "prd_01_test"
 
+    with patch("vibe_tools.utils.collect_prd_files", return_value=[mock_file]):
         with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": [], "started_prds": []}):
             result = runner.invoke(cli, ["history"])
             assert result.exit_code == 0
@@ -105,6 +105,8 @@ def test_rerun_command_found(runner, tmp_path):
             with patch("vibe_tools.cli.run_command") as mock_run:
                 mock_run.return_value = ("main", 0)  # branch check
                 with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": ["prd_01_test"], "started_prds": ["prd_01_test"]}):
+                    # We need to ensure collect_prd_files returns our file if rerun uses it
+                    # But rerun still uses PRD_DIR.glob or similar? No, let's check rerun.
                     result = runner.invoke(cli, ["rerun", "01"])
                     assert "Rerunning PRD: prd_01_test" in result.output
                     assert "Removed from completed PRDs list." in result.output
@@ -192,3 +194,45 @@ def test_review_prd_command_skips_agent_when_flag_disabled(runner, tmp_path, mon
 
     assert result.exit_code == 0
     agent_runner.assert_not_called()
+
+
+def test_memory_command_saves_file(runner, tmp_path, monkeypatch):
+    instructions_dir = tmp_path / "instructions"
+    instructions_dir.mkdir()
+    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
+
+    result = runner.invoke(cli, ["memory", "Test instruction"])
+
+    assert result.exit_code == 0
+    assert "Memory saved" in result.output
+    files = list(instructions_dir.glob("memory_*_test_instruction.txt"))
+    assert len(files) == 1
+    assert files[0].read_text() == "Test instruction"
+
+
+def test_remember_alias_works(runner, tmp_path, monkeypatch):
+    instructions_dir = tmp_path / "instructions"
+    instructions_dir.mkdir()
+    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
+
+    result = runner.invoke(cli, ["remember", "Alias test"])
+
+    assert result.exit_code == 0
+    assert "Memory saved" in result.output
+    files = list(instructions_dir.glob("memory_*_alias_test.txt"))
+    assert len(files) == 1
+    assert files[0].read_text() == "Alias test"
+
+
+def test_memory_list_command(runner, tmp_path, monkeypatch):
+    instructions_dir = tmp_path / "instructions"
+    instructions_dir.mkdir()
+    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
+    (instructions_dir / "memory_1.txt").write_text("Instruction 1")
+
+    result = runner.invoke(cli, ["memory", "--list"])
+
+    assert result.exit_code == 0
+    assert "Current memories:" in result.output
+    assert "memory_1.txt" in result.output
+    assert "Instruction 1" in result.output
