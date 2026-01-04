@@ -9,7 +9,7 @@ venv/
 env/
 build/
 dist/
-
+prds/
 
 
 .vibe_config.json
