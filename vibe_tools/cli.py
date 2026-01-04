@@ -60,6 +60,12 @@ def maybe_init_git():
     help="Enable debug logging to console.",
 )
 @click.option(
+    "--verbose",
+    is_flag=True,
+    default=None,
+    help="Output verbose information (like prompts) to the terminal.",
+)
+@click.option(
     "--agent",
     type=click.Choice(["cursor-agent", "claude", "antigravity"]),
     default="cursor-agent",
@@ -73,14 +79,27 @@ def maybe_init_git():
 )
 @click.version_option(version="0.1.0")
 @click.pass_context
-def cli(ctx, debug, agent, caffeinate):
+def cli(ctx, debug, verbose, agent, caffeinate):
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
 
+    config = load_config()
+
     if debug:
         enable_console_debug()
+    else:
+        # Default to WARNING level for terminal if not verbose
+        if verbose is None:
+            verbose = config.get("verbose", False)
+        
+        from vibe_tools.utils import set_console_level
+        if verbose:
+            set_console_level(logging.INFO)
+        else:
+            set_console_level(logging.WARNING)
 
-    config = load_config()
+    ctx.obj["verbose"] = verbose
+
     if caffeinate is None:
         caffeinate = config.get("caffeinate", False)
     ctx.obj["caffeinate"] = caffeinate
@@ -89,6 +108,7 @@ def cli(ctx, debug, agent, caffeinate):
         click.echo("vibe-tools configuration:")
         click.echo(f"  Agent: {agent}")
         click.echo(f"  Caffeinate: {'ON' if caffeinate else 'OFF'}")
+        click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
 
         ralph_config = config.get("ralph", {})
         if ralph_config:

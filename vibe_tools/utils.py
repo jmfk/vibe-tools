@@ -39,6 +39,12 @@ stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(stream_handler)
 
+
+def set_console_level(level):
+    """Sets the console output level."""
+    stream_handler.setLevel(level)
+
+
 # Flag to track if an agent was called
 _agent_called = False
 
@@ -83,7 +89,8 @@ def run_command(cmd, check=True, caffeinate=False):
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
     
-    logger.info(f"Running command: {' '.join(cmd)}")
+    # Use logger.debug for the "Running command" message so it's hidden by default
+    logger.debug(f"Running command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     
     # Debug level logging for full command output
@@ -110,7 +117,8 @@ def run_agent(cmd, caffeinate=False):
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
     
-    logger.info(f"Running agent: {' '.join(cmd)}")
+    # Use logger.debug for the "Running agent" message
+    logger.debug(f"Running agent: {' '.join(cmd)}")
     
     # Use process groups to ensure children are killed on interrupt (Unix only)
     popen_kwargs = {
