@@ -206,7 +206,7 @@ class PRDWriter:
             env["GOOGLE_API_KEY"] = api_key
         elif "GOOGLE_API_KEY" not in env:
             raise click.ClickException(
-                "Google API Key is missing. Please run `vibe setup-api` first."
+                "Google API Key is missing. Please run `vibe-setup api` first."
             )
 
         command = ["dspy", "--model", "gemini-3-flash", "--json"]
@@ -242,3 +242,174 @@ class PRDWriter:
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
         return run_agent(command, caffeinate=False)
+
+
+class InteractivePRD(PRDWriter):
+    """Integrated interactive script for writing PRDs."""
+
+    QUESTIONS_PROMPT_FILENAME = "prd_questions_prompt.txt"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.history: List[Dict[str, str]] = []
+        self.pending_questions: List[str] = []
+        self.current_summary: str = ""
+        self.current_draft: str = ""
+        self.satisfied: bool = False
+        self.title: str = ""
+        self.context: str = ""
+
+    def run_loop(self, initial_prompt: str):
+        """Main interactive loop."""
+        self.title = initial_prompt.splitlines()[0][:50]
+        self.context = initial_prompt
+        self.current_summary = initial_prompt
+
+        click.echo(f"\n🚀 Starting interactive PRD session for: {self.title}")
+        click.echo(
+            "Type your answer, or use slash commands like /help, /generate, /save."
+        )
+
+        while True:
+            if not self.pending_questions and not self.satisfied:
+                self._fetch_new_questions()
+
+            if self.pending_questions:
+                q = self.pending_questions.pop(0)
+                click.echo(f"\n🤖 {q}")
+                user_input = click.prompt("👤", default="", show_default=False).strip()
+            else:
+                if self.satisfied:
+                    click.echo(
+                        "\n🤖 I have enough information. You can /generate the PRD or keep talking."
+                    )
+                user_input = click.prompt("👤", default="", show_default=False).strip()
+
+            if not user_input:
+                continue
+
+            if user_input.startswith("/"):
+                if self._handle_slash_command(user_input):
+                    break
+                continue
+
+            # It's an answer or a comment
+            if self.pending_questions or not self.satisfied:
+                # If we were asking a specific question, record it
+                self.history.append(
+                    {
+                        "question": q if "q" in locals() else "Follow-up",
+                        "answer": user_input,
+                    }
+                )
+            else:
+                self.context += f"\nUser added: {user_input}"
+
+            # Reset satisfied if user adds more info or we need more
+            self.satisfied = False
+
+    def _handle_slash_command(self, command_str: str) -> bool:
+        """Returns True if the loop should exit."""
+        parts = command_str.split(" ", 1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "/help":
+            self._show_help()
+        elif cmd == "/generate":
+            self._generate_draft()
+        elif cmd == "/review":
+            self._review_draft()
+        elif cmd == "/save":
+            if not self.current_draft:
+                click.echo("❌ No draft generated yet. Run /generate first.")
+            else:
+                self.write_spec(self.title, self.current_draft)
+                return True
+        elif cmd == "/add":
+            if not args:
+                click.echo("❌ Usage: /add <context information>")
+            else:
+                self.context += f"\n{args}"
+                click.echo("✅ Context added.")
+                self.satisfied = False
+        elif cmd == "/reset":
+            if click.confirm(
+                "Are you sure you want to reset the session?", default=False
+            ):
+                self.history = []
+                self.pending_questions = []
+                self.current_draft = ""
+                self.satisfied = False
+                click.echo("✅ Session reset.")
+        elif cmd == "/exit":
+            if click.confirm("Exit without saving?", default=True):
+                return True
+        else:
+            click.echo(f"❌ Unknown command: {cmd}. Type /help for options.")
+
+        return False
+
+    def _show_help(self):
+        click.echo("\nAvailable commands:")
+        click.echo("  /generate - Generate a markdown PRD draft")
+        click.echo("  /review   - View the current draft")
+        click.echo("  /save     - Save the finalized PRD to specs/")
+        click.echo("  /add <msg>- Manually add information to the context")
+        click.echo("  /reset    - Clear all history and start over")
+        click.echo("  /help     - Show this help message")
+        click.echo("  /exit     - Exit the session")
+
+    def _fetch_new_questions(self):
+        """Ask the AI for new questions based on current context."""
+        template_path = self.prompts_dir / self.QUESTIONS_PROMPT_FILENAME
+        if not template_path.exists():
+            # Fallback or error
+            raise click.ClickException(f"Missing prompt: {template_path}")
+
+        prompt = template_path.read_text().format(
+            title=self.title,
+            summary=self.current_summary,
+            context=self.context,
+            history=self._render_history(self.history),
+        )
+
+        # We use the agent_runner but expect JSON output
+        # For simplicity in this implementation, we'll try to parse JSON from the agent output
+        output, exit_code = self.agent_runner(prompt + "\nOUTPUT ONLY THE JSON.")
+        if exit_code != 0:
+            click.echo("⚠️ AI failed to generate questions.")
+            return
+
+        try:
+            # Simple JSON extraction
+            import json
+
+            start = output.find("{")
+            end = output.rfind("}") + 1
+            data = json.loads(output[start:end])
+
+            self.current_summary = data.get("summary", self.current_summary)
+            self.pending_questions = data.get("questions", [])
+            self.satisfied = data.get("satisfied", False)
+        except Exception as e:
+            click.echo(f"⚠️ Failed to parse AI response: {e}")
+
+    def _generate_draft(self):
+        click.echo("⏳ Generating PRD draft...")
+        interview_data = {
+            "history": self.history,
+            "summary": self.current_summary,
+            "context": self.context,
+        }
+        self.current_draft = self.build_markdown(self.title, interview_data)
+        click.echo("✅ Draft generated! Use /review to see it or /save to finalize.")
+
+    def _review_draft(self):
+        if not self.current_draft:
+            click.echo("❌ No draft generated. Run /generate first.")
+            return
+
+        click.echo("\n--- CURRENT PRD DRAFT ---")
+        click.echo(self.current_draft)
+        click.echo("--- END OF DRAFT ---\n")

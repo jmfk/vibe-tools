@@ -24,8 +24,8 @@ pip3 install -e .
 
 echo ""
 echo "--- Installation Complete ---"
-echo "You can now use the 'vibe' command."
-echo "Try running: vibe --help"
+echo "You can now use the 'vibe' and 'vibe-setup' commands."
+echo "Try running: vibe --help or vibe-setup --help"
 
 
 
