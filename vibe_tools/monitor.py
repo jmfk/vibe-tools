@@ -1,11 +1,10 @@
-import time
 import datetime
-import sys
 import pathlib
+import sys
+import time
 
-
-from vibe_tools.utils import run_command, run_agent, get_agent_command
-from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
+from vibe_tools.utils import get_agent_command, run_agent, run_command
 
 PROMPTS_DIR = pathlib.Path("prompts")
 MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
@@ -14,16 +13,12 @@ MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
 def get_status_report(agent, interval, cost_logger=None):
     """Gathers context and calls agent to inspect progress."""
     # Check if we are in a git repository
-    stdout, code = run_command(
-        ["git", "rev-parse", "--is-inside-work-tree"], check=False
-    )
+    stdout, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
     if code != 0:
         print("Error: Not in a git repository. Status report requires a git project.")
         return
 
-    current_branch_out, _ = run_command(
-        ["git", "branch", "--show-current"], check=False
-    )
+    current_branch_out, _ = run_command(["git", "branch", "--show-current"], check=False)
     git_status_out, _ = run_command(["git", "status", "--short"], check=False)
     last_diff_out, _ = run_command(["git", "diff", "HEAD", "src/"], check=False)
 
@@ -68,9 +63,7 @@ def get_status_report(agent, interval, cost_logger=None):
 def run_monitor(agent, interval):
     from vibe_tools.cli import load_config
 
-    print(
-        f"Starting monitor with {interval}s interval using agent {agent}. Press Ctrl+C to stop."
-    )
+    print(f"Starting monitor with {interval}s interval using agent {agent}. Press Ctrl+C to stop.")
 
     config = load_config()
     cost_logger = CostLogger(config)

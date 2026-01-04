@@ -1,11 +1,9 @@
 import pathlib
 import sys
-import re
 
-
-from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
+from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+from vibe_tools.utils import get_agent_command, logger, run_agent, run_command
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -21,6 +19,7 @@ def get_coverage_report(caffeinate=False):
 
 def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
     from vibe_tools.cli import load_config
+
     logger.info("--- Starting Coverage Improvement Loop ---")
 
     config = load_config()
@@ -32,7 +31,9 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
 
     for i in range(1, MAX_ITERATIONS + 1):
         report, current_cov = get_coverage_report(caffeinate=caffeinate)
-        logger.info(f"\n[COVERAGE LOOP] [PHASE: report] (Iteration {i}) Current Total Coverage: {current_cov}%")
+        logger.info(
+            f"\n[COVERAGE LOOP] [PHASE: report] (Iteration {i}) Current Total Coverage: {current_cov}%"
+        )
 
         if current_cov >= 100:
             logger.info("100% coverage achieved!")
@@ -54,7 +55,9 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             .replace("{target_cov}", f"{target_cov:.1f}")
         )
 
-        logger.info(f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage...")
+        logger.info(
+            f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage..."
+        )
         cmd = get_agent_command(agent, prompt)
         output, _ = run_agent(cmd, caffeinate=caffeinate)
 
@@ -71,9 +74,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
 
         # Verify if tests still pass
         logger.info(f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests...")
-        _, test_exit_code = run_command(
-            ["make", "test"], check=False, caffeinate=caffeinate
-        )
+        _, test_exit_code = run_command(["make", "test"], check=False, caffeinate=caffeinate)
         if test_exit_code != 0:
             logger.warning(
                 "⚠️ Warning: Tests are failing after agent changes! Asking agent to fix..."

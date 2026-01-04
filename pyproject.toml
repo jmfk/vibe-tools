@@ -19,6 +19,8 @@ dependencies = [
     "pydantic[email]",
     "httpx",
     "pytest-asyncio",
+    "ruff",
+    "mypy",
 ]
 
 [tool.setuptools]
@@ -26,4 +28,32 @@ packages = ["vibe_tools"]
 
 [project.scripts]
 vibe = "vibe_tools.cli:cli"
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+    "N",  # pep8-naming
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"vibe_tools/*" = ["E501"] # Some long f-strings are better kept on one line for readability in CLI
+
+[tool.mypy]
+python_version = "3.9"
+strict = false
+ignore_missing_imports = true
+explicit_package_bases = true
+exclude = ["frontend", "tests"]
+check_untyped_defs = true
 

@@ -44,8 +44,10 @@ test-regression:
 	@exit 0
 
 lint-backend:
-	@echo "Running backend lint..."
-	@exit 0
+	@echo "Running backend lint (ruff)..."
+	ruff check .
+	@echo "Running backend type check (mypy)..."
+	mypy .
 
 lint-frontend:
 	cd frontend && npx eslint . --ext ts,tsx

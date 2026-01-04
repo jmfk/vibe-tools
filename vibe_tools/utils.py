@@ -1,14 +1,14 @@
-import subprocess
-import time
-import datetime
-import sys
-import pathlib
-import json
-import logging
 import atexit
+import datetime
+import logging
 import os
+import pathlib
 import signal
+import subprocess
+import sys
+import time
 from logging.handlers import RotatingFileHandler
+from typing import Any, Dict
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
@@ -40,9 +40,7 @@ def setup_logging(command_name):
     # File handler
     file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(file_handler)
 
     # Stream handler (console)
@@ -102,9 +100,7 @@ def rotate_log():
 
 def is_merged(branch_name):
     """Checks if a branch is merged into main."""
-    _, code = run_command(
-        ["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False
-    )
+    _, code = run_command(["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False)
     return code == 0
 
 
@@ -112,11 +108,11 @@ def run_command(cmd, check=True, caffeinate=False):
     """Utility to run a command and return its output."""
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
-    
+
     # Use logger.debug for the "Running command" message so it's hidden by default
     logger.debug(f"Running command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     # Debug level logging for full command output
     logger.debug(f"Command finished with return code: {result.returncode}")
     if result.stdout:
@@ -140,12 +136,12 @@ def run_agent(cmd, caffeinate=False):
     _agent_called = True
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
-    
+
     # Use logger.debug for the "Running agent" message
     logger.debug(f"Running agent: {' '.join(cmd)}")
-    
+
     # Use process groups to ensure children are killed on interrupt (Unix only)
-    popen_kwargs = {
+    popen_kwargs: Dict[str, Any] = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
         "text": True,
@@ -156,16 +152,14 @@ def run_agent(cmd, caffeinate=False):
 
     process = subprocess.Popen(cmd, **popen_kwargs)
     full_output, start_time = [], time.time()
-    
+
     try:
         for line in iter(process.stdout.readline, ""):
             full_output.append(line)
             elapsed = int(time.time() - start_time)
             preview = line.strip()[:80]
             # Live progress to stdout (bypassing file log for spammy progress)
-            sys.stdout.write(
-                f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}"
-            )
+            sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}")
             sys.stdout.flush()
             # Also log to debug file immediately
             logger.debug(f"AGENT_LIVE: {line.strip()}")
@@ -190,30 +184,30 @@ def run_agent(cmd, caffeinate=False):
         if process.stdout:
             process.stdout.close()
         process.wait()
-    
+
     sys.stdout.write("\r\033[K")
     sys.stdout.flush()
-    
+
     output = "".join(full_output)
     logger.info(f"Agent finished with exit code: {process.returncode}")
-    
+
     # Log full agent output to debug level (which goes to file)
     logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
-    
+
     return output, process.returncode
 
 
 def cleanup_stale_processes():
     """Kills stale pytest, cursor-agent, and caffeinate processes."""
     logger.info("Cleaning up stale processes associated with vibe-tools...")
-    
+
     targets = ["pytest", "cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
-    
+
     for target in targets:
         logger.info(f"Killing '{target}' processes...")
         # Use pkill with full string matching
         subprocess.run(["pkill", "-f", target], check=False)
-    
+
     logger.info("Cleanup complete.")
 
 

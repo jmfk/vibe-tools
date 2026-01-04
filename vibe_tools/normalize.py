@@ -1,8 +1,10 @@
 import pathlib
 import sys
+
 import click
-from vibe_tools.utils import run_agent, get_agent_command
-from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+
+from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
+from vibe_tools.utils import get_agent_command, run_agent
 
 PROMPTS_DIR = pathlib.Path("prompts")
 NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
@@ -12,10 +14,11 @@ PRDS_DIR = pathlib.Path("prds")
 
 def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False):
     from vibe_tools.cli import load_config
+
     if not PROMPTS_DIR.exists():
         print("Error: prompts directory not found. Please run 'vibe init' first.")
         sys.exit(1)
-    
+
     config = load_config()
     cost_logger = CostLogger(config)
 

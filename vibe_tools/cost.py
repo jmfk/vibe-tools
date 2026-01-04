@@ -1,9 +1,7 @@
 import csv
 import datetime
-import json
-import os
 import pathlib
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from vibe_tools.utils import COSTS_DIR, logger
 
@@ -28,7 +26,7 @@ DEFAULT_PRICING = {"input": 1.0, "output": 1.0}  # Fallback
 USAGE_LOG_CSV = COSTS_DIR / "usage.csv"
 
 # Track runs in the current session for final reporting
-_session_runs = []
+_session_runs: List[Dict[str, Any]] = []
 
 
 class CostLogger:
@@ -44,9 +42,7 @@ class CostLogger:
             return 0
         return len(text) // 4
 
-    def calculate_cost(
-        self, model: str, input_tokens: int, output_tokens: int
-    ) -> float:
+    def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         pricing = PRICING.get(model, DEFAULT_PRICING)
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
@@ -126,7 +122,7 @@ class CostLogger:
         write_header = not file_exists
         if file_exists:
             try:
-                with open(USAGE_LOG_CSV, mode="r", newline="") as f:
+                with open(USAGE_LOG_CSV, newline="") as f:
                     reader = csv.reader(f)
                     first_row = next(reader, None)
                     if first_row and len(first_row) != len(header):
@@ -162,9 +158,7 @@ class CostLogger:
                     )
                 else:
                     # gspread might still work with just authorized_user if already logged in
-                    gc = gspread.oauth(
-                        authorized_user_filename=str(authorized_user_path)
-                    )
+                    gc = gspread.oauth(authorized_user_filename=str(authorized_user_path))
             # 2. Fallback to Service Account
             elif creds_path.exists():
                 gc = gspread.service_account(filename=str(creds_path))
@@ -172,6 +166,9 @@ class CostLogger:
                 logger.warning(
                     "⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe setup-google'."
                 )
+                return
+
+            if not self.google_sheet_id:
                 return
 
             try:
@@ -200,7 +197,7 @@ def get_total_cost():
 
     total = 0.0
     try:
-        with open(USAGE_LOG_CSV, mode="r") as f:
+        with open(USAGE_LOG_CSV) as f:
             reader = csv.DictReader(f)
             for row in reader:
                 total += float(row.get("Cost (USD)", 0.0))

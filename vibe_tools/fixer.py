@@ -1,11 +1,10 @@
+import json
 import pathlib
 import sys
-import json
 
-
-from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
+from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+from vibe_tools.utils import get_agent_command, logger, run_agent
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -48,6 +47,7 @@ def run_tests(caffeinate=False):
 
 def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
     from vibe_tools.cli import load_config
+
     logger.info("--- Starting Test and Fix Loop ---")
 
     config = load_config()
@@ -59,7 +59,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
 
     saved_state = load_state()
     start_iteration = saved_state["iteration"] if saved_state else 1
-    
+
     if saved_state:
         logger.info(f"[RESTART] Resuming Test and Fix loop at iteration {start_iteration}")
 
@@ -69,7 +69,9 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
         test_output, tests_passed, env_failures = run_tests(caffeinate=caffeinate)
 
         if env_failures:
-            logger.error(f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}")
+            logger.error(
+                f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
+            )
             logger.error("Please ensure your environment is set up correctly (npm install, etc.).")
             sys.exit(127)
 
@@ -106,9 +108,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
         save_state(i + 1, test_output)
 
         if i == MAX_ITERATIONS:
-            logger.error(
-                f"FAILED: Could not fix all errors within {MAX_ITERATIONS} iterations."
-            )
+            logger.error(f"FAILED: Could not fix all errors within {MAX_ITERATIONS} iterations.")
             sys.exit(1)
 
     logger.info("--- Test and Fix Loop Finished ---")

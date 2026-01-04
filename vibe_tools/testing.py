@@ -1,10 +1,13 @@
 import pathlib
-import subprocess
 import re
-from vibe_tools.utils import run_command, logger
+import subprocess
+
+from vibe_tools.utils import logger, run_command
+
 
 class ProjectTester:
     __test__ = False
+
     def __init__(self, backend_root="src", frontend_root="frontend"):
         self.backend_root = pathlib.Path(backend_root)
         self.frontend_root = pathlib.Path(frontend_root)
@@ -25,7 +28,7 @@ class ProjectTester:
         """Discovers the command to run backend tests."""
         if self.has_make_target("test"):
             return ["make", "test"]
-        
+
         # Fallback to pytest if available
         try:
             subprocess.run(["pytest", "--version"], capture_output=True, check=True)
@@ -35,7 +38,9 @@ class ProjectTester:
 
         # Try python3 -m pytest
         try:
-            subprocess.run(["python3", "-m", "pytest", "--version"], capture_output=True, check=True)
+            subprocess.run(
+                ["python3", "-m", "pytest", "--version"], capture_output=True, check=True
+            )
             return ["python3", "-m", "pytest", "-v"]
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
@@ -46,31 +51,31 @@ class ProjectTester:
         """Discovers the command to run frontend tests."""
         if self.has_make_target("frontend-test"):
             return ["make", "frontend-test"]
-        
+
         if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
             return ["npm", "--prefix", str(self.frontend_root), "test", "--", "--run"]
-        
+
         return None
 
     def discover_frontend_lint_cmd(self):
         """Discovers the command to run frontend lint."""
         if self.has_make_target("frontend-lint"):
             return ["make", "frontend-lint"]
-        
+
         if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
             return ["npm", "--prefix", str(self.frontend_root), "run", "lint"]
-        
+
         return None
 
     def discover_coverage_cmd(self):
         """Discovers the command to run coverage."""
         if self.has_make_target("coverage"):
             return ["make", "coverage"]
-        
+
         # Default to pytest --cov if src exists
         if self.backend_root.exists():
             return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
-        
+
         return None
 
     def run_tests(self, caffeinate=False):
@@ -94,14 +99,14 @@ class ProjectTester:
             if self.has_make_target(target):
                 logger.info(f"Running target: make {target}")
                 output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
-                
+
                 # Check for exit code 127 (Command not found)
                 # Note: 'make' might return 2 if the shell command within it returns 127
                 if code == 127 or "command not found" in output.lower() or "sh: " in output:
                     # Double check if it's really a command not found
                     if "command not found" in output.lower() or "not found" in output.lower():
                         env_failures.append(target)
-                
+
                 outputs.append(f"--- TARGET: {target} ---\n{output}")
                 if code != 0:
                     all_passed = False
@@ -110,7 +115,7 @@ class ProjectTester:
                 outputs.append(f"--- TARGET: {target} (NOT FOUND) ---")
 
         combined_output = "\n\n".join(outputs)
-        
+
         # If we have environment failures, return a special flag
         return combined_output, all_passed, env_failures
 
@@ -131,5 +136,3 @@ class ProjectTester:
             total_cov = 0
 
         return output, total_cov
-
-

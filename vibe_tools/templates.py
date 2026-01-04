@@ -114,7 +114,7 @@ CURRENT COVERAGE REPORT:
 {report}
 
 TASK:
-Improve the test coverage of the backend implementation. 
+Improve the test coverage of the backend implementation.
 Focus on the files with the highest number of 'Missing' lines as shown in the report.
 Create new test files or update existing ones to cover the missing lines.
 Your goal is to increase the total coverage from {current_cov}% towards the target of {target_cov:.1f}%.
@@ -187,4 +187,3 @@ lint-frontend:
 });
 """,
 }
-

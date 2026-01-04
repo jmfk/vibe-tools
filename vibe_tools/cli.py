@@ -1,22 +1,24 @@
-import pathlib
-import click
-import json
-import subprocess
-import logging
 import atexit
+import json
+import logging
+import pathlib
+import subprocess
+
+import click
+
+from vibe_tools.cost import finalize_cost_report, get_total_cost
+from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
-    ensure_dir,
-    ensure_gitignore,
+    COSTS_DIR,
     PRD_DIR,
-    is_merged,
-    run_command,
     STATE_FILE,
     enable_console_debug,
-    COSTS_DIR,
+    ensure_dir,
+    ensure_gitignore,
+    is_merged,
+    run_command,
     setup_logging,
 )
-from vibe_tools.templates import TEMPLATES
-from vibe_tools.cost import get_total_cost, finalize_cost_report
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 
@@ -86,7 +88,7 @@ def cli(ctx, debug, verbose, agent, caffeinate):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
-    
+
     # Register session cost reporting at exit
     atexit.register(finalize_cost_report)
 
@@ -101,8 +103,9 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         # Default to WARNING level for terminal if not verbose
         if verbose is None:
             verbose = config.get("verbose", False)
-        
+
         from vibe_tools.utils import set_console_level
+
         if verbose:
             set_console_level(logging.INFO)
         else:
@@ -123,15 +126,9 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         ralph_config = config.get("ralph", {})
         if ralph_config:
             click.echo("  Ralph Default Config:")
-            click.echo(
-                f"    Tests:      {'ON' if ralph_config.get('tests') else 'OFF'}"
-            )
-            click.echo(
-                f"    Review:     {'ON' if ralph_config.get('review') else 'OFF'}"
-            )
-            click.echo(
-                f"    Auto-merge: {'ON' if ralph_config.get('auto_merge') else 'OFF'}"
-            )
+            click.echo(f"    Tests:      {'ON' if ralph_config.get('tests') else 'OFF'}")
+            click.echo(f"    Review:     {'ON' if ralph_config.get('review') else 'OFF'}")
+            click.echo(f"    Auto-merge: {'ON' if ralph_config.get('auto_merge') else 'OFF'}")
         else:
             click.echo("  Ralph Default Config: Not set (will prompt on first run)")
 
@@ -139,9 +136,7 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
 
         specs_dir = (
-            pathlib.Path("specs")
-            if pathlib.Path("specs").exists()
-            else pathlib.Path("spec")
+            pathlib.Path("specs") if pathlib.Path("specs").exists() else pathlib.Path("spec")
         )
         click.echo(
             f"  Specs Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to specs/)'}"
@@ -153,7 +148,8 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         click.echo("\nAvailable commands:")
         for command in sorted(cli.list_commands(ctx)):
             cmd_obj = cli.get_command(ctx, command)
-            click.echo(f"  {command:<10} {cmd_obj.get_short_help_str()}")
+            if cmd_obj:
+                click.echo(f"  {command:<10} {cmd_obj.get_short_help_str()}")
 
         click.echo("\nRun 'vibe --help' for full options.")
 
@@ -227,7 +223,7 @@ def ralph(ctx, review, tests, auto_merge, budget):
     # If everything is still False (and we have no config file), prompt the user
     if not CONFIG_FILE.exists() and not any([review, tests, auto_merge]):
         click.echo("\n⚠️ Ralph is not yet configured for quality gates.")
-        
+
         tests = click.confirm(
             "Enable Tests (auto-discover backend and frontend tests)?",
             default=True,
@@ -273,9 +269,7 @@ def ralph(ctx, review, tests, auto_merge, budget):
                 ctx.obj["caffeinate"] = caffeinate
                 click.echo("✅ Enabled Caffeinate.")
 
-        if click.confirm(
-            "Save these settings as default in .vibe_config.json?", default=True
-        ):
+        if click.confirm("Save these settings as default in .vibe_config.json?", default=True):
             save_config(
                 {
                     "ralph": {
@@ -300,13 +294,11 @@ def ralph(ctx, review, tests, auto_merge, budget):
     click.echo("\nWorkflow:")
     click.echo("1. Ensure 'main' branch.")
     click.echo("2. Sequentially process all 'prd_*.yaml' in 'prds/'.")
-    click.echo(
-        "3. Create feature branch, run up to 10 agent iterations for implementation."
-    )
+    click.echo("3. Create feature branch, run up to 10 agent iterations for implementation.")
     click.echo("4. Run quality gates (tests/review) if enabled.")
     click.echo("5. Commit and optionally merge changes.")
 
-    from vibe_tools.ralph import ralph_loop, get_pending_prds_and_estimates
+    from vibe_tools.ralph import get_pending_prds_and_estimates, ralph_loop
 
     # Get estimates for pending PRDs
     vibe_config = load_config()
@@ -321,12 +313,14 @@ def ralph(ctx, review, tests, auto_merge, budget):
                 f"  - {est['prd_name']}{resume_suffix} (Model: {est['model']}, Est. Initial Cost: ${est['cost_estimate']:.6f})"
             )
             total_initial_cost += est["cost_estimate"]
-        
+
         click.echo(f"\nTotal Estimated Initial Cost: ${total_initial_cost:.6f} USD")
         click.echo("(Note: Subsequent iterations and output tokens will incur additional costs.)")
-        
+
         if total_initial_cost > budget:
-            click.echo(f"\n⚠️ WARNING: Estimated cost (${total_initial_cost:.6f}) exceeds current budget (${budget:.2f})!")
+            click.echo(
+                f"\n⚠️ WARNING: Estimated cost (${total_initial_cost:.6f}) exceeds current budget (${budget:.2f})!"
+            )
     else:
         click.echo("\nNo pending PRDs found to process.")
 
@@ -359,16 +353,12 @@ def coverage(ctx):
     """Run the coverage improvement loop."""
     from vibe_tools.coverage import improve_coverage_loop
 
-    improve_coverage_loop(
-        agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False)
-    )
+    improve_coverage_loop(agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False))
 
 
 @cli.command()
 @click.argument("input_file", required=False)
-@click.option(
-    "--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs."
-)
+@click.option("--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs.")
 @click.pass_context
 def normalize(ctx, input_file, yes):
     """Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
@@ -414,6 +404,7 @@ def history():
     click.echo("-" * 56)
 
     from vibe_tools.ralph import load_state
+
     state = load_state()
     completed_prds = state.get("completed_prds", [])
 
@@ -443,10 +434,10 @@ def cost():
     config = load_config()
     use_google = config.get("use_google_sheets", False)
     sheet_id = config.get("google_sheet_id")
-    
+
     click.echo(f"\nTotal estimated cost: ${total:.4f} USD")
     click.echo(f"Detailed log available at: {COSTS_DIR}/usage.csv")
-    
+
     if use_google and sheet_id:
         click.echo(f"Google Sheets Logging: ENABLED (ID: {sheet_id})")
     else:
@@ -457,13 +448,13 @@ def cost():
 def setup_google():
     """Set up Google Sheets connection for cost logging."""
     click.echo("\n--- Google Sheets Setup ---")
-    
+
     config = load_config()
     current_use = config.get("use_google_sheets", False)
-    
+
     use_google = click.confirm("Enable logging costs to Google Sheets?", default=current_use)
     config["use_google_sheets"] = use_google
-    
+
     if not use_google:
         save_config(config)
         click.echo("✅ Google Sheets logging disabled.")
@@ -499,14 +490,20 @@ def setup_google():
             click.echo("1. Go to Google Cloud Console (https://console.cloud.google.com).")
             click.echo("2. Create a Project (or select an existing one).")
             click.echo("3. In 'APIs & Services' > 'Library', enable 'Google Sheets API'.")
-            click.echo("4. In 'APIs & Services' > 'Google Auth Platform' (or OAuth consent screen):")
+            click.echo(
+                "4. In 'APIs & Services' > 'Google Auth Platform' (or OAuth consent screen):"
+            )
             click.echo("   - Under 'Branding': Set your App Name and support email.")
-            click.echo("   - Under 'Audience': Set User Type (External) and add your email to 'Test users'.")
-            click.echo("   - Under 'Data Access': Add the 'Google Sheets API' scope (../auth/spreadsheets).")
+            click.echo(
+                "   - Under 'Audience': Set User Type (External) and add your email to 'Test users'."
+            )
+            click.echo(
+                "   - Under 'Data Access': Add the 'Google Sheets API' scope (../auth/spreadsheets)."
+            )
             click.echo("5. Under 'Clients': Click 'Create Client' > 'OAuth client ID'.")
             click.echo("6. Choose 'Desktop App', name it, and download the JSON file.")
             click.echo(f"7. Rename it to '{client_secrets_path}' and place it in this directory.")
-            
+
             if not click.confirm("\nHave you placed the file?", default=False):
                 click.echo("Aborted. Please place the file and run again.")
                 return
@@ -514,11 +511,12 @@ def setup_google():
         if client_secrets_path.exists():
             try:
                 import gspread
+
                 click.echo("\nAttempting browser login...")
                 # This will open the browser for authentication
                 gspread.oauth(
                     credentials_filename=str(client_secrets_path),
-                    authorized_user_filename=str(authorized_user_path)
+                    authorized_user_filename=str(authorized_user_path),
                 )
                 click.echo(f"✅ Browser login successful. Tokens saved to {authorized_user_path}")
             except Exception as e:
@@ -534,9 +532,7 @@ def setup_google():
 
         creds_path = pathlib.Path(".vibe_google_creds.json")
         if not creds_path.exists():
-            click.echo(
-                f"\n⚠️  Reminder: Please place your service account key at {creds_path}"
-            )
+            click.echo(f"\n⚠️  Reminder: Please place your service account key at {creds_path}")
         else:
             click.echo(f"✅ Found {creds_path}")
     else:
@@ -547,6 +543,7 @@ def setup_google():
 def cleanup():
     """Clean up stale pytest, cursor-agent, and caffeinate processes."""
     from vibe_tools.utils import cleanup_stale_processes
+
     cleanup_stale_processes()
 
 
@@ -582,6 +579,7 @@ def rerun(prd_id):
 
     # 1. Clear saved state if it matches this PRD or is in completed_prds
     from vibe_tools.ralph import load_state
+
     state = load_state()
     state_changed = False
 
@@ -602,9 +600,7 @@ def rerun(prd_id):
         STATE_FILE.write_text(json.dumps(state, indent=2))
 
     # 2. Delete the branch if it exists
-    _, check_branch = run_command(
-        ["git", "rev-parse", "--verify", branch_name], check=False
-    )
+    _, check_branch = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
     if check_branch == 0:
         # Check if we are currently on that branch
         stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
