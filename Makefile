@@ -34,15 +34,15 @@ test-frontend:
 
 test-infra:
 	@echo "Running infra tests..."
-	@exit 0
+	pytest tests/test_cli.py
 
 test-integration:
 	@echo "Running integration tests..."
-	@exit 0
+	pytest tests/test_api.py
 
 test-regression:
 	@echo "Running regression tests..."
-	@exit 0
+	pytest tests/test_utils.py
 
 lint-backend:
 	@echo "Running backend lint (ruff)..."
@@ -55,7 +55,7 @@ lint-frontend:
 
 lint-infra:
 	@echo "Running infra lint..."
-	@exit 0
+	ruff check vibe_tools/
 
 install:
 	./install.sh
