@@ -65,6 +65,51 @@ def _switch_to_main():
     run_command(["git", "checkout", "main"])
 
 
+def _switch_to_branch(branch_name, agent, project_name, caffeinate=False):
+    """Robustly switches to a feature branch, using AI rescue if needed."""
+    # Check if branch exists in git
+    _, code = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
+    branch_exists = code == 0
+
+    if branch_exists:
+        logger.info(f"Branch '{branch_name}' already exists. Switching...")
+        output, code = run_command(["git", "checkout", branch_name], check=False)
+    else:
+        logger.info(f"Creating and switching to branch: {branch_name}")
+        output, code = run_command(["git", "checkout", "-b", branch_name], check=False)
+
+    if code != 0:
+        logger.warning(
+            f"Git operation failed for branch '{branch_name}': {output}. Calling agent to sort it out..."
+        )
+        git_status, _ = run_command(["git", "status"], check=False)
+        prompt = f"""A git operation failed while trying to switch to branch '{branch_name}' for PRD '{project_name}'.
+
+ERROR:
+{output}
+
+CURRENT GIT STATUS:
+{git_status}
+
+TASK:
+Please resolve this git issue so the automated pipeline can continue. 
+You may need to stash changes, commit them, reset the branch, or merge. 
+Ensure the end state is that we are on branch '{branch_name}' and ready to work.
+"""
+        cmd = get_agent_command(agent, prompt)
+        run_agent(cmd, caffeinate=caffeinate)
+
+        # Final attempt after agent fix
+        final_output, final_code = run_command(
+            ["git", "checkout", branch_name], check=False
+        )
+        if final_code != 0:
+            logger.error(
+                f"Agent was unable to resolve git conflict. Final error: {final_output}"
+            )
+            sys.exit(1)
+
+
 def save_state(prd_name, iteration, output, context, phase="build"):
     """Saves the current state to a file."""
     # Load existing state to preserve completed_prds
@@ -543,15 +588,8 @@ def ralph_loop(
 
             logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
-            # Check if branch already exists in our state
-            if project_name in state.get("started_prds", []):
-                logger.info(
-                    f"PRD {project_name} already started. Switching to branch {branch_name}..."
-                )
-                run_command(["git", "checkout", branch_name])
-            else:
-                logger.info(f"Creating and switching to branch: {branch_name}")
-                run_command(["git", "checkout", "-b", branch_name])
+            # Switch to feature branch
+            _switch_to_branch(branch_name, agent, project_name, caffeinate=caffeinate)
 
             if not BASE_PROMPT_TEMPLATE.exists():
                 logger.error(
