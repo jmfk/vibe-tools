@@ -80,7 +80,7 @@ test:
 	pytest -v
 
 coverage:
-	pytest --cov=src --cov-report=term-missing tests/
+	pytest --cov=vibe_tools --cov-report=term-missing tests/
 
 coverage-loop:
 	vibe coverage

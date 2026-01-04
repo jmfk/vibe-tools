@@ -1,5 +1,6 @@
 import subprocess
 import time
+import datetime
 import sys
 import pathlib
 import json
@@ -8,7 +9,14 @@ from logging.handlers import RotatingFileHandler
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
-LOG_FILE = pathlib.Path("vibe.log")
+LOGS_DIR = pathlib.Path("logs")
+
+# Ensure logs directory exists
+LOGS_DIR.mkdir(exist_ok=True)
+
+# Generate timestamped log filename
+_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = LOGS_DIR / f"vibe_{_timestamp}.log"
 
 # Setup logger
 logger = logging.getLogger("vibe")

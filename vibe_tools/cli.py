@@ -28,7 +28,7 @@ def load_config():
 def save_config(config):
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
     ensure_gitignore(".vibe_config.json")
-    ensure_gitignore("vibe.log")
+    ensure_gitignore("logs/")
 
 
 def maybe_init_git():
@@ -42,7 +42,7 @@ def maybe_init_git():
                 subprocess.run(["git", "init"], check=True)
                 click.echo("✅ Initialized empty Git repository.")
                 ensure_gitignore(".vibe_config.json")
-                ensure_gitignore("vibe.log")
+                ensure_gitignore("logs/")
             except Exception as e:
                 click.echo(f"❌ Failed to initialize Git repository: {e}")
 
@@ -127,7 +127,7 @@ def cli(ctx, debug, agent, caffeinate):
 def init():
     """Initialize the prompts directory and default templates."""
     maybe_init_git()
-    ensure_gitignore("vibe.log")
+    ensure_gitignore("logs/")
     prompts_dir = pathlib.Path("prompts")
     ensure_dir(prompts_dir)
 
