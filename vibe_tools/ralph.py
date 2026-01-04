@@ -16,6 +16,7 @@ from vibe_tools.utils import (
     get_agent_command,
     get_instructions_context,
     get_latest_context_file,
+    is_dirty,
     logger,
     run_agent,
     run_command,
@@ -33,6 +34,35 @@ CICD = pathlib.Path("prds/cicd.yaml")
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
+
+
+def _switch_to_main():
+    """Helper to commit dirty changes on feature branches before switching to main."""
+    if is_dirty():
+        current_branch, _ = run_command(
+            ["git", "branch", "--show-current"], check=False
+        )
+        current_branch = current_branch.strip()
+        if current_branch and current_branch != "main":
+            logger.info(
+                f"Uncommitted changes detected on '{current_branch}'. Committing before switching to 'main'..."
+            )
+            run_command(["git", "add", "."], check=False)
+            run_command(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    f"vibe ralph: automatic commit of partial work on {current_branch}",
+                ],
+                check=False,
+            )
+        else:
+            logger.warning(
+                "Uncommitted changes detected on 'main'. Please commit or stash them manually."
+            )
+
+    run_command(["git", "checkout", "main"])
 
 
 def save_state(prd_name, iteration, output, context, phase="build"):
@@ -483,7 +513,7 @@ def ralph_loop(
 
     # Ensure we are on main branch
     logger.info("Ensuring we are on 'main' branch...")
-    run_command(["git", "checkout", "main"])
+    _switch_to_main()
 
     # Iterate only over numbered PRDs, excluding architecture, index, and overview
     prds = collect_prd_files()
@@ -770,13 +800,13 @@ def ralph_loop(
 
                 if auto_merge:
                     logger.info(f"Merging {branch_name} into main...")
-                    run_command(["git", "checkout", "main"])
+                    _switch_to_main()
                     run_command(["git", "merge", branch_name])
                 else:
                     logger.info(
                         f"Auto-merge is OFF. Changes remain on branch {branch_name}."
                     )
-                    run_command(["git", "checkout", "main"])
+                    _switch_to_main()
 
                 mark_prd_completed(project_name)
             else:
@@ -787,6 +817,6 @@ def ralph_loop(
 
     finally:
         logger.info("Ralph Loop process complete. Returning to 'main' branch...")
-        run_command(["git", "checkout", "main"])
+        _switch_to_main()
 
     print("All PRDs processed successfully.")
