@@ -43,17 +43,19 @@ def test_ralph_command_prompt(runner, tmp_path):
     config_file = tmp_path / ".vibe_config.json"
     with patch("vibe_tools.cli.CONFIG_FILE", config_file):
         with patch("vibe_tools.cli.maybe_init_git"):
-            with patch("vibe_tools.ralph.ralph_loop"):
-                # 1. Enable Tests? y
-                # 2. Enable Agentic Review? y
-                # 3. Enable Auto-merge? n
-                # 4. Set budget? 5.0
-                # 5. Enable verbose? n
-                # 6. Use caffeinate? y
-                # 7. Save settings? y
-                # 8. Proceed with Ralph loop? n
-                result = runner.invoke(cli, ["ralph"], input="y\ny\nn\n5.0\nn\ny\ny\nn\n")
-                assert "Aborted" in result.output
+                with patch("vibe_tools.ralph.ralph_loop"):
+                    # 1. Enable Tests? y
+                    # 2. Enable Fast Mode? y
+                    # 3. Enable Coverage? y
+                    # 4. Enable Agentic Review? y
+                    # 5. Enable Auto-merge? n
+                    # 6. Set budget? 5.0
+                    # 7. Enable verbose? n
+                    # 8. Use caffeinate? y
+                    # 9. Save settings? y
+                    # 10. Proceed with Ralph loop? n
+                    result = runner.invoke(cli, ["ralph"], input="y\ny\ny\ny\nn\n5.0\nn\ny\ny\nn\n")
+                    assert "Aborted" in result.output
 
 
 def test_history_command(runner):
