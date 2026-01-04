@@ -88,11 +88,20 @@ class ProjectTester:
 
         outputs = []
         all_passed = True
+        env_failures = []
 
         for target in targets:
             if self.has_make_target(target):
                 logger.info(f"Running target: make {target}")
                 output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
+                
+                # Check for exit code 127 (Command not found)
+                # Note: 'make' might return 2 if the shell command within it returns 127
+                if code == 127 or "command not found" in output.lower() or "sh: " in output:
+                    # Double check if it's really a command not found
+                    if "command not found" in output.lower() or "not found" in output.lower():
+                        env_failures.append(target)
+                
                 outputs.append(f"--- TARGET: {target} ---\n{output}")
                 if code != 0:
                     all_passed = False
@@ -101,7 +110,9 @@ class ProjectTester:
                 outputs.append(f"--- TARGET: {target} (NOT FOUND) ---")
 
         combined_output = "\n\n".join(outputs)
-        return combined_output, all_passed
+        
+        # If we have environment failures, return a special flag
+        return combined_output, all_passed, env_failures
 
     def get_coverage_report(self, caffeinate=False):
         """Runs coverage and returns the full report and total coverage percentage."""

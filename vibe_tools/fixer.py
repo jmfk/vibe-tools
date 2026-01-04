@@ -66,7 +66,12 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
     for i in range(start_iteration, MAX_ITERATIONS + 1):
         logger.info(f"\n[TEST_FIX LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})")
 
-        test_output, tests_passed = run_tests(caffeinate=caffeinate)
+        test_output, tests_passed, env_failures = run_tests(caffeinate=caffeinate)
+
+        if env_failures:
+            logger.error(f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}")
+            logger.error("Please ensure your environment is set up correctly (npm install, etc.).")
+            sys.exit(127)
 
         if tests_passed:
             logger.info("✅ All tests and linting passed!")

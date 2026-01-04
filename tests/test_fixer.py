@@ -7,7 +7,7 @@ def test_run_test_fix_loop_success():
     with patch("vibe_tools.fixer.run_tests") as mock_tests:
         with patch("vibe_tools.fixer.PROMPTS_DIR") as mock_prompts_dir:
             mock_prompts_dir.exists.return_value = True
-            mock_tests.return_value = ("passed", True)
+            mock_tests.return_value = ("passed", True, [])
             
             with patch("vibe_tools.fixer.load_state", return_value=None):
                 with patch("vibe_tools.fixer.clear_state") as mock_clear:
@@ -24,7 +24,7 @@ def test_run_test_fix_loop_failure_then_success():
                     mock_template.read_text.return_value = "fix it {test_output}"
                     
                     # First fail, then pass
-                    mock_tests.side_effect = [("failed", False), ("passed", True)]
+                    mock_tests.side_effect = [("failed", False, []), ("passed", True, [])]
                     mock_agent.return_value = ("fixed", 0)
                     
                     with patch("vibe_tools.fixer.load_state", return_value=None):

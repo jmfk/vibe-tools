@@ -3,6 +3,7 @@ import click
 import json
 import subprocess
 import logging
+import atexit
 from vibe_tools.utils import (
     ensure_dir,
     ensure_gitignore,
@@ -12,9 +13,10 @@ from vibe_tools.utils import (
     STATE_FILE,
     enable_console_debug,
     COSTS_DIR,
+    setup_logging,
 )
 from vibe_tools.templates import TEMPLATES
-from vibe_tools.cost import get_total_cost
+from vibe_tools.cost import get_total_cost, finalize_cost_report
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 
@@ -81,6 +83,13 @@ def maybe_init_git():
 @click.version_option(version="0.1.0")
 @click.pass_context
 def cli(ctx, debug, verbose, agent, caffeinate):
+    # Initialize logging for the invoked command
+    command_name = ctx.invoked_subcommand or "info"
+    setup_logging(command_name)
+    
+    # Register session cost reporting at exit
+    atexit.register(finalize_cost_report)
+
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
 
@@ -192,8 +201,14 @@ def init():
     default=None,
     help="Enable/disable automatic merge.",
 )
+@click.option(
+    "--budget",
+    type=float,
+    default=None,
+    help="Max budget in USD for this run. System will pause if reached.",
+)
 @click.pass_context
-def ralph(ctx, review, tests, auto_merge):
+def ralph(ctx, review, tests, auto_merge, budget):
     """Run the Ralph loop for processing PRDs."""
     maybe_init_git()
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -206,6 +221,8 @@ def ralph(ctx, review, tests, auto_merge):
         tests = config.get("tests", False)
     if auto_merge is None:
         auto_merge = config.get("auto_merge", False)
+    if budget is None:
+        budget = config.get("budget", 5.0)  # Default $5 budget if not set
 
     # If everything is still False (and we have no config file), prompt the user
     if not CONFIG_FILE.exists() and not any([review, tests, auto_merge]):
@@ -231,6 +248,13 @@ def ralph(ctx, review, tests, auto_merge):
         )
         if auto_merge:
             click.echo("✅ Auto-merge enabled.")
+
+        budget = click.prompt(
+            "Set a max budget in USD for this run?",
+            type=float,
+            default=5.0,
+        )
+        click.echo(f"✅ Budget set to ${budget:.2f} USD.")
 
         verbose = click.confirm(
             "Enable verbose output (log prompts and commands to terminal)?",
@@ -258,6 +282,7 @@ def ralph(ctx, review, tests, auto_merge):
                         "review": review,
                         "tests": tests,
                         "auto_merge": auto_merge,
+                        "budget": budget,
                     },
                     "caffeinate": caffeinate,
                     "verbose": verbose,
@@ -270,6 +295,7 @@ def ralph(ctx, review, tests, auto_merge):
     click.echo(f"Review:     {'ON' if review else 'OFF'}")
     click.echo(f"Tests:      {'ON' if tests else 'OFF'}")
     click.echo(f"Auto-merge: {'ON' if auto_merge else 'OFF'}")
+    click.echo(f"Max Budget: ${budget:.2f} USD")
 
     click.echo("\nWorkflow:")
     click.echo("1. Ensure 'main' branch.")
@@ -298,6 +324,9 @@ def ralph(ctx, review, tests, auto_merge):
         
         click.echo(f"\nTotal Estimated Initial Cost: ${total_initial_cost:.6f} USD")
         click.echo("(Note: Subsequent iterations and output tokens will incur additional costs.)")
+        
+        if total_initial_cost > budget:
+            click.echo(f"\n⚠️ WARNING: Estimated cost (${total_initial_cost:.6f}) exceeds current budget (${budget:.2f})!")
     else:
         click.echo("\nNo pending PRDs found to process.")
 
@@ -311,6 +340,7 @@ def ralph(ctx, review, tests, auto_merge):
         tests=tests,
         auto_merge=auto_merge,
         caffeinate=ctx.obj.get("caffeinate", False),
+        budget=budget,
     )
 
 

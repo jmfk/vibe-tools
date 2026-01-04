@@ -5,7 +5,7 @@ import os
 import pathlib
 from typing import Optional
 
-from vibe_tools.utils import COSTS_DIR
+from vibe_tools.utils import COSTS_DIR, logger
 
 # Pricing per 1M tokens (USD)
 # Source: Standard LLM pricing as of late 2024 / early 2025
@@ -26,6 +26,9 @@ AGENT_DEFAULT_MODEL = {
 
 DEFAULT_PRICING = {"input": 1.0, "output": 1.0}  # Fallback
 USAGE_LOG_CSV = COSTS_DIR / "usage.csv"
+
+# Track runs in the current session for final reporting
+_session_runs = []
 
 
 class CostLogger:
@@ -77,6 +80,25 @@ class CostLogger:
             f"{cost:.6f}",
             purpose,
         ]
+
+        # Track for session report
+        _session_runs.append(
+            {
+                "timestamp": timestamp,
+                "prd": prd_name,
+                "phase": phase,
+                "iteration": iteration,
+                "agent": agent,
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost": cost,
+                "purpose": purpose,
+            }
+        )
+
+        # Continuous reporting to console
+        logger.info(f"💰 Step Cost: ${cost:.6f} USD (Model: {model}, Phase: {phase})")
 
         # 1. Local Sink (CSV)
         self._log_to_csv(row)
@@ -185,3 +207,45 @@ def get_total_cost():
     except Exception:
         pass
     return total
+
+
+def get_session_cost():
+    """Returns the total cost incurred in the current execution session."""
+    return sum(run["cost"] for run in _session_runs)
+
+
+def finalize_cost_report():
+    """Aggregates session costs and writes a summary to the log and terminal."""
+    if not _session_runs:
+        return
+
+    total_cost = sum(run["cost"] for run in _session_runs)
+
+    # Format detailed table for log file
+    report_lines = [
+        "\n" + "=" * 80,
+        "SESSION COST REPORT",
+        "=" * 80,
+        f"{'PRD':<20} {'Phase':<10} {'Iter':<5} {'Model':<20} {'Cost (USD)':<10}",
+        "-" * 80,
+    ]
+
+    for run in _session_runs:
+        report_lines.append(
+            f"{run['prd'][:19]:<20} {run['phase'][:9]:<10} {run['iteration']:<5} "
+            f"{run['model'][:19]:<20} ${run['cost']:>9.6f}"
+        )
+
+    report_lines.append("-" * 80)
+    report_lines.append(f"{'TOTAL SESSION COST:':<56} ${total_cost:>9.6f}")
+    report_lines.append("=" * 80 + "\n")
+
+    report = "\n".join(report_lines)
+
+    # Log the full report to the log file (DEBUG level ensures it goes to file)
+    logger.debug(report)
+
+    # Print total cost to terminal
+    import click
+
+    click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD")

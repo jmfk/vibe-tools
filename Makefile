@@ -29,7 +29,7 @@ test-backend:
 	pytest -v
 
 test-frontend:
-	cd frontend && npm run test -- --run
+	cd frontend && npx vitest --run
 
 test-infra:
 	@echo "Running infra tests..."
@@ -48,7 +48,7 @@ lint-backend:
 	@exit 0
 
 lint-frontend:
-	cd frontend && npm run lint
+	cd frontend && npx eslint . --ext ts,tsx
 
 lint-infra:
 	@echo "Running infra lint..."
@@ -81,7 +81,7 @@ test:
 	pytest -v
 
 coverage:
-	pytest --cov=vibe_tools --cov-report=term-missing tests/
+	pytest --cov=src --cov=vibe_tools --cov-report=term-missing tests/
 
 coverage-loop:
 	vibe coverage
@@ -96,13 +96,13 @@ frontend-build:
 	cd frontend && npm run build
 
 frontend-lint:
-	cd frontend && npm run lint
+	cd frontend && npx eslint . --ext ts,tsx
 
 frontend-test:
-	cd frontend && npm run test -- --run
+	cd frontend && npx vitest --run
 
 frontend-coverage:
-	cd frontend && npm run test:coverage
+	cd frontend && npx vitest --coverage
 
 frontend-run:
 	cd frontend && npm run dev

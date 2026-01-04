@@ -74,7 +74,7 @@ def test_run_tests_with_failures(tmp_path):
     with patch("vibe_tools.testing.run_command") as mock_run:
         # One pass, one fail
         mock_run.side_effect = [("pass", 0), ("fail", 1)]
-        output, passed = tester.run_tests()
+        output, passed, env_failures = tester.run_tests()
         assert passed == False
         assert "TARGET: test-backend" in output
         assert "TARGET: test-frontend" in output

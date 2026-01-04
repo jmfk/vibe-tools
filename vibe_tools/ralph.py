@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import json
+import hashlib
 
 
 from vibe_tools.utils import (
@@ -15,7 +16,7 @@ from vibe_tools.utils import (
     rotate_log,
 )
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL, get_session_cost
 
 BACKEND_ROOT = pathlib.Path("src")
 FRONTEND_ROOT = pathlib.Path("frontend")
@@ -119,7 +120,9 @@ def get_pending_prds_and_estimates(agent_type, config):
         return results
 
     base_prompt = BASE_PROMPT_TEMPLATE.read_text()
-    architecture_content = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    architecture_content = (
+        ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    )
     overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
 
     for prd_file in prds:
@@ -128,7 +131,7 @@ def get_pending_prds_and_estimates(agent_type, config):
 
         if resume_prd and project_name != resume_prd:
             continue
-        
+
         if project_name in completed_prds:
             continue
 
@@ -137,17 +140,17 @@ def get_pending_prds_and_estimates(agent_type, config):
 
         # Simulate the prompt construction
         prd_content = prd_file.read_text()
-        
+
         iteration_output = ""
         additional_context = ""
-        
+
         if active_task and project_name == active_task.get("prd_name"):
             iteration_output = active_task.get("output", "")
             additional_context = active_task.get("context", "")
-        
+
         # This matches the structure in run_ralph_agent and ralph_loop
         prompt_text = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
-        
+
         combined_prompt = f"""{prompt_text}
 
 CONTEXT FILES:
@@ -174,12 +177,14 @@ Include {COMPLETION_PROMISE} when you are done.
         input_tokens = cost_logger.estimate_tokens(combined_prompt)
         cost = cost_logger.calculate_cost(model, input_tokens, 0)
 
-        results.append({
-            "prd_name": project_name,
-            "model": model,
-            "cost_estimate": cost,
-            "is_resume": project_name == resume_prd
-        })
+        results.append(
+            {
+                "prd_name": project_name,
+                "model": model,
+                "cost_estimate": cost,
+                "is_resume": project_name == resume_prd,
+            }
+        )
 
         # Once we found the resume PRD, stop skipping
         resume_prd = None
@@ -251,12 +256,58 @@ def run_review_logic(agent_type, prd_path, caffeinate=False):
     return output, "<review>PASSED</review>" in output
 
 
+def check_budget(budget):
+    """Checks if the current session cost exceeds the budget. Returns updated budget."""
+    if budget is None:
+        return None
+
+    import click
+    from vibe_tools.cost import _session_runs
+
+    current_cost = get_session_cost()
+    if current_cost >= budget:
+        logger.warning(
+            f"\n⚠️  BUDGET REACHED: Current session cost (${current_cost:.4f}) has reached the limit of ${budget:.2f}"
+        )
+
+        # Display cost report
+        click.echo("\n" + "=" * 40)
+        click.echo("SESSION COST REPORT (BUDGET EXCEEDED)")
+        click.echo("=" * 40)
+        for run in _session_runs:
+            click.echo(f"{run['phase']:<10} {run['prd'][:15]:<16} ${run['cost']:>8.4f}")
+        click.echo("-" * 40)
+        click.echo(f"{'TOTAL:':<27} ${current_cost:>8.4f}")
+        click.echo("=" * 40)
+
+        if click.confirm(
+            "\nWould you like to increase the budget and continue?", default=True
+        ):
+            add_amount = click.prompt(
+                "How much would you like to add to the budget (USD)?",
+                type=float,
+                default=5.0,
+            )
+            new_budget = budget + add_amount
+            click.echo(f"✅ Budget increased to ${new_budget:.2f}. Continuing...")
+            return new_budget
+        else:
+            click.echo("Aborting run due to budget limit.")
+            sys.exit(0)
+
+    return budget
+
+
 def ralph_loop(
-    agent="cursor-agent", review=False, tests=False, auto_merge=False, caffeinate=False
+    agent="cursor-agent",
+    review=False,
+    tests=False,
+    auto_merge=False,
+    caffeinate=False,
+    budget=None,
 ):
     from vibe_tools.cli import load_config
 
-    rotate_log()
     config = load_config()
     cost_logger = CostLogger(config)
 
@@ -386,11 +437,18 @@ def ralph_loop(
         resume_phase = "build"
 
         success = False
+        last_error_hash = None
+        error_repeat_count = 0
 
         for i in range(start_iteration, MAX_ITERATIONS + 1):
             # Phase 1: Build/Implementation
             if start_phase == "build":
-                logger.info(f"[RALPH LOOP] [PHASE: build] (Iteration {i})")
+                # Check budget before agent call
+                budget = check_budget(budget)
+
+                logger.info(
+                    f"🚀 [RALPH LOOP] [PHASE: build] (Iteration {i}/{MAX_ITERATIONS})"
+                )
 
                 prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
@@ -419,6 +477,9 @@ def ralph_loop(
                 iteration_output = output
 
                 if COMPLETION_PROMISE not in output:
+                    logger.info(
+                        "⏳ Agent is still working (no completion promise yet)..."
+                    )
                     additional_context = ""
                     save_state(
                         project_name, i + 1, output, additional_context, phase="build"
@@ -426,18 +487,59 @@ def ralph_loop(
                     continue
 
                 logger.info(
-                    f"COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
+                    f"✅ COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
                 )
                 save_state(project_name, i, output, additional_context, phase="test")
                 start_phase = "test"
 
             # Phase 2: Tests
             if start_phase == "test":
-                logger.info(f"[RALPH LOOP] [PHASE: test] (Iteration {i})")
+                logger.info(
+                    f"🧪 [RALPH LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})"
+                )
                 if tests:
-                    test_output, tests_passed = run_tests_logic(caffeinate=caffeinate)
+                    test_output, tests_passed, env_failures = run_tests_logic(
+                        caffeinate=caffeinate
+                    )
+
+                    if env_failures:
+                        logger.error(
+                            f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
+                        )
+                        logger.error(
+                            "The system cannot continue automatically when tools are missing from the environment."
+                        )
+                        logger.error(
+                            "Please ensure 'npx', 'npm', and other required tools are installed and accessible."
+                        )
+                        sys.exit(127)
+
                     if not tests_passed:
-                        logger.error("❌ Tests failed. Feeding back to agent...")
+                        # Loop detection
+                        error_hash = hashlib.md5(test_output.encode()).hexdigest()
+                        if error_hash == last_error_hash:
+                            error_repeat_count += 1
+                            logger.warning(
+                                f"⚠️  REPEATED FAILURE DETECTED (Count: {error_repeat_count})"
+                            )
+                        else:
+                            error_repeat_count = 0
+
+                        last_error_hash = error_hash
+
+                        if error_repeat_count >= 2:
+                            logger.error(
+                                "🛑 STOPPING: The system is stuck in a loop with the same test failure."
+                            )
+                            logger.error(
+                                "The agent is unable to fix the issue automatically. Please intervene."
+                            )
+                            logger.info(f"Last test output:\n{test_output}")
+                            sys.exit(1)
+
+                        logger.error(
+                            "❌ Tests failed. Feeding back to agent for repair..."
+                        )
                         additional_context = (
                             f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
                         )
@@ -450,7 +552,7 @@ def ralph_loop(
                         )
                         start_phase = "build"
                         continue
-                    logger.info("✅ Tests passed.")
+                    logger.info("✅ All tests and linting passed.")
                 else:
                     logger.info("⏩ Skipping tests as requested.")
 
@@ -465,7 +567,12 @@ def ralph_loop(
 
             # Phase 3: Review
             if start_phase == "review":
-                logger.info(f"[RALPH LOOP] [PHASE: review] (Iteration {i})")
+                # Check budget before agent call
+                budget = check_budget(budget)
+
+                logger.info(
+                    f"🔎 [RALPH LOOP] [PHASE: review] (Iteration {i}/{MAX_ITERATIONS})"
+                )
                 if review:
                     review_output, review_passed = run_review_logic(
                         agent, prd_file, caffeinate=caffeinate
@@ -502,6 +609,9 @@ def ralph_loop(
                 break
 
         if success:
+            # Check budget before commit agent call
+            budget = check_budget(budget)
+
             logger.info(f"Committing changes for: {project_name}")
             commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
             commit_cmd = get_agent_command(agent, commit_prompt)

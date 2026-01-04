@@ -77,11 +77,19 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             output_filename = f"prd_{stem}.yaml"
         output_path = PRDS_DIR / output_filename
 
-        if output_path.exists() and not overwrite_all:
-            print(f"Skipping {spec_path.name} (already exists at {output_path})")
-            continue
+        # Optimization: Skip if YAML is newer than the source MD
+        if output_path.exists():
+            md_mtime = spec_path.stat().st_mtime
+            yaml_mtime = output_path.stat().st_mtime
+            if yaml_mtime > md_mtime and not overwrite_all:
+                print(f"⏩ Skipping {spec_path.name} (already up-to-date at {output_path.name})")
+                continue
 
-        print(f"Normalizing: {spec_path.name} -> {output_path.name} using {agent}...")
+        if output_path.exists() and not overwrite_all:
+            if not click.confirm(f"Overwrite existing {output_path.name}?", default=False):
+                continue
+
+        print(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using {agent}...")
 
         human_prd = spec_path.read_text()
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)

@@ -3,20 +3,26 @@ import pathlib
 import pytest
 import json
 from unittest.mock import patch, MagicMock
+from vibe_tools import utils
 from vibe_tools.utils import (
-    logger, stream_handler, enable_console_debug, run_command, 
+    logger, enable_console_debug, run_command, 
     ensure_dir, rotate_log, is_merged, run_agent, get_agent_command,
     is_git_repo, ensure_gitignore
 )
 
 def test_enable_console_debug():
+    # Ensure stream_handler is not None for the test
+    if utils.stream_handler is None:
+        utils.stream_handler = logging.StreamHandler()
+        utils.logger.addHandler(utils.stream_handler)
+
     # Initial level might have been changed by previous tests, so we set it back
-    stream_handler.setLevel(logging.INFO)
-    assert stream_handler.level == logging.INFO
+    utils.stream_handler.setLevel(logging.INFO)
+    assert utils.stream_handler.level == logging.INFO
     
     enable_console_debug()
     
-    assert stream_handler.level == logging.DEBUG
+    assert utils.stream_handler.level == logging.DEBUG
     assert logger.level == logging.DEBUG
 
 def test_ensure_dir(tmp_path):

@@ -41,10 +41,12 @@ def test_ralph_command_prompt(runner, tmp_path):
                 # 1. Enable Tests? y
                 # 2. Enable Agentic Review? y
                 # 3. Enable Auto-merge? n
-                # 4. Use caffeinate? y
-                # 5. Save settings? y
-                # 6. Proceed with Ralph loop? n
-                result = runner.invoke(cli, ["ralph"], input="y\ny\nn\ny\ny\nn\n")
+                # 4. Set budget? 5.0
+                # 5. Enable verbose? n
+                # 6. Use caffeinate? y
+                # 7. Save settings? y
+                # 8. Proceed with Ralph loop? n
+                result = runner.invoke(cli, ["ralph"], input="y\ny\nn\n5.0\nn\ny\ny\nn\n")
                 assert "Aborted" in result.output
 
 def test_history_command(runner):

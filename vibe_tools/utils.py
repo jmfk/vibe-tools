@@ -19,30 +19,45 @@ COSTS_DIR = pathlib.Path("costs")
 LOGS_DIR.mkdir(exist_ok=True)
 COSTS_DIR.mkdir(exist_ok=True)
 
-# Generate timestamped log filename
-_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_FILE = LOGS_DIR / f"vibe_{_timestamp}.log"
-
 # Setup logger
 logger = logging.getLogger("vibe")
 logger.setLevel(logging.DEBUG)
 
-# File handler
-file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-logger.addHandler(file_handler)
+# Globals to be initialized by setup_logging
+LOG_FILE = None
+file_handler = None
+stream_handler = None
 
-# Stream handler
-stream_handler = logging.StreamHandler(sys.stdout)
-stream_handler.setLevel(logging.INFO)
-stream_handler.setFormatter(logging.Formatter("%(message)s"))
-logger.addHandler(stream_handler)
+
+def setup_logging(command_name):
+    """Initializes logging for a specific command run."""
+    global LOG_FILE, file_handler, stream_handler
+
+    # Generate timestamped log filename with command name
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    LOG_FILE = LOGS_DIR / f"vibe_{command_name}_{timestamp}.log"
+
+    # File handler
+    file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    )
+    logger.addHandler(file_handler)
+
+    # Stream handler (console)
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stream_handler)
+
+    return LOG_FILE
 
 
 def set_console_level(level):
     """Sets the console output level."""
-    stream_handler.setLevel(level)
+    if stream_handler:
+        stream_handler.setLevel(level)
 
 
 # Flag to track if an agent was called
@@ -50,11 +65,18 @@ _agent_called = False
 
 
 def _cleanup_log():
-    """Deletes the log file if no agent was called or if it's empty."""
+    """Deletes the log file if it's empty."""
+    global LOG_FILE, file_handler
+    if not LOG_FILE:
+        return
+
     try:
-        if not _agent_called or (LOG_FILE.exists() and LOG_FILE.stat().st_size == 0):
+        # Delete only if the file is empty
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size == 0:
             # Close handler to release file lock
-            file_handler.close()
+            if file_handler:
+                file_handler.close()
+                logger.removeHandler(file_handler)
             if LOG_FILE.exists():
                 LOG_FILE.unlink()
     except Exception:
@@ -66,14 +88,16 @@ atexit.register(_cleanup_log)
 
 def enable_console_debug():
     """Sets the console output level to DEBUG."""
-    stream_handler.setLevel(logging.DEBUG)
-    logger.debug("Console debug logging enabled.")
+    if stream_handler:
+        stream_handler.setLevel(logging.DEBUG)
+        logger.debug("Console debug logging enabled.")
 
 
 def rotate_log():
     """Rotates the log file if it exists and is not empty."""
-    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
-        file_handler.doRollover()
+    if LOG_FILE and LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
+        if file_handler:
+            file_handler.doRollover()
 
 
 def is_merged(branch_name):

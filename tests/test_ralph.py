@@ -31,9 +31,9 @@ def test_mark_prd_completed(mock_state_file):
 def test_run_tests_logic():
     with patch("vibe_tools.ralph.ProjectTester") as mock_tester_cls:
         mock_tester = mock_tester_cls.return_value
-        mock_tester.run_tests.return_value = ("output", True)
+        mock_tester.run_tests.return_value = ("output", True, [])
         
-        output, passed = run_tests_logic()
+        output, passed, env_failures = run_tests_logic()
         assert passed == True
         assert output == "output"
 
@@ -66,7 +66,7 @@ def test_ralph_loop_with_test_failure(tmp_path):
                             mock_run.return_value = ("", 0)
                             mock_agent.return_value = "done <promise>DONE</promise>"
                             # First tests fail, then we'll stop
-                            mock_tests.side_effect = [("failed", False), ("passed", True)]
+                            mock_tests.side_effect = [("failed", False, []), ("passed", True, [])]
                             mock_commit_agent.return_value = ("committed", 0)
                             
                             with patch("vibe_tools.ralph.STATE_FILE", tmp_path / ".state.json"):
@@ -102,7 +102,7 @@ def test_ralph_loop_resuming(tmp_path):
                     with patch("vibe_tools.ralph.run_tests_logic") as mock_tests:
                         with patch("vibe_tools.ralph.mark_prd_completed") as mock_completed:
                             mock_run.return_value = ("", 0)
-                            mock_tests.return_value = ("passed", True)
+                            mock_tests.return_value = ("passed", True, [])
                             
                             ralph_loop(tests=True, review=False)
                             

@@ -24,3 +24,4 @@ costs/
 .vibe_client_secrets.json
 
 .vibe_authorized_user.json
+node_modules/

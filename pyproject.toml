@@ -12,6 +12,13 @@ dependencies = [
     "gspread",
     "google-auth",
     "google-auth-oauthlib",
+    "fastapi",
+    "uvicorn",
+    "tortoise-orm",
+    "aerich",
+    "pydantic[email]",
+    "httpx",
+    "pytest-asyncio",
 ]
 
 [tool.setuptools]
