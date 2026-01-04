@@ -379,271 +379,274 @@ def ralph_loop(
         logger.info("No PRD files found (matching 'prd_*.yaml').")
         return
 
-    for prd_file in prds:
-        project_name = prd_file.stem
-        branch_name = f"feature/{project_name}"
+    try:
+        for prd_file in prds:
+            project_name = prd_file.stem
+            branch_name = f"feature/{project_name}"
 
-        # If we are resuming, skip until we reach the resume target
-        if resume_prd and project_name != resume_prd:
-            logger.info(f"Skipping {project_name} (resuming from {resume_prd})...")
-            continue
+            # If we are resuming, skip until we reach the resume target
+            if resume_prd and project_name != resume_prd:
+                logger.info(f"Skipping {project_name} (resuming from {resume_prd})...")
+                continue
 
-        # Check if already done (merged or in completed_prds)
-        if project_name in completed_prds:
-            logger.info(
-                f"PRD {project_name} already marked as completed in state file. Skipping..."
-            )
-            continue
-
-        # Once we reach the resume target, we don't need to skip anymore
-        resume_prd = None
-
-        logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
-
-        if is_merged(branch_name):
-            logger.info(f"Branch {branch_name} already merged into main. Skipping...")
-            # Also mark as completed if it's merged but not in state
-            if project_name not in completed_prds:
-                mark_prd_completed(project_name)
-            continue
-
-        # Check if branch exists
-        _, check_branch = run_command(
-            ["git", "rev-parse", "--verify", branch_name], check=False
-        )
-
-        if check_branch == 0:
-            logger.info(f"Branch {branch_name} already exists. Switching to it...")
-            run_command(["git", "checkout", branch_name])
-        else:
-            logger.info(f"Creating and switching to branch: {branch_name}")
-            run_command(["git", "checkout", "-b", branch_name])
-
-        if not BASE_PROMPT_TEMPLATE.exists():
-            logger.error(
-                f"Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'."
-            )
-            sys.exit(1)
-
-        base_prompt = BASE_PROMPT_TEMPLATE.read_text()
-        iteration_output = active_task["output"] if active_task else ""
-        additional_context = active_task["context"] if active_task else ""
-        start_iteration = resume_iteration
-        start_phase = resume_phase
-
-        # Clear active_task once it's been consumed
-        active_task = None
-        resume_iteration = 1
-        resume_phase = "build"
-
-        success = False
-        last_error_hash = None
-        error_repeat_count = 0
-
-        for i in range(start_iteration, MAX_ITERATIONS + 1):
-            # Phase 1: Build/Implementation
-            if start_phase == "build":
-                # Check budget before agent call
-                budget = check_budget(budget)
-
+            # Check if already done (merged or in completed_prds)
+            if project_name in completed_prds:
                 logger.info(
-                    f"🚀 [RALPH LOOP] [PHASE: build] (Iteration {i}/{MAX_ITERATIONS})"
+                    f"PRD {project_name} already marked as completed in state file. Skipping..."
                 )
+                continue
 
-                prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
+            # Once we reach the resume target, we don't need to skip anymore
+            resume_prd = None
 
-                output = run_ralph_agent(
-                    agent,
-                    prompt_for_iteration,
-                    prd_file,
-                    ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
-                    OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
-                    BACKEND_ROOT,
-                    FRONTEND_ROOT,
-                    caffeinate=caffeinate,
+            logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
+
+            if is_merged(branch_name):
+                logger.info(f"Branch {branch_name} already merged into main. Skipping...")
+                # Also mark as completed if it's merged but not in state
+                if project_name not in completed_prds:
+                    mark_prd_completed(project_name)
+                continue
+
+            # Check if branch exists
+            _, check_branch = run_command(
+                ["git", "rev-parse", "--verify", branch_name], check=False
+            )
+
+            if check_branch == 0:
+                logger.info(f"Branch {branch_name} already exists. Switching to it...")
+                run_command(["git", "checkout", branch_name])
+            else:
+                logger.info(f"Creating and switching to branch: {branch_name}")
+                run_command(["git", "checkout", "-b", branch_name])
+
+            if not BASE_PROMPT_TEMPLATE.exists():
+                logger.error(
+                    f"Base prompt template not found at {BASE_PROMPT_TEMPLATE}. Please run 'vibe init'."
                 )
+                sys.exit(1)
 
-                cost_logger.log_run(
-                    agent=agent,
-                    model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
-                    prompt=prompt_for_iteration,
-                    output=output,
-                    prd_name=project_name,
-                    iteration=i,
-                    phase="build",
-                    purpose="implementation",
-                )
+            base_prompt = BASE_PROMPT_TEMPLATE.read_text()
+            iteration_output = active_task["output"] if active_task else ""
+            additional_context = active_task["context"] if active_task else ""
+            start_iteration = resume_iteration
+            start_phase = resume_phase
 
-                iteration_output = output
+            # Clear active_task once it's been consumed
+            active_task = None
+            resume_iteration = 1
+            resume_phase = "build"
 
-                if COMPLETION_PROMISE not in output:
+            success = False
+            last_error_hash = None
+            error_repeat_count = 0
+
+            for i in range(start_iteration, MAX_ITERATIONS + 1):
+                # Phase 1: Build/Implementation
+                if start_phase == "build":
+                    # Check budget before agent call
+                    budget = check_budget(budget)
+
                     logger.info(
-                        "⏳ Agent is still working (no completion promise yet)..."
-                    )
-                    additional_context = ""
-                    save_state(
-                        project_name, i + 1, output, additional_context, phase="build"
-                    )
-                    continue
-
-                logger.info(
-                    f"✅ COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
-                )
-                save_state(project_name, i, output, additional_context, phase="test")
-                start_phase = "test"
-
-            # Phase 2: Tests
-            if start_phase == "test":
-                logger.info(
-                    f"🧪 [RALPH LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})"
-                )
-                if tests:
-                    test_output, tests_passed, env_failures = run_tests_logic(
-                        caffeinate=caffeinate
+                        f"🚀 [RALPH LOOP] [PHASE: build] (Iteration {i}/{MAX_ITERATIONS})"
                     )
 
-                    if env_failures:
-                        logger.error(
-                            f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
-                        )
-                        logger.error(
-                            "The system cannot continue automatically when tools are missing from the environment."
-                        )
-                        logger.error(
-                            "Please ensure 'npx', 'npm', and other required tools are installed and accessible."
-                        )
-                        sys.exit(127)
+                    prompt_for_iteration = f"{base_prompt}\n{additional_context}\nPREVIOUS_OUTPUT:\n{iteration_output}\n\nRespond again until you include {COMPLETION_PROMISE}."
 
-                    if not tests_passed:
-                        # Loop detection
-                        error_hash = hashlib.md5(test_output.encode()).hexdigest()
-                        if error_hash == last_error_hash:
-                            error_repeat_count += 1
-                            logger.warning(
-                                f"⚠️  REPEATED FAILURE DETECTED (Count: {error_repeat_count})"
-                            )
-                        else:
-                            error_repeat_count = 0
-
-                        last_error_hash = error_hash
-
-                        if error_repeat_count >= 2:
-                            logger.error(
-                                "🛑 STOPPING: The system is stuck in a loop with the same test failure."
-                            )
-                            logger.error(
-                                "The agent is unable to fix the issue automatically. Please intervene."
-                            )
-                            logger.info(f"Last test output:\n{test_output}")
-                            sys.exit(1)
-
-                        logger.error(
-                            "❌ Tests failed. Feeding back to agent for repair..."
-                        )
-                        additional_context = (
-                            f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
-                        )
-                        save_state(
-                            project_name,
-                            i + 1,
-                            iteration_output,
-                            additional_context,
-                            phase="build",
-                        )
-                        start_phase = "build"
-                        continue
-                    logger.info("✅ All tests and linting passed.")
-                else:
-                    logger.info("⏩ Skipping tests as requested.")
-
-                save_state(
-                    project_name,
-                    i,
-                    iteration_output,
-                    additional_context,
-                    phase="review",
-                )
-                start_phase = "review"
-
-            # Phase 3: Review
-            if start_phase == "review":
-                # Check budget before agent call
-                budget = check_budget(budget)
-
-                logger.info(
-                    f"🔎 [RALPH LOOP] [PHASE: review] (Iteration {i}/{MAX_ITERATIONS})"
-                )
-                if review:
-                    review_output, review_passed = run_review_logic(
-                        agent, prd_file, caffeinate=caffeinate
+                    output = run_ralph_agent(
+                        agent,
+                        prompt_for_iteration,
+                        prd_file,
+                        ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
+                        OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
+                        BACKEND_ROOT,
+                        FRONTEND_ROOT,
+                        caffeinate=caffeinate,
                     )
+
                     cost_logger.log_run(
                         agent=agent,
                         model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
-                        prompt=f"Review changes against {prd_file}",
-                        output=review_output,
+                        prompt=prompt_for_iteration,
+                        output=output,
                         prd_name=project_name,
                         iteration=i,
-                        phase="review",
-                        purpose="agentic_review",
+                        phase="build",
+                        purpose="implementation",
                     )
-                    if not review_passed:
-                        logger.error("❌ Review failed. Feeding back to agent...")
-                        additional_context = (
-                            f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
+
+                    iteration_output = output
+
+                    if COMPLETION_PROMISE not in output:
+                        logger.info(
+                            "⏳ Agent is still working (no completion promise yet)..."
                         )
+                        additional_context = ""
                         save_state(
-                            project_name,
-                            i + 1,
-                            iteration_output,
-                            additional_context,
-                            phase="build",
+                            project_name, i + 1, output, additional_context, phase="build"
                         )
-                        start_phase = "build"
                         continue
-                    logger.info("✅ Review passed.")
-                else:
-                    logger.info("⏩ Skipping agentic review as requested.")
 
-                success = True
-                break
+                    logger.info(
+                        f"✅ COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
+                    )
+                    save_state(project_name, i, output, additional_context, phase="test")
+                    start_phase = "test"
 
-        if success:
-            # Check budget before commit agent call
-            budget = check_budget(budget)
+                # Phase 2: Tests
+                if start_phase == "test":
+                    logger.info(
+                        f"🧪 [RALPH LOOP] [PHASE: test] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
+                    if tests:
+                        test_output, tests_passed, env_failures = run_tests_logic(
+                            caffeinate=caffeinate
+                        )
 
-            logger.info(f"Committing changes for: {project_name}")
-            commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
-            commit_cmd = get_agent_command(agent, commit_prompt)
-            commit_output, _ = run_agent(commit_cmd, caffeinate=caffeinate)
-            cost_logger.log_run(
-                agent=agent,
-                model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
-                prompt=commit_prompt,
-                output=commit_output,
-                prd_name=project_name,
-                iteration=1,
-                phase="commit",
-                purpose="committing_changes",
-            )
+                        if env_failures:
+                            logger.error(
+                                f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
+                            )
+                            logger.error(
+                                "The system cannot continue automatically when tools are missing from the environment."
+                            )
+                            logger.error(
+                                "Please ensure 'npx', 'npm', and other required tools are installed and accessible."
+                            )
+                            sys.exit(127)
 
-            if auto_merge:
-                logger.info(f"Merging {branch_name} into main...")
-                run_command(["git", "checkout", "main"])
-                run_command(["git", "merge", branch_name])
-            else:
-                logger.info(
-                    f"Auto-merge is OFF. Changes remain on branch {branch_name}."
+                        if not tests_passed:
+                            # Loop detection
+                            error_hash = hashlib.md5(test_output.encode()).hexdigest()
+                            if error_hash == last_error_hash:
+                                error_repeat_count += 1
+                                logger.warning(
+                                    f"⚠️  REPEATED FAILURE DETECTED (Count: {error_repeat_count})"
+                                )
+                            else:
+                                error_repeat_count = 0
+
+                            last_error_hash = error_hash
+
+                            if error_repeat_count >= 2:
+                                logger.error(
+                                    "🛑 STOPPING: The system is stuck in a loop with the same test failure."
+                                )
+                                logger.error(
+                                    "The agent is unable to fix the issue automatically. Please intervene."
+                                )
+                                logger.info(f"Last test output:\n{test_output}")
+                                sys.exit(1)
+
+                            logger.error(
+                                "❌ Tests failed. Feeding back to agent for repair..."
+                            )
+                            additional_context = (
+                                f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
+                            )
+                            save_state(
+                                project_name,
+                                i + 1,
+                                iteration_output,
+                                additional_context,
+                                phase="build",
+                            )
+                            start_phase = "build"
+                            continue
+                        logger.info("✅ All tests and linting passed.")
+                    else:
+                        logger.info("⏩ Skipping tests as requested.")
+
+                    save_state(
+                        project_name,
+                        i,
+                        iteration_output,
+                        additional_context,
+                        phase="review",
+                    )
+                    start_phase = "review"
+
+                # Phase 3: Review
+                if start_phase == "review":
+                    # Check budget before agent call
+                    budget = check_budget(budget)
+
+                    logger.info(
+                        f"🔎 [RALPH LOOP] [PHASE: review] (Iteration {i}/{MAX_ITERATIONS})"
+                    )
+                    if review:
+                        review_output, review_passed = run_review_logic(
+                            agent, prd_file, caffeinate=caffeinate
+                        )
+                        cost_logger.log_run(
+                            agent=agent,
+                            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+                            prompt=f"Review changes against {prd_file}",
+                            output=review_output,
+                            prd_name=project_name,
+                            iteration=i,
+                            phase="review",
+                            purpose="agentic_review",
+                        )
+                        if not review_passed:
+                            logger.error("❌ Review failed. Feeding back to agent...")
+                            additional_context = (
+                                f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
+                            )
+                            save_state(
+                                project_name,
+                                i + 1,
+                                iteration_output,
+                                additional_context,
+                                phase="build",
+                            )
+                            start_phase = "build"
+                            continue
+                        logger.info("✅ Review passed.")
+                    else:
+                        logger.info("⏩ Skipping agentic review as requested.")
+
+                    success = True
+                    break
+
+            if success:
+                # Check budget before commit agent call
+                budget = check_budget(budget)
+
+                logger.info(f"Committing changes for: {project_name}")
+                commit_prompt = f"Git commit all changes in the repository. Group changes into reasonable, atomic commits based on their purpose. Write clear and descriptive commit messages. Context: These changes were generated for PRD {project_name} and passed all quality gates."
+                commit_cmd = get_agent_command(agent, commit_prompt)
+                commit_output, _ = run_agent(commit_cmd, caffeinate=caffeinate)
+                cost_logger.log_run(
+                    agent=agent,
+                    model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+                    prompt=commit_prompt,
+                    output=commit_output,
+                    prd_name=project_name,
+                    iteration=1,
+                    phase="commit",
+                    purpose="committing_changes",
                 )
-                run_command(["git", "checkout", "main"])
 
-            mark_prd_completed(project_name)
-        else:
-            logger.error(
-                f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations."
-            )
-            logger.info("Reverting to 'main' branch.")
-            run_command(["git", "checkout", "main"])
-            sys.exit(1)
+                if auto_merge:
+                    logger.info(f"Merging {branch_name} into main...")
+                    run_command(["git", "checkout", "main"])
+                    run_command(["git", "merge", branch_name])
+                else:
+                    logger.info(
+                        f"Auto-merge is OFF. Changes remain on branch {branch_name}."
+                    )
+                    run_command(["git", "checkout", "main"])
+
+                mark_prd_completed(project_name)
+            else:
+                logger.error(
+                    f"FAILED: Did not find completion promise within {MAX_ITERATIONS} iterations."
+                )
+                sys.exit(1)
+
+    finally:
+        logger.info("Ralph Loop process complete. Returning to 'main' branch...")
+        run_command(["git", "checkout", "main"])
 
     print("All PRDs processed successfully.")
