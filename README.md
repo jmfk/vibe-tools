@@ -4,7 +4,7 @@ Global commands for Cursor Ralph loop and coverage improvement.
 
 ## Configuration
 
-The tools use a `.vibe_config.json` file in the project root for configuration. This file is automatically created and updated when running `vibe setup-google` or on the first run of `vibe ralph`.
+The tools use a `.vibe_config.json` file in the project root for configuration. This file is automatically created and updated when running `vibe-setup google` or on the first run of `vibe ralph`.
 
 ### Example `.vibe_config.json`
 
@@ -66,12 +66,14 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 
 ### Service Configuration
 
-Use the new setup commands to record connection details for the supporting services your projects rely on:
+Use the `vibe-setup` command to record connection details for the supporting services your projects rely on:
 
-- `vibe setup-postgres`
-- `vibe setup-redis`
-- `vibe setup-rabbitmq`
-- `vibe setup-elasticsearch`
+- `vibe-setup postgres`
+- `vibe-setup redis`
+- `vibe-setup rabbitmq`
+- `vibe-setup elasticsearch`
+- `vibe-setup api`
+- `vibe-setup google`
 
 Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `.vibe_config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
 
@@ -99,9 +101,9 @@ vibe --help
 - `vibe remember`: Save a global instruction ("memory") always sent to the agent.
 - `vibe ralph`: Run the main PRD processing loop.
 - `vibe history`: Check the status of all PRDs.
-- `vibe setup-api`: Configure API keys for Google Gemini/DSPy.
-- `vibe setup-google`: Configure Google Sheets for cost logging.
 - `vibe cost`: View total estimated cost of LLM usage.
+- `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
+- `vibe-setup google`: Configure Google Sheets for cost logging.
 
 ### Loop Scripts
 

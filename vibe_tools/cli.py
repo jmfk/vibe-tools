@@ -3,7 +3,7 @@ import json
 import logging
 import pathlib
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import List
 
 import click
 
@@ -23,236 +23,12 @@ from vibe_tools.utils import (
     save_config,
     setup_logging,
 )
+from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 PROMPTS_DIR = pathlib.Path("prompts")
 REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 SPECS_DIR = pathlib.Path("specs")
-
-
-def load_config():
-    if CONFIG_FILE.exists():
-        try:
-            return json.loads(CONFIG_FILE.read_text())
-        except Exception:
-            return {}
-    return {}
-
-
-def save_config(config):
-    CONFIG_FILE.write_text(json.dumps(config, indent=2))
-    ensure_gitignore(".vibe_config.json")
-    ensure_gitignore("logs/")
-    ensure_gitignore(".vibe_google_creds.json")
-    ensure_gitignore(".vibe_client_secrets.json")
-    ensure_gitignore(".vibe_authorized_user.json")
-
-
-SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
-    "postgres": {
-        "display": "PostgreSQL",
-        "default_port": 5432,
-        "docker_keywords": ["postgres", "postgresql"],
-        "fields": [
-            {"name": "host", "prompt": "Postgres host", "default": "localhost"},
-            {"name": "port", "prompt": "Postgres port", "type": int, "default": 5432},
-            {"name": "user", "prompt": "Postgres user", "default": "postgres"},
-            {
-                "name": "password",
-                "prompt": "Postgres password",
-                "default": "",
-                "hide_input": True,
-            },
-            {
-                "name": "database",
-                "prompt": "Postgres database name",
-                "default": "postgres",
-            },
-        ],
-    },
-    "redis": {
-        "display": "Redis",
-        "default_port": 6379,
-        "docker_keywords": ["redis"],
-        "fields": [
-            {"name": "host", "prompt": "Redis host", "default": "localhost"},
-            {"name": "port", "prompt": "Redis port", "type": int, "default": 6379},
-            {
-                "name": "password",
-                "prompt": "Redis password (leave blank if none)",
-                "default": "",
-                "hide_input": True,
-            },
-            {
-                "name": "database",
-                "prompt": "Redis database number",
-                "type": int,
-                "default": 0,
-            },
-        ],
-    },
-    "rabbitmq": {
-        "display": "RabbitMQ",
-        "default_port": 5672,
-        "docker_keywords": ["rabbitmq"],
-        "fields": [
-            {"name": "host", "prompt": "RabbitMQ host", "default": "localhost"},
-            {
-                "name": "port",
-                "prompt": "RabbitMQ port",
-                "type": int,
-                "default": 5672,
-            },
-            {"name": "user", "prompt": "RabbitMQ username", "default": "guest"},
-            {
-                "name": "password",
-                "prompt": "RabbitMQ password",
-                "default": "guest",
-                "hide_input": True,
-            },
-            {
-                "name": "virtual_host",
-                "prompt": "RabbitMQ virtual host",
-                "default": "/",
-            },
-        ],
-    },
-    "elasticsearch": {
-        "display": "Elasticsearch",
-        "default_port": 9200,
-        "docker_keywords": ["elasticsearch", "elastic"],
-        "fields": [
-            {"name": "host", "prompt": "Elasticsearch host", "default": "localhost"},
-            {
-                "name": "port",
-                "prompt": "Elasticsearch port",
-                "type": int,
-                "default": 9200,
-            },
-            {"name": "scheme", "prompt": "Elasticsearch scheme", "default": "http"},
-            {"name": "username", "prompt": "Elasticsearch username", "default": ""},
-            {
-                "name": "password",
-                "prompt": "Elasticsearch password",
-                "default": "",
-                "hide_input": True,
-            },
-        ],
-    },
-}
-
-
-def _parse_docker_port_mapping(ports: str, target_port: int) -> Optional[str]:
-    if not ports:
-        return None
-    for candidate in ports.split(","):
-        candidate = candidate.strip()
-        if "->" not in candidate:
-            continue
-        host_part, container_part = candidate.split("->", 1)
-        container_port = container_part.split("/")[0].strip()
-        if not container_port.isdigit():
-            continue
-        if int(container_port) != target_port:
-            continue
-        host_port = host_part.split(":")[-1].strip()
-        if host_port:
-            return host_port
-    return None
-
-
-def detect_docker_service(service_key: str) -> Dict[str, Any]:
-    metadata = SERVICE_DEFINITIONS.get(service_key)
-    if not metadata:
-        return {}
-
-    try:
-        output, _ = run_command(
-            ["docker", "ps", "--format", "{{.Names}}||{{.Image}}||{{.Ports}}"],
-            check=False,
-        )
-    except FileNotFoundError:
-        return {}
-
-    if not output:
-        return {}
-
-    for line in output.splitlines():
-        if not line:
-            continue
-        parts = line.split("||", maxsplit=2)
-        if len(parts) != 3:
-            continue
-        container_name, image, ports = parts
-        searchable = f"{container_name} {image}".lower()
-        if not any(keyword in searchable for keyword in metadata["docker_keywords"]):
-            continue
-        mapped_port = _parse_docker_port_mapping(ports, metadata["default_port"])
-        return {
-            "container_name": container_name,
-            "image": image,
-            "host": "localhost",
-            "port": int(mapped_port)
-            if mapped_port
-            else metadata["default_port"],
-        }
-
-    return {}
-
-
-def prompt_service_config(service_key: str) -> Dict[str, Any]:
-    metadata = SERVICE_DEFINITIONS[service_key]
-    click.echo(f"\n--- {metadata['display']} Setup ---")
-
-    detection = detect_docker_service(service_key)
-    if detection.get("container_name"):
-        click.echo(
-            f"Detected Docker container '{detection['container_name']}' for {metadata['display']} "
-            f"(defaulting to {detection['host']}:{detection['port']})."
-        )
-
-    responses: Dict[str, Any] = {}
-    for field in metadata["fields"]:
-        default_value = detection.get(field["name"])
-        if default_value is None:
-            default_value = field.get("default")
-        prompt_args = {
-            "default": default_value,
-            "hide_input": field.get("hide_input", False),
-            "type": field.get("type", str),
-        }
-        responses[field["name"]] = click.prompt(field["prompt"], **prompt_args)
-
-    if detection.get("container_name"):
-        responses["docker_container_name"] = detection["container_name"]
-
-    return responses
-
-
-def configure_service(service_key: str):
-    metadata = SERVICE_DEFINITIONS[service_key]
-    config = load_config()
-    details = prompt_service_config(service_key)
-    services = config.setdefault("services", {})
-    services[service_key] = details
-    save_config(config)
-    click.echo(f"✅ {metadata['display']} configuration saved to {CONFIG_FILE}")
-
-
-def maybe_init_git():
-    from vibe_tools.utils import is_git_repo
-
-    if not is_git_repo():
-        if click.confirm(
-            "\nNo git repository found. Would you like to initialize one?", default=True
-        ):
-            try:
-                subprocess.run(["git", "init"], check=True)
-                click.echo("✅ Initialized empty Git repository.")
-                ensure_gitignore(".vibe_config.json")
-                ensure_gitignore("logs/")
-            except Exception as e:
-                click.echo(f"❌ Failed to initialize Git repository: {e}")
 
 
 @click.group(invoke_without_command=True)
@@ -363,6 +139,7 @@ def cli(ctx, debug, verbose, agent, caffeinate):
 
         if not prompts_init:
             click.echo("\nRun 'vibe init' to set up templates.")
+            click.echo("Run 'vibe-setup api' to configure LLM access.")
 
         click.echo("\nAvailable commands:")
         for command in sorted(cli.list_commands(ctx)):
@@ -667,7 +444,7 @@ def monitor(ctx, interval):
     run_monitor(agent=ctx.obj["agent"], interval=interval)
 
 
-@cli.command()
+@cli.command(name="review-prd")
 @click.option(
     "--review/--no-review",
     type=bool,
@@ -676,7 +453,8 @@ def monitor(ctx, interval):
 )
 @click.pass_context
 def review_prd(ctx, review):
-    """List specs PRDs, display one, and optionally run the Gemini review prompt."""
+    """[DEPRECATED] List specs PRDs, display one, and optionally run the Gemini review prompt."""
+    click.echo("⚠️ 'review-prd' is deprecated. 'vibe prd' now includes a /review command during creation.")
     ensure_dir(SPECS_DIR)
 
     prd_files = _list_spec_files()
@@ -752,8 +530,47 @@ def _run_agent_review(agent_type: str, prd_path: pathlib.Path, caffeinate: bool)
     help="Type of PRD to write (default: feature).",
 )
 @click.pass_context
+def prd(ctx, title, type):
+    """Interactive PRD writer with slash commands."""
+    from vibe_tools.prd_writer import InteractivePRD
+
+    initial_prompt = title or click.prompt(f"Describe the {type} PRD you'd like to write")
+    
+    # Base specs dir
+    specs_base = pathlib.Path("specs")
+    ensure_dir(specs_base)
+    
+    # Target dir based on type
+    target_specs_dir = specs_base
+    if type in ["infra", "cicd"]:
+        target_specs_dir = specs_base / type
+        ensure_dir(target_specs_dir)
+
+    writer = InteractivePRD(
+        agent_type=ctx.obj.get("agent", "cursor-agent"),
+        specs_dir=target_specs_dir,
+        prd_type=type
+    )
+    writer.run_loop(initial_prompt)
+
+
+@cli.command(name="write-prd")
+@click.option(
+    "--title",
+    "-t",
+    help="Short description of the PRD or feature you want to explore.",
+)
+@click.option(
+    "--type",
+    "-T",
+    type=click.Choice(["feature", "infra", "cicd", "architecture"]),
+    default="feature",
+    help="Type of PRD to write (default: feature).",
+)
+@click.pass_context
 def write_prd(ctx, title, type):
-    """Run the dspy interview loop and generate a markdown PRD."""
+    """[DEPRECATED] Use 'vibe prd' instead. Runs the legacy dspy interview loop."""
+    click.echo("⚠️ 'write-prd' is deprecated. Please use 'vibe prd' for the new interactive experience.")
     from vibe_tools.prd_writer import PRDWriter
 
     initial_prompt = title or click.prompt(f"Describe the {type} PRD you'd like to write")
@@ -830,165 +647,6 @@ def cost():
         click.echo(f"Google Sheets Logging: ENABLED (ID: {sheet_id})")
     else:
         click.echo("Google Sheets Logging: DISABLED")
-
-
-@cli.command()
-def setup_api():
-    """Configure API keys for LLM access."""
-    click.echo("\n--- API Key Configuration ---")
-    config = load_config()
-
-    current_google_key = config.get("google_api_key", "")
-    new_google_key = click.prompt(
-        "Enter Google API Key (for Gemini/DSPy)",
-        default=current_google_key,
-        hide_input=True,
-    )
-
-    if new_google_key:
-        config["google_api_key"] = new_google_key
-        save_config(config)
-        click.echo("✅ Google API Key saved.")
-    else:
-        click.echo("⏩ Google API Key skipped.")
-
-
-@cli.command()
-def setup_google():
-    """Set up Google Sheets connection for cost logging."""
-    click.echo("\n--- Google Sheets Setup ---")
-
-    config = load_config()
-    current_use = config.get("use_google_sheets", False)
-
-    use_google = click.confirm("Enable logging costs to Google Sheets?", default=current_use)
-    config["use_google_sheets"] = use_google
-
-    if not use_google:
-        save_config(config)
-        click.echo("✅ Google Sheets logging disabled.")
-        return
-
-    click.echo("\nTo log costs to Google Sheets, you need to configure access.")
-
-    current_id = config.get("google_sheet_id", "")
-    click.echo("\nThe Sheet ID is the long string in the Google Sheet URL:")
-    click.echo("https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit")
-    new_id = click.prompt("Enter Google Sheet ID (or the Sheet Name)", default=current_id)
-
-    if not new_id:
-        click.echo("Operation cancelled.")
-        return
-
-    config["google_sheet_id"] = new_id
-    save_config(config)
-    click.echo(f"✅ Google Sheet ID saved to {CONFIG_FILE}")
-
-    click.echo("\nChoose authentication method:")
-    click.echo("1. Browser Login (Recommended - uses your Google account)")
-    click.echo("2. Service Account (Requires JSON key file)")
-
-    choice = click.prompt("Select option", type=int, default=1)
-
-    if choice == 1:
-        click.echo("\n--- Browser Login Setup ---")
-        client_secrets_path = pathlib.Path(".vibe_client_secrets.json")
-        authorized_user_path = pathlib.Path(".vibe_authorized_user.json")
-
-        if not client_secrets_path.exists():
-            click.echo("1. Go to Google Cloud Console (https://console.cloud.google.com).")
-            click.echo("2. Create a Project (or select an existing one).")
-            click.echo("3. In 'APIs & Services' > 'Library', enable 'Google Sheets API'.")
-            click.echo(
-                "4. In 'APIs & Services' > 'Google Auth Platform' (or OAuth consent screen):"
-            )
-            click.echo("   - Under 'Branding': Set your App Name and support email.")
-            click.echo(
-                "   - Under 'Audience': Set User Type (External) and add your email to 'Test users'."
-            )
-            click.echo(
-                "   - Under 'Data Access': Add the 'Google Sheets API' scope (../auth/spreadsheets)."
-            )
-            click.echo("5. Under 'Clients': Click 'Create Client' > 'OAuth client ID'.")
-            click.echo("6. Choose 'Desktop App', name it, and download the JSON file.")
-            click.echo(f"7. Rename it to '{client_secrets_path}' and place it in this directory.")
-
-            if not click.confirm("\nHave you placed the file?", default=False):
-                click.echo("Aborted. Please place the file and run again.")
-                return
-
-        if client_secrets_path.exists():
-            try:
-                import gspread
-
-                click.echo("\nAttempting browser login...")
-                # This will open the browser for authentication
-                gspread.oauth(
-                    credentials_filename=str(client_secrets_path),
-                    authorized_user_filename=str(authorized_user_path),
-                )
-                click.echo(f"✅ Browser login successful. Tokens saved to {authorized_user_path}")
-            except Exception as e:
-                click.echo(f"❌ Login failed: {e}")
-        else:
-            click.echo(f"❌ {client_secrets_path} not found.")
-
-    elif choice == 2:
-        click.echo("\n--- Service Account Setup ---")
-        click.echo("1. A Google Cloud Project with the Google Sheets API enabled.")
-        click.echo("2. A Service Account with a JSON key saved as '.vibe_google_creds.json'.")
-        click.echo("3. The Service Account email shared with the Google Sheet (Editor access).")
-
-        creds_path = pathlib.Path(".vibe_google_creds.json")
-        if not creds_path.exists():
-            click.echo(f"\n⚠️  Reminder: Please place your service account key at {creds_path}")
-        else:
-            click.echo(f"✅ Found {creds_path}")
-    else:
-        click.echo("Invalid choice.")
-
-
-@cli.command("setup-api")
-def setup_api():
-    """Configure API keys for LLM services (e.g., Google Gemini)."""
-    click.echo("\n--- API Configuration ---")
-    config = load_config()
-    
-    current_key = config.get("google_api_key", "")
-    if current_key:
-        click.echo(f"Current Google API Key: {'*' * 8}{current_key[-4:] if len(current_key) > 4 else ''}")
-    
-    new_key = click.prompt("Enter Google API Key", default=current_key, hide_input=True)
-    if new_key:
-        config["google_api_key"] = new_key
-        save_config(config)
-        click.echo("✅ Google API Key saved to .vibe_config.json")
-    else:
-        click.echo("No changes made.")
-
-
-@cli.command("setup-postgres")
-def setup_postgres():
-    """Collect PostgreSQL connection details."""
-    configure_service("postgres")
-
-
-@cli.command("setup-redis")
-def setup_redis():
-    """Collect Redis connection details."""
-    configure_service("redis")
-
-
-@cli.command("setup-rabbitmq")
-def setup_rabbitmq():
-    """Collect RabbitMQ connection details."""
-    configure_service("rabbitmq")
-
-
-@cli.command("setup-elasticsearch")
-def setup_elasticsearch():
-    """Collect Elasticsearch connection details."""
-    configure_service("elasticsearch")
 
 
 @cli.command()
