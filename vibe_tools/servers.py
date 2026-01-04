@@ -50,7 +50,7 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
             "MINIO_ROOT_USER": "minioadmin",
             "MINIO_ROOT_PASSWORD": "minioadmin",
         },
-        "command": "server /data --console-address ':9001'",
+        "command": "server /data --console-address :9001",
         "description": "MinIO S3-compatible (Linode-style path addressing)",
     },
     "minio-aws": {
@@ -61,7 +61,7 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
             "MINIO_ROOT_USER": "minioadmin",
             "MINIO_ROOT_PASSWORD": "minioadmin",
         },
-        "command": "server /data --console-address ':9011'",
+        "command": "server /data --console-address :9011",
         "description": "MinIO S3-compatible (AWS-style virtual addressing)",
     },
 }
@@ -167,7 +167,8 @@ def install(service):
     cmd.append(config["image"])
     
     if "command" in config:
-        cmd.extend(config["command"].split())
+        import shlex
+        cmd.extend(shlex.split(config["command"]))
         
     stdout, code = run_command(cmd, check=False)
     if code == 0:
