@@ -18,5 +18,5 @@ logs/
 vibe.log*
 costs/
 .vibe_google_creds.json
-
 .vibe_google_token.json
+

@@ -123,32 +123,29 @@ class CostLogger:
     def _log_to_google(self, row):
         try:
             import gspread
-            from google.oauth2.credentials import Credentials
-            from google.auth.transport.requests import Request
 
-            # Define the scopes
-            SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-
-            creds = None
-            token_path = pathlib.Path(".vibe_google_token.json")
+            authorized_user_path = pathlib.Path(".vibe_authorized_user.json")
             creds_path = pathlib.Path(".vibe_google_creds.json")
 
-            if not creds_path.exists():
+            # 1. Try OAuth2 (Browser Login) first
+            if authorized_user_path.exists():
+                client_secrets_path = pathlib.Path(".vibe_client_secrets.json")
+                if client_secrets_path.exists():
+                    gc = gspread.oauth(
+                        credentials_path=str(client_secrets_path),
+                        authorized_user_filename=str(authorized_user_path),
+                    )
+                else:
+                    # gspread might still work with just authorized_user if already logged in
+                    gc = gspread.oauth(
+                        authorized_user_filename=str(authorized_user_path)
+                    )
+            # 2. Fallback to Service Account
+            elif creds_path.exists():
+                gc = gspread.service_account(filename=str(creds_path))
+            else:
                 return
 
-            if token_path.exists():
-                creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
-                else:
-                    return
-
-                with open(token_path, "w") as token:
-                    token.write(creds.to_json())
-
-            gc = gspread.authorize(creds)
             sh = gc.open_by_key(self.google_sheet_id)
             worksheet = sh.get_worksheet(0)
             worksheet.append_row(row)

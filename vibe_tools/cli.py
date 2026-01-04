@@ -32,6 +32,8 @@ def save_config(config):
     ensure_gitignore(".vibe_config.json")
     ensure_gitignore("logs/")
     ensure_gitignore(".vibe_google_creds.json")
+    ensure_gitignore(".vibe_client_secrets.json")
+    ensure_gitignore(".vibe_authorized_user.json")
 
 
 def maybe_init_git():
@@ -387,21 +389,64 @@ def cost():
 def setup_google():
     """Set up Google Sheets connection for cost logging."""
     click.echo("\n--- Google Sheets Setup ---")
-    click.echo("To log costs to Google Sheets, you need:")
-    click.echo("1. A Google Cloud Project with the Google Sheets API enabled.")
-    click.echo("2. A Service Account with a JSON key saved as '.vibe_google_creds.json'.")
-    click.echo("3. A Google Sheet ID (found in the URL: .../d/ID/edit).")
-    click.echo("4. The Service Account email shared with the Google Sheet (Editor access).")
+    click.echo("To log costs to Google Sheets, you need to configure access.")
 
     config = load_config()
     current_id = config.get("google_sheet_id", "")
 
     new_id = click.prompt("\nEnter Google Sheet ID", default=current_id)
 
-    if new_id:
-        config["google_sheet_id"] = new_id
-        save_config(config)
-        click.echo(f"✅ Google Sheet ID saved to {CONFIG_FILE}")
+    if not new_id:
+        click.echo("Operation cancelled.")
+        return
+
+    config["google_sheet_id"] = new_id
+    save_config(config)
+    click.echo(f"✅ Google Sheet ID saved to {CONFIG_FILE}")
+
+    click.echo("\nChoose authentication method:")
+    click.echo("1. Browser Login (Recommended - uses your Google account)")
+    click.echo("2. Service Account (Requires JSON key file)")
+
+    choice = click.prompt("Select option", type=int, default=1)
+
+    if choice == 1:
+        click.echo("\n--- Browser Login Setup ---")
+        client_secrets_path = pathlib.Path(".vibe_client_secrets.json")
+        authorized_user_path = pathlib.Path(".vibe_authorized_user.json")
+
+        if not client_secrets_path.exists():
+            click.echo("1. Go to Google Cloud Console (https://console.cloud.google.com).")
+            click.echo("2. Create a Project (or select an existing one).")
+            click.echo("3. Enable 'Google Sheets API' for your project.")
+            click.echo("4. Go to 'Credentials' -> 'Create Credentials' -> 'OAuth client ID'.")
+            click.echo("5. Choose 'Desktop App' and download the JSON file.")
+            click.echo(f"6. Rename it to '{client_secrets_path}' and place it in this directory.")
+            
+            if not click.confirm("\nHave you placed the file?", default=False):
+                click.echo("Aborted. Please place the file and run again.")
+                return
+
+        if client_secrets_path.exists():
+            try:
+                import gspread
+                click.echo("\nAttempting browser login...")
+                # This will open the browser for authentication
+                gspread.oauth(
+                    credentials_path=str(client_secrets_path),
+                    authorized_user_filename=str(authorized_user_path)
+                )
+                click.echo(f"✅ Browser login successful. Tokens saved to {authorized_user_path}")
+            except Exception as e:
+                click.echo(f"❌ Login failed: {e}")
+        else:
+            click.echo(f"❌ {client_secrets_path} not found.")
+
+    elif choice == 2:
+        click.echo("\n--- Service Account Setup ---")
+        click.echo("1. A Google Cloud Project with the Google Sheets API enabled.")
+        click.echo("2. A Service Account with a JSON key saved as '.vibe_google_creds.json'.")
+        click.echo("3. The Service Account email shared with the Google Sheet (Editor access).")
 
         creds_path = pathlib.Path(".vibe_google_creds.json")
         if not creds_path.exists():
@@ -411,7 +456,7 @@ def setup_google():
         else:
             click.echo(f"✅ Found {creds_path}")
     else:
-        click.echo("Operation cancelled.")
+        click.echo("Invalid choice.")
 
 
 @cli.command()
