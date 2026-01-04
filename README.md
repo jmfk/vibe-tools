@@ -97,14 +97,30 @@ vibe --help
 ### Key Commands
 
 - `vibe init`: Initialize templates and prompt directories.
-- `vibe write-prd`: Start an interactive interview to generate a new PRD spec.
-- `vibe review-prd`: List and view markdown specs with optional agentic review.
-- `vibe remember`: Save a global instruction ("memory") always sent to the agent.
-- `vibe ralph`: Run the main PRD processing loop.
+- `vibe status`: Display a comprehensive system status report (costs, PRDs, servers, logs).
+- `vibe prd`: Interactive PRD writer with slash commands (preferred).
+- `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
+- `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.
+- `vibe memory`: Save a global instruction ("memory") always sent to the agent.
+- `vibe remember`: Alias for `vibe memory`.
 - `vibe history`: Check the status of all PRDs.
 - `vibe cost`: View total estimated cost of LLM usage.
+- `vibe ralph`: Run the main PRD processing loop.
+- `vibe write-prd`: [DEPRECATED] Use `vibe prd` instead.
+- `vibe review-prd`: [DEPRECATED] List and view markdown specs with optional agentic review.
 - `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
 - `vibe-setup google`: Configure Google Sheets for cost logging.
+
+### Local Infrastructure
+
+Manage local development servers via Docker using `vibe-servers`:
+
+- `vibe-servers list`: List supported servers (Postgres, Redis, RabbitMQ, Elasticsearch, MailHog) and their status.
+- `vibe-servers install <service>`: Pull and run the Docker container for a service and save connection details.
+- `vibe-servers start/stop <service>`: Start or stop one or all servers.
+- `vibe-servers logs <service>`: View logs for one or all servers.
+- `vibe-servers status`: Show detailed status and port mappings.
+- `vibe-servers remove <service>`: Remove a service container.
 
 ### Loop Scripts
 

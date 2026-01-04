@@ -673,6 +673,14 @@ def history():
 
 
 @cli.command()
+def status():
+    """Display a comprehensive system status report."""
+    from vibe_tools.utils import get_vibe_status_report
+
+    click.echo(get_vibe_status_report())
+
+
+@cli.command()
 def cost():
     """Display the total estimated cost of LLM usage for this project."""
     total = get_total_cost()
