@@ -548,9 +548,29 @@ def google():
 
 @setup_cli.command()
 def deps():
-    """Install required Python dependencies."""
+    """Install required Python and Frontend dependencies."""
     click.echo("\n--- Installing Dependencies ---")
-    run_command(["pip", "install", "-e", "."], caffeinate=True)
+    
+    # 1. Always install essential tools for the loop
+    click.echo("Installing essential tools (ruff, pytest, mypy)...")
+    run_command(["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"], caffeinate=True)
+
+    # 2. Project-specific Python dependencies
+    if pathlib.Path("pyproject.toml").exists():
+        click.echo("Found pyproject.toml. Installing in editable mode...")
+        run_command(["pip", "install", "-e", "."], caffeinate=True)
+    elif pathlib.Path("backend/requirements.txt").exists():
+        click.echo("Found backend/requirements.txt. Installing...")
+        run_command(["pip", "install", "-r", "backend/requirements.txt"], caffeinate=True)
+    elif pathlib.Path("requirements.txt").exists():
+        click.echo("Found requirements.txt. Installing...")
+        run_command(["pip", "install", "-r", "requirements.txt"], caffeinate=True)
+
+    # 3. Frontend dependencies
+    if pathlib.Path("frontend/package.json").exists():
+        click.echo("Found frontend/package.json. Installing npm dependencies...")
+        run_command(["npm", "install", "--prefix", "frontend"], caffeinate=True)
+
     click.echo("✅ Dependencies installed.")
 
 
