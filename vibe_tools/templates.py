@@ -97,6 +97,54 @@ TASK:
 If everything looks correct, respond with: <review>PASSED</review>
 Otherwise, list the issues and do NOT include the pass tag.
 """,
+    "prd_generation_prompt.txt": """You are an expert product writer who turns discussions into concise PRDs.
+
+The user has supplied this information:
+
+- Title: {title}
+- Summary: {summary}
+- Context: {context}
+- Question/Answer Log:
+{qa}
+
+Produce a Markdown PRD with the following structure and cover all sections:
+
+# {title}
+
+## Overview
+- Problem statement: what we are solving
+- User benefits
+- Success criteria
+
+## Feature Inspiration
+- Describe the main feature, flow, or capability.
+- Mention data inputs/outputs if relevant.
+
+## Frontend
+- Key screens, components, and interactions.
+- UX constraints, accessibility, or performance notes.
+
+## Backend
+- APIs, data models, validation, and integrations.
+- Scaling, data consistency, or reliability concerns.
+
+## Infrastructure
+- Deployment targets, monitoring, storage, or ops work.
+- Dependencies on databases, queues, caches, or third parties.
+
+## Architecture and Constraints
+- High-level architecture diagrams or service boundaries.
+- Security, compliance, or platform guardrails.
+
+## Success Criteria
+- Measurable outcomes (e.g., metrics, KPIs).
+- How we’ll know it is ready to ship.
+
+## Acceptance Tests
+- List scenarios or checks that prove the feature works.
+- Include happy path plus key edge cases when possible.
+
+Always keep the output limited to Markdown. If the QA log is empty, use \"No follow-up questions were needed.\"""",
     "test_fix_prompt.txt": """The codebase currently has test or linting failures. Please fix them.
 
 ERROR OUTPUT:
