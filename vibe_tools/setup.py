@@ -13,6 +13,7 @@ from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_gitignore,
     get_google_api_key,
+    get_project_name,
     load_config,
     run_command,
     save_config,
@@ -23,7 +24,7 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "postgres": {
         "display": "PostgreSQL",
         "default_port": 5432,
-        "docker_keywords": ["postgres", "postgresql"],
+        "docker_keywords": ["postgres", "postgresql", "pgvector", "pg15", "pg16", "pg17"],
         "fields": [
             {"name": "host", "prompt": "Postgres host", "default": "localhost"},
             {"name": "port", "prompt": "Postgres port", "type": int, "default": 5432},
@@ -31,13 +32,13 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             {
                 "name": "password",
                 "prompt": "Postgres password",
-                "default": "",
+                "default": "postgres",
                 "hide_input": True,
             },
             {
                 "name": "database",
                 "prompt": "Postgres database name",
-                "default": "postgres",
+                "default": get_project_name(),
             },
         ],
     },
@@ -110,6 +111,16 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "mailhog": {
+        "display": "MailHog",
+        "default_port": 1025,
+        "docker_keywords": ["mailhog"],
+        "fields": [
+            {"name": "host", "prompt": "MailHog host", "default": "localhost"},
+            {"name": "port", "prompt": "MailHog SMTP port", "type": int, "default": 1025},
+            {"name": "web_port", "prompt": "MailHog Web port", "type": int, "default": 8025},
+        ],
+    },
 }
 
 
@@ -148,6 +159,7 @@ def detect_docker_service(service_key: str) -> Dict[str, Any]:
     if not output:
         return {}
 
+    candidates = []
     for line in output.splitlines():
         if not line:
             continue
@@ -155,20 +167,29 @@ def detect_docker_service(service_key: str) -> Dict[str, Any]:
         if len(parts) != 3:
             continue
         container_name, image, ports = parts
-        searchable = f"{container_name} {image}".lower()
-        if not any(keyword in searchable for keyword in metadata["docker_keywords"]):
-            continue
         mapped_port = _parse_docker_port_mapping(ports, metadata["default_port"])
-        return {
+        
+        info = {
             "container_name": container_name,
             "image": image,
             "host": "localhost",
-            "port": int(mapped_port)
-            if mapped_port
-            else metadata["default_port"],
+            "port": int(mapped_port) if mapped_port else metadata["default_port"],
+            "mapped": bool(mapped_port)
         }
+        
+        # Check for keyword match
+        searchable = f"{container_name} {image}".lower()
+        if any(keyword in searchable for keyword in metadata["docker_keywords"]):
+            # Strong match: keyword + port mapping
+            if info["mapped"]:
+                return info
+            # Decent match: keyword match only
+            candidates.append(info)
+        elif info["mapped"]:
+            # Fallback match: port mapping matches service's default_port
+            candidates.append(info)
 
-    return {}
+    return candidates[0] if candidates else {}
 
 
 def prompt_service_config(service_key: str) -> Dict[str, Any]:
@@ -435,6 +456,12 @@ def rabbitmq():
 def elasticsearch():
     """Collect Elasticsearch connection details."""
     configure_service("elasticsearch")
+
+
+@setup_cli.command()
+def mailhog():
+    """Collect MailHog connection details."""
+    configure_service("mailhog")
 
 
 if __name__ == "__main__":
