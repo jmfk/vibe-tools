@@ -16,7 +16,6 @@ PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
 LOGS_DIR = pathlib.Path("logs")
 COSTS_DIR = pathlib.Path("costs")
-SPECIAL_PRD_SUBDIRS = ["infra", "cicd"]
 INSTRUCTIONS_DIR = pathlib.Path("instructions")
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
@@ -410,13 +409,8 @@ def ensure_gitignore(entry: str):
 
 
 def collect_prd_files():
-    """Returns all PRD files, including special infra/CI-CD subdirectories."""
-    prd_files = list(PRD_DIR.glob("prd_*.yaml"))
-    for subdir in SPECIAL_PRD_SUBDIRS:
-        subdir_path = PRD_DIR / subdir
-        if subdir_path.exists():
-            prd_files.extend(subdir_path.glob("prd_*.yaml"))
-    return sorted(prd_files, key=lambda path: path.name)
+    """Returns all PRD files in PRD_DIR starting with prd_."""
+    return sorted(list(PRD_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
 
 
 def get_instructions_context():

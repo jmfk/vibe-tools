@@ -27,6 +27,8 @@ BASE_PROMPT_TEMPLATE = PROMPTS_DIR / "ralph_base_prompt.txt"
 REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 ARCHITECTURE = pathlib.Path("prds/architecture.yaml")
 OVERVIEW = pathlib.Path("prds/project_overview.yaml")
+INFRA = pathlib.Path("prds/infrastructure.yaml")
+CICD = pathlib.Path("prds/cicd.yaml")
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
@@ -146,8 +148,8 @@ def get_pending_prds_and_estimates(agent_type, config):
         ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
     )
     overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
-    infra_content = get_latest_context_file("infra_*.yaml")
-    cicd_content = get_latest_context_file("cicd_*.yaml")
+    infra_content = INFRA.read_text() if INFRA.exists() else "NOT FOUND"
+    cicd_content = CICD.read_text() if CICD.exists() else "NOT FOUND"
     instructions_content = get_instructions_context()
 
     for prd_file in prds:
@@ -221,8 +223,6 @@ def run_ralph_agent(
     agent_type,
     prompt_text,
     prd_path,
-    architecture_path,
-    overview_path,
     backend_dir,
     frontend_dir,
     caffeinate=False,
@@ -230,16 +230,20 @@ def run_ralph_agent(
     """
     Calls the configured agent with the combined prompt and context.
     """
-    infra_content = get_latest_context_file("infra_*.yaml")
-    cicd_content = get_latest_context_file("cicd_*.yaml")
     instructions_content = get_instructions_context()
+    architecture_content = (
+        ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    )
+    overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
+    infra_content = INFRA.read_text() if INFRA.exists() else "NOT FOUND"
+    cicd_content = CICD.read_text() if CICD.exists() else "NOT FOUND"
 
     combined_prompt = f"""{prompt_text}
 
 CONTEXT FILES:
 - PRD: {prd_path}
-- Architecture: {architecture_path}
-- Project Overview: {overview_path}
+- Architecture: {architecture_content}
+- Project Overview: {overview_content}
 - Infrastructure: {infra_content}
 - CI/CD: {cicd_content}
 
@@ -526,8 +530,6 @@ def ralph_loop(
                         agent,
                         prompt_for_iteration,
                         prd_file,
-                        ARCHITECTURE if ARCHITECTURE.exists() else "NOT FOUND",
-                        OVERVIEW if OVERVIEW.exists() else "NOT FOUND",
                         BACKEND_ROOT,
                         FRONTEND_ROOT,
                         caffeinate=caffeinate,
