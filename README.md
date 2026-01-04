@@ -19,7 +19,40 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
   "use_google_sheets": true,
   "google_sheet_id": "YOUR_SHEET_ID_HERE",
   "verbose": false,
-  "default_budget": 5.0
+  "default_budget": 5.0,
+  "services": {
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "",
+      "database": "app_db",
+      "docker_container_name": "postgres-local"
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "",
+      "database": 0,
+      "docker_container_name": "redis-local"
+    },
+    "rabbitmq": {
+      "host": "localhost",
+      "port": 5672,
+      "user": "guest",
+      "password": "guest",
+      "virtual_host": "/",
+      "docker_container_name": "rabbitmq-local"
+    },
+    "elasticsearch": {
+      "host": "localhost",
+      "port": 9200,
+      "scheme": "http",
+      "username": "",
+      "password": "",
+      "docker_container_name": "es-local"
+    }
+  }
 }
 ```
 
@@ -29,6 +62,18 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 - `google_sheet_id`: The ID of the Google Sheet to log to.
 - `verbose`: Whether to output detailed logs (like prompts) to the terminal.
 - `default_budget`: Max budget in USD for automated runs (can be overridden per run).
+- `services`: Connection details for supporting servers (Postgres, Redis, RabbitMQ, Elasticsearch, etc.). Entries under this map store host, port, credentials, and any detected Docker container so every project command can reuse a shared backend.
+
+### Service Configuration
+
+Use the new setup commands to record connection details for the supporting services your projects rely on:
+
+- `vibe setup-postgres`
+- `vibe setup-redis`
+- `vibe setup-rabbitmq`
+- `vibe setup-elasticsearch`
+
+Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `.vibe_config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
 
 ## Installation
 
