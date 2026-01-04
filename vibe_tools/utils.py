@@ -451,3 +451,87 @@ def get_latest_context_file(pattern):
     # Sort by name (which includes the ## prefix)
     latest = sorted(files)[-1]
     return latest.read_text()
+
+
+def get_vibe_status_report():
+    """Generates a comprehensive status report of the system."""
+    import click
+    from vibe_tools.cost import get_total_cost
+    from vibe_tools.ralph import load_state
+    from vibe_tools.servers import get_server_configs, get_container_status
+
+    report = []
+    report.append(click.style("\n=== VIBE SYSTEM STATUS ===", fg="cyan", bold=True))
+
+    # 1. Project Info
+    project_name = get_project_name()
+    report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name}")
+    report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
+
+    # 2. PRD Progress
+    report.append(click.style("\nPRD PROGRESS:", fg="yellow", bold=True))
+    state = load_state()
+    completed = state.get("completed_prds", [])
+    started = state.get("started_prds", [])
+    all_prds = collect_prd_files()
+
+    if not all_prds:
+        report.append("  No PRDs found in prds/")
+    else:
+        for prd in all_prds:
+            name = prd.stem
+            if name in completed:
+                status = click.style("✅ DONE", fg="green")
+            elif name in started:
+                status = click.style("⏳ IN_PROGRESS", fg="blue")
+            else:
+                status = click.style("⚪ PENDING", fg="white", dim=True)
+            report.append(f"  - {name:<40} {status}")
+
+    # 3. Costs
+    total_cost = get_total_cost()
+    report.append(click.style("\nCOSTS:", fg="yellow", bold=True))
+    report.append(f"  Total Estimated Project Cost: {click.style(f'${total_cost:.4f} USD', fg='green')}")
+    report.append(f"  Detailed log: {COSTS_DIR}/usage.csv")
+
+    # 4. Services
+    report.append(click.style("\nSERVICES:", fg="yellow", bold=True))
+    configs = get_server_configs()
+    if not configs:
+        report.append("  No services configured.")
+    else:
+        for name, config in configs.items():
+            status = get_container_status(config["container_name"])
+            if status == "running":
+                status_display = click.style("✅ Running", fg="green")
+            elif status == "exited":
+                status_display = click.style("🛑 Stopped", fg="red")
+            else:
+                status_display = click.style("⚪ Not Installed", fg="white", dim=True)
+            
+            ports = ", ".join([f"{v}" for k, v in config.get("ports", {}).items()])
+            report.append(f"  - {name:<15} {status_display:<20} {ports}")
+
+    # 5. Configuration & Environment
+    report.append(click.style("\nCONFIGURATION:", fg="yellow", bold=True))
+    config = load_config()
+    report.append(f"  Caffeinate:   {'ON' if config.get('caffeinate') else 'OFF'}")
+    report.append(f"  Verbose:      {'ON' if config.get('verbose') else 'OFF'}")
+    report.append(f"  Google Sheets: {'ENABLED' if config.get('use_google_sheets') and config.get('google_sheet_id') else 'DISABLED'}")
+    
+    google_api_key = get_google_api_key()
+    report.append(f"  Google API Key: {'SET' if google_api_key else click.style('NOT SET', fg='red')}")
+
+    # 6. Recent Errors (from logs)
+    report.append(click.style("\nRECENT LOGS:", fg="yellow", bold=True))
+    log_files = sorted(LOGS_DIR.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
+    if not log_files:
+        report.append("  No logs found.")
+    else:
+        for log in log_files:
+            size = log.stat().st_size / 1024
+            mtime = datetime.datetime.fromtimestamp(log.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            report.append(f"  - {log.name:<40} {size:>6.1f} KB  {mtime}")
+
+    report.append("")
+    return "\n".join(report)
