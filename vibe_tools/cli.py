@@ -138,6 +138,12 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         prompts_init = pathlib.Path("prompts").exists()
         click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
 
+        coverage_targets = config.get("coverage_targets", {"backend": 85, "frontend": 85, "infra": 85})
+        click.echo("  Coverage Targets:")
+        click.echo(f"    Backend:    {coverage_targets.get('backend', 85)}%")
+        click.echo(f"    Frontend:   {coverage_targets.get('frontend', 85)}%")
+        click.echo(f"    Infra:      {coverage_targets.get('infra', 85)}%")
+
         specs_dir = (
             pathlib.Path("specs") if pathlib.Path("specs").exists() else pathlib.Path("spec")
         )
@@ -195,10 +201,22 @@ def init():
     help="Enable/disable running tests.",
 )
 @click.option(
+    "--coverage/--no-coverage",
+    is_flag=True,
+    default=None,
+    help="Enable/disable coverage enforcement.",
+)
+@click.option(
     "--auto-merge/--no-auto-merge",
     is_flag=True,
     default=None,
     help="Enable/disable automatic merge.",
+)
+@click.option(
+    "--fast/--no-fast",
+    is_flag=True,
+    default=None,
+    help="Only run tests for changed files (more efficient).",
 )
 @click.option(
     "--budget",
@@ -207,7 +225,7 @@ def init():
     help="Max budget in USD for this run. System will pause if reached.",
 )
 @click.pass_context
-def ralph(ctx, review, tests, auto_merge, budget):
+def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
     """Run the Ralph loop for processing PRDs."""
     maybe_init_git()
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -218,15 +236,19 @@ def ralph(ctx, review, tests, auto_merge, budget):
         review = config.get("review", False)
     if tests is None:
         tests = config.get("tests", False)
+    if coverage is None:
+        coverage = config.get("coverage", False)
     if auto_merge is None:
         auto_merge = config.get("auto_merge", False)
+    if fast is None:
+        fast = config.get("fast", False)
     if budget is None:
         budget = config.get("budget")
     if budget is None:
         budget = ctx.obj.get("default_budget", 5.0)
 
     # If everything is still False (and we have no config file), prompt the user
-    if not CONFIG_FILE.exists() and not any([review, tests, auto_merge]):
+    if not CONFIG_FILE.exists() and not any([review, tests, coverage, auto_merge]):
         click.echo("\n⚠️ Ralph is not yet configured for quality gates.")
 
         tests = click.confirm(
@@ -235,6 +257,20 @@ def ralph(ctx, review, tests, auto_merge, budget):
         )
         if tests:
             click.echo("✅ Tests enabled.")
+
+            fast = click.confirm(
+                "Enable Fast Mode (only run tests for changed files)?",
+                default=True,
+            )
+            if fast:
+                click.echo("✅ Fast mode enabled.")
+
+            coverage = click.confirm(
+                "Enable Coverage Enforcement (ensure 85%+ coverage)?",
+                default=True,
+            )
+            if coverage:
+                click.echo("✅ Coverage Enforcement enabled.")
 
         review = click.confirm(
             "Enable Agentic Review (agent verifies changes against PRD)?",
@@ -280,11 +316,18 @@ def ralph(ctx, review, tests, auto_merge, budget):
                     "ralph": {
                         "review": review,
                         "tests": tests,
+                        "coverage": coverage,
                         "auto_merge": auto_merge,
+                        "fast": fast,
                     },
                     "default_budget": budget,
                     "caffeinate": caffeinate,
                     "verbose": verbose,
+                    "coverage_targets": {
+                        "backend": 85,
+                        "frontend": 85,
+                        "infra": 85,
+                    },
                 }
             )
             click.echo("✅ Configuration saved.")
@@ -293,6 +336,8 @@ def ralph(ctx, review, tests, auto_merge, budget):
     click.echo(f"Agent:      {agent}")
     click.echo(f"Review:     {'ON' if review else 'OFF'}")
     click.echo(f"Tests:      {'ON' if tests else 'OFF'}")
+    click.echo(f"Coverage:   {'ON' if coverage else 'OFF'}")
+    click.echo(f"Fast Mode:  {'ON' if fast else 'OFF'}")
     click.echo(f"Auto-merge: {'ON' if auto_merge else 'OFF'}")
     click.echo(f"Max Budget: ${budget:.2f} USD")
 
@@ -337,19 +382,31 @@ def ralph(ctx, review, tests, auto_merge, budget):
         agent=agent,
         review=review,
         tests=tests,
+        coverage=coverage,
         auto_merge=auto_merge,
         caffeinate=ctx.obj.get("caffeinate", False),
         budget=budget,
+        fast=fast,
     )
 
 
 @cli.command()
+@click.option(
+    "--fast/--no-fast",
+    is_flag=True,
+    default=False,
+    help="Only run tests for changed files (more efficient).",
+)
 @click.pass_context
-def test_fix(ctx):
+def test_fix(ctx, fast):
     """Run the test and fix loop."""
     from vibe_tools.fixer import run_test_fix_loop
 
-    run_test_fix_loop(agent=ctx.obj["agent"], caffeinate=ctx.obj.get("caffeinate", False))
+    run_test_fix_loop(
+        agent=ctx.obj["agent"],
+        caffeinate=ctx.obj.get("caffeinate", False),
+        fast=fast,
+    )
 
 
 @cli.command()

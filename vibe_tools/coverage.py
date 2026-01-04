@@ -11,10 +11,10 @@ MAX_ITERATIONS = 5
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 
-def get_coverage_report(caffeinate=False):
+def get_coverage_report(component=None, caffeinate=False):
     """Runs coverage and returns the full report and total coverage percentage."""
     tester = ProjectTester()
-    return tester.get_coverage_report(caffeinate=caffeinate)
+    return tester.get_coverage_report(component=component, caffeinate=caffeinate)
 
 
 def improve_coverage_loop(agent="cursor-agent", caffeinate=False):

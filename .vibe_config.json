@@ -1,0 +1,18 @@
+{
+  "ralph": {
+    "review": true,
+    "tests": true,
+    "coverage": true,
+    "auto_merge": false
+  },
+  "caffeinate": true,
+  "google_sheet_id": "vibe-tools",
+  "use_google_sheets": false,
+  "verbose": false,
+  "default_budget": 5.0,
+  "coverage_targets": {
+    "backend": 85,
+    "frontend": 85,
+    "infra": 85
+  }
+}
