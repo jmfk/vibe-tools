@@ -657,13 +657,57 @@ def env(python_version):
     click.echo(f"Setting local python version to {venv_name}...")
     run_command(["pyenv", "local", venv_name])
 
-    # 7. Install dependencies
-    click.echo("Installing dependencies in managed environment...")
-    # We use python -m pip to ensure we use the venv's pip
-    run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
-    run_command(["python", "-m", "pip", "install", "-e", "."])
+    # 7. Initialize Project Infrastructure
+    click.echo("\n--- Initializing Project Infrastructure ---")
+    from vibe_tools.templates import TEMPLATES
+    from vibe_tools.utils import ensure_dir
 
-    # 8. Record in config
+    # Create vibe_data directory
+    vibe_data = pathlib.Path("vibe_data")
+    if not vibe_data.exists():
+        click.echo(f"Creating storage directory: {vibe_data}")
+        vibe_data.mkdir(parents=True, exist_ok=True)
+        ensure_gitignore("vibe_data/*")
+
+    # Initialize __init__.py files
+    for path in [
+        pathlib.Path("backend"),
+        pathlib.Path("backend/tests"),
+    ]:
+        if path.exists():
+            init_file = path / "__init__.py"
+            if not init_file.exists():
+                click.echo(f"Initializing {init_file}")
+                init_file.write_text(TEMPLATES["empty_init"])
+
+    # Initialize conftest.py
+    backend_tests = pathlib.Path("backend/tests")
+    if backend_tests.exists():
+        conftest = backend_tests / "conftest.py"
+        if not conftest.exists():
+            click.echo(f"Initializing {conftest}")
+            conftest.write_text(TEMPLATES["conftest.py"])
+
+    # Offer to create pyproject.toml
+    if not pathlib.Path("pyproject.toml").exists():
+        if click.confirm(
+            "\n'pyproject.toml' is missing. Create a default one?", default=True
+        ):
+            click.echo("Creating default pyproject.toml...")
+            content = TEMPLATES["pyproject.toml"].replace(
+                "{project_name}", get_project_name()
+            )
+            pathlib.Path("pyproject.toml").write_text(content)
+
+    # 8. Install dependencies
+    click.echo("\nInstalling dependencies...")
+    # Call the deps command directly
+    try:
+        deps.callback()
+    except Exception as e:
+        click.echo(f"⚠️ Warning: Failed to install dependencies: {e}")
+
+    # 9. Record in config
     config = load_config()
     config["env"] = {
         "type": "pyenv-virtualenv",

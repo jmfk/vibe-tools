@@ -369,7 +369,16 @@ def check_env_health() -> bool:
         logger.warning(f"❌ Missing essential tools: {', '.join(missing_tools)}")
         return False
 
-    # 3. If managed env is configured, check if we're in it
+    # 3. Check for package structure
+    if pathlib.Path("backend").exists() and not (pathlib.Path("backend") / "__init__.py").exists():
+        logger.warning("❌ Missing 'backend/__init__.py'.")
+        return False
+        
+    if not pathlib.Path("vibe_data").exists():
+        logger.warning("❌ Missing local data directory 'vibe_data/'.")
+        return False
+
+    # 4. If managed env is configured, check if we're in it
     if env_config:
         venv_name = env_config.get("venv_name")
         if venv_name:
@@ -514,7 +523,13 @@ def sync_env_file():
         env_lines.append(f"GOOGLE_API_KEY={google_key}")
         env_lines.append("")
 
-    # 4. S3 / Object Store
+    # 4. Local Storage
+    vibe_data = pathlib.Path("vibe_data")
+    if vibe_data.exists():
+        env_lines.append(f"VIBE_DATA_DIR={vibe_data.absolute()}")
+        env_lines.append("")
+
+    # 5. S3 / Object Store
     s3_linode = services.get("s3-linode")
     s3_aws = services.get("s3-aws")
     s3 = s3_linode or s3_aws
