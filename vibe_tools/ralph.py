@@ -11,7 +11,6 @@ from vibe_tools.utils import (
     STATE_FILE,
     ensure_dir,
     get_agent_command,
-    is_merged,
     logger,
     run_agent,
     run_command,
@@ -32,7 +31,16 @@ COMPLETION_PROMISE = "<promise>DONE</promise>"
 def save_state(prd_name, iteration, output, context, phase="build"):
     """Saves the current state to a file."""
     # Load existing state to preserve completed_prds
-    state = load_state() or {"completed_prds": [], "active_task": None}
+    state = load_state() or {
+        "completed_prds": [],
+        "started_prds": [],
+        "active_task": None,
+    }
+
+    if prd_name not in state.get("started_prds", []):
+        if "started_prds" not in state:
+            state["started_prds"] = []
+        state["started_prds"].append(prd_name)
 
     state["active_task"] = {
         "prd_name": prd_name,
@@ -46,9 +54,15 @@ def save_state(prd_name, iteration, output, context, phase="build"):
 
 def mark_prd_completed(prd_name):
     """Marks a PRD as completed in the state file."""
-    state = load_state() or {"completed_prds": [], "active_task": None}
+    state = load_state() or {
+        "completed_prds": [],
+        "started_prds": [],
+        "active_task": None,
+    }
     if prd_name not in state["completed_prds"]:
         state["completed_prds"].append(prd_name)
+    if prd_name in state.get("started_prds", []):
+        state["started_prds"].remove(prd_name)
     state["active_task"] = None
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
@@ -62,6 +76,9 @@ def load_state():
             if "prd_name" in data and "active_task" not in data:
                 return {
                     "completed_prds": [],
+                    "started_prds": (
+                        [data.get("prd_name")] if data.get("prd_name") else []
+                    ),
                     "active_task": {
                         "prd_name": data.get("prd_name"),
                         "iteration": data.get("iteration", 1),
@@ -73,13 +90,15 @@ def load_state():
             # Ensure new structure
             if "completed_prds" not in data:
                 data["completed_prds"] = []
+            if "started_prds" not in data:
+                data["started_prds"] = []
             if "active_task" not in data:
                 data["active_task"] = None
             return data
         except Exception as e:
             logger.warning(f"Failed to load state file: {e}")
             return None
-    return {"completed_prds": [], "active_task": None}
+    return {"completed_prds": [], "started_prds": [], "active_task": None}
 
 
 def clear_active_state():
@@ -126,15 +145,11 @@ def get_pending_prds_and_estimates(agent_type, config):
 
     for prd_file in prds:
         project_name = prd_file.stem
-        branch_name = f"feature/{project_name}"
 
         if resume_prd and project_name != resume_prd:
             continue
 
         if project_name in completed_prds:
-            continue
-
-        if is_merged(branch_name):
             continue
 
         # Simulate the prompt construction
@@ -401,22 +416,11 @@ def ralph_loop(
 
             logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
-            if is_merged(branch_name):
+            # Check if branch already exists in our state
+            if project_name in state.get("started_prds", []):
                 logger.info(
-                    f"Branch {branch_name} already merged into main. Skipping..."
+                    f"PRD {project_name} already started. Switching to branch {branch_name}..."
                 )
-                # Also mark as completed if it's merged but not in state
-                if project_name not in completed_prds:
-                    mark_prd_completed(project_name)
-                continue
-
-            # Check if branch exists
-            _, check_branch = run_command(
-                ["git", "rev-parse", "--verify", branch_name], check=False
-            )
-
-            if check_branch == 0:
-                logger.info(f"Branch {branch_name} already exists. Switching to it...")
                 run_command(["git", "checkout", branch_name])
             else:
                 logger.info(f"Creating and switching to branch: {branch_name}")

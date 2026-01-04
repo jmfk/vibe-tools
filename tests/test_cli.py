@@ -63,13 +63,11 @@ def test_history_command(runner):
         mock_file.stem = "prd_01_test"
         mock_prd_dir.glob.return_value = [mock_file]
 
-        with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": []}):
-            with patch("vibe_tools.cli.is_merged", return_value=False):
-                with patch("vibe_tools.cli.run_command", return_value=("", 1)):
-                    result = runner.invoke(cli, ["history"])
-                    assert result.exit_code == 0
-                    assert "prd_01_test" in result.output
-                    assert "PENDING" in result.output
+        with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": [], "started_prds": []}):
+            result = runner.invoke(cli, ["history"])
+            assert result.exit_code == 0
+            assert "prd_01_test" in result.output
+            assert "PENDING" in result.output
 
 
 def test_rerun_command_found(runner, tmp_path):
@@ -79,12 +77,15 @@ def test_rerun_command_found(runner, tmp_path):
     prd_file.write_text("content")
 
     with patch("vibe_tools.cli.PRD_DIR", prds_dir):
-        with patch("vibe_tools.cli.STATE_FILE", tmp_path / "state.json"):
+        state_file = tmp_path / "state.json"
+        with patch("vibe_tools.cli.STATE_FILE", state_file):
             with patch("vibe_tools.cli.run_command") as mock_run:
                 mock_run.return_value = ("main", 0)  # branch check
-                with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": []}):
+                with patch("vibe_tools.ralph.load_state", return_value={"completed_prds": ["prd_01_test"], "started_prds": ["prd_01_test"]}):
                     result = runner.invoke(cli, ["rerun", "01"])
                     assert "Rerunning PRD: prd_01_test" in result.output
+                    assert "Removed from completed PRDs list." in result.output
+                    assert "Removed from started PRDs list." in result.output
 
 
 def test_monitor_command(runner):

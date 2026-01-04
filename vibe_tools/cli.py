@@ -15,7 +15,6 @@ from vibe_tools.utils import (
     enable_console_debug,
     ensure_dir,
     ensure_gitignore,
-    is_merged,
     run_command,
     setup_logging,
 )
@@ -413,22 +412,17 @@ def history():
 
     state = load_state()
     completed_prds = state.get("completed_prds", [])
+    started_prds = state.get("started_prds", [])
 
     for prd_file in prds:
         project_name = prd_file.stem
-        branch_name = f"feature/{project_name}"
 
-        if is_merged(branch_name) or project_name in completed_prds:
+        if project_name in completed_prds:
             status = "✅ DONE"
+        elif project_name in started_prds:
+            status = "⏳ IN_PROGRESS"
         else:
-            # Check if branch exists
-            _, check_branch = run_command(
-                ["git", "rev-parse", "--verify", branch_name], check=False
-            )
-            if check_branch == 0:
-                status = "⏳ IN_PROGRESS"
-            else:
-                status = "⚪️ PENDING"
+            status = "⚪️ PENDING"
 
         click.echo(f"{project_name:<40} {status:<15}")
 
@@ -601,6 +595,12 @@ def rerun(prd_id):
         state["completed_prds"].remove(project_name)
         state_changed = True
         click.echo("✅ Removed from completed PRDs list.")
+
+    # Check started prds
+    if project_name in state.get("started_prds", []):
+        state["started_prds"].remove(project_name)
+        state_changed = True
+        click.echo("✅ Removed from started PRDs list.")
 
     if state_changed:
         STATE_FILE.write_text(json.dumps(state, indent=2))
