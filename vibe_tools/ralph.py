@@ -274,7 +274,9 @@ def run_coverage_logic(config, caffeinate=False):
     """Checks if coverage targets are met for all components."""
     logger.info("Checking coverage targets...")
     tester = ProjectTester()
-    targets = config.get("coverage_targets", {"backend": 85, "frontend": 85, "infra": 85})
+    targets = config.get(
+        "coverage_targets", {"backend": 85, "frontend": 85, "infra": 85}
+    )
 
     results = []
     all_passed = True
@@ -291,14 +293,20 @@ def run_coverage_logic(config, caffeinate=False):
 
     for component in components:
         target = targets.get(component, 85)
-        report, current = tester.get_coverage_report(component=component, caffeinate=caffeinate)
+        report, current = tester.get_coverage_report(
+            component=component, caffeinate=caffeinate
+        )
         combined_report += f"\n--- COVERAGE REPORT: {component.upper()} ---\n{report}\n"
 
         if current < target:
             all_passed = False
-            results.append(f"❌ {component.capitalize()}: {current}% (Target: {target}%)")
+            results.append(
+                f"❌ {component.capitalize()}: {current}% (Target: {target}%)"
+            )
         else:
-            results.append(f"✅ {component.capitalize()}: {current}% (Target: {target}%)")
+            results.append(
+                f"✅ {component.capitalize()}: {current}% (Target: {target}%)"
+            )
 
     status_message = "\n".join(results)
     return combined_report, status_message, all_passed
