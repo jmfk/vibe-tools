@@ -425,14 +425,21 @@ def get_changed_files(base_branch="main"):
 
 
 def is_dirty():
-    """Checks if the repository has uncommitted changes."""
+    """Checks if the repository has uncommitted changes or untracked files."""
     if not is_git_repo():
         return False
+    # Check for tracked changes
     _, code = run_command(["git", "diff", "--quiet"], check=False)
     if code != 0:
         return True
     _, code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
-    return code != 0
+    if code != 0:
+        return True
+    # Check for untracked files
+    stdout, code = run_command(
+        ["git", "ls-files", "--others", "--exclude-standard"], check=False
+    )
+    return bool(stdout.strip())
 
 
 def ensure_gitignore(entry: str):
