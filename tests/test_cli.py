@@ -1,9 +1,30 @@
 from unittest.mock import MagicMock, patch
 
+import json
+
 import pytest
 from click.testing import CliRunner
 
 from vibe_tools.cli import cli, load_config, save_config
+
+
+SERVICE_TEST_DETECTIONS = {
+    "postgres": {"host": "127.0.0.1", "port": 15432, "container_name": "postgres-docker"},
+    "redis": {"host": "127.0.0.1", "port": 16379, "container_name": "redis-docker"},
+    "rabbitmq": {"host": "127.0.0.1", "port": 5673, "container_name": "rabbitmq-docker"},
+    "elasticsearch": {"host": "127.0.0.1", "port": 9201, "container_name": "es-docker"},
+}
+
+SERVICE_COMMANDS = [
+    ("setup-postgres", "postgres"),
+    ("setup-redis", "redis"),
+    ("setup-rabbitmq", "rabbitmq"),
+    ("setup-elasticsearch", "elasticsearch"),
+]
+
+
+def _prompt_return_default(*args, default=None, **kwargs):
+    return default
 
 
 @pytest.fixture
@@ -109,3 +130,22 @@ def test_test_fix_command(runner):
         result = runner.invoke(cli, ["test-fix"])
         assert result.exit_code == 0
         mock_loop.assert_called_once()
+
+
+@pytest.mark.parametrize("command, service_key", SERVICE_COMMANDS)
+def test_setup_service_commands_save_config(runner, tmp_path, command, service_key):
+    config_file = tmp_path / ".vibe_config.json"
+    detection = SERVICE_TEST_DETECTIONS[service_key]
+
+    with patch("vibe_tools.cli.CONFIG_FILE", config_file):
+        with patch("vibe_tools.cli.detect_docker_service", return_value=detection):
+            with patch("vibe_tools.cli.click.prompt", side_effect=_prompt_return_default):
+                with patch("vibe_tools.cli.ensure_gitignore"):
+                    result = runner.invoke(cli, [command])
+                    assert result.exit_code == 0
+
+    content = json.loads(config_file.read_text())
+    service_settings = content["services"][service_key]
+    assert service_settings["host"] == detection["host"]
+    assert service_settings["port"] == detection["port"]
+    assert service_settings["docker_container_name"] == detection["container_name"]

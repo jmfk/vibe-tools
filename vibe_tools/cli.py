@@ -3,6 +3,7 @@ import json
 import logging
 import pathlib
 import subprocess
+from typing import Any, Dict, Optional
 
 import click
 
@@ -38,6 +39,197 @@ def save_config(config):
     ensure_gitignore(".vibe_google_creds.json")
     ensure_gitignore(".vibe_client_secrets.json")
     ensure_gitignore(".vibe_authorized_user.json")
+
+
+SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "postgres": {
+        "display": "PostgreSQL",
+        "default_port": 5432,
+        "docker_keywords": ["postgres", "postgresql"],
+        "fields": [
+            {"name": "host", "prompt": "Postgres host", "default": "localhost"},
+            {"name": "port", "prompt": "Postgres port", "type": int, "default": 5432},
+            {"name": "user", "prompt": "Postgres user", "default": "postgres"},
+            {
+                "name": "password",
+                "prompt": "Postgres password",
+                "default": "",
+                "hide_input": True,
+            },
+            {
+                "name": "database",
+                "prompt": "Postgres database name",
+                "default": "postgres",
+            },
+        ],
+    },
+    "redis": {
+        "display": "Redis",
+        "default_port": 6379,
+        "docker_keywords": ["redis"],
+        "fields": [
+            {"name": "host", "prompt": "Redis host", "default": "localhost"},
+            {"name": "port", "prompt": "Redis port", "type": int, "default": 6379},
+            {
+                "name": "password",
+                "prompt": "Redis password (leave blank if none)",
+                "default": "",
+                "hide_input": True,
+            },
+            {
+                "name": "database",
+                "prompt": "Redis database number",
+                "type": int,
+                "default": 0,
+            },
+        ],
+    },
+    "rabbitmq": {
+        "display": "RabbitMQ",
+        "default_port": 5672,
+        "docker_keywords": ["rabbitmq"],
+        "fields": [
+            {"name": "host", "prompt": "RabbitMQ host", "default": "localhost"},
+            {
+                "name": "port",
+                "prompt": "RabbitMQ port",
+                "type": int,
+                "default": 5672,
+            },
+            {"name": "user", "prompt": "RabbitMQ username", "default": "guest"},
+            {
+                "name": "password",
+                "prompt": "RabbitMQ password",
+                "default": "guest",
+                "hide_input": True,
+            },
+            {
+                "name": "virtual_host",
+                "prompt": "RabbitMQ virtual host",
+                "default": "/",
+            },
+        ],
+    },
+    "elasticsearch": {
+        "display": "Elasticsearch",
+        "default_port": 9200,
+        "docker_keywords": ["elasticsearch", "elastic"],
+        "fields": [
+            {"name": "host", "prompt": "Elasticsearch host", "default": "localhost"},
+            {
+                "name": "port",
+                "prompt": "Elasticsearch port",
+                "type": int,
+                "default": 9200,
+            },
+            {"name": "scheme", "prompt": "Elasticsearch scheme", "default": "http"},
+            {"name": "username", "prompt": "Elasticsearch username", "default": ""},
+            {
+                "name": "password",
+                "prompt": "Elasticsearch password",
+                "default": "",
+                "hide_input": True,
+            },
+        ],
+    },
+}
+
+
+def _parse_docker_port_mapping(ports: str, target_port: int) -> Optional[str]:
+    if not ports:
+        return None
+    for candidate in ports.split(","):
+        candidate = candidate.strip()
+        if "->" not in candidate:
+            continue
+        host_part, container_part = candidate.split("->", 1)
+        container_port = container_part.split("/")[0].strip()
+        if not container_port.isdigit():
+            continue
+        if int(container_port) != target_port:
+            continue
+        host_port = host_part.split(":")[-1].strip()
+        if host_port:
+            return host_port
+    return None
+
+
+def detect_docker_service(service_key: str) -> Dict[str, Any]:
+    metadata = SERVICE_DEFINITIONS.get(service_key)
+    if not metadata:
+        return {}
+
+    try:
+        output, _ = run_command(
+            ["docker", "ps", "--format", "{{.Names}}||{{.Image}}||{{.Ports}}"],
+            check=False,
+        )
+    except FileNotFoundError:
+        return {}
+
+    if not output:
+        return {}
+
+    for line in output.splitlines():
+        if not line:
+            continue
+        parts = line.split("||", maxsplit=2)
+        if len(parts) != 3:
+            continue
+        container_name, image, ports = parts
+        searchable = f"{container_name} {image}".lower()
+        if not any(keyword in searchable for keyword in metadata["docker_keywords"]):
+            continue
+        mapped_port = _parse_docker_port_mapping(ports, metadata["default_port"])
+        return {
+            "container_name": container_name,
+            "image": image,
+            "host": "localhost",
+            "port": int(mapped_port)
+            if mapped_port
+            else metadata["default_port"],
+        }
+
+    return {}
+
+
+def prompt_service_config(service_key: str) -> Dict[str, Any]:
+    metadata = SERVICE_DEFINITIONS[service_key]
+    click.echo(f"\n--- {metadata['display']} Setup ---")
+
+    detection = detect_docker_service(service_key)
+    if detection.get("container_name"):
+        click.echo(
+            f"Detected Docker container '{detection['container_name']}' for {metadata['display']} "
+            f"(defaulting to {detection['host']}:{detection['port']})."
+        )
+
+    responses: Dict[str, Any] = {}
+    for field in metadata["fields"]:
+        default_value = detection.get(field["name"])
+        if default_value is None:
+            default_value = field.get("default")
+        prompt_args = {
+            "default": default_value,
+            "hide_input": field.get("hide_input", False),
+            "type": field.get("type", str),
+        }
+        responses[field["name"]] = click.prompt(field["prompt"], **prompt_args)
+
+    if detection.get("container_name"):
+        responses["docker_container_name"] = detection["container_name"]
+
+    return responses
+
+
+def configure_service(service_key: str):
+    metadata = SERVICE_DEFINITIONS[service_key]
+    config = load_config()
+    details = prompt_service_config(service_key)
+    services = config.setdefault("services", {})
+    services[service_key] = details
+    save_config(config)
+    click.echo(f"✅ {metadata['display']} configuration saved to {CONFIG_FILE}")
 
 
 def maybe_init_git():
@@ -143,6 +335,17 @@ def cli(ctx, debug, verbose, agent, caffeinate):
         click.echo(f"    Backend:    {coverage_targets.get('backend', 85)}%")
         click.echo(f"    Frontend:   {coverage_targets.get('frontend', 85)}%")
         click.echo(f"    Infra:      {coverage_targets.get('infra', 85)}%")
+
+        services_config = config.get("services", {})
+        if services_config:
+            click.echo("  Services:")
+            for service_key in sorted(services_config):
+                service_data = services_config[service_key]
+                metadata = SERVICE_DEFINITIONS.get(service_key, {})
+                display_name = metadata.get("display", service_key.capitalize())
+                host = service_data.get("host", "localhost")
+                port = service_data.get("port", "n/a")
+                click.echo(f"    {display_name}: {host}:{port}")
 
         specs_dir = (
             pathlib.Path("specs") if pathlib.Path("specs").exists() else pathlib.Path("spec")
@@ -594,6 +797,30 @@ def setup_google():
             click.echo(f"✅ Found {creds_path}")
     else:
         click.echo("Invalid choice.")
+
+
+@cli.command("setup-postgres")
+def setup_postgres():
+    """Collect PostgreSQL connection details."""
+    configure_service("postgres")
+
+
+@cli.command("setup-redis")
+def setup_redis():
+    """Collect Redis connection details."""
+    configure_service("redis")
+
+
+@cli.command("setup-rabbitmq")
+def setup_rabbitmq():
+    """Collect RabbitMQ connection details."""
+    configure_service("rabbitmq")
+
+
+@cli.command("setup-elasticsearch")
+def setup_elasticsearch():
+    """Collect Elasticsearch connection details."""
+    configure_service("elasticsearch")
 
 
 @cli.command()
