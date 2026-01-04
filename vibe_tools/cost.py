@@ -132,7 +132,7 @@ class CostLogger:
                 client_secrets_path = pathlib.Path(".vibe_client_secrets.json")
                 if client_secrets_path.exists():
                     gc = gspread.oauth(
-                        credentials_path=str(client_secrets_path),
+                        client_secret_filename=str(client_secrets_path),
                         authorized_user_filename=str(authorized_user_path),
                     )
                 else:

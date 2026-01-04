@@ -437,7 +437,7 @@ def setup_google():
                 click.echo("\nAttempting browser login...")
                 # This will open the browser for authentication
                 gspread.oauth(
-                    credentials_path=str(client_secrets_path),
+                    client_secret_filename=str(client_secrets_path),
                     authorized_user_filename=str(authorized_user_path)
                 )
                 click.echo(f"✅ Browser login successful. Tokens saved to {authorized_user_path}")
