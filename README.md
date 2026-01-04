@@ -98,6 +98,7 @@ vibe --help
 
 - `vibe init`: Initialize templates and prompt directories.
 - `vibe status`: Display a comprehensive system status report (costs, PRDs, servers, logs).
+- `vibe docs`: Display the project documentation (README.md).
 - `vibe prd`: Interactive PRD writer with slash commands (preferred).
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
 - `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.

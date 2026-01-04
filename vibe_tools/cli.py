@@ -681,6 +681,18 @@ def status():
 
 
 @cli.command()
+def docs():
+    """Display the project documentation (README.md)."""
+    readme_path = pathlib.Path("README.md")
+    if not readme_path.exists():
+        click.echo("README.md not found.")
+        return
+
+    content = readme_path.read_text()
+    click.echo_via_pager(content)
+
+
+@cli.command()
 def cost():
     """Display the total estimated cost of LLM usage for this project."""
     total = get_total_cost()
