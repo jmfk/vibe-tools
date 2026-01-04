@@ -5,14 +5,17 @@ import sys
 import pathlib
 import json
 import logging
+import atexit
 from logging.handlers import RotatingFileHandler
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
 LOGS_DIR = pathlib.Path("logs")
+COSTS_DIR = pathlib.Path("costs")
 
-# Ensure logs directory exists
+# Ensure directories exist
 LOGS_DIR.mkdir(exist_ok=True)
+COSTS_DIR.mkdir(exist_ok=True)
 
 # Generate timestamped log filename
 _timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -33,6 +36,24 @@ stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(stream_handler)
+
+# Flag to track if an agent was called
+_agent_called = False
+
+
+def _cleanup_log():
+    """Deletes the log file if no agent was called or if it's empty."""
+    try:
+        if not _agent_called or (LOG_FILE.exists() and LOG_FILE.stat().st_size == 0):
+            # Close handler to release file lock
+            file_handler.close()
+            if LOG_FILE.exists():
+                LOG_FILE.unlink()
+    except Exception:
+        pass
+
+
+atexit.register(_cleanup_log)
 
 
 def enable_console_debug():
@@ -82,6 +103,8 @@ def run_command(cmd, check=True, caffeinate=False):
 
 def run_agent(cmd, caffeinate=False):
     """Runs an agent with a live progress indicator."""
+    global _agent_called
+    _agent_called = True
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
     
