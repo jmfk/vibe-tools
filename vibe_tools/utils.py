@@ -254,6 +254,49 @@ def is_git_repo():
         return False
 
 
+def get_changed_files(base_branch="main"):
+    """Returns files changed relative to the base branch."""
+    if not is_git_repo():
+        return []
+
+    stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
+    if code != 0:
+        merge_base = base_branch
+    else:
+        merge_base = stdout.strip() or base_branch
+
+    stdout, code = run_command(["git", "diff", "--name-only", merge_base], check=False)
+    if code != 0:
+        changed = []
+    else:
+        changed = stdout.strip().splitlines() if stdout.strip() else []
+
+    stdout, code = run_command(["git", "ls-files", "--others", "--exclude-standard"], check=False)
+    if code == 0 and stdout.strip():
+        changed.extend(stdout.strip().splitlines())
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for path in changed:
+        if path and path not in seen:
+            seen.add(path)
+            unique.append(path)
+
+    return unique
+
+
+def is_dirty():
+    """Checks if the repository has uncommitted changes."""
+    if not is_git_repo():
+        return False
+    _, code = run_command(["git", "diff", "--quiet"], check=False)
+    if code != 0:
+        return True
+    _, code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
+    return code != 0
+
+
 def ensure_gitignore(entry: str):
     """Ensures that a specific entry exists in .gitignore."""
     gitignore = pathlib.Path(".gitignore")

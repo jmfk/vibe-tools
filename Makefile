@@ -81,7 +81,7 @@ migrate:
 	aerich upgrade
 
 test:
-	pytest -v
+	PYTHONPATH=. pytest -v
 
 coverage:
 	pytest --cov=src --cov=vibe_tools --cov-report=term-missing tests/
