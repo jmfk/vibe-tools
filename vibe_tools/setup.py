@@ -121,6 +121,24 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             {"name": "web_port", "prompt": "MailHog Web port", "type": int, "default": 8025},
         ],
     },
+    "s3": {
+        "display": "S3 Object Store (MinIO)",
+        "default_port": 9000,
+        "docker_keywords": ["minio"],
+        "fields": [
+            {"name": "host", "prompt": "S3 host", "default": "localhost"},
+            {"name": "port", "prompt": "S3 port", "type": int, "default": 9000},
+            {"name": "access_key", "prompt": "S3 Access Key", "default": "minioadmin"},
+            {
+                "name": "secret_key",
+                "prompt": "S3 Secret Key",
+                "default": "minioadmin",
+                "hide_input": True,
+            },
+            {"name": "region", "prompt": "S3 Region", "default": "us-east-1"},
+            {"name": "console_port", "prompt": "S3 Console port", "type": int, "default": 9001},
+        ],
+    },
 }
 
 
@@ -462,6 +480,12 @@ def elasticsearch():
 def mailhog():
     """Collect MailHog connection details."""
     configure_service("mailhog")
+
+
+@setup_cli.command()
+def s3():
+    """Collect S3 Object Store connection details."""
+    configure_service("s3")
 
 
 if __name__ == "__main__":

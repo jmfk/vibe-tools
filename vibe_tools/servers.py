@@ -42,6 +42,17 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "ports": {"1025/tcp": 1025, "8025/tcp": 8025},
         "description": "MailHog email testing tool (SMTP: 1025, Web: 8025)",
     },
+    "minio": {
+        "image": "minio/minio",
+        "container_name": "vibe-minio",
+        "ports": {"9000/tcp": 9000, "9001/tcp": 9001},
+        "env": {
+            "MINIO_ROOT_USER": "minioadmin",
+            "MINIO_ROOT_PASSWORD": "minioadmin",
+        },
+        "command": "server /data --console-address ':9001'",
+        "description": "MinIO S3-compatible object store (API: 9000, Console: 9001)",
+    },
 }
 
 def get_server_configs() -> Dict[str, Any]:
@@ -123,6 +134,9 @@ def install(service):
         
     cmd.append(config["image"])
     
+    if "command" in config:
+        cmd.extend(config["command"].split())
+        
     stdout, code = run_command(cmd, check=False)
     if code == 0:
         click.echo(f"✅ {service} installed and started successfully.")
@@ -148,8 +162,20 @@ def install(service):
                 service_details["user"] = config["env"]["POSTGRES_USER"]
             if "POSTGRES_PASSWORD" in config["env"]:
                 service_details["password"] = config["env"]["POSTGRES_PASSWORD"]
+            if "MINIO_ROOT_USER" in config["env"]:
+                service_details["access_key"] = config["env"]["MINIO_ROOT_USER"]
+            if "MINIO_ROOT_PASSWORD" in config["env"]:
+                service_details["secret_key"] = config["env"]["MINIO_ROOT_PASSWORD"]
                 
-        services[service] = service_details
+        # Handle service specific key names
+        save_key = service
+        if service == "minio":
+            save_key = "s3"
+            service_details["region"] = "us-east-1"
+            if "9001/tcp" in config.get("ports", {}):
+                service_details["console_port"] = config["ports"]["9001/tcp"]
+                
+        services[save_key] = service_details
         save_config(global_config, global_scope=True)
         click.echo(f"✅ Saved connection details to global config.")
     else:
