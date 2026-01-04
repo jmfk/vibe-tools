@@ -684,9 +684,13 @@ def status():
 def docs():
     """Display the project documentation (README.md)."""
     from vibe_tools.templates import TEMPLATES
+    from rich.console import Console
+    from rich.markdown import Markdown
 
     content = TEMPLATES.get("README", "Documentation not found in templates.")
-    click.echo_via_pager(content)
+    console = Console()
+    md = Markdown(content)
+    console.print(md)
 
 
 @cli.command()
