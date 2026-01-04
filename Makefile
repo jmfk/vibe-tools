@@ -26,7 +26,7 @@ help:
 	@echo "  make cleanup      - Kill stale pytest and agent processes"
 
 test-backend:
-	pytest -v
+	PYTHONPATH=. pytest -v tests/
 
 test-frontend:
 	cd frontend && npx vitest --run
