@@ -5,7 +5,7 @@ import os
 import pathlib
 from typing import Optional
 
-from vibe_tools.utils import LOGS_DIR
+from vibe_tools.utils import COSTS_DIR
 
 # Pricing per 1M tokens (USD)
 # Source: Standard LLM pricing as of late 2024 / early 2025
@@ -19,7 +19,8 @@ PRICING = {
 }
 
 DEFAULT_PRICING = {"input": 1.0, "output": 1.0}  # Fallback
-USAGE_LOG_CSV = LOGS_DIR / "vibe_usage_log.csv"
+USAGE_LOG_CSV = COSTS_DIR / "usage.csv"
+
 
 class CostLogger:
     def __init__(self, config_data: dict):
@@ -33,7 +34,9 @@ class CostLogger:
             return 0
         return len(text) // 4
 
-    def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> float:
         pricing = PRICING.get(model, DEFAULT_PRICING)
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
@@ -78,11 +81,19 @@ class CostLogger:
         with open(USAGE_LOG_CSV, mode="a", newline="") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow([
-                    "Timestamp", "PRD", "Phase", "Iteration", 
-                    "Model", "Input Tokens", "Output Tokens", 
-                    "Cost (USD)", "Purpose"
-                ])
+                writer.writerow(
+                    [
+                        "Timestamp",
+                        "PRD",
+                        "Phase",
+                        "Iteration",
+                        "Model",
+                        "Input Tokens",
+                        "Output Tokens",
+                        "Cost (USD)",
+                        "Purpose",
+                    ]
+                )
             writer.writerow(row)
 
     def _log_to_google(self, row):
@@ -92,8 +103,8 @@ class CostLogger:
             from google.auth.transport.requests import Request
 
             # Define the scopes
-            SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-            
+            SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
             creds = None
             token_path = pathlib.Path(".vibe_google_token.json")
             creds_path = pathlib.Path(".vibe_google_creds.json")
@@ -103,14 +114,14 @@ class CostLogger:
 
             if token_path.exists():
                 creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-            
+
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 else:
                     return
-                
-                with open(token_path, 'w') as token:
+
+                with open(token_path, "w") as token:
                     token.write(creds.to_json())
 
             gc = gspread.authorize(creds)
@@ -119,12 +130,14 @@ class CostLogger:
             worksheet.append_row(row)
         except Exception as e:
             from vibe_tools.utils import logger
+
             logger.error(f"Failed to log to Google Sheets: {e}")
+
 
 def get_total_cost():
     if not USAGE_LOG_CSV.exists():
         return 0.0
-    
+
     total = 0.0
     try:
         with open(USAGE_LOG_CSV, mode="r") as f:
