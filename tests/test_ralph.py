@@ -101,11 +101,14 @@ def test_ralph_loop_resuming(tmp_path):
                 with patch("vibe_tools.ralph.run_command") as mock_run:
                     with patch("vibe_tools.ralph.run_tests_logic") as mock_tests:
                         with patch("vibe_tools.ralph.mark_prd_completed") as mock_completed:
-                            mock_run.return_value = ("", 0)
-                            mock_tests.return_value = ("passed", True, [])
-                            
-                            ralph_loop(tests=True, review=False)
-                            
-                            # Should have started at iteration 2 and phase test
-                            mock_tests.assert_called_once()
-                            mock_completed.assert_called_once_with("prd_01_test")
+                            with patch("vibe_tools.ralph.run_agent") as mock_agent:
+                                mock_run.return_value = ("", 0)
+                                mock_tests.return_value = ("passed", True, [])
+                                mock_agent.return_value = ("committed", 0)
+                                
+                                ralph_loop(tests=True, review=False)
+                                
+                                # Should have started at iteration 2 and phase test
+                                mock_tests.assert_called_once()
+                                mock_completed.assert_called_once_with("prd_01_test")
+                                mock_agent.assert_called_once()

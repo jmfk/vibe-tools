@@ -5,11 +5,13 @@ from vibe_tools.coverage import improve_coverage_loop
 def test_improve_coverage_loop_already_100():
     with patch("vibe_tools.coverage.get_coverage_report") as mock_report:
         with patch("vibe_tools.coverage.PROMPTS_DIR") as mock_prompts_dir:
-            mock_prompts_dir.exists.return_value = True
-            mock_report.return_value = ("report", 100)
-            
-            improve_coverage_loop()
-            mock_report.assert_called_once()
+            with patch("vibe_tools.coverage.run_agent") as mock_agent:
+                mock_prompts_dir.exists.return_value = True
+                mock_report.return_value = ("report", 100)
+                
+                improve_coverage_loop()
+                mock_report.assert_called_once()
+                mock_agent.assert_not_called()
 
 def test_improve_coverage_loop_improvement():
     with patch("vibe_tools.coverage.get_coverage_report") as mock_report:
