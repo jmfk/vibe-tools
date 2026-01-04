@@ -3,7 +3,7 @@ import json
 import logging
 import pathlib
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import click
 
@@ -16,11 +16,16 @@ from vibe_tools.utils import (
     enable_console_debug,
     ensure_dir,
     ensure_gitignore,
+    get_agent_command,
+    run_agent,
     run_command,
     setup_logging,
 )
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
+PROMPTS_DIR = pathlib.Path("prompts")
+REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
+SPECS_DIR = pathlib.Path("specs")
 
 
 def load_config():
@@ -374,6 +379,13 @@ def init():
     prompts_dir = pathlib.Path("prompts")
     ensure_dir(prompts_dir)
 
+    # Create new directories for instructions and specs
+    from vibe_tools.utils import INSTRUCTIONS_DIR
+    ensure_dir(INSTRUCTIONS_DIR)
+    ensure_dir(pathlib.Path("specs") / "infra")
+    ensure_dir(pathlib.Path("specs") / "cicd")
+    ensure_dir(pathlib.Path("prds"))
+
     for filename, content in TEMPLATES.items():
         if filename in ["dummy_backend_test", "dummy_frontend_test"]:
             continue
@@ -655,19 +667,110 @@ def monitor(ctx, interval):
 
 @cli.command()
 @click.option(
+    "--review/--no-review",
+    type=bool,
+    default=True,
+    help="Run the agentic review prompt after showing the PRD.",
+)
+@click.pass_context
+def review_prd(ctx, review):
+    """List specs PRDs, display one, and optionally run the Gemini review prompt."""
+    ensure_dir(SPECS_DIR)
+
+    prd_files = _list_spec_files()
+    if not prd_files:
+        click.echo("No PRDs found in specs/.")
+        return
+
+    click.echo("Available specs:")
+    for idx, prd_path in enumerate(prd_files, start=1):
+        rel_path = prd_path.relative_to(SPECS_DIR)
+        click.echo(f"  {idx}. {rel_path}")
+
+    selected = _prompt_for_prd(prd_files)
+    click.echo(f"\n--- {selected.name} ---")
+    click.echo(selected.read_text())
+
+    if review:
+        _run_agent_review(
+            agent_type=ctx.obj.get("agent", "cursor-agent"),
+            prd_path=selected,
+            caffeinate=ctx.obj.get("caffeinate", False),
+        )
+
+
+def _list_spec_files() -> List[pathlib.Path]:
+    if not SPECS_DIR.exists():
+        return []
+    # Search recursively for markdown files
+    return sorted(SPECS_DIR.rglob("*.md"))
+
+
+def _prompt_for_prd(prd_paths: List[pathlib.Path]) -> pathlib.Path:
+    default = len(prd_paths)
+    while True:
+        selection = click.prompt(
+            "Select a PRD to view",
+            type=int,
+            default=default,
+        )
+        if 1 <= selection <= len(prd_paths):
+            return prd_paths[selection - 1]
+        click.echo("Invalid selection. Please choose a number from the list.")
+
+
+def _run_agent_review(agent_type: str, prd_path: pathlib.Path, caffeinate: bool) -> None:
+    if not REVIEW_PROMPT_TEMPLATE.exists():
+        click.echo("Review prompt template missing; skipping agentic review.")
+        return
+
+    prompt_text = REVIEW_PROMPT_TEMPLATE.read_text().format(prd_path=prd_path)
+    command = get_agent_command(agent_type, prompt_text)
+    output, exit_code = run_agent(command, caffeinate=caffeinate)
+
+    if exit_code != 0:
+        click.echo(f"Agentic review failed (exit {exit_code}).")
+        return
+
+    click.echo("\n--- Agentic Review Output ---")
+    click.echo(output)
+
+
+@cli.command()
+@click.option(
     "--title",
     "-t",
     help="Short description of the PRD or feature you want to explore.",
 )
+@click.option(
+    "--type",
+    "-T",
+    type=click.Choice(["feature", "infra", "cicd", "architecture"]),
+    default="feature",
+    help="Type of PRD to write (default: feature).",
+)
 @click.pass_context
-def write_prd(ctx, title):
+def write_prd(ctx, title, type):
     """Run the dspy interview loop and generate a markdown PRD."""
     from vibe_tools.prd_writer import PRDWriter
 
-    initial_prompt = title or click.prompt("Describe the PRD you'd like to write")
-    ensure_dir(pathlib.Path("specs"))
+    initial_prompt = title or click.prompt(f"Describe the {type} PRD you'd like to write")
+    
+    # Base specs dir
+    specs_base = pathlib.Path("specs")
+    ensure_dir(specs_base)
+    
+    # Target dir based on type
+    target_specs_dir = specs_base
+    if type in ["infra", "cicd"]:
+        target_specs_dir = specs_base / type
+        ensure_dir(target_specs_dir)
 
-    writer = PRDWriter(agent_type=ctx.obj.get("agent", "cursor-agent"))
+    writer = PRDWriter(
+        agent_type=ctx.obj.get("agent", "cursor-agent"),
+        specs_dir=target_specs_dir,
+        prd_type=type
+    )
     writer.create_prd(initial_prompt)
 
 
@@ -678,7 +781,8 @@ def history():
         click.echo(f"PRD directory {PRD_DIR} not found.")
         return
 
-    prds = sorted(PRD_DIR.glob("prd_*.yaml"))
+    from vibe_tools.utils import collect_prd_files
+    prds = collect_prd_files()
     if not prds:
         click.echo("No PRD files found.")
         return
@@ -693,11 +797,15 @@ def history():
     started_prds = state.get("started_prds", [])
 
     for prd_file in prds:
-        project_name = prd_file.stem
+        # Show relative path for infra/cicd
+        try:
+            project_name = prd_file.relative_to(PRD_DIR).with_suffix("").as_posix()
+        except ValueError:
+            project_name = prd_file.stem
 
-        if project_name in completed_prds:
+        if prd_file.stem in completed_prds:
             status = "✅ DONE"
-        elif project_name in started_prds:
+        elif prd_file.stem in started_prds:
             status = "⏳ IN_PROGRESS"
         else:
             status = "⚪️ PENDING"
@@ -847,6 +955,64 @@ def cleanup():
     from vibe_tools.utils import cleanup_stale_processes
 
     cleanup_stale_processes()
+
+
+@cli.command()
+@click.argument("text", required=False)
+@click.option("--list", "-l", "list_memories", is_flag=True, help="List all memories.")
+@click.option("--delete", "-d", "delete_idx", type=int, help="Delete a memory by its index.")
+@click.option("--clear", is_flag=True, help="Clear all memories.")
+def memory(text, list_memories, delete_idx, clear):
+    """Save a 'memory' (global instruction) that is always sent to the agent."""
+    from vibe_tools.utils import INSTRUCTIONS_DIR
+    ensure_dir(INSTRUCTIONS_DIR)
+
+    if clear:
+        if click.confirm("Are you sure you want to clear all memories?", default=False):
+            for f in INSTRUCTIONS_DIR.glob("*"):
+                if f.is_file():
+                    f.unlink()
+            click.echo("✅ All memories cleared.")
+        return
+
+    if delete_idx is not None:
+        files = sorted(INSTRUCTIONS_DIR.glob("*"))
+        if 1 <= delete_idx <= len(files):
+            target = files[delete_idx - 1]
+            if click.confirm(f"Delete memory: {target.name}?", default=True):
+                target.unlink()
+                click.echo(f"✅ Deleted {target.name}.")
+        else:
+            click.echo(f"❌ Invalid index: {delete_idx}")
+        return
+
+    if list_memories:
+        files = sorted(INSTRUCTIONS_DIR.glob("*"))
+        if not files:
+            click.echo("No memories saved.")
+        else:
+            click.echo("Current memories:")
+            for idx, f in enumerate(files, start=1):
+                content = f.read_text().strip()
+                # Show first line or truncate
+                preview = content.splitlines()[0] if content else "(empty)"
+                if len(preview) > 60:
+                    preview = preview[:57] + "..."
+                click.echo(f"  {idx}. {f.name}: {preview}")
+        return
+
+    if not text:
+        text = click.prompt("Enter the instruction to remember")
+
+    if text:
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # slugify text for filename
+        slug = "".join(c if c.isalnum() else "_" for c in text[:30]).lower()
+        filename = f"memory_{timestamp}_{slug}.txt"
+        filepath = INSTRUCTIONS_DIR / filename
+        filepath.write_text(text)
+        click.echo(f"✅ Memory saved to {filepath}")
 
 
 @cli.command()
