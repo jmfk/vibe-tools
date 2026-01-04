@@ -67,7 +67,7 @@ def test_ralph_loop_with_test_failure(tmp_path):
     prds_dir.mkdir()
     (prds_dir / "prd_01_test.yaml").write_text("prd content")
 
-    with patch("vibe_tools.ralph.PRD_DIR", prds_dir):
+    with patch("vibe_tools.utils.PRD_DIR", prds_dir):
         with patch("vibe_tools.ralph.PROMPTS_DIR", prompts_dir):
             with patch("vibe_tools.ralph.run_command") as mock_run:
                 with patch("vibe_tools.ralph.run_ralph_agent") as mock_agent:
@@ -106,7 +106,7 @@ def test_ralph_loop_resuming(tmp_path):
     }
     state_file.write_text(json.dumps(state_data))
 
-    with patch("vibe_tools.ralph.PRD_DIR", prds_dir):
+    with patch("vibe_tools.utils.PRD_DIR", prds_dir):
         with patch("vibe_tools.ralph.PROMPTS_DIR", prompts_dir):
             with patch("vibe_tools.ralph.STATE_FILE", state_file):
                 with patch("vibe_tools.ralph.run_command") as mock_run:

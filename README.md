@@ -99,6 +99,7 @@ vibe --help
 - `vibe remember`: Save a global instruction ("memory") always sent to the agent.
 - `vibe ralph`: Run the main PRD processing loop.
 - `vibe history`: Check the status of all PRDs.
+- `vibe setup-api`: Configure API keys for Google Gemini/DSPy.
 - `vibe setup-google`: Configure Google Sheets for cost logging.
 - `vibe cost`: View total estimated cost of LLM usage.
 

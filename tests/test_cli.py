@@ -236,3 +236,15 @@ def test_memory_list_command(runner, tmp_path, monkeypatch):
     assert "Current memories:" in result.output
     assert "memory_1.txt" in result.output
     assert "Instruction 1" in result.output
+
+
+def test_setup_api_command(runner, tmp_path):
+    config_file = tmp_path / ".vibe_config.json"
+    with patch("vibe_tools.cli.CONFIG_FILE", config_file):
+        with patch("vibe_tools.cli.click.prompt", return_value="fake-google-key"):
+            result = runner.invoke(cli, ["setup-api"])
+            assert result.exit_code == 0
+            assert "Google API Key saved" in result.output
+
+    content = json.loads(config_file.read_text())
+    assert content["google_api_key"] == "fake-google-key"

@@ -1,5 +1,6 @@
 import atexit
 import datetime
+import json
 import logging
 import os
 import pathlib
@@ -8,7 +9,7 @@ import subprocess
 import sys
 import time
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
@@ -16,10 +17,30 @@ LOGS_DIR = pathlib.Path("logs")
 COSTS_DIR = pathlib.Path("costs")
 SPECIAL_PRD_SUBDIRS = ["infra", "cicd"]
 INSTRUCTIONS_DIR = pathlib.Path("instructions")
+CONFIG_FILE = pathlib.Path(".vibe_config.json")
 
 # Ensure directories exist
 LOGS_DIR.mkdir(exist_ok=True)
 COSTS_DIR.mkdir(exist_ok=True)
+
+
+def load_config():
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def save_config(config):
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    ensure_gitignore(".vibe_config.json")
+    ensure_gitignore("logs/")
+    ensure_gitignore(".vibe_google_creds.json")
+    ensure_gitignore(".vibe_client_secrets.json")
+    ensure_gitignore(".vibe_authorized_user.json")
+
 
 # Setup logger
 logger = logging.getLogger("vibe")
