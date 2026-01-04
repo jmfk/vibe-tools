@@ -402,7 +402,9 @@ def ralph_loop(
             logger.info(f"\n--- Running Ralph Loop for {project_name} ---")
 
             if is_merged(branch_name):
-                logger.info(f"Branch {branch_name} already merged into main. Skipping...")
+                logger.info(
+                    f"Branch {branch_name} already merged into main. Skipping..."
+                )
                 # Also mark as completed if it's merged but not in state
                 if project_name not in completed_prds:
                     mark_prd_completed(project_name)
@@ -483,14 +485,20 @@ def ralph_loop(
                         )
                         additional_context = ""
                         save_state(
-                            project_name, i + 1, output, additional_context, phase="build"
+                            project_name,
+                            i + 1,
+                            output,
+                            additional_context,
+                            phase="build",
                         )
                         continue
 
                     logger.info(
                         f"✅ COMPLETION PROMISE FOUND at iteration {i}. Proceeding to Quality Gates."
                     )
-                    save_state(project_name, i, output, additional_context, phase="test")
+                    save_state(
+                        project_name, i, output, additional_context, phase="test"
+                    )
                     start_phase = "test"
 
                 # Phase 2: Tests
@@ -541,9 +549,7 @@ def ralph_loop(
                             logger.error(
                                 "❌ Tests failed. Feeding back to agent for repair..."
                             )
-                            additional_context = (
-                                f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
-                            )
+                            additional_context = f"THE PREVIOUS CHANGES CAUSED TEST FAILURES:\n{test_output}"
                             save_state(
                                 project_name,
                                 i + 1,
@@ -590,9 +596,7 @@ def ralph_loop(
                         )
                         if not review_passed:
                             logger.error("❌ Review failed. Feeding back to agent...")
-                            additional_context = (
-                                f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
-                            )
+                            additional_context = f"THE PREVIOUS CHANGES FAILED CODE REVIEW:\n{review_output}"
                             save_state(
                                 project_name,
                                 i + 1,
