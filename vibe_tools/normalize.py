@@ -51,8 +51,8 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             sys.exit(1)
         files_to_process = [path]
     else:
-        # Find all markdown files in specs
-        files_to_process = list(specs_dir.glob("*.md"))
+        # Find all markdown files in specs and subdirectories
+        files_to_process = list(specs_dir.rglob("*.md"))
         if not files_to_process:
             print(
                 f"No markdown files found in {specs_dir}/. Please add your PRDs as .md files there."
@@ -60,7 +60,8 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             return
 
     # Check for existing normalized files
-    existing_prds = list(PRDS_DIR.glob("prd_*.yaml"))
+    existing_prds = list(PRDS_DIR.glob("*.yaml"))
+
     overwrite_all = auto_overwrite
     if existing_prds and not auto_overwrite:
         if click.confirm(
@@ -73,11 +74,24 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
 
     for spec_path in files_to_process:
         stem = spec_path.stem
-        # Handle case-insensitive "prd_" prefix normalization
-        if stem.lower().startswith("prd_"):
-            output_filename = f"prd_{stem[4:]}.yaml"
+
+        # Determine prefix based on spec location
+        parent_name = spec_path.parent.name.lower()
+        if parent_name in ["infra", "cicd"]:
+            prefix = f"{parent_name}_"
         else:
-            output_filename = f"prd_{stem}.yaml"
+            prefix = "prd_"
+
+        # Handle case-insensitive prefixes to avoid double prefixing
+        clean_stem = stem.lower()
+        if clean_stem.startswith("prd_"):
+            clean_stem = clean_stem[4:]
+        elif clean_stem.startswith("infra_"):
+            clean_stem = clean_stem[6:]
+        elif clean_stem.startswith("cicd_"):
+            clean_stem = clean_stem[5:]
+        
+        output_filename = f"{prefix}{clean_stem}.yaml"
         output_path = PRDS_DIR / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD

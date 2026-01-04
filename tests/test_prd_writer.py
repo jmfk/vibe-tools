@@ -57,3 +57,16 @@ def test_interview_writes_spec(tmp_path: pathlib.Path, monkeypatch: pytest.Monke
     assert generated.name.startswith("prd_01_user-onboarding")
     assert generated.read_text() == "# Generated PRD\n"
 
+
+def test_next_spec_path_increments_infra(tmp_path: pathlib.Path) -> None:
+    prompts_dir = tmp_path / "prompts"
+    specs_dir = tmp_path / "specs" / "infra"
+    _create_prompt_template(prompts_dir)
+    specs_dir.mkdir(parents=True)
+    (specs_dir / "prd_infra_01_existing.md").write_text("Existing")
+
+    writer = PRDWriter(specs_dir=specs_dir, prompts_dir=prompts_dir, prd_type="infra")
+    next_path = writer._next_spec_path("Kubernetes")
+
+    assert next_path.name.startswith("prd_infra_02_kubernetes")
+

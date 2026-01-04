@@ -14,6 +14,8 @@ PRD_DIR = pathlib.Path("prds")
 STATE_FILE = pathlib.Path(".ralph_state.json")
 LOGS_DIR = pathlib.Path("logs")
 COSTS_DIR = pathlib.Path("costs")
+SPECIAL_PRD_SUBDIRS = ["infra", "cicd"]
+INSTRUCTIONS_DIR = pathlib.Path("instructions")
 
 # Ensure directories exist
 LOGS_DIR.mkdir(exist_ok=True)
@@ -310,3 +312,47 @@ def ensure_gitignore(entry: str):
         with gitignore.open("a") as f:
             f.write(f"\n{entry}\n")
         logger.info(f"Added {entry} to .gitignore")
+
+
+def collect_prd_files():
+    """Returns all PRD files, including special infra/CI-CD subdirectories."""
+    prd_files = list(PRD_DIR.glob("prd_*.yaml"))
+    for subdir in SPECIAL_PRD_SUBDIRS:
+        subdir_path = PRD_DIR / subdir
+        if subdir_path.exists():
+            prd_files.extend(subdir_path.glob("prd_*.yaml"))
+    return sorted(prd_files, key=lambda path: path.name)
+
+
+def get_instructions_context():
+    """Reads all files in INSTRUCTIONS_DIR and returns them as a formatted string."""
+    if not INSTRUCTIONS_DIR.exists():
+        return ""
+
+    sections = []
+    for f in sorted(INSTRUCTIONS_DIR.glob("*")):
+        if f.is_file():
+            content = f.read_text().strip()
+            if content:
+                sections.append(f"--- {f.name} ---\n{content}")
+
+    if not sections:
+        return ""
+
+    return "INSTRUCTIONS:\n" + "\n\n".join(sections)
+
+
+def get_latest_context_file(pattern):
+    """Finds the latest file matching the pattern in PRD_DIR recursively."""
+    # Handle the pattern to be more flexible (e.g. "infra_*.yaml" -> "prd_infra_*.yaml")
+    search_pattern = pattern
+    if not search_pattern.startswith("prd_") and not search_pattern.startswith("*"):
+        search_pattern = f"prd_{search_pattern}"
+
+    files = list(PRD_DIR.rglob(search_pattern))
+    if not files:
+        return "NOT FOUND"
+
+    # Sort by name (which includes the ## prefix)
+    latest = sorted(files)[-1]
+    return latest.read_text()

@@ -149,3 +149,46 @@ def test_setup_service_commands_save_config(runner, tmp_path, command, service_k
     assert service_settings["host"] == detection["host"]
     assert service_settings["port"] == detection["port"]
     assert service_settings["docker_container_name"] == detection["container_name"]
+
+
+def _setup_spec_dir(monkeypatch, tmp_path):
+    spec_dir = tmp_path / "specs"
+    spec_dir.mkdir()
+    spec_file = spec_dir / "PRD-01-test.md"
+    spec_file.write_text("# Review candidate\nDetails")
+
+    prompt_path = tmp_path / "review_prompt.txt"
+    prompt_path.write_text("Reviewing {prd_path}")
+
+    monkeypatch.setattr("vibe_tools.cli.SPECS_DIR", spec_dir)
+    monkeypatch.setattr("vibe_tools.cli.REVIEW_PROMPT_TEMPLATE", prompt_path)
+    return spec_file
+
+
+def test_review_prd_command_runs_agent(runner, tmp_path, monkeypatch):
+    spec_file = _setup_spec_dir(monkeypatch, tmp_path)
+
+    agent_command = MagicMock(return_value=["cursor-agent"])
+    agent_runner = MagicMock(return_value=("review output", 0))
+    monkeypatch.setattr("vibe_tools.cli.get_agent_command", agent_command)
+    monkeypatch.setattr("vibe_tools.cli.run_agent", agent_runner)
+
+    result = runner.invoke(cli, ["review-prd"], input="\n")
+
+    assert result.exit_code == 0
+    assert spec_file.name in result.output
+    assert "review output" in result.output
+    agent_command.assert_called_once()
+    agent_runner.assert_called_once()
+
+
+def test_review_prd_command_skips_agent_when_flag_disabled(runner, tmp_path, monkeypatch):
+    _setup_spec_dir(monkeypatch, tmp_path)
+
+    agent_runner = MagicMock()
+    monkeypatch.setattr("vibe_tools.cli.run_agent", agent_runner)
+
+    result = runner.invoke(cli, ["review-prd", "--no-review"], input="\n")
+
+    assert result.exit_code == 0
+    agent_runner.assert_not_called()

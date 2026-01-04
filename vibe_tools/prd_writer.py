@@ -27,12 +27,14 @@ class PRDWriter:
         prompts_dir: Optional[pathlib.Path] = None,
         dspy_runner: Optional[DspyRunner] = None,
         agent_runner: Optional[AgentRunner] = None,
+        prd_type: str = "feature"
     ):
         self.agent_type = agent_type
         self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("specs"))
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
         self.dspy_runner = dspy_runner or self._execute_dspy
         self.agent_runner = agent_runner or self._default_agent_runner
+        self.prd_type = prd_type
 
     def create_prd(self, initial_request: str) -> pathlib.Path:
         """Run the interview and write the resulting markdown PRD."""
@@ -98,10 +100,22 @@ class PRDWriter:
             )
         template = template_path.read_text()
         qa_section = self._render_history(interview.get("history", []))
+        
+        # Inject type guidance into context
+        type_context = f"This is a {self.prd_type.upper()} PRD. Please focus on relevant sections."
+        if self.prd_type == "infra":
+            type_context += " Focus heavily on the Infrastructure and Architecture sections."
+        elif self.prd_type == "cicd":
+            type_context += " Focus on deployment, automation, and CI/CD pipelines in the Infrastructure section."
+        elif self.prd_type == "architecture":
+            type_context += " Focus on the Architecture and Constraints section."
+
+        context = f"{type_context}\n\n{interview.get('context', '')}"
+        
         prompt = template.format(
             title=title,
             summary=interview.get("summary", ""),
-            context=interview.get("context", ""),
+            context=context,
             qa=qa_section,
         )
 
@@ -116,7 +130,7 @@ class PRDWriter:
         ensure_dir(self.specs_dir)
         target = self._next_spec_path(title)
         target.write_text(markdown)
-        click.echo(f"✅ Wrote PRD to {target}")
+        click.echo(f"✅ Wrote {self.prd_type} PRD to {target}")
         return target
 
     def _next_spec_path(self, title: str) -> pathlib.Path:
@@ -124,22 +138,35 @@ class PRDWriter:
         ensure_dir(self.specs_dir)
         next_number = self._next_spec_number()
         slug = self._slugify(title)
-        filename = f"prd_{next_number:02d}_{slug}.md"
+        
+        prefix = "prd"
+        if self.prd_type != "feature":
+            prefix = f"prd_{self.prd_type}"
+            
+        filename = f"{prefix}_{next_number:02d}_{slug}.md"
         return self.specs_dir / filename
 
     def _next_spec_number(self) -> int:
         """Return the next sequential spec number based on existing files."""
         ensure_dir(self.specs_dir)
         highest = 0
-        for child in self.specs_dir.glob("prd_*.md"):
+        
+        prefix = "prd"
+        if self.prd_type != "feature":
+            prefix = f"prd_{self.prd_type}"
+            
+        pattern = f"{prefix}_*.md"
+        for child in self.specs_dir.glob(pattern):
             parts = child.stem.split("_")
-            if len(parts) < 2:
-                continue
             try:
-                value = int(parts[1])
-            except ValueError:
+                # prd_01_... -> parts[1] is number
+                # prd_infra_01_... -> parts[2] is number
+                idx = 1 if self.prd_type == "feature" else 2
+                if len(parts) > idx:
+                    value = int(parts[idx])
+                    highest = max(highest, value)
+            except (ValueError, IndexError):
                 continue
-            highest = max(highest, value)
         return highest + 1
 
     def _slugify(self, text: str) -> str:

@@ -7,10 +7,14 @@ from typing import Any
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger, get_session_cost
 from vibe_tools.testing import ProjectTester
 from vibe_tools.utils import (
+    INSTRUCTIONS_DIR,
     PRD_DIR,
     STATE_FILE,
+    collect_prd_files,
     ensure_dir,
     get_agent_command,
+    get_instructions_context,
+    get_latest_context_file,
     logger,
     run_agent,
     run_command,
@@ -131,7 +135,7 @@ def get_pending_prds_and_estimates(agent_type, config):
     resume_prd = active_task["prd_name"] if active_task else None
     active_task["iteration"] if active_task else 1
 
-    prds = sorted(PRD_DIR.glob("prd_*.yaml"))
+    prds = collect_prd_files()
     results: list[dict[str, Any]] = []
 
     if not BASE_PROMPT_TEMPLATE.exists():
@@ -142,6 +146,9 @@ def get_pending_prds_and_estimates(agent_type, config):
         ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
     )
     overview_content = OVERVIEW.read_text() if OVERVIEW.exists() else "NOT FOUND"
+    infra_content = get_latest_context_file("infra_*.yaml")
+    cicd_content = get_latest_context_file("cicd_*.yaml")
+    instructions_content = get_instructions_context()
 
     for prd_file in prds:
         project_name = prd_file.stem
@@ -171,6 +178,10 @@ CONTEXT FILES:
 - PRD: {prd_content}
 - Architecture: {architecture_content}
 - Project Overview: {overview_content}
+- Infrastructure: {infra_content}
+- CI/CD: {cicd_content}
+
+{instructions_content}
 
 TARGET DIRECTORIES:
 - Backend: {BACKEND_ROOT}
@@ -219,12 +230,20 @@ def run_ralph_agent(
     """
     Calls the configured agent with the combined prompt and context.
     """
+    infra_content = get_latest_context_file("infra_*.yaml")
+    cicd_content = get_latest_context_file("cicd_*.yaml")
+    instructions_content = get_instructions_context()
+
     combined_prompt = f"""{prompt_text}
 
 CONTEXT FILES:
 - PRD: {prd_path}
 - Architecture: {architecture_path}
 - Project Overview: {overview_path}
+- Infrastructure: {infra_content}
+- CI/CD: {cicd_content}
+
+{instructions_content}
 
 TARGET DIRECTORIES:
 - Backend: {backend_dir}
@@ -433,7 +452,7 @@ def ralph_loop(
     run_command(["git", "checkout", "main"])
 
     # Iterate only over numbered PRDs, excluding architecture, index, and overview
-    prds = sorted(PRD_DIR.glob("prd_*.yaml"))
+    prds = collect_prd_files()
     if not prds:
         logger.info("No PRD files found (matching 'prd_*.yaml').")
         return
