@@ -512,9 +512,24 @@ def ralph_loop(
 
     if not check_env_health():
         logger.warning("\n⚠️  Environment health check failed!")
-        if click.confirm("Would you like to run 'vibe-setup env' now?", default=True):
-            # Run the env setup command logic
-            from vibe_tools.setup import env as setup_env
+        
+        # 1. Try quick fix first
+        if click.confirm("Would you like to run 'vibe-setup deps' to install missing tools?", default=True):
+            from vibe_tools.setup import deps as setup_deps
+            try:
+                setup_deps.callback()
+                if check_env_health():
+                    logger.info("✅ Environment is now healthy.")
+                else:
+                    logger.warning("⚠️  Environment still unhealthy after installing dependencies.")
+            except Exception as e:
+                logger.error(f"❌ Failed to install dependencies: {e}")
+
+        # 2. If still unhealthy, offer full setup
+        if not check_env_health():
+            if click.confirm("Would you like to run 'vibe-setup env' for a full environment setup?", default=True):
+                # Run the env setup command logic
+                from vibe_tools.setup import env as setup_env
 
             # Note: click.Context is needed if we want to call it exactly like the CLI
             # but we can just call the function directly for simplicity here
@@ -735,7 +750,7 @@ TARGETS WITH FAILURES: {', '.join(env_failures)}
 TASK:
 1. Identify missing tools or configuration issues (e.g., 'ruff' missing, 'next' not found, incorrect node/python version).
 2. Fix the environment by installing missing packages, updating the Makefile, or adjusting paths.
-3. You may use terminal commands like 'pip install', 'npm install', or 'brew install'.
+3. You may use terminal commands like 'vibe-setup deps', 'pip install', 'npm install', or 'brew install'.
 4. Ensure the end state allows 'make {env_failures[0]}' (and other failed targets) to run successfully.
 5. Include <promise>DONE</promise> in your response once you have attempted the fix.
 """

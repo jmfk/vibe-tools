@@ -547,6 +547,14 @@ def google():
 
 
 @setup_cli.command()
+def deps():
+    """Install required Python dependencies."""
+    click.echo("\n--- Installing Dependencies ---")
+    run_command(["pip", "install", "-e", "."], caffeinate=True)
+    click.echo("✅ Dependencies installed.")
+
+
+@setup_cli.command()
 @click.option("--python-version", default="3.11.10", help="Python version to install")
 def env(python_version):
     """Set up and verify a managed Python environment."""
@@ -627,13 +635,9 @@ def env(python_version):
 
     # 7. Install dependencies
     click.echo("Installing dependencies in managed environment...")
-    # Prefer make install-deps if available, otherwise fallback to pip
-    if pathlib.Path("Makefile").exists():
-        run_command(["make", "install-deps"])
-    else:
-        # We use python -m pip to ensure we use the venv's pip
-        run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
-        run_command(["python", "-m", "pip", "install", "-e", "."])
+    # We use python -m pip to ensure we use the venv's pip
+    run_command(["python", "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(["python", "-m", "pip", "install", "-e", "."])
 
     # 8. Record in config
     config = load_config()
