@@ -18,6 +18,12 @@ PRICING = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.6},
 }
 
+AGENT_DEFAULT_MODEL = {
+    "cursor-agent": "gemini-3-flash",
+    "claude": "claude-3-5-sonnet",
+    "antigravity": "gpt-4o",
+}
+
 DEFAULT_PRICING = {"input": 1.0, "output": 1.0}  # Fallback
 USAGE_LOG_CSV = COSTS_DIR / "usage.csv"
 
@@ -44,6 +50,7 @@ class CostLogger:
 
     def log_run(
         self,
+        agent: str,
         model: str,
         prompt: str,
         output: str,
@@ -62,6 +69,7 @@ class CostLogger:
             prd_name,
             phase,
             str(iteration),
+            agent,
             model,
             str(input_tokens),
             str(output_tokens),
@@ -78,22 +86,38 @@ class CostLogger:
 
     def _log_to_csv(self, row):
         file_exists = USAGE_LOG_CSV.exists()
+        header = [
+            "Timestamp",
+            "PRD",
+            "Phase",
+            "Iteration",
+            "Agent",
+            "Model",
+            "Input Tokens",
+            "Output Tokens",
+            "Cost (USD)",
+            "Purpose",
+        ]
+
+        # Check if we need to write a new header due to column change
+        write_header = not file_exists
+        if file_exists:
+            try:
+                with open(USAGE_LOG_CSV, mode="r", newline="") as f:
+                    reader = csv.reader(f)
+                    first_row = next(reader, None)
+                    if first_row and len(first_row) != len(header):
+                        write_header = True
+            except Exception:
+                pass
+
         with open(USAGE_LOG_CSV, mode="a", newline="") as f:
             writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow(
-                    [
-                        "Timestamp",
-                        "PRD",
-                        "Phase",
-                        "Iteration",
-                        "Model",
-                        "Input Tokens",
-                        "Output Tokens",
-                        "Cost (USD)",
-                        "Purpose",
-                    ]
-                )
+            if write_header:
+                # If file exists but we need a new header, add a separator
+                if file_exists:
+                    f.write("\n")
+                writer.writerow(header)
             writer.writerow(row)
 
     def _log_to_google(self, row):

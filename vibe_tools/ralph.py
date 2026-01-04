@@ -15,7 +15,7 @@ from vibe_tools.utils import (
     rotate_log,
 )
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
 
 BACKEND_ROOT = pathlib.Path("src")
 FRONTEND_ROOT = pathlib.Path("frontend")
@@ -315,7 +315,8 @@ def ralph_loop(
                 )
 
                 cost_logger.log_run(
-                    model=agent,  # agent is the name/type
+                    agent=agent,
+                    model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
                     prompt=prompt_for_iteration,
                     output=output,
                     prd_name=project_name,
@@ -379,7 +380,8 @@ def ralph_loop(
                         agent, prd_file, caffeinate=caffeinate
                     )
                     cost_logger.log_run(
-                        model=agent,
+                        agent=agent,
+                        model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
                         prompt=f"Review changes against {prd_file}",
                         output=review_output,
                         prd_name=project_name,
@@ -414,7 +416,8 @@ def ralph_loop(
             commit_cmd = get_agent_command(agent, commit_prompt)
             commit_output, _ = run_agent(commit_cmd, caffeinate=caffeinate)
             cost_logger.log_run(
-                model=agent,
+                agent=agent,
+                model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
                 prompt=commit_prompt,
                 output=commit_output,
                 prd_name=project_name,

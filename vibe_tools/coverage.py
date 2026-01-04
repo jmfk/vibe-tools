@@ -5,7 +5,7 @@ import re
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
 
 PROMPTS_DIR = pathlib.Path("prompts")
 COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
@@ -59,7 +59,8 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
         output, _ = run_agent(cmd, caffeinate=caffeinate)
 
         cost_logger.log_run(
-            model=agent,
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
             prompt=prompt,
             output=output,
             prd_name="N/A",
@@ -81,7 +82,8 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False):
             cmd_fix = get_agent_command(agent, fix_prompt)
             fix_output, _ = run_agent(cmd_fix, caffeinate=caffeinate)
             cost_logger.log_run(
-                model=agent,
+                agent=agent,
+                model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
                 prompt=fix_prompt,
                 output=fix_output,
                 prd_name="N/A",

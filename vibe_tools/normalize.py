@@ -2,7 +2,7 @@ import pathlib
 import sys
 import click
 from vibe_tools.utils import run_agent, get_agent_command
-from vibe_tools.cost import CostLogger
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
 
 PROMPTS_DIR = pathlib.Path("prompts")
 NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
@@ -90,7 +90,8 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
         output, code = run_agent(cmd, caffeinate=caffeinate)
 
         cost_logger.log_run(
-            model=agent,
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
             prompt=prompt,
             output=output,
             prd_name=stem,

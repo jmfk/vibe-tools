@@ -5,7 +5,7 @@ import pathlib
 
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command
-from vibe_tools.cost import CostLogger
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
 
 PROMPTS_DIR = pathlib.Path("prompts")
 MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
@@ -49,7 +49,8 @@ def get_status_report(agent, interval, cost_logger=None):
 
     if cost_logger:
         cost_logger.log_run(
-            model=agent,
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
             prompt=inspection_prompt,
             output=output,
             prd_name="N/A",
@@ -66,6 +67,7 @@ def get_status_report(agent, interval, cost_logger=None):
 
 def run_monitor(agent, interval):
     from vibe_tools.cli import load_config
+
     print(
         f"Starting monitor with {interval}s interval using agent {agent}. Press Ctrl+C to stop."
     )

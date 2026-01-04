@@ -5,7 +5,7 @@ import json
 
 from vibe_tools.utils import run_command, run_agent, get_agent_command, logger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.cost import CostLogger
+from vibe_tools.cost import CostLogger, AGENT_DEFAULT_MODEL
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
 PROMPTS_DIR = pathlib.Path("prompts")
@@ -88,7 +88,8 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False):
         agent_output, _ = run_agent(cmd, caffeinate=caffeinate)
 
         cost_logger.log_run(
-            model=agent,
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
             prompt=prompt,
             output=agent_output,
             prd_name="N/A",
