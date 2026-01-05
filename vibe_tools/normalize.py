@@ -145,5 +145,12 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
 
             output_path.write_text(clean_output)
             print(f"✅ Saved: {output_path}")
+
+            # Update project state if this was a full normalization run
+            if not input_file:
+                from vibe_tools.utils import load_project_state, save_project_state
+                state = load_project_state()
+                state["phases"]["normalize"]["status"] = "completed"
+                save_project_state(state)
         else:
             print(f"❌ Failed to normalize {spec_path.name}")

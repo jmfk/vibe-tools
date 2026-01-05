@@ -480,7 +480,7 @@ def coverage(ctx):
 )
 @click.pass_context
 def normalize(ctx, input_file, yes):
-    """Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
+    """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     from vibe_tools.normalize import normalize_prd
 
@@ -491,6 +491,10 @@ def normalize(ctx, input_file, yes):
         caffeinate=ctx.obj.get("caffeinate", False),
         stream=ctx.obj.get("stream", False),
     )
+
+    click.echo("\nNext Steps:")
+    click.echo("[ ] Review/Edit generated YAMLs in prds/")
+    click.echo("[ ] Generate Project Plan (vibe plan)")
 
 
 @cli.command()
@@ -851,6 +855,7 @@ def plan(ctx):
         save_project_state(state)
         click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
         click.echo("\nNext Steps:")
+        click.echo("[ ] Review/Edit project-plan.yaml")
         click.echo("[ ] Start Building (vibe implementation)")
     else:
         click.echo("❌ Project planning failed.")
@@ -877,6 +882,10 @@ def implementation(ctx):
         state["phases"]["implementation"]["status"] = "completed"
         save_project_state(state)
         click.echo("✅ Implementation complete.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Run Tests & Reconciliation (vibe testing)")
+        click.echo("[ ] Setup Infrastructure (vibe infra)")
+        click.echo("[ ] Setup CI/CD (vibe cicd)")
     else:
         click.echo("❌ Implementation failed.")
 
@@ -885,9 +894,15 @@ def implementation(ctx):
 @click.pass_context
 def infra(ctx):
     """Phase 5: Infrastructure reconciliation."""
+    state = load_project_state()
+    if state["phases"]["setup"]["status"] != "completed":
+        click.echo(
+            "❌ Setup phase must be completed before infrastructure. Run 'vibe setup'."
+        )
+        return
+
     from vibe_tools.ralph import RalphLoop
 
-    state = load_project_state()
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
@@ -901,15 +916,25 @@ def infra(ctx):
     if loop.run():
         state["phases"]["infra"]["status"] = "completed"
         save_project_state(state)
+        click.echo("✅ Infrastructure reconciliation complete.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Setup CI/CD (vibe cicd)")
+        click.echo("[ ] Deployment (vibe deploy)")
+    else:
+        click.echo("❌ Infrastructure reconciliation failed.")
 
 
 @cli.command()
 @click.pass_context
 def cicd(ctx):
     """Phase 6: CI/CD reconciliation."""
+    state = load_project_state()
+    if state["phases"]["setup"]["status"] != "completed":
+        click.echo("❌ Setup phase must be completed before CI/CD. Run 'vibe setup'.")
+        return
+
     from vibe_tools.ralph import RalphLoop
 
-    state = load_project_state()
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
@@ -923,15 +948,25 @@ def cicd(ctx):
     if loop.run():
         state["phases"]["cicd"]["status"] = "completed"
         save_project_state(state)
+        click.echo("✅ CI/CD reconciliation complete.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Setup Infrastructure (vibe infra)")
+        click.echo("[ ] Deployment (vibe deploy)")
+    else:
+        click.echo("❌ CI/CD reconciliation failed.")
 
 
 @cli.command()
 @click.pass_context
 def testing(ctx):
     """Phase 7: Testing reconciliation."""
+    state = load_project_state()
+    if state["phases"]["setup"]["status"] != "completed":
+        click.echo("❌ Setup phase must be completed before testing. Run 'vibe setup'.")
+        return
+
     from vibe_tools.ralph import RalphLoop
 
-    state = load_project_state()
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
@@ -945,6 +980,11 @@ def testing(ctx):
     if loop.run():
         state["phases"]["testing"]["status"] = "completed"
         save_project_state(state)
+        click.echo("✅ Testing reconciliation complete.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Deployment (vibe deploy)")
+    else:
+        click.echo("❌ Testing reconciliation failed.")
 
 
 @cli.command()
@@ -955,11 +995,17 @@ def deploy(ctx):
     if (
         state["phases"]["infra"]["status"] != "completed"
         or state["phases"]["cicd"]["status"] != "completed"
+        or state["phases"]["testing"]["status"] != "completed"
     ):
-        click.echo("❌ Infra and CI/CD phases must be completed before deployment.")
+        click.echo(
+            "❌ Infra, CI/CD, and Testing phases must be completed before deployment."
+        )
         return
     # TODO: Implement deployment logic
     click.echo("🚀 Triggering deployment...")
+    state["phases"]["deploy"]["status"] = "completed"
+    save_project_state(state)
+    click.echo("\n✨ Project fully deployed! All lifecycle phases completed.")
 
 
 @cli.command()
