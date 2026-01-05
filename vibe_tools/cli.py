@@ -16,18 +16,16 @@ class OrderedGroup(click.Group):
         # Define the desired order of commands
         order = [
             # Phases 1-8
-            "normalize",
-            "setup",
             "architect",
             "pm",
-            "plan",
+            "normalize",
+            "setup",
             "implement",
+            "testing",
             "infra",
             "cicd",
-            "testing",
             "deploy",
             # Supporting tools
-            "ideation",
             "prd",
             "history",
             "status",
@@ -248,46 +246,39 @@ def init(ctx):
 
     click.echo("Please select your starting scenario:")
     click.echo(
-        click.style("  A) Idea Only", bold=True)
-        + " - You have an idea and want to define requirements interactively."
-    )
-    click.echo(
-        click.style("  B) Human Specs", bold=True)
+        click.style("  A) Human Specs", bold=True)
         + " - You already have human-written markdown specs in 'specs/'."
     )
     click.echo(
-        click.style("  C) Adoption", bold=True)
+        click.style("  B) Adoption", bold=True)
         + " - You have an existing codebase and want Vibe to discover it."
     )
     click.echo(
-        click.style("  D) Architecture Ready", bold=True)
+        click.style("  C) Architecture Ready", bold=True)
         + " - You have an 'architecture.yaml' ready to go."
     )
     click.echo(
-        click.style("  E) Manual Setup", bold=True)
+        click.style("  D) Manual Setup", bold=True)
         + " - Just initialize the folders and templates for manual work."
     )
 
     choice = click.prompt(
         "\nSelect scenario",
-        type=click.Choice(["A", "B", "C", "D", "E"], case_sensitive=False),
-        default="E",
+        type=click.Choice(["A", "B", "C", "D"], case_sensitive=False),
+        default="D",
     ).upper()
 
     # Always perform basic initialization first
     _perform_basic_init()
 
     if choice == "A":
-        click.echo("\n🚀 Starting interactive ideation...")
-        ctx.invoke(ideation)
-    elif choice == "B":
         click.echo(
             "\n📄 Please ensure your specs are in 'specs/'. Next step: 'vibe normalize'"
         )
-    elif choice == "C":
+    elif choice == "B":
         click.echo("\n🔍 Starting codebase discovery...")
         ctx.invoke(setup, import_code=True)
-    elif choice == "D":
+    elif choice == "C":
         click.echo("\n🏗️  Starting architecture setup...")
         ctx.invoke(setup)
     else:
@@ -358,8 +349,7 @@ def ralph():
     click.echo("Please use the new modular commands:")
     click.echo("  vibe setup          - Phase 1: Architecture")
     click.echo("  vibe normalize      - Phase 2: Standardize Specs")
-    click.echo("  vibe plan           - Phase 3: Project Planning")
-    click.echo("  vibe implement      - Phase 4: Building")
+    click.echo("  vibe implement      - Phase 3: Building")
     click.echo("")
 
 
@@ -403,7 +393,7 @@ def coverage(ctx):
 )
 @click.pass_context
 def normalize(ctx, input_file, yes):
-    """Phase 1: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
+    """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     state = load_project_state()
     missing = check_dependencies("normalize", state)
@@ -413,8 +403,9 @@ def normalize(ctx, input_file, yes):
         )
         return
 
-    from vibe_tools.normalize import normalize_prd
+    from vibe_tools.normalize import normalize_prd, normalize_plans
 
+    click.echo("🔄 Normalizing specs...")
     normalize_prd(
         agent=ctx.obj["agent"],
         input_file=input_file,
@@ -424,8 +415,9 @@ def normalize(ctx, input_file, yes):
     )
 
     click.echo("\nNext Steps:")
-    click.echo("[ ] Review/Edit generated YAMLs in prds/")
+    click.echo("[ ] Review/Edit generated YAMLs in project/prds/")
     click.echo("[ ] Architecture Setup (vibe setup)")
+    click.echo("[ ] Start Building (vibe implement)")
 
 
 @cli.command()
@@ -715,7 +707,7 @@ def cost():
 )
 @click.pass_context
 def setup(ctx, auto, import_code):
-    """Phase 2: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
+    """Phase 3: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
     from vibe_tools.ralph import RalphLoop
 
     state = load_project_state()
@@ -790,8 +782,14 @@ def setup(ctx, auto, import_code):
         state["phases"]["setup"]["hash"] = get_file_hash(ARCHITECTURE)
         save_project_state(state)
         click.echo("\n✅ Architecture setup complete. project-state.json updated.")
+
+        # Generate the project plan based on PRDs
+        from vibe_tools.ralph import generate_prd_plan
+
+        generate_prd_plan()
+
         click.echo("\nNext Steps:")
-        click.echo("[ ] Generate Project Plan (vibe plan)")
+        click.echo("[ ] Start Building (vibe implement)")
     else:
         click.echo("❌ Architecture setup failed.")
 
@@ -814,7 +812,7 @@ def architect(ctx, query):
 @click.argument("query", required=False)
 @click.pass_context
 def pm(ctx, query):
-    """Interactive PRD and specification manager."""
+    """Phase 1: Interactive PRD and specification manager."""
     from vibe_tools.pm import InteractivePM
 
     pm_tool = InteractivePM(
@@ -822,38 +820,6 @@ def pm(ctx, query):
         stream=ctx.obj.get("stream", True),
     )
     pm_tool.run_loop(query)
-
-
-@cli.command()
-@click.pass_context
-def plan(ctx):
-    """Phase 3: Project Planning. Generates project-plan.yaml from PRDs and Architecture."""
-    state = load_project_state()
-    missing = check_dependencies("plan", state)
-    if missing:
-        click.echo(
-            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
-        )
-        return
-
-    agent = ctx.obj.get("agent", "cursor-agent")
-    stream = ctx.obj.get("stream", False)
-
-    click.echo("🧠 Generating project-plan.yaml...")
-    # TODO: Implement Planner Agent logic
-    from vibe_tools.ralph import run_planner_agent
-
-    project_plan = run_planner_agent(agent, stream=stream)
-    if project_plan:
-        state["phases"]["plan"]["status"] = "completed"
-        state["phases"]["plan"]["hash"] = get_file_hash(PROJECT_PLAN)
-        save_project_state(state)
-        click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
-        click.echo("\nNext Steps:")
-        click.echo("[ ] Review/Edit project-plan.yaml")
-        click.echo("[ ] Start Building (vibe implement)")
-    else:
-        click.echo("❌ Project planning failed.")
 
 
 @cli.command()
@@ -1028,22 +994,6 @@ def deploy(ctx):
     state["phases"]["deploy"]["status"] = "completed"
     save_project_state(state)
     click.echo("\n✨ Project fully deployed! All lifecycle phases completed.")
-
-
-@cli.command()
-@click.pass_context
-def ideation(ctx):
-    """Scenario E: Interactive ideation to generate PRDs."""
-    agent = ctx.obj.get("agent", "cursor-agent")
-    stream = ctx.obj.get("stream", False)
-
-    click.echo("💡 Starting interactive ideation session...")
-    prompt = "I have an idea for a project. Please walk me through an interactive loop to define the core PRDs and requirements. Ask me questions one by one until we have enough to generate initial PRD files in 'specs/'."
-    cmd = get_agent_command(agent, prompt)
-    run_agent(cmd, stream=stream)
-    click.echo("✅ Ideation complete. Specs generated in specs/.")
-    click.echo("\nNext Steps:")
-    click.echo("[ ] Setup Architecture (vibe setup --auto)")
 
 
 @cli.command()

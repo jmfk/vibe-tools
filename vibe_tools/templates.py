@@ -132,8 +132,8 @@ Break down the requirements into logical, decoupled building blocks. Optimize fo
 
 TASK:
 1. Break down all PRDs and Architecture into granular implementation plans.
-2. Group plans into logical PHASES: Setup, Infra, Implementation, and CI/CD.
-3. For the "Implementation" phase, group plans by their source PRD.
+2. Group plans into logical PHASES: Setup, Infra, Implement, and CI/CD.
+3. For the "Implement" phase, group plans by their source PRD.
 4. For each plan, create a separate Markdown file in the 'project/plans/' directory (e.g., 'project/plans/01_setup_auth.md').
 5. Each Markdown plan MUST include:
    - Title
@@ -158,7 +158,7 @@ phases:
       - id: "02_db_setup"
         file: "project/plans/02_db_setup.md"
         status: "pending"
-  implementation:
+  implement:
     prds:
       - id: "prd_01_minimal_htmx"
         plans:

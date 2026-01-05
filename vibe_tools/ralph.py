@@ -12,6 +12,8 @@ from typing import Any, List, Dict
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     PRD_DIR,
+    PLANS_DIR,
+    COMPILED_PLANS_DIR,
     PROJECT_PLAN,
     ARCHITECTURE,
     get_agent_command,
@@ -121,19 +123,16 @@ def run_planner_agent(agent: str, stream: bool = False) -> bool:
     save_project_state(state)
 
     architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
-    prds = ""
-    for prd_file in collect_prd_files():
-        # Try to find corresponding markdown spec in specs/
-        # prd_01_name.yaml -> PRD-01-name.md
-        parts = prd_file.stem.split("_")
-        spec_path = "NOT FOUND"
-        if len(parts) >= 2:
-            prd_id = parts[1]
-            spec_matches = list(pathlib.Path("specs").glob(f"PRD-{prd_id}-*.md"))
-            if spec_matches:
-                spec_path = str(spec_matches[0])
 
-        prds += f"\n--- {prd_file.name} ---\nYAML Path: {prd_file}\nMarkdown Spec Path: {spec_path}\nContent:\n{prd_file.read_text()}\n"
+    # Read specs from specs/ as the primary source of truth
+    specs_content = ""
+    from vibe_tools.utils import SPECS_DIR
+
+    if SPECS_DIR.exists():
+        for spec_file in sorted(SPECS_DIR.rglob("*.md")):
+            specs_content += f"\n\n--- FILE: {spec_file} ---\n{spec_file.read_text()}\n--- END FILE: {spec_file} ---"
+    else:
+        specs_content = "No specs/ directory found."
 
     try:
         prompt_base = get_prompt("planner_prompt.txt")
@@ -146,128 +145,119 @@ def run_planner_agent(agent: str, stream: bool = False) -> bool:
 ARCHITECTURE:
 {architecture}
 
-PRDS:
-{prds}
+SPECS (Primary Requirements):
+{specs_content}
+
+INSTRUCTIONS:
+1. Review the architecture and the provided specs.
+2. Create detailed implementation plans for each feature/change.
+3. Write each plan as a separate Markdown file in 'project/plans/'.
+4. Each plan must follow the structure:
+   - # Plan: [Title]
+   - ID: [unique_slug]
+   - Status: pending
+   - Description: ...
+   - Success Criteria:
+     - [ ] ...
+   - Dependencies: [list of plan IDs]
+5. Finally, update 'project/project-plan.yaml' to index all plans.
 """
     cmd = get_agent_command(agent, prompt)
     output, code = run_agent(cmd, stream=stream)
 
     if code == 0 and COMPLETION_PROMISE in output:
         # Step 2: Normalize the generated plans
+        from vibe_tools.normalize import normalize_plans
+
         return normalize_plans(agent, stream=stream)
     return False
 
 
-def _extract_all_plans(index_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Helper to extract all plan objects from the nested phases/prds structure."""
-    all_plans = []
-    phases = index_data.get("phases", {})
-
-    # Standard phases: setup, infra, cicd
-    for phase_name in ["setup", "infra", "cicd"]:
-        phase_data = phases.get(phase_name, {})
-        all_plans.extend(phase_data.get("plans", []))
-
-    # Implementation phase: grouped by PRDs
-    implementation = phases.get("implementation", {})
-    prds = implementation.get("prds", [])
-    for prd in prds:
-        all_plans.extend(prd.get("plans", []))
-
-    return all_plans
-
-
-def normalize_plans(agent: str, stream: bool = False) -> bool:
-    """Normalizes Markdown plans in plans/ into machine-consumable YAML files."""
-    from vibe_tools.utils import migrate_to_project_dir
-
-    migrate_to_project_dir()
-
-    if not PROJECT_PLAN.exists():
-        logger.error(f"❌ {PROJECT_PLAN} not found. Planning failed.")
+def generate_prd_plan() -> bool:
+    """Generates a project-plan.yaml that tracks PRDs directly instead of granular plans."""
+    prds = collect_prd_files()
+    if not prds:
+        logger.warning("No PRDs found in project/prds/ to generate plan.")
         return False
 
-    try:
-        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
-    except Exception as e:
-        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
-        return False
+    plan_data = {
+        "phases": {
+            "setup": {"plans": []},
+            "infra": {"plans": []},
+            "implement": {"prds": []},
+            "cicd": {"plans": []},
+        }
+    }
 
-    all_plans = _extract_all_plans(index_data)
-    if not all_plans:
-        logger.warning("No plans found in project-plan.yaml index.")
-        return True
+    state = load_project_state()
 
-    try:
-        prompt_base = get_prompt("plan_normalization_prompt.txt")
-    except FileNotFoundError as e:
-        logger.error(f"Error: {e}")
-        return False
-
-    for plan_info in all_plans:
-        plan_file = pathlib.Path(plan_info.get("file"))
-        if not plan_file.exists():
-            logger.error(f"Plan file {plan_file} not found.")
-            continue
-
-        yaml_path = plan_file.with_suffix(".yaml")
-        # Optimization: skip if yaml is newer than markdown
-        if yaml_path.exists() and yaml_path.stat().st_mtime > plan_file.stat().st_mtime:
-            continue
-
-        logger.info(f"🔄 Normalizing plan: {plan_file.name} -> {yaml_path.name}...")
-        prompt = prompt_base.replace("{plan_content}", plan_file.read_text())
-        cmd = get_agent_command(agent, prompt)
-        output, code = run_agent(cmd, stream=stream)
-
-        if code == 0:
-            # Clean markdown code fences if present
-            clean_output = output.strip()
-            if clean_output.startswith("```"):
-                lines = clean_output.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                clean_output = "\n".join(lines).strip()
-
-            yaml_path.write_text(clean_output)
-            logger.info(f"✅ Saved: {yaml_path}")
-
-            # Sync to project-state.json
-            try:
-                plan_data = yaml.safe_load(clean_output)
-                state = load_project_state()
-                plan_id = plan_data.get("id")
-                if plan_id:
-                    state["plans"][plan_id] = {
-                        "status": plan_data.get("status", "pending"),
-                        "depends_on": plan_data.get("dependencies", []),
-                        "title": plan_data.get("title", plan_id),
+    for prd_path in prds:
+        prd_id = prd_path.stem
+        # Structure it so implementation_loop can find it as a single 'plan' per PRD
+        plan_data["phases"]["implement"]["prds"].append(
+            {
+                "id": prd_id,
+                "plans": [
+                    {
+                        "id": prd_id,
+                        "file": str(prd_path),
+                        "status": state.get("plans", {})
+                        .get(prd_id, {})
+                        .get("status", "pending"),
+                        "is_direct_prd": True,
                     }
-                    save_project_state(state)
-            except Exception as e:
-                logger.error(f"Failed to sync plan {plan_file.name} to state: {e}")
-        else:
-            logger.error(f"❌ Failed to normalize plan {plan_file.name}")
-            return False
+                ],
+            }
+        )
 
+        # Also ensure it's in state["plans"]
+        if prd_id not in state["plans"]:
+            state["plans"][prd_id] = {
+                "status": "pending",
+                "depends_on": [],
+                "title": prd_id.replace("prd_", "").replace("_", " ").title(),
+            }
+
+    save_project_state(state)
+
+    with open(PROJECT_PLAN, "w") as f:
+        yaml.dump(plan_data, f, sort_keys=False)
+
+    logger.info(f"✅ Generated PRD-based project plan: {PROJECT_PLAN}")
     return True
 
 
 def implementation_loop(agent: str, stream: bool = False) -> bool:
-    """Executes the implementation phase based on granular YAML plans."""
+    """Executes the implementation phase based on granular YAML plans or direct PRDs."""
+    plans_from_prds = False
     if not PROJECT_PLAN.exists():
-        logger.error(f"❌ {PROJECT_PLAN} not found.")
-        return False
+        logger.info(
+            f"ℹ️ {PROJECT_PLAN} not found. Falling back to direct PRD implementation."
+        )
+        prds = collect_prd_files()
+        if not prds:
+            logger.error(f"❌ No PRDs found in {PRD_DIR}.")
+            return False
 
-    try:
-        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
-    except Exception as e:
-        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
-        return False
+        plans_to_run_direct = []
+        for prd_path in prds:
+            plan_id = prd_path.stem
+            plans_to_run_direct.append(
+                {"id": plan_id, "file": str(prd_path), "is_direct_prd": True}
+            )
 
-    phases = index_data.get("phases", {})
+        phases = {
+            "implement": {"prds": [{"id": "direct", "plans": plans_to_run_direct}]}
+        }
+        plans_from_prds = True
+    else:
+        try:
+            index_data = yaml.safe_load(PROJECT_PLAN.read_text())
+        except Exception as e:
+            logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
+            return False
+        phases = index_data.get("phases", {})
+
     if not phases:
         logger.warning("No phases found in project-plan.yaml index.")
         return True
@@ -280,7 +270,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     tests = ralph_config.get("tests", True)
 
     # Order of phases to execute
-    phase_order = ["setup", "infra", "implementation", "cicd"]
+    phase_order = ["setup", "implement", "testing", "infra", "cicd"]
 
     for phase_name in phase_order:
         if phase_name not in phases:
@@ -289,7 +279,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         phase_data = phases[phase_name]
         plans_to_run = []
 
-        if phase_name == "implementation":
+        if phase_name == "implement":
             # For implementation, we have nested PRDs
             prds = phase_data.get("prds", [])
             for prd in prds:
@@ -305,6 +295,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
         for plan_info in plans_to_run:
             plan_id = plan_info.get("id")
+            is_direct_prd = plan_info.get("is_direct_prd", False)
 
             # Check plan-level dependencies from project-state.json
             state = load_project_state()
@@ -319,8 +310,14 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     )
                     continue
 
-            plan_md_path = pathlib.Path(plan_info.get("file"))
-            plan_yaml_path = plan_md_path.with_suffix(".yaml")
+            plan_file_path = pathlib.Path(plan_info.get("file"))
+
+            if is_direct_prd:
+                # For direct PRD, the file is the YAML already
+                plan_yaml_path = plan_file_path
+            else:
+                # For planned implementation, the file is the Markdown plan
+                plan_yaml_path = COMPILED_PLANS_DIR / (plan_file_path.stem + ".yaml")
 
             if not plan_yaml_path.exists():
                 logger.error(f"Normalized plan {plan_yaml_path} not found. Skipping.")
@@ -332,7 +329,36 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 logger.error(f"Failed to parse {plan_yaml_path}: {e}")
                 continue
 
-            logger.info(f"🚀 Executing Plan: {plan_data.get('title')} ({plan_id})")
+            if is_direct_prd:
+                # Synthesize plan_data from PRD structure if needed
+                # Normalized PRDs have SYSTEM_CONTRACT, DOMAIN_MODEL, CAPABILITIES, OUTPUT_TARGETS
+                # We can use the whole YAML as the description
+                title = plan_id.replace("prd_", "").replace("_", " ").title()
+                description = plan_yaml_path.read_text()
+
+                # Extract success criteria from various parts of the PRD
+                capabilities = plan_data.get("CAPABILITIES", {})
+                success_criteria = []
+                if isinstance(capabilities.get("interaction_mechanisms"), list):
+                    success_criteria.extend(capabilities["interaction_mechanisms"])
+                if isinstance(capabilities.get("patterns"), list):
+                    success_criteria.extend(capabilities["patterns"])
+                if isinstance(capabilities.get("routing"), list):
+                    success_criteria.extend(capabilities["routing"])
+
+                if not success_criteria:
+                    success_criteria = [
+                        "Implement all capabilities defined in the PRD."
+                    ]
+
+                test_targets = ["test"]
+            else:
+                title = plan_data.get("title", plan_id)
+                description = plan_data.get("description", "")
+                success_criteria = plan_data.get("success_criteria", [])
+                test_targets = plan_data.get("test_targets", ["test"])
+
+            logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
             branch_name = f"feature/{plan_id}"
             _switch_to_branch(branch_name, agent, plan_id, stream=stream)
 
@@ -348,10 +374,10 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     return False
 
                 prompt = prompt_template.format(
-                    title=plan_data.get("title"),
-                    description=plan_data.get("description"),
+                    title=title,
+                    description=description,
                     success_criteria=chr(10).join(
-                        ["- " + c for c in plan_data.get("success_criteria", [])]
+                        ["- " + str(c) for c in success_criteria]
                     ),
                 )
                 cmd = get_agent_command(agent, prompt)
@@ -366,7 +392,6 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 passed_gates = True
 
                 if tests:
-                    test_targets = plan_data.get("test_targets", ["test"])
                     for target in test_targets:
                         logger.info(f"Running test target: {target}")
                         _, test_code = run_command(["make", target], check=False)
@@ -386,10 +411,10 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         return False
 
                     review_prompt = review_prompt_template.format(
-                        title=plan_data.get("title"),
-                        description=plan_data.get("description"),
+                        title=title,
+                        description=description,
                         success_criteria=chr(10).join(
-                            ["- " + c for c in plan_data.get("success_criteria", [])]
+                            ["- " + str(c) for c in success_criteria]
                         ),
                     )
                     review_cmd = get_agent_command(agent, review_prompt)
@@ -407,7 +432,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             if success:
                 logger.info(f"✅ Plan {plan_id} completed successfully.")
                 # Commit changes
-                commit_prompt = f"Commit changes for plan: {plan_data.get('title')}. Ensure all success criteria were met."
+                commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
                 commit_cmd = get_agent_command(agent, commit_prompt)
                 run_agent(commit_cmd, stream=stream)
 
@@ -416,11 +441,20 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 if plan_id not in state["plans"]:
                     state["plans"][plan_id] = {}
                 state["plans"][plan_id]["status"] = "completed"
+
+                # If it's a direct PRD, also mark it in completed_prds
+                if is_direct_prd:
+                    if plan_id not in state.get("completed_prds", []):
+                        state["completed_prds"].append(plan_id)
+
                 save_project_state(state)
 
                 # Update status in individual YAML (for backward compatibility/redundancy)
-                plan_data["status"] = "completed"
-                plan_yaml_path.write_text(yaml.dump(plan_data))
+                # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible,
+                # but project-plan.yaml does it for plans. For PRDs we use state.json mostly)
+                if not is_direct_prd:
+                    plan_data["status"] = "completed"
+                    plan_yaml_path.write_text(yaml.dump(plan_data))
 
                 # Switch back to main
                 _switch_to_main()
