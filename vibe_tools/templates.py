@@ -313,8 +313,12 @@ Currently, you have access to two main specification files:
 1. Architecture Specification (architecture.md)
 2. Infrastructure Specification (infrastructure.md)
 
+MODE: {mode}
+
+{mode_instructions}
+
 TASK:
-Your goal is to refine these specifications based on user instructions.
+Your goal is to refine these specifications or provide guidance based on user instructions.
 
 CRITICAL RULES FOR UPDATING FILES:
 - If you are updating the Architecture Specification, you MUST start your response with 'FILE_UPDATE: arch'.
@@ -328,13 +332,15 @@ CURRENT ARCHITECTURE (architecture.md):
 CURRENT INFRASTRUCTURE (infrastructure.md):
 {infrastructure_content}
 
+{instructions}
+
 CONVERSATION HISTORY:
 {history}
 
 GOAL:
 Respond to the user's latest query or instruction. 
 If they ask a question, answer it clearly based on the provided specifications.
-If they provide an instruction to modify one of the files, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header.
+If they provide an instruction to modify one of the files, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header (ONLY in AGENT mode).
 
 USER QUERY:
 {query}
