@@ -688,10 +688,15 @@ def setup(ctx, auto, import_code):
 
     if import_code:
         from vibe_tools.ralph import COMPLETION_PROMISE
+        from vibe_tools.utils import ensure_project_structure
+        
+        # Ensure project directory exists before agent runs
+        ensure_project_structure()
+        
         click.echo("🔍 Analyzing codebase to generate architecture and infrastructure definitions...")
-        prompt = f"""Analyze the current codebase and generate four files in the project root:
-1. '{ARCHITECTURE_CURRENT.name}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
-2. '{INFRA_CURRENT.name}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
+        prompt = f"""Analyze the current codebase and generate the following four files:
+1. '{ARCHITECTURE_CURRENT}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
+2. '{INFRA_CURRENT}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
 3. '{ARCHITECTURE_SPEC}': Markdown specification of the DESIRED architecture, based on the codebase but cleaned up for a specification.
 4. '{INFRA_SPEC}': Markdown specification of the DESIRED infrastructure.
 

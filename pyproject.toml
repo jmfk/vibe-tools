@@ -25,6 +25,7 @@ dependencies = [
     "mypy",
     "python-dotenv",
     "rich",
+    "PyYAML",
 ]
 
 [tool.setuptools]
