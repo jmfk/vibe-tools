@@ -1,5 +1,6 @@
 import atexit
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -131,21 +132,8 @@ def load_project_state() -> Dict[str, Any]:
 
 
 def save_project_state(state: Dict[str, Any]):
-    """Saves the project state to project-state.json and commits it if in a git repo."""
+    """Saves the project state to project-state.json."""
     PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
-    
-    if is_git_repo():
-        # Avoid recursive calls or excessive commits, but ensure state is "safe"
-        # We only commit if there's an actual change to the state file
-        try:
-            # Check if state file is modified or untracked
-            stdout, _ = run_command(["git", "status", "--porcelain", str(PROJECT_STATE_FILE)], check=False)
-            if stdout.strip():
-                logger.debug(f"Committing {PROJECT_STATE_FILE} for safety...")
-                run_command(["git", "add", str(PROJECT_STATE_FILE)], check=False)
-                run_command(["git", "commit", "-m", "vibe: update project state", "--no-verify"], check=False)
-        except Exception as e:
-            logger.debug(f"Failed to auto-commit project state: {e}")
 
 
 def migrate_legacy_state():
@@ -728,9 +716,27 @@ def get_vibe_status_report():
     report = []
     report.append(click.style("\n=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
 
-    # 1. Lifecycle Progress
+    # 1. Project Info
+    project_name = state.get("project_name", get_project_name())
+    version = state.get("version", "1.0")
+    report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name} (v{version})")
+    report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
+    
+    active_task = state.get("active_task")
+    if active_task:
+        report.append(f"{click.style('ACTIVE TASK:', bold=True)} {click.style(active_task, fg='yellow')}")
+
+    # 2. Lifecycle Progress
     report.append(click.style("\nLIFECYCLE PROGRESS:", fg="yellow", bold=True))
     phases = state.get("phases", {})
+    # Map phase to its corresponding desired file for sync check
+    phase_files = {
+        "setup": (ARCHITECTURE, ARCHITECTURE_CURRENT),
+        "infra": (INFRA, INFRA_CURRENT),
+        "cicd": (CICD, CICD_CURRENT),
+        "testing": (TESTING_CONFIG, TESTING_CURRENT),
+    }
+    
     order = ["setup", "normalize", "plan", "implement", "infra", "cicd", "testing", "deploy"]
     
     next_action = None
@@ -738,8 +744,19 @@ def get_vibe_status_report():
         phase = phases.get(phase_id, {})
         status = phase.get("status", "pending")
         
+        sync_status = ""
+        if phase_id in phase_files:
+            desired_file, current_file = phase_files[phase_id]
+            if desired_file.exists():
+                stored_hash = phase.get("hash")
+                current_hash = get_file_hash(desired_file)
+                if stored_hash and current_hash == stored_hash:
+                    sync_status = click.style(" (In Sync)", fg="dim green")
+                else:
+                    sync_status = click.style(" (Out of Sync)", fg="dim yellow")
+
         if status == "completed":
-            status_display = click.style("✅ DONE", fg="green")
+            status_display = click.style("✅ DONE", fg="green") + sync_status
         elif status == "in_progress":
             status_display = click.style("⏳ IN_PROGRESS", fg="blue")
             if not next_action:
@@ -751,17 +768,60 @@ def get_vibe_status_report():
         
         report.append(f"  - {phase_id:<15} {status_display}")
 
-    # 2. Next Steps
+    # 3. Core Configuration
+    report.append(click.style("\nCORE CONFIGURATION:", fg="yellow", bold=True))
+    core_files = [
+        ("Architecture", ARCHITECTURE),
+        ("Project Overview", OVERVIEW),
+        ("Infrastructure", INFRA),
+        ("CI/CD", CICD),
+        ("Testing", TESTING_CONFIG),
+    ]
+    for label, path in core_files:
+        if path.exists():
+            status = click.style("✅ Found", fg="green")
+        else:
+            status = click.style("⚪ Missing", fg="white", dim=True)
+        report.append(f"  - {label:<20} {status}")
+
+    # 4. Planning & Implementation
+    report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
+    if PROJECT_PLAN.exists():
+        plan_status = click.style("✅ Found", fg="green")
+    else:
+        plan_status = click.style("⚪ Missing", fg="white", dim=True)
+    report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
+    
+    if PLANS_DIR.exists():
+        plans = sorted(list(PLANS_DIR.glob("*.md")))
+        if plans:
+            report.append(f"  - {PLANS_DIR.name}/")
+            for p in plans:
+                report.append(f"    - {p.name:<30} ✅")
+        else:
+            report.append(f"  - {PLANS_DIR.name}/ (Empty)")
+    else:
+        report.append(f"  - {PLANS_DIR.name}/ (Not created)")
+
+    # 5. Instructions
+    report.append(click.style("\nINSTRUCTIONS:", fg="yellow", bold=True))
+    if INSTRUCTIONS_DIR.exists():
+        instr_files = sorted(list(INSTRUCTIONS_DIR.glob("*")))
+        if instr_files:
+            for f in instr_files:
+                if f.is_file():
+                    report.append(f"  - {f.name}")
+        else:
+            report.append("  No instructions found.")
+    else:
+        report.append("  No instructions directory.")
+
+    # 6. Next Steps
     if next_action:
         report.append(click.style("\nNEXT SUGGESTED ACTION:", fg="green", bold=True))
         report.append(f"  > {next_action}")
 
-    # 3. Project Info
-    project_name = state.get("project_name", get_project_name())
-    report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name}")
-    report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
-
-    # 4. PRD Progress (Detailed)
+    # 7. PRD Progress (Detailed)
     report.append(click.style("\nPRD FILES:", fg="yellow", bold=True))
     all_prds = collect_prd_files()
     completed_prds = state.get("completed_prds", [])
@@ -780,12 +840,12 @@ def get_vibe_status_report():
                 status = click.style("⚪ PENDING", fg="white", dim=True)
             report.append(f"  - {name:<40} {status}")
 
-    # 5. Costs
+    # 8. Costs
     total_cost = get_total_cost()
     report.append(click.style("\nCOSTS:", fg="yellow", bold=True))
     report.append(f"  Total Estimated Project Cost: {click.style(f'${total_cost:.4f} USD', fg='green')}")
 
-    # 6. Services
+    # 9. Services
     report.append(click.style("\nSERVICES:", fg="yellow", bold=True))
     configs = get_server_configs()
     if not configs:
