@@ -174,21 +174,6 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
         click.echo(f"  Default Budget: ${default_budget:.2f} USD")
 
-        ralph_config = config.get("ralph", {})
-        if ralph_config:
-            click.echo("  Ralph Default Config:")
-            click.echo(
-                f"    Tests:      {'ON' if ralph_config.get('tests') else 'OFF'}"
-            )
-            click.echo(
-                f"    Review:     {'ON' if ralph_config.get('review') else 'OFF'}"
-            )
-            click.echo(
-                f"    Auto-merge: {'ON' if ralph_config.get('auto_merge') else 'OFF'}"
-            )
-        else:
-            click.echo("  Ralph Default Config: Not set (will prompt on first run)")
-
         prompts_init = pathlib.Path("prompts").exists()
         click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
 
@@ -268,49 +253,12 @@ def init():
 
 
 @cli.command()
-@click.option(
-    "--review/--no-review",
-    is_flag=True,
-    default=None,
-    help="Enable/disable agentic review.",
-)
-@click.option(
-    "--tests/--no-tests",
-    is_flag=True,
-    default=None,
-    help="Enable/disable running tests.",
-)
-@click.option(
-    "--coverage/--no-coverage",
-    is_flag=True,
-    default=None,
-    help="Enable/disable coverage enforcement.",
-)
-@click.option(
-    "--auto-merge/--no-auto-merge",
-    is_flag=True,
-    default=None,
-    help="Enable/disable automatic merge.",
-)
-@click.option(
-    "--fast/--no-fast",
-    is_flag=True,
-    default=None,
-    help="Only run tests for changed files (more efficient).",
-)
-@click.option(
-    "--budget",
-    type=float,
-    default=None,
-    help="Max budget in USD for this run. System will pause if reached.",
-)
-@click.pass_context
-def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
+def ralph():
     """[DEPRECATED] legacy Ralph loop. Use vibe setup/plan/implement instead."""
     click.echo(click.style("\n" + "!" * 60, fg="red", bold=True))
     click.echo(
         click.style(
-            "!!! DEPRECATED: 'vibe ralph' is legacy and will be removed !!!",
+            "!!! DEPRECATED: 'vibe ralph' is legacy and has been removed !!!",
             fg="red",
             bold=True,
         )
@@ -322,176 +270,6 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
     click.echo("  vibe plan           - Phase 3: Project Planning")
     click.echo("  vibe implement      - Phase 4: Building")
     click.echo("")
-    if not click.confirm("Proceed with legacy Ralph loop?", default=False):
-        return
-    maybe_init_git()
-    agent = ctx.obj.get("agent", "cursor-agent")
-    config = load_config().get("ralph", {})
-
-    # Use config if not explicitly provided via CLI
-    if review is None:
-        review = config.get("review", False)
-    if tests is None:
-        tests = config.get("tests", False)
-    if coverage is None:
-        coverage = config.get("coverage", False)
-    if auto_merge is None:
-        auto_merge = config.get("auto_merge", False)
-    if fast is None:
-        fast = config.get("fast", False)
-    if budget is None:
-        budget = config.get("budget")
-    if budget is None:
-        budget = ctx.obj.get("default_budget", 5.0)
-
-    # If everything is still False (and we have no config file), prompt the user
-    if not CONFIG_FILE.exists() and not any([review, tests, coverage, auto_merge]):
-        click.echo("\n⚠️ Ralph is not yet configured for quality gates.")
-
-        tests = click.confirm(
-            "Enable Tests (auto-discover backend and frontend tests)?",
-            default=True,
-        )
-        if tests:
-            click.echo("✅ Tests enabled.")
-
-            fast = click.confirm(
-                "Enable Fast Mode (only run tests for changed files)?",
-                default=True,
-            )
-            if fast:
-                click.echo("✅ Fast mode enabled.")
-
-            coverage = click.confirm(
-                "Enable Coverage Enforcement (ensure 85%+ coverage)?",
-                default=True,
-            )
-            if coverage:
-                click.echo("✅ Coverage Enforcement enabled.")
-
-        review = click.confirm(
-            "Enable Agentic Review (agent verifies changes against PRD)?",
-            default=True,
-        )
-        if review:
-            click.echo("✅ Agentic Review enabled.")
-
-        auto_merge = click.confirm(
-            "Enable Auto-merge (automatically merge into main if quality gates pass)?",
-            default=False,
-        )
-        if auto_merge:
-            click.echo("✅ Auto-merge enabled.")
-
-        budget = click.prompt(
-            "Set a max budget in USD for this run?",
-            type=float,
-            default=5.0,
-        )
-        click.echo(f"✅ Budget set to ${budget:.2f} USD.")
-
-        verbose = click.confirm(
-            "Enable verbose output (log prompts and commands to terminal)?",
-            default=False,
-        )
-        if verbose:
-            click.echo("✅ Verbose output enabled.")
-
-        caffeinate = ctx.obj.get("caffeinate", False)
-        if not caffeinate:
-            if click.confirm(
-                "Would you like to use 'caffeinate' to prevent system sleep during long runs?",
-                default=True,
-            ):
-                caffeinate = True
-                ctx.obj["caffeinate"] = caffeinate
-                click.echo("✅ Enabled Caffeinate.")
-
-        if click.confirm(
-            "Save these settings as default in .vibe_config.json?", default=True
-        ):
-            save_config(
-                {
-                    "ralph": {
-                        "review": review,
-                        "tests": tests,
-                        "coverage": coverage,
-                        "auto_merge": auto_merge,
-                        "fast": fast,
-                    },
-                    "default_budget": budget,
-                    "caffeinate": caffeinate,
-                    "verbose": verbose,
-                    "coverage_targets": {
-                        "backend": 85,
-                        "frontend": 85,
-                        "infra": 85,
-                    },
-                }
-            )
-            click.echo("✅ Configuration saved.")
-
-    click.echo("\n--- Ralph Loop Configuration ---")
-    click.echo(f"Agent:      {agent}")
-    click.echo(f"Review:     {'ON' if review else 'OFF'}")
-    click.echo(f"Tests:      {'ON' if tests else 'OFF'}")
-    click.echo(f"Coverage:   {'ON' if coverage else 'OFF'}")
-    click.echo(f"Fast Mode:  {'ON' if fast else 'OFF'}")
-    click.echo(f"Auto-merge: {'ON' if auto_merge else 'OFF'}")
-    click.echo(f"Max Budget: ${budget:.2f} USD")
-
-    click.echo("\nWorkflow:")
-    click.echo("1. Ensure 'main' branch.")
-    click.echo("2. Sequentially process all 'prd_*.yaml' in 'prds/'.")
-    click.echo(
-        "3. Create feature branch, run up to 10 agent iterations for implementation."
-    )
-    click.echo("4. Run quality gates (tests/review) if enabled.")
-    click.echo("5. Commit and optionally merge changes.")
-
-    from vibe_tools.ralph import get_pending_prds_and_estimates, ralph_loop
-
-    # Get estimates for pending PRDs
-    vibe_config = load_config()
-    pending_estimates = get_pending_prds_and_estimates(agent, vibe_config)
-
-    if pending_estimates:
-        click.echo("\nPending PRDs and Estimated Initial Costs:")
-        total_initial_cost = 0.0
-        for est in pending_estimates:
-            resume_suffix = " [RESUMING]" if est["is_resume"] else ""
-            click.echo(
-                f"  - {est['prd_name']}{resume_suffix} (Model: {est['model']}, Est. Initial Cost: ${est['cost_estimate']:.6f})"
-            )
-            total_initial_cost += est["cost_estimate"]
-
-        click.echo(f"\nTotal Estimated Initial Cost: ${total_initial_cost:.6f} USD")
-        click.echo(
-            "(Note: Subsequent iterations and output tokens will incur additional costs.)"
-        )
-
-        if total_initial_cost > budget:
-            click.echo(
-                f"\n⚠️ WARNING: Estimated cost (${total_initial_cost:.6f}) exceeds current budget (${budget:.2f})!"
-            )
-    else:
-        click.echo("\nNo pending PRDs found to process.")
-
-    if not click.confirm("\nProceed with Ralph loop?", default=True):
-        click.echo("Aborted.")
-        return
-
-    ralph_loop(
-        agent=agent,
-        review=review,
-        tests=tests,
-        coverage=coverage,
-        auto_merge=auto_merge,
-        caffeinate=ctx.obj.get("caffeinate", False),
-        budget=budget,
-        fast=fast,
-        stream=ctx.obj.get("stream", False),
-    )
 
 
 @cli.command()
@@ -728,15 +506,7 @@ def write_prd(ctx, title, type):
 
 @cli.command()
 def history():
-    """[DEPRECATED] List the status of all PRDs."""
-    click.echo(
-        click.style(
-            "\n!!! DEPRECATED: 'history' uses legacy Ralph state !!!",
-            fg="yellow",
-            bold=True,
-        )
-    )
-    click.echo("Use 'vibe status' for the current project state.\n")
+    """List the status of all PRDs."""
     if not PRD_DIR.exists():
         click.echo(f"PRD directory {PRD_DIR} not found.")
         return
@@ -751,9 +521,7 @@ def history():
     click.echo(f"{'PRD':<40} {'Status':<15}")
     click.echo("-" * 56)
 
-    from vibe_tools.ralph import load_state
-
-    state = load_state()
+    state = load_project_state()
     completed_prds = state.get("completed_prds", [])
     started_prds = state.get("started_prds", [])
 
@@ -765,11 +533,11 @@ def history():
             project_name = prd_file.stem
 
         if prd_file.stem in completed_prds:
-            status = "✅ DONE"
+            status = click.style("✅ DONE", fg="green")
         elif prd_file.stem in started_prds:
-            status = "⏳ IN_PROGRESS"
+            status = click.style("⏳ IN_PROGRESS", fg="blue")
         else:
-            status = "⚪️ PENDING"
+            status = click.style("⚪️ PENDING", fg="white", dim=True)
 
         click.echo(f"{project_name:<40} {status:<15}")
 
@@ -920,31 +688,25 @@ def plan(ctx):
     state = load_project_state()
     if state["phases"]["setup"]["status"] != "completed":
         click.echo(
-            "❌ Setup phase (Architecture) must be completed before planning. Run 'vibe setup'."
-        )
-        return
-
-    if not ARCHITECTURE_CURRENT.exists():
-        click.echo(
-            f"❌ {ARCHITECTURE_CURRENT} not found. Architecture must be initialized before planning. Run 'vibe setup'."
+            "❌ Setup phase must be completed before planning. Run 'vibe setup'."
         )
         return
 
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
-    click.echo("🧠 Breaking down PRDs into implementation plans...")
+    click.echo("🧠 Generating project-plan.yaml...")
+    # TODO: Implement Planner Agent logic
     from vibe_tools.ralph import run_planner_agent
 
-    success = run_planner_agent(agent, stream=stream)
-    if success:
+    project_plan = run_planner_agent(agent, stream=stream)
+    if project_plan:
         state["phases"]["plan"]["status"] = "completed"
         state["phases"]["plan"]["hash"] = get_file_hash(PROJECT_PLAN)
         save_project_state(state)
         click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
-        click.echo(f"✅ Granular plans created in {PLANS_DIR}/")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Review/Edit granular plans in plans/")
+        click.echo("[ ] Review/Edit project-plan.yaml")
         click.echo("[ ] Start Building (vibe implement)")
     else:
         click.echo("❌ Project planning failed.")
@@ -955,24 +717,18 @@ def plan(ctx):
 def implement(ctx):
     """Phase 4: Implement. Iterates through the project-plan.yaml."""
     state = load_project_state()
-    if state["phases"]["setup"]["status"] != "completed" or not ARCHITECTURE_CURRENT.exists():
-        click.echo(
-            "❌ Setup phase (Architecture) must be completed before implementing. Run 'vibe setup'."
-        )
-        return
-
     if state["phases"]["plan"]["status"] != "completed":
         click.echo(
             "❌ Plan phase must be completed before implementing. Run 'vibe plan'."
         )
         return
 
-    from vibe_tools.ralph import implement_loop
+    from vibe_tools.ralph import implementation_loop
 
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
-    success = implement_loop(agent, stream=stream)
+    success = implementation_loop(agent, stream=stream)
     if success:
         state["phases"]["implement"]["status"] = "completed"
         save_project_state(state)
@@ -1256,9 +1012,7 @@ def rerun(prd_id):
     click.echo(f"Rerunning PRD: {project_name}")
 
     # 1. Clear saved state if it matches this PRD or is in completed_prds
-    from vibe_tools.ralph import load_state
-
-    state = load_state()
+    state = load_project_state()
     state_changed = False
 
     # Check active task
@@ -1281,7 +1035,7 @@ def rerun(prd_id):
         click.echo("✅ Removed from started PRDs list.")
 
     if state_changed:
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        save_project_state(state)
 
     # 2. Delete the branch if it exists
     _, check_branch = run_command(

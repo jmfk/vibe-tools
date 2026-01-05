@@ -100,19 +100,21 @@ Otherwise, list the issues and do NOT include the pass tag.
 """,
     "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a set of granular, dependency-aware implementation plans.
 
+GOAL:
+Break down the requirements into logical, decoupled building blocks. Optimize for build speed by identifying components that can be built in parallel once their base dependencies are met.
+
 TASK:
-1. Break down all normalized PRDs (found in 'prds/') into granular implementation plans.
-2. A single PRD should typically be broken into multiple Plans to optimize for building speed and focused implementation.
+1. Break down all PRDs into granular implementation plans.
+2. Group related functionality but keep components decoupled where possible.
 3. For each plan, create a separate Markdown file in the 'plans/' directory (e.g., 'plans/01_setup_auth.md').
 4. Each Markdown plan MUST include:
-   - id: (unique slug)
-   - title: (short name)
-   - description: (detailed what to do)
-   - dependencies: (list of plan IDs that MUST be done first)
-   - success_criteria: (list of specific, measurable checks that prove this plan works)
-   - test_targets: (specific Makefile targets to run to verify this plan)
-5. Order these plans for optimal build speed and logical dependency.
-6. Also create a 'project-plan.yaml' in the root directory that acts as an index of all plans in their intended order.
+   - Title
+   - Description
+   - Dependencies: IDs of other plans that MUST be completed first.
+   - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
+   - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
+5. Order these plans for optimal build speed: Infrastructure and shared services first, then independent features.
+6. Create a 'project-plan.yaml' in the root directory that acts as an index of all plans in their intended order.
 
 SCHEMA for project-plan.yaml index:
 plans:
@@ -123,17 +125,19 @@ plans:
     file: "plans/02_implement_user_api.md"
     status: "pending"
 
-Include <promise>DONE</promise> when all files are saved and the project-plan.yaml is ready.
+Include <promise>DONE</promise> when all files are saved.
 """,
     "plan_normalization_prompt.txt": """You are a Plan Normalizer. Your task is to convert a Markdown implementation plan into a machine-consumable YAML format.
 
+CRITICAL: Success criteria and test targets are the primary quality gates for the automated implementation loop. They must be extracted accurately as lists of strings.
+
 Rules:
 - Extract all fields accurately.
-- Ensure dependencies is an array (empty [] if none).
-- Ensure success_criteria is an array of strings.
-- Ensure test_targets is an array of strings.
+- Ensure 'dependencies' is an array of strings (plan IDs).
+- Ensure 'success_criteria' is an array of strings (specific, testable conditions).
+- Ensure 'test_targets' is an array of strings (Makefile targets).
 - Output valid YAML only.
-- No markdown fences (no ```yaml).
+- DO NOT wrap the output in markdown code blocks.
 - No explanations.
 
 YAML SCHEMA:
