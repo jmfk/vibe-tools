@@ -664,6 +664,7 @@ def setup(ctx, auto, import_code):
     stream = ctx.obj.get("stream", False)
 
     if import_code:
+        from vibe_tools.ralph import COMPLETION_PROMISE
         click.echo("🔍 Analyzing codebase to generate current architecture and infrastructure definitions...")
         prompt = f"""Analyze the current codebase and generate two comprehensive YAML files in the project root:
 1. '{ARCHITECTURE_CURRENT.name}': Describe the tech stack, directory structure, key dependencies, and test suites.
@@ -676,7 +677,6 @@ ACTUAL CODEBASE:
 
 Once you have analyzed the codebase and written BOTH the '{ARCHITECTURE_CURRENT.name}' and '{INFRA_CURRENT.name}' files, include {COMPLETION_PROMISE}.
 """
-        from vibe_tools.ralph import COMPLETION_PROMISE
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
         
