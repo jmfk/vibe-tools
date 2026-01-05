@@ -98,26 +98,57 @@ TASK:
 If everything looks correct, respond with: <review>PASSED</review>
 Otherwise, list the issues and do NOT include the pass tag.
 """,
-    "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a granular, dependency-aware 'project-plan.yaml'.
+    "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a set of granular, dependency-aware implementation plans.
 
 TASK:
-1. Break down all PRDs into granular implementation steps.
-2. Order these steps for optimal build speed (e.g., backend models before frontend UI).
-3. Define specific Success Criteria (including test targets) for each step.
-4. Output the result into a 'project-plan.yaml' file in the root directory.
+1. Break down all normalized PRDs (found in 'prds/') into granular implementation plans.
+2. A single PRD should typically be broken into multiple Plans to optimize for building speed and focused implementation.
+3. For each plan, create a separate Markdown file in the 'plans/' directory (e.g., 'plans/01_setup_auth.md').
+4. Each Markdown plan MUST include:
+   - id: (unique slug)
+   - title: (short name)
+   - description: (detailed what to do)
+   - dependencies: (list of plan IDs that MUST be done first)
+   - success_criteria: (list of specific, measurable checks that prove this plan works)
+   - test_targets: (specific Makefile targets to run to verify this plan)
+5. Order these plans for optimal build speed and logical dependency.
+6. Also create a 'project-plan.yaml' in the root directory that acts as an index of all plans in their intended order.
 
-SCHEMA for project-plan.yaml:
-steps:
-  - id: step_id
-    title: "Step Title"
-    description: "Detailed description of what to do"
-    dependencies: [dep_id1, dep_id2]
-    status: pending | completed
-    success_criteria:
-      - "Criteria 1"
-      - "Criteria 2"
+SCHEMA for project-plan.yaml index:
+plans:
+  - id: "01_setup_auth"
+    file: "plans/01_setup_auth.md"
+    status: "pending"
+  - id: "02_implement_user_api"
+    file: "plans/02_implement_user_api.md"
+    status: "pending"
 
-Include <promise>DONE</promise> when the plan is saved.
+Include <promise>DONE</promise> when all files are saved and the project-plan.yaml is ready.
+""",
+    "plan_normalization_prompt.txt": """You are a Plan Normalizer. Your task is to convert a Markdown implementation plan into a machine-consumable YAML format.
+
+Rules:
+- Extract all fields accurately.
+- Ensure dependencies is an array (empty [] if none).
+- Ensure success_criteria is an array of strings.
+- Ensure test_targets is an array of strings.
+- Output valid YAML only.
+- No markdown fences (no ```yaml).
+- No explanations.
+
+YAML SCHEMA:
+id: "plan_id"
+title: "Plan Title"
+description: "Detailed description"
+dependencies: ["dep1", "dep2"]
+success_criteria:
+  - "Criteria 1"
+test_targets:
+  - "test-target-1"
+status: "pending"
+
+BEGIN PLAN:
+{plan_content}
 """,
     "prd_generation_prompt.txt": """You are an expert product writer who turns discussions into concise PRDs.
 

@@ -15,6 +15,7 @@ from vibe_tools.testing import ProjectTester
 from vibe_tools.utils import (
     INSTRUCTIONS_DIR,
     PRD_DIR,
+    PLANS_DIR,
     STATE_FILE,
     PROJECT_STATE_FILE,
     ARCHITECTURE,
@@ -47,6 +48,7 @@ FRONTEND_ROOT = pathlib.Path("frontend")
 PROMPTS_DIR = pathlib.Path("prompts")
 BASE_PROMPT_TEMPLATE = PROMPTS_DIR / "ralph_base_prompt.txt"
 PLANNER_PROMPT_TEMPLATE = PROMPTS_DIR / "planner_prompt.txt"
+PLAN_NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "plan_normalization_prompt.txt"
 REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 
 MAX_ITERATIONS = 10
@@ -71,6 +73,7 @@ class RalphLoop:
         self.agent = agent
         self.stream = stream
         self.caffeinate = caffeinate
+        self.instructions = []
 
     def run(self) -> bool:
         """Executes the reconciliation loop."""
@@ -83,10 +86,18 @@ class RalphLoop:
         # 1. Compare Desired vs Current
         desired_hash = get_file_hash(self.desired_file)
         current_content = (
-            self.current_file.read_text() if self.current_file.exists() else "NOT FOUND"
+            self.current_file.read_text()
+            if self.current_file.exists()
+            else "NOT FOUND (FIRST INITIALIZATION)"
         )
 
         # 2. Prepare prompt
+        custom_instructions = ""
+        if self.instructions:
+            custom_instructions = "\nADDITIONAL PHASE-SPECIFIC INSTRUCTIONS:\n"
+            for idx, inst in enumerate(self.instructions, 1):
+                custom_instructions += f"{idx}. {inst}\n"
+
         prompt = f"""You are in the '{self.name}' phase of the project lifecycle.
 Your goal is to reconcile the DESIRED state (defined in {self.desired_file.name}) with the ACTUAL state (described in {self.current_file.name} and the current codebase).
 
@@ -96,11 +107,17 @@ DESIRED STATE ({self.desired_file.name}):
 ACTUAL STATE ({self.current_file.name}):
 {current_content}
 
+PROJECT STATUS:
+(Look at project-state.json and the filesystem to understand current progress)
+
 INSTRUCTIONS:
 1. Examine the current codebase and the actual state.
-2. Perform any necessary actions (coding, configuration, setup) to match the desired state.
-3. Update {self.current_file.name} to accurately reflect the new actual state once complete.
-4. Include {COMPLETION_PROMISE} in your response when the reconciliation is successful.
+2. If an ACTUAL state exists, perform a MIGRATION or UPGRADE to reach the DESIRED state.
+3. If no ACTUAL state exists (FIRST INITIALIZATION), perform a fresh setup of the architecture/infrastructure/config.
+4. Perform any necessary actions (coding, configuration, setup, migrations, terminal commands) to match the desired state.
+5. Update {self.current_file.name} to accurately reflect the new actual state once complete.
+6. Ensure {self.current_file.name} includes details like versions, connection strings (if safe), and directory structures.{custom_instructions}
+7. Include {COMPLETION_PROMISE} in your response when the reconciliation is successful and the actual state file has been updated.
 """
         # 3. Run Agent
         cmd = get_agent_command(self.agent, prompt)
@@ -115,7 +132,7 @@ INSTRUCTIONS:
 
 
 def run_planner_agent(agent: str, stream: bool = False) -> bool:
-    """Runs the Planner Agent to generate project-plan.yaml."""
+    """Runs the Planner Agent to generate Markdown plans and project-plan.yaml index."""
     architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
     prds = ""
     for prd_file in collect_prd_files():
@@ -138,53 +155,214 @@ PRDS:
 """
     cmd = get_agent_command(agent, prompt)
     output, code = run_agent(cmd, stream=stream)
-    return code == 0 and COMPLETION_PROMISE in output
+
+    if code == 0 and COMPLETION_PROMISE in output:
+        # Step 2: Normalize the generated plans
+        return normalize_plans(agent, stream=stream)
+    return False
 
 
-def implement_loop(agent: str, stream: bool = False) -> bool:
-    """Executes the implement phase based on project-plan.yaml."""
+def normalize_plans(agent: str, stream: bool = False) -> bool:
+    """Normalizes Markdown plans in plans/ into machine-consumable YAML files."""
     if not PROJECT_PLAN.exists():
-        logger.error(f"❌ {PROJECT_PLAN} not found.")
+        logger.error(f"❌ {PROJECT_PLAN} not found. Planning failed.")
         return False
 
-    try:
-        import yaml
+    import yaml
 
-        plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
+    try:
+        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
     except Exception as e:
         logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
         return False
 
-    steps = plan_data.get("steps", [])
-    if not steps:
-        logger.warning("No steps found in project-plan.yaml.")
+    plans = index_data.get("plans", [])
+    if not plans:
+        logger.warning("No plans found in project-plan.yaml index.")
         return True
 
-    for step in steps:
-        if step.get("status") == "completed":
+    from vibe_tools.templates import TEMPLATES
+
+    if PLAN_NORMALIZATION_PROMPT_TEMPLATE.exists():
+        prompt_base = PLAN_NORMALIZATION_PROMPT_TEMPLATE.read_text()
+    else:
+        prompt_base = TEMPLATES.get("plan_normalization_prompt.txt", "")
+
+    for plan_info in plans:
+        plan_file = pathlib.Path(plan_info.get("file"))
+        if not plan_file.exists():
+            logger.error(f"Plan file {plan_file} not found.")
             continue
 
-        logger.info(f"🚀 Executing Step: {step.get('title')} ({step.get('id')})")
+        yaml_path = plan_file.with_suffix(".yaml")
+        # Optimization: skip if yaml is newer than markdown
+        if yaml_path.exists() and yaml_path.stat().st_mtime > plan_file.stat().st_mtime:
+            continue
 
-        prompt = f"""You are the Implementation Agent. Your task is to execute a specific step from the project plan.
-
-STEP TO EXECUTE:
-Title: {step.get('title')}
-Description: {step.get('description')}
-Success Criteria:
-{chr(10).join(['- ' + c for c in step.get('success_criteria', [])])}
-
-TASK:
-1. Implement the code, tests, and configuration required for THIS STEP ONLY.
-2. Verify the changes against the success criteria.
-3. Update {PROJECT_PLAN.name} to set status of step '{step.get('id')}' to 'completed'.
-4. Include {COMPLETION_PROMISE} when the step is finished.
-"""
+        logger.info(f"🔄 Normalizing plan: {plan_file.name} -> {yaml_path.name}...")
+        prompt = prompt_base.replace("{plan_content}", plan_file.read_text())
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
 
-        if code != 0 or COMPLETION_PROMISE not in output:
-            logger.error(f"❌ Failed at step {step.get('id')}.")
+        if code == 0:
+            # Clean markdown code fences if present
+            clean_output = output.strip()
+            if clean_output.startswith("```"):
+                lines = clean_output.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_output = "\n".join(lines).strip()
+
+            yaml_path.write_text(clean_output)
+            logger.info(f"✅ Saved: {yaml_path}")
+        else:
+            logger.error(f"❌ Failed to normalize plan {plan_file.name}")
+            return False
+
+    return True
+
+
+def implementation_loop(agent: str, stream: bool = False) -> bool:
+    """Executes the implementation phase based on granular YAML plans."""
+    if not PROJECT_PLAN.exists():
+        logger.error(f"❌ {PROJECT_PLAN} not found.")
+        return False
+
+    import yaml
+
+    try:
+        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
+    except Exception as e:
+        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
+        return False
+
+    plans_list = index_data.get("plans", [])
+    if not plans_list:
+        logger.warning("No plans found in project-plan.yaml index.")
+        return True
+
+    from vibe_tools.cli import load_config
+
+    config = load_config()
+    ralph_config = config.get("ralph", {})
+    review = ralph_config.get("review", True)
+    tests = ralph_config.get("tests", True)
+
+    for plan_info in plans_list:
+        plan_id = plan_info.get("id")
+        plan_md_path = pathlib.Path(plan_info.get("file"))
+        plan_yaml_path = plan_md_path.with_suffix(".yaml")
+
+        if not plan_yaml_path.exists():
+            logger.error(f"Normalized plan {plan_yaml_path} not found. Skipping.")
+            continue
+
+        try:
+            plan_data = yaml.safe_load(plan_yaml_path.read_text())
+        except Exception as e:
+            logger.error(f"Failed to parse {plan_yaml_path}: {e}")
+            continue
+
+        if plan_data.get("status") == "completed":
+            continue
+
+        logger.info(f"🚀 Executing Plan: {plan_data.get('title')} ({plan_id})")
+        branch_name = f"feature/{plan_id}"
+        _switch_to_branch(branch_name, agent, plan_id, stream=stream)
+
+        success = False
+        for i in range(1, MAX_ITERATIONS + 1):
+            logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{MAX_ITERATIONS}")
+
+            # 1. Implementation
+            prompt = f"""You are the Implementation Agent. Your task is to execute a specific plan.
+
+PLAN TO EXECUTE:
+Title: {plan_data.get('title')}
+Description: {plan_data.get('description')}
+Success Criteria:
+{chr(10).join(['- ' + c for c in plan_data.get('success_criteria', [])])}
+
+TASK:
+1. Implement the code and configuration required for THIS PLAN.
+2. Verify your changes against the success criteria.
+3. Include {COMPLETION_PROMISE} in your response when the implementation is finished.
+"""
+            cmd = get_agent_command(agent, prompt)
+            output, code = run_agent(cmd, stream=stream)
+
+            if code != 0 or COMPLETION_PROMISE not in output:
+                logger.warning(f"⏳ Implementation in progress for {plan_id}...")
+                continue
+
+        # 2. Quality Gates
+        logger.info("🧪 Running Quality Gates...")
+        passed_gates = True
+
+        if tests:
+            test_targets = plan_data.get("test_targets", ["test"])
+            if not test_targets:
+                test_targets = ["test"]
+
+            for target in test_targets:
+                logger.info(f"Running test target: {target}")
+                stdout, test_code = run_command(["make", target], check=False)
+                if test_code != 0:
+                    logger.error(f"❌ Test target {target} failed.")
+                    logger.debug(f"Test failure output:\n{stdout}")
+                    passed_gates = False
+                    break
+
+        if passed_gates and review:
+            logger.info("🔎 Running Agentic Review for Success Criteria...")
+            review_prompt = f"""You are the Quality Assurance Agent. Your task is to verify that the implementation of Plan '{plan_data.get('title')}' meets all success criteria.
+
+PLAN DESCRIPTION:
+{plan_data.get('description')}
+
+SUCCESS CRITERIA TO VERIFY:
+{chr(10).join(['- ' + c for c in plan_data.get('success_criteria', [])])}
+
+ACTUAL CHANGES:
+(Examine the current codebase and tests)
+
+TASK:
+1. Verify each success criterion one by one.
+2. If the implementation meets ALL criteria, respond with: <review>PASSED</review>
+3. Otherwise, list the specific criteria that failed and why.
+"""
+            review_cmd = get_agent_command(agent, review_prompt)
+            review_output, _ = run_agent(review_cmd, stream=stream)
+            if "<review>PASSED</review>" not in review_output:
+                logger.error("❌ Agentic review failed.")
+                logger.info(f"Review feedback:\n{review_output}")
+                passed_gates = False
+
+        if passed_gates:
+            success = True
+            break
+        else:
+            logger.info("🔄 Retrying implementation to fix quality issues...")
+
+        if success:
+            logger.info(f"✅ Plan {plan_id} completed successfully.")
+            # Commit changes
+            commit_prompt = f"Commit changes for plan: {plan_data.get('title')}. Ensure all success criteria were met."
+            commit_cmd = get_agent_command(agent, commit_prompt)
+            run_agent(commit_cmd, stream=stream)
+
+            # Update status
+            plan_data["status"] = "completed"
+            plan_yaml_path.write_text(yaml.dump(plan_data))
+
+            # Switch back to main
+            _switch_to_main()
+        else:
+            logger.error(
+                f"❌ Failed to complete plan {plan_id} after {MAX_ITERATIONS} iterations."
+            )
             return False
 
     return True
