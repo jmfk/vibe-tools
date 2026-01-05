@@ -18,7 +18,7 @@ class OrderedGroup(click.Group):
             "setup",
             "normalize",
             "plan",
-            "implementation",
+            "implement",
             "infra",
             "cicd",
             "testing",
@@ -306,7 +306,7 @@ def init():
 )
 @click.pass_context
 def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
-    """[DEPRECATED] legacy Ralph loop. Use vibe setup/plan/implementation instead."""
+    """[DEPRECATED] legacy Ralph loop. Use vibe setup/plan/implement instead."""
     click.echo(click.style("\n" + "!" * 60, fg="red", bold=True))
     click.echo(
         click.style(
@@ -320,7 +320,7 @@ def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
     click.echo("  vibe setup          - Phase 1: Architecture")
     click.echo("  vibe normalize      - Phase 2: Standardize Specs")
     click.echo("  vibe plan           - Phase 3: Project Planning")
-    click.echo("  vibe implementation - Phase 4: Building")
+    click.echo("  vibe implement      - Phase 4: Building")
     click.echo("")
     if not click.confirm("Proceed with legacy Ralph loop?", default=False):
         return
@@ -924,30 +924,30 @@ def plan(ctx):
         click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
         click.echo("\nNext Steps:")
         click.echo("[ ] Review/Edit project-plan.yaml")
-        click.echo("[ ] Start Building (vibe implementation)")
+        click.echo("[ ] Start Building (vibe implement)")
     else:
         click.echo("❌ Project planning failed.")
 
 
 @cli.command()
 @click.pass_context
-def implementation(ctx):
-    """Phase 4: Implementation. Iterates through the project-plan.yaml."""
+def implement(ctx):
+    """Phase 4: Implement. Iterates through the project-plan.yaml."""
     state = load_project_state()
     if state["phases"]["plan"]["status"] != "completed":
         click.echo(
-            "❌ Plan phase must be completed before implementation. Run 'vibe plan'."
+            "❌ Plan phase must be completed before implementing. Run 'vibe plan'."
         )
         return
 
-    from vibe_tools.ralph import implementation_loop
+    from vibe_tools.ralph import implement_loop
 
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
-    success = implementation_loop(agent, stream=stream)
+    success = implement_loop(agent, stream=stream)
     if success:
-        state["phases"]["implementation"]["status"] = "completed"
+        state["phases"]["implement"]["status"] = "completed"
         save_project_state(state)
         click.echo("✅ Implementation complete.")
         click.echo("\nNext Steps:")
