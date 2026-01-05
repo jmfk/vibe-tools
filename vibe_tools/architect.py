@@ -31,11 +31,24 @@ class ArchitectCompleter:
         self.architect = architect
         # Sort commands so cycling order is predictable (alphabetical)
         # We only show the full commands in the completion list
-        self.commands = sorted([
-            "/send", "/reset", "/mode", "/ask", "/agent",
-            "/show", "/edit", "/history", "/files", "/add",
-            "/list", "/exit", "/conf", "/help"
-        ])
+        self.commands = sorted(
+            [
+                "/send",
+                "/reset",
+                "/mode",
+                "/ask",
+                "/agent",
+                "/show",
+                "/edit",
+                "/history",
+                "/files",
+                "/add",
+                "/list",
+                "/exit",
+                "/conf",
+                "/help",
+            ]
+        )
         self.subcommands = {
             "/files": sorted(["list", "add", "remove"]),
             "/history": sorted(["list", "view", "remove"]),
@@ -46,19 +59,19 @@ class ArchitectCompleter:
 
     def complete(self, text, state):
         buffer = readline.get_line_buffer() if readline else ""
-        
+
         # If there's no space, we are completing the primary command
         if " " not in buffer:
             if buffer.startswith("/"):
                 options = [c for c in self.commands if c.startswith(text)]
                 return options[state] if state < len(options) else None
             return None
-        
+
         # We have at least one space, so we are in subcommand/argument territory
         parts = buffer.split()
         if not parts:
             return None
-            
+
         cmd = parts[0].lower()
         # Only complete if we are currently on the second word (the subcommand)
         # Check if there is only one space in the buffer (ignoring trailing)
@@ -67,7 +80,7 @@ class ArchitectCompleter:
                 subs = self.subcommands[cmd]
                 options = [s for s in subs if s.startswith(text)]
                 return options[state] if state < len(options) else None
-        
+
         return None
 
 
@@ -86,7 +99,8 @@ class InteractiveArchitect:
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
         self.stream = stream
         self.history: List[Dict[str, str]] = []
-        self.current_query: str = ""
+        self.pending_prompt: str = ""
+        self.session_memory: str = ""
         self.additional_files: List[pathlib.Path] = []
         self.config = self._load_config()
         self.mode = "ASK"  # Default mode
@@ -97,23 +111,23 @@ class InteractiveArchitect:
         if readline:
             readline.set_completer(ArchitectCompleter(self).complete)
             # Remove / from delimiters so /command is treated as one word
-            readline.set_completer_delims(' \t\n;')
-            
-            if hasattr(readline, 'set_auto_history'):
+            readline.set_completer_delims(" \t\n;")
+
+            if hasattr(readline, "set_auto_history"):
                 readline.set_auto_history(True)
-            
+
             if "libedit" in readline.__doc__:  # macOS compatibility
                 # macOS default is often libedit
                 readline.parse_and_bind("bind ^I menu-complete")
                 readline.parse_and_bind('bind "\033[Z" backward-menu-complete')
-                readline.parse_and_bind("bind -e") # use emacs keybindings
+                readline.parse_and_bind("bind -e")  # use emacs keybindings
             else:
                 # GNU Readline
                 readline.parse_and_bind("tab: menu-complete")
                 readline.parse_and_bind('"\e[Z": menu-complete-backward')
                 # Bind Escape to clear line
                 readline.parse_and_bind('"\e": kill-whole-line')
-            
+
             # Setup history file
             history_file = VIBE_PROJECT_DIR / ".architect_history"
             if history_file.exists():
@@ -122,6 +136,7 @@ class InteractiveArchitect:
                 except Exception:
                     pass
             import atexit
+
             atexit.register(self._save_readline_history, history_file)
 
     def _save_readline_history(self, history_file):
@@ -136,6 +151,7 @@ class InteractiveArchitect:
         if ARCH_CONFIG_FILE.exists():
             try:
                 import json
+
                 return json.loads(ARCH_CONFIG_FILE.read_text())
             except Exception:
                 pass
@@ -143,6 +159,7 @@ class InteractiveArchitect:
 
     def _save_config(self):
         import json
+
         ensure_dir(ARCH_CONFIG_FILE.parent)
         ARCH_CONFIG_FILE.write_text(json.dumps(self.config, indent=2))
 
@@ -150,22 +167,28 @@ class InteractiveArchitect:
         if ARCH_SESSION_FILE.exists():
             try:
                 import json
+
                 data = json.loads(ARCH_SESSION_FILE.read_text())
                 self.history = data.get("history", [])
-                self.current_query = data.get("current_query", "")
-                self.additional_files = [pathlib.Path(f) for f in data.get("additional_files", [])]
+                self.pending_prompt = data.get("pending_prompt", "")
+                self.session_memory = data.get("session_memory", "")
+                self.additional_files = [
+                    pathlib.Path(f) for f in data.get("additional_files", [])
+                ]
                 self.mode = data.get("mode", "ASK")
             except Exception as e:
                 logger.debug(f"Error loading architect session: {e}")
 
     def _save_session(self):
         import json
+
         ensure_dir(ARCH_SESSION_FILE.parent)
         data = {
             "history": self.history,
-            "current_query": self.current_query,
+            "pending_prompt": self.pending_prompt,
+            "session_memory": self.session_memory,
             "additional_files": [str(f) for f in self.additional_files],
-            "mode": self.mode
+            "mode": self.mode,
         }
         ARCH_SESSION_FILE.write_text(json.dumps(data, indent=2))
 
@@ -176,27 +199,22 @@ class InteractiveArchitect:
         click.echo("Type /help for available commands.\n")
 
         if initial_prompt:
-            self.current_query = initial_prompt
-            self._ask_to_send()
+            self.pending_prompt = initial_prompt
+            self._save_session()
+            self._show_prompt_summary()
 
         while True:
             mode_color_code = "32" if self.mode == "ASK" else "31"  # Green or Red
             # Standard ANSI escape codes
-            # \001 (RL_PROMPT_START_IGNORE) and \002 (RL_PROMPT_END_IGNORE) 
-            # MUST wrap ONLY the non-printing escape sequences.
-            
             ESC = "\x1b"
             START = "\001"
             END = "\002"
-            
             RESET = f"{START}{ESC}[0m{END}"
             MODE_COLOR = f"{START}{ESC}[{mode_color_code}m{END}"
             BOLD = f"{START}{ESC}[1m{END}"
-            
             prompt_symbol = f"{MODE_COLOR}({self.mode}){RESET} {BOLD}👤{RESET} "
-            
+
             try:
-                # Using standard input for readline support
                 user_input = input(prompt_symbol).strip()
             except EOFError:
                 break
@@ -212,19 +230,34 @@ class InteractiveArchitect:
                     break
                 continue
 
-            # Regular text input is no longer auto-appended
-            click.echo(click.style("ℹ️  Use /a <text> to add info to the pending prompt, or /s to send it.", fg="blue"))
-            if self.current_query or self.additional_files:
-                self._ask_to_send()
+            # Regular text input updates the pending prompt
+            if self.pending_prompt:
+                self.pending_prompt += f"\n{user_input}"
+            else:
+                self.pending_prompt = user_input
 
-    def _ask_to_send(self):
-        if not self.current_query and not self.additional_files:
+            self._save_session()
+            self._show_prompt_summary()
+
+    def _show_prompt_summary(self):
+        if not self.pending_prompt:
             return
-            
-        prompt = self._build_prompt()
-        size_kb = len(prompt) / 1024
-        click.echo(click.style(f"\n📝 Pending prompt: {size_kb:.2f} KB", fg="yellow"))
-        click.echo("Type /s to send to Architect, /r to reset, or /a to add more info.")
+
+        lines = self.pending_prompt.splitlines()
+        count = len(lines)
+        click.echo(
+            click.style(f"\n📝 Pending Prompt ({count} lines):", fg="yellow", bold=True)
+        )
+        for line in lines[:5]:
+            click.echo(f"  {line}")
+        if count > 5:
+            click.echo(f"  ... (+{count-5} more lines)")
+
+        click.echo(
+            click.style(
+                "Type /s to send, /r to reset, or keep typing to add more.\n", dim=True
+            )
+        )
 
     def _handle_slash_command(self, command_str: str) -> bool:
         """Returns True if the loop should exit."""
@@ -259,24 +292,38 @@ class InteractiveArchitect:
         if cmd == "/help":
             self._show_help()
         elif cmd == "/send":
-            if not self.current_query and not self.additional_files:
-                click.echo("❌ Nothing to send. Type something first using /a <text>.")
+            if not self.pending_prompt and not self.additional_files:
+                click.echo("❌ Nothing to send. Type something first.")
             else:
                 self._dispatch_agent()
         elif cmd == "/reset":
-            self.current_query = ""
+            self.pending_prompt = ""
+            self.session_memory = ""
             self.additional_files = []
             self._save_session()
-            click.echo("✅ Pending prompt and files reset.")
+            click.echo("✅ Session memory and pending prompt reset.")
         elif cmd == "/add":
             if args:
-                if self.current_query:
-                    self.current_query += f"\n{args}"
+                if self.session_memory:
+                    self.session_memory += f"\n{args}"
                 else:
-                    self.current_query = args
+                    self.session_memory = args
                 self._save_session()
-                click.echo(f"✅ Added text to pending prompt.")
-                self._ask_to_send()
+
+                # Show summary of memory
+                lines = self.session_memory.splitlines()
+                count = len(lines)
+                click.echo(
+                    click.style(
+                        f"✅ Session Memory Updated ({count} lines):",
+                        fg="green",
+                        bold=True,
+                    )
+                )
+                for line in lines[:5]:
+                    click.echo(f"  {line}")
+                if count > 5:
+                    click.echo(f"  ... (+{count-5} more lines)")
             else:
                 click.echo("❌ Usage: /add <text>")
         elif cmd == "/show":
@@ -332,10 +379,16 @@ class InteractiveArchitect:
         click.echo("  /ask, /agent     - Shortcut to switch modes")
         click.echo("  /show [arch|infra] - Display current specs")
         click.echo("  /edit [path]     - Open file in code editor")
-        click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
-        click.echo("  /files, /f [list|add <path>|remove <path>] - Manage additional context files")
+        click.echo(
+            "  /history [list|view <idx>|remove <idx>] - Manage interaction history"
+        )
+        click.echo(
+            "  /files, /f [list|add <path>|remove <path>] - Manage additional context files"
+        )
         click.echo("  /list memory, /l - List pending text, files, and history summary")
-        click.echo("  /conf [md|code] <editor_cmd> - Configure preferred editor (e.g. /conf md typora)")
+        click.echo(
+            "  /conf [md|code] <editor_cmd> - Configure preferred editor (e.g. /conf md typora)"
+        )
         click.echo("  /help, /h        - Show this help message")
         click.echo("  /c               - Clear the shell prompt history")
         click.echo("  /exit, /q        - Exit the session")
@@ -345,9 +398,11 @@ class InteractiveArchitect:
             click.echo("❌ Usage: /conf [md|code] <editor_cmd>")
             return
         if not editor:
-            click.echo(f"Current {target} editor: {self.config.get(f'{target}_editor') or 'None'}")
+            click.echo(
+                f"Current {target} editor: {self.config.get(f'{target}_editor') or 'None'}"
+            )
             return
-        
+
         self.config[f"{target}_editor"] = editor
         self._save_config()
         click.echo(f"✅ Set {target} editor to: {editor}")
@@ -361,7 +416,7 @@ class InteractiveArchitect:
         else:
             click.echo("❌ Usage: /mode [ASK|AGENT]")
             return
-        
+
         self._save_session()
         color = "green" if self.mode == "ASK" else "red"
         click.echo(f"✅ Switched to {click.style(self.mode, fg=color)} mode.")
@@ -374,14 +429,17 @@ class InteractiveArchitect:
         if not p.exists():
             click.echo(f"❌ File not found: {path_str}")
             return
-        
+
         editor = self.config.get("code_editor") or self.config.get("md_editor")
         if not editor:
-            click.echo("❌ No editor configured. Use /conf code <cmd> or /conf md <cmd> first.")
+            click.echo(
+                "❌ No editor configured. Use /conf code <cmd> or /conf md <cmd> first."
+            )
             return
-        
+
         try:
             import subprocess
+
             subprocess.Popen([editor, str(p)])
             click.echo(f"🚀 Opening {p} in {editor}...")
         except Exception as e:
@@ -398,7 +456,7 @@ class InteractiveArchitect:
                 idx = int(args)
                 h = self.history[idx]
                 click.echo(f"\n--- History [{idx}] ({h['role'].upper()}) ---")
-                click.echo(h['content'])
+                click.echo(h["content"])
             except (ValueError, IndexError):
                 click.echo("❌ Invalid history index.")
         elif sub_cmd == "remove":
@@ -434,28 +492,62 @@ class InteractiveArchitect:
                 click.echo(f"❌ File not in context: {args}")
 
     def _list_memory(self):
-        click.echo("\n--- Current Memory ---")
-        click.echo(click.style("Pending Prompt:", bold=True))
-        click.echo(self.current_query or "(empty)")
+        click.echo("\n--- Session Status ---")
+
+        # Session Memory (Persistent)
+        click.echo(
+            click.style("Session Memory (Persistent - added via /a):", bold=True)
+        )
+        if self.session_memory:
+            lines = self.session_memory.splitlines()
+            for line in lines[:5]:
+                click.echo(f"  {line}")
+            if len(lines) > 5:
+                click.echo(f"  ... (+{len(lines)-5} more lines)")
+            click.echo(f"  ({len(lines)} lines total)")
+        else:
+            click.echo("  (empty)")
+
+        # Pending Prompt
+        click.echo(click.style("\nPending Prompt (Current task):", bold=True))
+        if self.pending_prompt:
+            lines = self.pending_prompt.splitlines()
+            for line in lines[:5]:
+                click.echo(f"  {line}")
+            if len(lines) > 5:
+                click.echo(f"  ... (+{len(lines)-5} more lines)")
+            click.echo(f"  ({len(lines)} lines total)")
+        else:
+            click.echo("  (empty)")
+
+        # Files
         click.echo(click.style("\nIncluded Files:", bold=True))
         if not self.additional_files:
-            click.echo("(none)")
+            click.echo("  (none)")
         for f in self.additional_files:
-            click.echo(f"- {f}")
-        
+            click.echo(f"  - {f}")
+
+        # History
         click.echo(click.style("\nHistory Summary (Sent Prompts):", bold=True))
-        sent_prompts = [h for h in self.history if h['role'] == 'user']
+        sent_prompts = [h for h in self.history if h["role"] == "user"]
         if not sent_prompts:
-            click.echo("(none)")
-        for i, h in enumerate(sent_prompts):
-            title = h['content'].splitlines()[0][:60]
-            click.echo(f"[{i}] {title}...")
+            click.echo("  (none)")
+        else:
+            for i, h in enumerate(sent_prompts):
+                title = h["content"].splitlines()[0][:60]
+                click.echo(f"  [{i}] {title}...")
+
+        # Total Payload size
+        prompt = self._build_prompt()
+        size_kb = len(prompt) / 1024
+        click.echo(f"\n📦 Total payload: {size_kb:.2f} KB")
         click.echo("----------------------")
 
     def _build_prompt(self) -> str:
         template_path = self.prompts_dir / self.PROMPT_FILENAME
         if not template_path.exists():
             from vibe_tools.templates import TEMPLATES
+
             content = TEMPLATES.get(self.PROMPT_FILENAME)
             if content:
                 ensure_dir(self.prompts_dir)
@@ -463,18 +555,33 @@ class InteractiveArchitect:
             else:
                 raise click.ClickException(f"Missing prompt template: {template_path}")
 
-        arch_content = ARCHITECTURE_SPEC.read_text() if ARCHITECTURE_SPEC.exists() else "No architecture.md found."
-        infra_content = INFRA_SPEC.read_text() if INFRA_SPEC.exists() else "No infrastructure.md found."
+        arch_content = (
+            ARCHITECTURE_SPEC.read_text()
+            if ARCHITECTURE_SPEC.exists()
+            else "No architecture.md found."
+        )
+        infra_content = (
+            INFRA_SPEC.read_text()
+            if INFRA_SPEC.exists()
+            else "No infrastructure.md found."
+        )
 
-        history_text = "\n".join([f"{h['role'].upper()}: {h['content']}" for h in self.history])
-        
+        history_text = "\n".join(
+            [f"{h['role'].upper()}: {h['content']}" for h in self.history]
+        )
+
         # Build additional files context
         files_context = ""
         for f in self.additional_files:
             try:
-                files_context += f"\n\n--- FILE: {f} ---\n{f.read_text()}\n--- END FILE: {f} ---"
+                files_context += (
+                    f"\n\n--- FILE: {f} ---\n{f.read_text()}\n--- END FILE: {f} ---"
+                )
             except Exception as e:
                 click.echo(f"⚠️ Error reading {f}: {e}")
+
+        # Combine global instructions with session memory
+        instructions = get_instructions_context()
 
         mode_instructions = ""
         if self.mode == "ASK":
@@ -482,26 +589,35 @@ class InteractiveArchitect:
         else:
             mode_instructions = "CURRENT MODE: AGENT. You ARE authorized to propose changes to architecture.md or infrastructure.md using the FILE_UPDATE: [arch|infra] tag as specified in the rules."
 
+        user_memory_text = ""
+        if self.session_memory:
+            user_memory_text = (
+                f"SESSION MEMORY (Persistent Instructions):\n{self.session_memory}"
+            )
+
         return template_path.read_text().format(
             mode=self.mode,
             mode_instructions=mode_instructions,
             architecture_content=arch_content,
             infrastructure_content=infra_content,
-            instructions=get_instructions_context(),
+            instructions=instructions,
+            user_memory=user_memory_text,
             history=history_text + files_context,
-            query=self.current_query,
+            query=self.pending_prompt,
         )
 
     def _dispatch_agent(self):
         prompt = self._build_prompt()
-        query = self.current_query
-        
+        query = self.pending_prompt
+
         click.echo("⏳ Architect is thinking... (Ctrl-C to cancel)")
         command = get_agent_command(self.agent_type, prompt)
-        
+
         # If streaming, show mode prefix before output
         if self.stream:
-            mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+            mode_prefix = click.style(
+                f"({self.mode})", fg="green" if self.mode == "ASK" else "red"
+            )
             click.echo(f"{mode_prefix} 🤖 ", nl=False)
 
         try:
@@ -515,31 +631,37 @@ class InteractiveArchitect:
             return
 
         self.history.append({"role": "user", "content": query})
-        self.current_query = "" # Clear after successful send
-        
+        self.pending_prompt = ""  # Clear after successful send
+
         # Check for file updates
         if "FILE_UPDATE:" in output:
             parts = output.split("FILE_UPDATE:", 1)
             thinking = parts[0].strip()
             update_part = parts[1].strip()
-            
+
             lines = update_part.splitlines()
             header = lines[0]
             content = "\n".join(lines[1:])
-            
+
             if thinking and not self.stream:
-                mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+                mode_prefix = click.style(
+                    f"({self.mode})", fg="green" if self.mode == "ASK" else "red"
+                )
                 click.echo(f"\n{mode_prefix} 🤖 Thinking: {thinking}")
 
             if "arch" in header.lower():
                 ARCHITECTURE_SPEC.write_text(content)
                 click.echo(f"✅ Updated {ARCHITECTURE_SPEC}")
-                self.history.append({"role": "architect", "content": "Updated architecture.md"})
+                self.history.append(
+                    {"role": "architect", "content": "Updated architecture.md"}
+                )
                 self._handle_response_display(content, ARCHITECTURE_SPEC)
             elif "infra" in header.lower():
                 INFRA_SPEC.write_text(content)
                 click.echo(f"✅ Updated {INFRA_SPEC}")
-                self.history.append({"role": "architect", "content": "Updated infrastructure.md"})
+                self.history.append(
+                    {"role": "architect", "content": "Updated infrastructure.md"}
+                )
                 self._handle_response_display(content, INFRA_SPEC)
             else:
                 self.history.append({"role": "architect", "content": output})
@@ -551,7 +673,9 @@ class InteractiveArchitect:
         self._save_session()
         click.echo("")
 
-    def _handle_response_display(self, content: str, path: Optional[pathlib.Path] = None):
+    def _handle_response_display(
+        self, content: str, path: Optional[pathlib.Path] = None
+    ):
         """Decide whether to show the response in terminal or open in an editor."""
         if self.stream:
             # Already displayed during stream, maybe just offer to open in editor
@@ -559,14 +683,16 @@ class InteractiveArchitect:
 
         md_editor = self.config.get("md_editor")
         code_editor = self.config.get("code_editor")
-        mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+        mode_prefix = click.style(
+            f"({self.mode})", fg="green" if self.mode == "ASK" else "red"
+        )
 
         if not md_editor and not code_editor:
             # Just show it
             click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
             if path and path.suffix == ".md":
                 self._print_styled_markdown(content)
-            elif content.strip().startswith("#"): # detected MD
+            elif content.strip().startswith("#"):  # detected MD
                 self._print_styled_markdown(content)
             else:
                 click.echo(content)
@@ -574,25 +700,34 @@ class InteractiveArchitect:
 
         # Editors are configured, ask the user
         detected = self._detect_content_type(content)
-        
+
         options = ["s"]
         prompt_parts = ["[s]how in terminal"]
-        if md_editor: 
+        if md_editor:
             options.append("m")
             prompt_parts.append("[m]arkdown editor")
-        if code_editor: 
+        if code_editor:
             options.append("c")
             prompt_parts.append("[c]ode editor")
-        
-        prompt_text = f"\n{mode_prefix} 🤖 Response ready. " + ", ".join(prompt_parts) + "?"
-        
+
+        prompt_text = (
+            f"\n{mode_prefix} 🤖 Response ready. " + ", ".join(prompt_parts) + "?"
+        )
+
         # Decide default based on detection
         default_choice = "s"
-        if detected == "md" and md_editor: default_choice = "m"
-        elif detected == "code" and code_editor: default_choice = "c"
-        
-        choice = click.prompt(prompt_text, type=click.Choice(options), default=default_choice, show_choices=False)
-        
+        if detected == "md" and md_editor:
+            default_choice = "m"
+        elif detected == "code" and code_editor:
+            default_choice = "c"
+
+        choice = click.prompt(
+            prompt_text,
+            type=click.Choice(options),
+            default=default_choice,
+            show_choices=False,
+        )
+
         if choice == "m":
             self._open_in_editor(content, md_editor, ".md", path)
         elif choice == "c":
@@ -607,39 +742,74 @@ class InteractiveArchitect:
 
     def _detect_content_type(self, content: str) -> str:
         stripped = content.strip()
-        
+
         # Obvious code block wrapper
-        if stripped.startswith("```") and stripped.endswith("```") and stripped.count("```") == 2:
+        if (
+            stripped.startswith("```")
+            and stripped.endswith("```")
+            and stripped.count("```") == 2
+        ):
             return "code"
 
         # Common code keywords (Python, JS, TS, etc.)
-        code_keywords = ["import ", "from ", "def ", "class ", "const ", "let ", "function ", "public ", "private ", "void ", "int ", "str "]
+        code_keywords = [
+            "import ",
+            "from ",
+            "def ",
+            "class ",
+            "const ",
+            "let ",
+            "function ",
+            "public ",
+            "private ",
+            "void ",
+            "int ",
+            "str ",
+        ]
         if any(k in content for k in code_keywords):
             # Check if it also has significant MD markers to distinguish from MD containing code
-            if not (stripped.startswith("# ") or "\n# " in content or "\n## " in content):
+            if not (
+                stripped.startswith("# ") or "\n# " in content or "\n## " in content
+            ):
                 return "code"
-            
+
             # If it has both code keywords and MD headers, check ratio or just return MD
             # But if headers are just '#' (could be comments), be careful.
             # MD headers usually have space: "# Title"
-            has_md_headers = stripped.startswith("# ") or "\n# " in content or "\n## " in content
+            has_md_headers = (
+                stripped.startswith("# ") or "\n# " in content or "\n## " in content
+            )
             if not has_md_headers and ("{" in content and "}" in content):
                 return "code"
 
         # MD markers: headers with spaces, bold, lists
-        if stripped.startswith("# ") or "\n# " in content or "\n- " in content or "\n* " in content or "**" in content:
+        if (
+            stripped.startswith("# ")
+            or "\n# " in content
+            or "\n- " in content
+            or "\n* " in content
+            or "**" in content
+        ):
             return "md"
-            
+
         if "```" in content:
             return "code"
-            
+
         return "md"
 
-    def _open_in_editor(self, content: str, editor: str, suffix: str, path: Optional[pathlib.Path] = None):
+    def _open_in_editor(
+        self,
+        content: str,
+        editor: str,
+        suffix: str,
+        path: Optional[pathlib.Path] = None,
+    ):
         if not path:
             # Create a temporary file for raw responses
             try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False) as f:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=suffix, delete=False
+                ) as f:
                     f.write(content)
                     path_str = f.name
                 click.echo(f"📝 Created temporary file: {path_str}")
@@ -648,7 +818,7 @@ class InteractiveArchitect:
                 return
         else:
             path_str = str(path)
-            
+
         try:
             subprocess.Popen([editor, path_str])
             click.echo(f"🚀 Opened in {editor}")
@@ -658,9 +828,15 @@ class InteractiveArchitect:
     def _maybe_open_editor(self, path: pathlib.Path):
         # This is now handled by _handle_response_display during agent dispatch,
         # but kept for legacy or other manual calls.
-        editor = self.config.get("md_editor") if path.suffix == ".md" else self.config.get("code_editor")
+        editor = (
+            self.config.get("md_editor")
+            if path.suffix == ".md"
+            else self.config.get("code_editor")
+        )
         if editor:
-            if click.confirm(f"🚀 Update detected. Open {path.name} in {editor}?", default=True):
+            if click.confirm(
+                f"🚀 Update detected. Open {path.name} in {editor}?", default=True
+            ):
                 try:
                     subprocess.Popen([editor, str(path)])
                 except Exception as e:
@@ -670,25 +846,34 @@ class InteractiveArchitect:
         if not path.exists():
             click.echo(f"❌ File not found: {path}")
             return
-        
+
         # Check if we should open in editor
-        editor = self.config.get("md_editor") if path.suffix == ".md" else self.config.get("code_editor")
+        editor = (
+            self.config.get("md_editor")
+            if path.suffix == ".md"
+            else self.config.get("code_editor")
+        )
         if editor:
             if click.confirm(f"Open {path.name} in {editor}?", default=True):
                 try:
                     import subprocess
+
                     subprocess.Popen([editor, str(path)])
                     return
                 except Exception as e:
                     click.echo(f"⚠️ Failed to open editor: {e}")
 
-        click.echo(f"\n{click.style('--- ' + path.name + ' ---', fg='cyan', bold=True)}")
+        click.echo(
+            f"\n{click.style('--- ' + path.name + ' ---', fg='cyan', bold=True)}"
+        )
         content = path.read_text()
         if path.suffix == ".md":
             self._print_styled_markdown(content)
         else:
             click.echo(content)
-        click.echo(f"{click.style('--- END OF ' + path.name + ' ---', fg='cyan', bold=True)}\n")
+        click.echo(
+            f"{click.style('--- END OF ' + path.name + ' ---', fg='cyan', bold=True)}\n"
+        )
 
     def _print_styled_markdown(self, content: str):
         lines = content.splitlines()
@@ -706,4 +891,3 @@ class InteractiveArchitect:
                 click.echo(line)
 
         click.echo("")
-
