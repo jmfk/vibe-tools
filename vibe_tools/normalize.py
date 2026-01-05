@@ -1,16 +1,32 @@
 import pathlib
 import re
 import sys
+from typing import Dict, List, Any
 
 import click
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.utils import get_agent_command, run_agent, VIBE_PROJECT_DIR, PRD_DIR, get_prompt
+from vibe_tools.utils import (
+    get_agent_command,
+    run_agent,
+    VIBE_PROJECT_DIR,
+    PRD_DIR,
+    PLANS_DIR,
+    COMPILED_PLANS_DIR,
+    PROJECT_PLAN,
+    get_prompt,
+    load_project_state,
+    save_project_state,
+    logger
+)
+
+import yaml
 
 DEFAULT_SPECS_DIR = pathlib.Path("specs")
 
 
 def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False):
+    # ... existing code ...
     from vibe_tools.cli import load_config
 
     config = load_config()
@@ -146,3 +162,104 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
                 save_project_state(state)
         else:
             print(f"❌ Failed to normalize {spec_path.name}")
+
+
+def _extract_all_plans(index_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Helper to extract all plan objects from the nested phases/prds structure."""
+    all_plans = []
+    phases = index_data.get("phases", {})
+
+    # Standard phases: setup, infra, cicd
+    for phase_name in ["setup", "infra", "cicd"]:
+        phase_data = phases.get(phase_name, {})
+        all_plans.extend(phase_data.get("plans", []))
+
+    # Implementation phase: grouped by PRDs
+    implement = phases.get("implement", {})
+    prds = implement.get("prds", [])
+    for prd in prds:
+        all_plans.extend(prd.get("plans", []))
+
+    return all_plans
+
+
+def normalize_plans(agent: str, stream: bool = False) -> bool:
+    """Normalizes Markdown plans in plans/ into machine-consumable YAML files in compiled_plans/."""
+    from vibe_tools.utils import migrate_to_project_dir
+
+    migrate_to_project_dir()
+
+    if not PROJECT_PLAN.exists():
+        logger.error(f"❌ {PROJECT_PLAN} not found. Planning failed.")
+        return False
+
+    try:
+        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
+    except Exception as e:
+        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
+        return False
+
+    all_plans = _extract_all_plans(index_data)
+    if not all_plans:
+        logger.warning("No plans found in project-plan.yaml index.")
+        return True
+
+    try:
+        prompt_base = get_prompt("plan_normalization_prompt.txt")
+    except FileNotFoundError as e:
+        logger.error(f"Error: {e}")
+        return False
+
+    COMPILED_PLANS_DIR.mkdir(exist_ok=True)
+
+    for plan_info in all_plans:
+        plan_file = pathlib.Path(plan_info.get("file"))
+        if not plan_file.exists():
+            logger.error(f"Plan file {plan_file} not found.")
+            continue
+
+        # Target is in COMPILED_PLANS_DIR
+        yaml_path = COMPILED_PLANS_DIR / (plan_file.stem + ".yaml")
+        
+        # Optimization: skip if yaml is newer than markdown
+        if yaml_path.exists() and yaml_path.stat().st_mtime > plan_file.stat().st_mtime:
+            continue
+
+        logger.info(f"🔄 Normalizing plan: {plan_file.name} -> {yaml_path.name}...")
+        prompt = prompt_base.replace("{plan_content}", plan_file.read_text())
+        cmd = get_agent_command(agent, prompt)
+        output, code = run_agent(cmd, stream=stream)
+
+        if code == 0:
+            # Clean markdown code fences if present
+            clean_output = output.strip()
+            if clean_output.startswith("```"):
+                lines = clean_output.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_output = "\n".join(lines).strip()
+
+            yaml_path.write_text(clean_output)
+            logger.info(f"✅ Saved: {yaml_path}")
+
+            # Sync to project-state.json
+            try:
+                plan_data = yaml.safe_load(clean_output)
+                state = load_project_state()
+                plan_id = plan_data.get("id")
+                if plan_id:
+                    state["plans"][plan_id] = {
+                        "status": plan_data.get("status", "pending"),
+                        "depends_on": plan_data.get("dependencies", []),
+                        "title": plan_data.get("title", plan_id),
+                    }
+                    save_project_state(state)
+            except Exception as e:
+                logger.error(f"Failed to sync plan {plan_file.name} to state: {e}")
+        else:
+            logger.error(f"❌ Failed to normalize plan {plan_file.name}")
+            return False
+
+    return True

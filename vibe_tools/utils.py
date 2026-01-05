@@ -18,6 +18,7 @@ VIBE_PROJECT_DIR = pathlib.Path("project")
 
 PRD_DIR = VIBE_PROJECT_DIR / "prds"
 PLANS_DIR = VIBE_PROJECT_DIR / "plans"
+COMPILED_PLANS_DIR = VIBE_PROJECT_DIR / "compiled_plans"
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
 LOGS_DIR = VIBE_PROJECT_DIR / "logs"
@@ -59,6 +60,8 @@ def ensure_project_structure():
     LOGS_DIR.mkdir(exist_ok=True)
     COSTS_DIR.mkdir(exist_ok=True)
     PRD_DIR.mkdir(exist_ok=True)
+    PLANS_DIR.mkdir(exist_ok=True)
+    COMPILED_PLANS_DIR.mkdir(exist_ok=True)
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
 
@@ -189,11 +192,10 @@ def load_project_state() -> Dict[str, Any]:
         "phases": {
             "normalize": {"status": "pending", "hash": None, "depends_on": []},
             "setup": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
-            "plan": {"status": "pending", "hash": None, "depends_on": ["setup"]},
-            "implement": {"status": "pending", "hash": None, "depends_on": ["plan"]},
+            "implement": {"status": "pending", "hash": None, "depends_on": ["setup"]},
+            "testing": {"status": "pending", "hash": None, "depends_on": ["implement"]},
             "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
             "cicd": {"status": "pending", "hash": None, "depends_on": ["infra"]},
-            "testing": {"status": "pending", "hash": None, "depends_on": ["implement"]},
             "deploy": {
                 "status": "pending",
                 "hash": None,
@@ -949,11 +951,10 @@ def get_vibe_status_report():
     order = [
         "normalize",
         "setup",
-        "plan",
         "implement",
+        "testing",
         "infra",
         "cicd",
-        "testing",
         "deploy",
     ]
 
@@ -1032,7 +1033,7 @@ def get_vibe_status_report():
                 plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
                 phases = plan_data.get("phases", {})
 
-                for phase_name in ["setup", "infra", "implementation", "cicd"]:
+                for phase_name in ["setup", "implement", "infra", "cicd"]:
                     if phase_name not in phases:
                         continue
 
@@ -1041,7 +1042,7 @@ def get_vibe_status_report():
                         f"    {click.style(phase_name.upper(), underline=True)}:"
                     )
 
-                    if phase_name == "implementation":
+                    if phase_name == "implement":
                         prds = phase_data.get("prds", [])
                         for prd in prds:
                             report.append(f"      PRD: {prd.get('id')}")
