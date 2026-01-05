@@ -205,6 +205,15 @@ SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "imgproxy": {
+        "display": "imgproxy",
+        "default_port": 8080,
+        "docker_keywords": ["imgproxy"],
+        "fields": [
+            {"name": "host", "prompt": "imgproxy host", "default": "localhost"},
+            {"name": "port", "prompt": "imgproxy port", "type": int, "default": 8080},
+        ],
+    },
 }
 
 
@@ -749,6 +758,12 @@ def s3_linode():
 def s3_aws():
     """Collect S3 AWS Object Store connection details."""
     configure_service("s3-aws")
+
+
+@setup_cli.command()
+def imgproxy():
+    """Collect imgproxy connection details."""
+    configure_service("imgproxy")
 
 
 if __name__ == "__main__":
