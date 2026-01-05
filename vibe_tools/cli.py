@@ -16,6 +16,7 @@ class OrderedGroup(click.Group):
         order = [
             # Phases 1-8
             "setup",
+            "architect",
             "normalize",
             "plan",
             "implement",
@@ -758,6 +759,20 @@ Once you have analyzed the codebase and written ALL four files, include {COMPLET
         click.echo("[ ] Generate Project Plan (vibe plan)")
     else:
         click.echo("❌ Architecture setup failed.")
+
+
+@cli.command()
+@click.argument("query", required=False)
+@click.pass_context
+def architect(ctx, query):
+    """Interactive architecture and infrastructure spec manager."""
+    from vibe_tools.architect import InteractiveArchitect
+
+    architect_tool = InteractiveArchitect(
+        agent_type=ctx.obj.get("agent", "cursor-agent"),
+        stream=ctx.obj.get("stream", False),
+    )
+    architect_tool.run_loop(query)
 
 
 @cli.command()
