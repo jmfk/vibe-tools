@@ -12,6 +12,7 @@ load_dotenv(find_dotenv() or ".env")
 
 from vibe_tools.utils import (
     CONFIG_FILE,
+    ensure_dir,
     ensure_gitignore,
     get_google_api_key,
     get_project_name,
@@ -20,6 +21,7 @@ from vibe_tools.utils import (
     save_config,
     save_google_api_key,
 )
+from vibe_tools.templates import TEMPLATES
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "postgres": {
@@ -764,6 +766,41 @@ def s3_aws():
 def imgproxy():
     """Collect imgproxy connection details."""
     configure_service("imgproxy")
+
+
+@setup_cli.command(name="eject-prompts")
+def eject_prompts():
+    """Extract all system prompts from templates.py and save them to the prompts/ directory."""
+    prompts_dir = pathlib.Path("prompts")
+    ensure_dir(prompts_dir)
+
+    click.echo(f"\n--- Ejecting Prompts to {prompts_dir}/ ---")
+
+    count = 0
+    for filename, content in TEMPLATES.items():
+        if filename in [
+            "dummy_backend_test",
+            "dummy_frontend_test",
+            "Makefile",
+            "README",
+        ]:
+            continue
+
+        file_path = prompts_dir / filename
+        if file_path.exists():
+            click.echo(f"⏩ Skipping {filename} (already exists)")
+            continue
+
+        click.echo(f"✅ Ejecting {filename}...")
+        file_path.write_text(content)
+        count += 1
+
+    click.echo(
+        f"\nFinished! {count} prompts ejected. You can now edit them in the 'prompts/' directory."
+    )
+    click.echo(
+        "Files in 'prompts/' will override the system defaults in 'templates.py'."
+    )
 
 
 if __name__ == "__main__":

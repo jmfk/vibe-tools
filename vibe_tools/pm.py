@@ -17,6 +17,7 @@ from vibe_tools.utils import (
     get_agent_command,
     run_agent,
     logger,
+    get_prompt,
     PM_CONFIG_FILE,
     PM_SESSION_FILE,
     get_instructions_context,
@@ -504,14 +505,10 @@ class InteractivePM:
         click.echo("----------------------")
 
     def _build_prompt(self) -> str:
-        template_path = self.prompts_dir / self.PROMPT_FILENAME
-        if not template_path.exists():
-            from vibe_tools.templates import TEMPLATES
-            content = TEMPLATES.get(self.PROMPT_FILENAME)
-            if content:
-                ensure_dir(self.prompts_dir)
-                template_path.write_text(content)
-            else: raise click.ClickException(f"Missing prompt template: {template_path}")
+        try:
+            prompt_template = get_prompt(self.PROMPT_FILENAME)
+        except FileNotFoundError as e:
+            raise click.ClickException(str(e))
 
         # Build specs context
         specs_context = ""
@@ -546,7 +543,7 @@ class InteractivePM:
         if self.session_memory:
             user_memory_text = f"SESSION MEMORY (Persistent Instructions):\n{self.session_memory}"
 
-        return template_path.read_text().format(
+        return prompt_template.format(
             mode=self.mode,
             mode_instructions=mode_instructions,
             specs_content=specs_context,

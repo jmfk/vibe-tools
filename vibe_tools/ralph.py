@@ -19,6 +19,7 @@ from vibe_tools.utils import (
     run_command,
     get_file_hash,
     logger,
+    get_prompt,
     load_project_state,
     save_project_state,
     check_plan_dependencies,
@@ -79,9 +80,11 @@ class RalphLoop:
         logger.info(f"📍 Mode: {mode}")
 
         # 2. Prepare prompt
-        from vibe_tools.templates import TEMPLATES
-
-        prompt_template = TEMPLATES.get("reconciliation_prompt.txt", "")
+        try:
+            prompt_template = get_prompt("reconciliation_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
+            return False
 
         custom_instructions = ""
         if self.instructions:
@@ -120,11 +123,23 @@ def run_planner_agent(agent: str, stream: bool = False) -> bool:
     architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
     prds = ""
     for prd_file in collect_prd_files():
-        prds += f"\n--- {prd_file.name} ---\n{prd_file.read_text()}\n"
+        # Try to find corresponding markdown spec in specs/
+        # prd_01_name.yaml -> PRD-01-name.md
+        parts = prd_file.stem.split("_")
+        spec_path = "NOT FOUND"
+        if len(parts) >= 2:
+            prd_id = parts[1]
+            spec_matches = list(pathlib.Path("specs").glob(f"PRD-{prd_id}-*.md"))
+            if spec_matches:
+                spec_path = str(spec_matches[0])
 
-    from vibe_tools.templates import TEMPLATES
+        prds += f"\n--- {prd_file.name} ---\nYAML Path: {prd_file}\nMarkdown Spec Path: {spec_path}\nContent:\n{prd_file.read_text()}\n"
 
-    prompt_base = TEMPLATES.get("planner_prompt.txt", "")
+    try:
+        prompt_base = get_prompt("planner_prompt.txt")
+    except FileNotFoundError as e:
+        logger.error(f"Error: {e}")
+        return False
 
     prompt = f"""{prompt_base}
 
@@ -164,6 +179,10 @@ def _extract_all_plans(index_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def normalize_plans(agent: str, stream: bool = False) -> bool:
     """Normalizes Markdown plans in plans/ into machine-consumable YAML files."""
+    from vibe_tools.utils import migrate_to_project_dir
+
+    migrate_to_project_dir()
+
     if not PROJECT_PLAN.exists():
         logger.error(f"❌ {PROJECT_PLAN} not found. Planning failed.")
         return False
@@ -179,9 +198,11 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
         logger.warning("No plans found in project-plan.yaml index.")
         return True
 
-    from vibe_tools.templates import TEMPLATES
-
-    prompt_base = TEMPLATES.get("plan_normalization_prompt.txt", "")
+    try:
+        prompt_base = get_prompt("plan_normalization_prompt.txt")
+    except FileNotFoundError as e:
+        logger.error(f"Error: {e}")
+        return False
 
     for plan_info in all_plans:
         plan_file = pathlib.Path(plan_info.get("file"))
@@ -320,19 +341,19 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{MAX_ITERATIONS}")
 
                 # 1. Implementation
-                prompt = f"""You are the Implementation Agent. Your task is to execute a specific plan.
+                try:
+                    prompt_template = get_prompt("implementation_prompt.txt")
+                except FileNotFoundError as e:
+                    logger.error(f"Error: {e}")
+                    return False
 
-PLAN TO EXECUTE:
-Title: {plan_data.get('title')}
-Description: {plan_data.get('description')}
-Success Criteria:
-{chr(10).join(['- ' + c for c in plan_data.get('success_criteria', [])])}
-
-TASK:
-1. Implement the code and configuration required for THIS PLAN.
-2. Verify your changes against the success criteria.
-3. Include {COMPLETION_PROMISE} in your response when the implementation is finished.
-"""
+                prompt = prompt_template.format(
+                    title=plan_data.get("title"),
+                    description=plan_data.get("description"),
+                    success_criteria=chr(10).join(
+                        ["- " + c for c in plan_data.get("success_criteria", [])]
+                    ),
+                )
                 cmd = get_agent_command(agent, prompt)
                 output, code = run_agent(cmd, stream=stream)
 
@@ -356,15 +377,21 @@ TASK:
 
                 if passed_gates and review:
                     logger.info("🔎 Running Agentic Review...")
-                    review_prompt = f"""Review the changes for the following plan:
-TITLE: {plan_data.get('title')}
-DESCRIPTION: {plan_data.get('description')}
-SUCCESS CRITERIA:
-{chr(10).join(['- ' + c for c in plan_data.get('success_criteria', [])])}
+                    try:
+                        review_prompt_template = get_prompt(
+                            "implementation_review_prompt.txt"
+                        )
+                    except FileNotFoundError as e:
+                        logger.error(f"Error: {e}")
+                        return False
 
-If the implementation meets all requirements, respond with: <review>PASSED</review>
-Otherwise, list the issues.
-"""
+                    review_prompt = review_prompt_template.format(
+                        title=plan_data.get("title"),
+                        description=plan_data.get("description"),
+                        success_criteria=chr(10).join(
+                            ["- " + c for c in plan_data.get("success_criteria", [])]
+                        ),
+                    )
                     review_cmd = get_agent_command(agent, review_prompt)
                     review_output, _ = run_agent(review_cmd, stream=stream)
                     if "<review>PASSED</review>" not in review_output:
@@ -463,19 +490,18 @@ def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream
             f"Git operation failed for branch '{branch_name}': {output}. Calling agent to sort it out..."
         )
         git_status, _ = run_command(["git", "status"], check=False)
-        prompt = f"""A git operation failed while trying to switch to branch '{branch_name}' for PRD '{project_name}'.
+        try:
+            prompt_template = get_prompt("git_fix_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
+            sys.exit(1)
 
-ERROR:
-{output}
-
-CURRENT GIT STATUS:
-{git_status}
-
-TASK:
-Please resolve this git issue so the automated pipeline can continue. 
-You may need to stash changes, commit them, reset the branch, or merge. 
-Ensure the end state is that we are on branch '{branch_name}' and ready to work.
-"""
+        prompt = prompt_template.format(
+            branch_name=branch_name,
+            project_name=project_name,
+            error=output,
+            git_status=git_status,
+        )
         cmd = get_agent_command(agent, prompt)
         run_agent(cmd, caffeinate=caffeinate, stream=stream)
 

@@ -693,6 +693,22 @@ def get_file_hash(filepath: pathlib.Path) -> Optional[str]:
     return sha256_hash.hexdigest()
 
 
+def get_prompt(prompt_filename: str) -> str:
+    """Retrieves a prompt template from prompts/ directory (override) or from templates.py (fallback)."""
+    from vibe_tools.templates import TEMPLATES
+
+    override_path = pathlib.Path("prompts") / prompt_filename
+    if override_path.exists():
+        return override_path.read_text()
+
+    if prompt_filename in TEMPLATES:
+        return TEMPLATES[prompt_filename]
+
+    raise FileNotFoundError(
+        f"Prompt template '{prompt_filename}' not found in 'prompts/' or 'TEMPLATES'."
+    )
+
+
 def is_git_repo():
     try:
         # Check if we are inside a git repository
@@ -1056,18 +1072,31 @@ def get_vibe_status_report():
         plan_status = click.style("⚪ Missing", fg="white", dim=True)
         report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
 
-    # 5. Instructions
-    report.append(click.style("\nINSTRUCTIONS:", fg="yellow", bold=True))
+    # 5. Instructions & Prompts
+    report.append(click.style("\nINSTRUCTIONS & PROMPTS:", fg="yellow", bold=True))
     if INSTRUCTIONS_DIR.exists():
         instr_files = sorted(list(INSTRUCTIONS_DIR.glob("*")))
         if instr_files:
+            report.append("  Instructions:")
             for f in instr_files:
                 if f.is_file():
-                    report.append(f"  - {f.name}")
+                    report.append(f"    - {f.name}")
         else:
             report.append("  No instructions found.")
     else:
         report.append("  No instructions directory.")
+
+    prompts_dir = pathlib.Path("prompts")
+    if prompts_dir.exists():
+        prompt_overrides = sorted(list(prompts_dir.glob("*.txt")))
+        if prompt_overrides:
+            report.append("  Prompt Overrides:")
+            for f in prompt_overrides:
+                report.append(f"    - {f.name}")
+        else:
+            report.append("  No prompt overrides found (using system defaults).")
+    else:
+        report.append("  No prompts directory (using system defaults).")
 
     # 6. Next Steps
     if next_action:

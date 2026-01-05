@@ -3,10 +3,8 @@ import sys
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.utils import get_agent_command, logger, run_agent, run_command
+from vibe_tools.utils import get_agent_command, logger, run_agent, run_command, get_prompt
 
-PROMPTS_DIR = pathlib.Path("prompts")
-COVERAGE_PROMPT_TEMPLATE = PROMPTS_DIR / "coverage_improvement_prompt.txt"
 MAX_ITERATIONS = 5
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
@@ -25,10 +23,6 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
     config = load_config()
     cost_logger = CostLogger(config)
 
-    if not PROMPTS_DIR.exists():
-        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
-        sys.exit(1)
-
     for i in range(1, MAX_ITERATIONS + 1):
         report, current_cov = get_coverage_report(caffeinate=caffeinate)
         logger.info(
@@ -42,13 +36,12 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
         target_cov = current_cov + (0.3 * (100 - current_cov))
         logger.info(f"Targeting improvement to at least {target_cov:.1f}%")
 
-        if not COVERAGE_PROMPT_TEMPLATE.exists():
-            logger.error(
-                f"Error: Coverage prompt template not found at {COVERAGE_PROMPT_TEMPLATE}. Please run 'vibe init'."
-            )
+        try:
+            prompt_base = get_prompt("coverage_improvement_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
             sys.exit(1)
 
-        prompt_base = COVERAGE_PROMPT_TEMPLATE.read_text()
         prompt = (
             prompt_base.replace("{report}", report)
             .replace("{current_cov}", str(current_cov))

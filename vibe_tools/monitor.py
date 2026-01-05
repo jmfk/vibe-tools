@@ -4,10 +4,7 @@ import sys
 import time
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.utils import get_agent_command, run_agent, run_command
-
-PROMPTS_DIR = pathlib.Path("prompts")
-MONITOR_PROMPT_TEMPLATE = PROMPTS_DIR / "monitor_prompt.txt"
+from vibe_tools.utils import get_agent_command, run_agent, run_command, get_prompt
 
 
 def get_status_report(agent, interval, cost_logger=None, stream=False):
@@ -24,12 +21,13 @@ def get_status_report(agent, interval, cost_logger=None, stream=False):
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if not MONITOR_PROMPT_TEMPLATE.exists():
-        print("Error: prompts/ directory not found or monitor_prompt.txt is missing.")
+    try:
+        prompt_base = get_prompt("monitor_prompt.txt")
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
         print("Please run 'vibe init' to initialize the project.")
         return
 
-    prompt_base = MONITOR_PROMPT_TEMPLATE.read_text()
     inspection_prompt = prompt_base.format(
         timestamp=timestamp,
         current_branch=current_branch_out,

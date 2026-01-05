@@ -89,6 +89,7 @@ from vibe_tools.utils import (
     save_project_state,
     check_dependencies,
     get_file_hash,
+    get_prompt,
     get_agent_processes,
     run_agent,
     run_command,
@@ -104,7 +105,6 @@ load_dotenv(find_dotenv() or ".env")
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 PROMPTS_DIR = pathlib.Path("prompts")
-REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 SPECS_DIR = pathlib.Path("specs")
 
 
@@ -147,6 +147,11 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
 
     # Register session cost reporting at exit
     atexit.register(finalize_cost_report)
+
+    # Ensure files are in the right place
+    from vibe_tools.utils import migrate_to_project_dir
+
+    migrate_to_project_dir()
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
@@ -292,7 +297,7 @@ def init(ctx):
 
 
 def _perform_basic_init():
-    """Helper to initialize the prompts directory and default templates."""
+    """Helper to initialize the project structure and essential templates."""
     maybe_init_git()
 
     from vibe_tools.utils import (
@@ -328,20 +333,14 @@ def _perform_basic_init():
     ensure_dir(COSTS_DIR)
     ensure_dir(VIBE_DATA_DIR)
 
-    for filename, content in TEMPLATES.items():
-        if filename in ["dummy_backend_test", "dummy_frontend_test"]:
-            continue
-
-        if filename == "Makefile":
-            file_path = pathlib.Path(filename)
+    # Only create Makefile if it doesn't exist
+    if "Makefile" in TEMPLATES:
+        makefile_path = pathlib.Path("Makefile")
+        if not makefile_path.exists():
+            click.echo(f"Creating template: {makefile_path}")
+            makefile_path.write_text(TEMPLATES["Makefile"])
         else:
-            file_path = prompts_dir / filename
-
-        if not file_path.exists():
-            click.echo(f"Creating template: {file_path}")
-            file_path.write_text(content)
-        else:
-            click.echo(f"Template already exists: {file_path}")
+            click.echo(f"Template already exists: {makefile_path}")
 
 
 @cli.command()
@@ -512,11 +511,13 @@ def _prompt_for_prd(prd_paths: List[pathlib.Path]) -> pathlib.Path:
 def _run_agent_review(
     agent_type: str, prd_path: pathlib.Path, caffeinate: bool, stream: bool = False
 ) -> None:
-    if not REVIEW_PROMPT_TEMPLATE.exists():
+    try:
+        prompt_template = get_prompt("review_prompt.txt")
+    except FileNotFoundError:
         click.echo("Review prompt template missing; skipping agentic review.")
         return
 
-    prompt_text = REVIEW_PROMPT_TEMPLATE.read_text().format(prd_path=prd_path)
+    prompt_text = prompt_template.format(prd_path=prd_path)
     command = get_agent_command(agent_type, prompt_text)
     output, exit_code = run_agent(command, caffeinate=caffeinate, stream=stream)
 
@@ -731,20 +732,18 @@ def setup(ctx, auto, import_code):
         click.echo(
             "🔍 Analyzing codebase to generate architecture and infrastructure definitions..."
         )
-        prompt = f"""Analyze the current codebase and generate the following four files:
-1. '{ARCHITECTURE_CURRENT}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
-2. '{INFRA_CURRENT}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
-3. '{ARCHITECTURE_SPEC}': Markdown specification of the DESIRED architecture, based on the codebase but cleaned up for a specification.
-4. '{INFRA_SPEC}': Markdown specification of the DESIRED infrastructure.
+        try:
+            prompt_template = get_prompt("discovery_prompt.txt")
+        except FileNotFoundError as e:
+            click.echo(f"Error: {e}")
+            return
 
-The '-current.yaml' files must describe what is CURRENTLY implemented.
-The '.md' files in 'specs/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
-
-ACTUAL CODEBASE:
-(The agent has access to the filesystem to perform this analysis)
-
-Once you have analyzed the codebase and written ALL four files, include {COMPLETION_PROMISE}.
-"""
+        prompt = prompt_template.format(
+            architecture_current=ARCHITECTURE_CURRENT,
+            infra_current=INFRA_CURRENT,
+            architecture_spec=ARCHITECTURE_SPEC,
+            infra_spec=INFRA_SPEC,
+        )
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
 
@@ -763,8 +762,11 @@ Once you have analyzed the codebase and written ALL four files, include {COMPLET
     if not ARCHITECTURE.exists():
         if auto:
             click.echo("Proposing architecture.yaml based on PRDs...")
-            # TODO: Implement auto-proposal logic
-            prompt = "Analyze the PRDs in prds/ and propose a comprehensive 'architecture.yaml' file that defines the tech stack, database schema, and project structure."
+            try:
+                prompt = get_prompt("architecture_proposal_prompt.txt")
+            except FileNotFoundError as e:
+                click.echo(f"Error: {e}")
+                return
             cmd = get_agent_command(agent, prompt)
             run_agent(cmd, stream=stream)
         else:

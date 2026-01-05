@@ -13,6 +13,7 @@ from vibe_tools.utils import (
     get_agent_command,
     run_agent,
     get_google_api_key,
+    get_prompt,
 )
 
 
@@ -103,12 +104,11 @@ class PRDWriter:
 
     def build_markdown(self, title: str, interview: Dict[str, Any]) -> str:
         """Ask Gemini to turn the interview data into markdown per the prompt template."""
-        template_path = self.prompts_dir / self.PROMPT_FILENAME
-        if not template_path.exists():
-            raise click.ClickException(
-                f"Prompt template not found at {template_path}. Run 'vibe init' first."
-            )
-        template = template_path.read_text()
+        try:
+            template = get_prompt(self.PROMPT_FILENAME)
+        except FileNotFoundError as e:
+            raise click.ClickException(str(e))
+
         qa_section = self._render_history(interview.get("history", []))
 
         # Inject type guidance into context
@@ -371,12 +371,12 @@ class InteractivePRD(PRDWriter):
 
     def _fetch_new_questions(self):
         """Ask the AI for new questions based on current context."""
-        template_path = self.prompts_dir / self.QUESTIONS_PROMPT_FILENAME
-        if not template_path.exists():
-            # Fallback or error
-            raise click.ClickException(f"Missing prompt: {template_path}")
+        try:
+            prompt_template = get_prompt(self.QUESTIONS_PROMPT_FILENAME)
+        except FileNotFoundError as e:
+            raise click.ClickException(str(e))
 
-        prompt = template_path.read_text().format(
+        prompt = prompt_template.format(
             title=self.title,
             summary=self.current_summary,
             context=self.context,

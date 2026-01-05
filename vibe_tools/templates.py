@@ -98,6 +98,33 @@ TASK:
 If everything looks correct, respond with: <review>PASSED</review>
 Otherwise, list the issues and do NOT include the pass tag.
 """,
+    "reconciliation_prompt.txt": """You are in the '{name}' phase of the project lifecycle.
+Your goal is to reconcile the DESIRED state with the ACTUAL state of the codebase.
+
+PHASE: {name}
+MODE: {mode}  # INITIALIZATION or MIGRATION
+DESIRED FILE: {desired_file}
+CURRENT FILE: {current_file}
+
+DESIRED STATE content:
+---
+{desired_content}
+---
+
+ACTUAL STATE content (from {current_file}):
+---
+{current_content}
+---
+
+INSTRUCTIONS for {mode}:
+1. Examine the current codebase and compare it against the DESIRED state.
+2. If mode is MIGRATION, identify the deltas between the ACTUAL state and the DESIRED state.
+3. Perform all necessary actions (coding, configuration, setup, migrations) to bring the codebase into alignment with the DESIRED state.
+4. Ensure all changes are robust, follow project patterns, and are documented in the code where appropriate.
+5. IMPORTANT: Once the reconciliation is complete, you MUST update '{current_file}' to exactly match the new state (which should now align with the DESIRED state).
+6. {custom_instructions}
+7. Include <promise>DONE</promise> in your response ONLY when the reconciliation is successful and '{current_file}' has been updated.
+""",
     "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a set of granular, dependency-aware implementation plans.
 
 GOAL:
@@ -107,38 +134,41 @@ TASK:
 1. Break down all PRDs and Architecture into granular implementation plans.
 2. Group plans into logical PHASES: Setup, Infra, Implementation, and CI/CD.
 3. For the "Implementation" phase, group plans by their source PRD.
-4. For each plan, create a separate Markdown file in the 'plans/' directory (e.g., 'plans/01_setup_auth.md').
+4. For each plan, create a separate Markdown file in the 'project/plans/' directory (e.g., 'project/plans/01_setup_auth.md').
 5. Each Markdown plan MUST include:
    - Title
    - Description
+   - PRD References: For each PRD this plan originates from, include:
+     - A link to the Markdown Spec file (e.g., [PRD-01](specs/PRD-01-minimal-htmx-server.md))
+     - The full YAML content of the PRD inside a collapsed `<details>` block.
    - Dependencies: IDs of other plans that MUST be completed first.
    - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
    - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-6. Create a 'project-plan.yaml' in the root directory that acts as an index of all plans, organized by phase and PRD.
+6. Create a 'project-plan.yaml' in the 'project/' directory that acts as an index of all plans, organized by phase and PRD.
 
-SCHEMA for project-plan.yaml:
+SCHEMA for project/project-plan.yaml:
 phases:
   setup:
     plans:
       - id: "01_init_repo"
-        file: "plans/01_init_repo.md"
+        file: "project/plans/01_init_repo.md"
         status: "pending"
   infra:
     plans:
       - id: "02_db_setup"
-        file: "plans/02_db_setup.md"
+        file: "project/plans/02_db_setup.md"
         status: "pending"
   implementation:
     prds:
       - id: "prd_01_minimal_htmx"
         plans:
           - id: "03_htmx_base"
-            file: "plans/03_htmx_base.md"
+            file: "project/plans/03_htmx_base.md"
             status: "pending"
   cicd:
     plans:
       - id: "04_github_actions"
-        file: "plans/04_github_actions.md"
+        file: "project/plans/04_github_actions.md"
         status: "pending"
 
 Include <promise>DONE</promise> when all files are saved.
@@ -218,6 +248,33 @@ Produce a Markdown PRD with the following structure and cover all sections:
 - Include happy path plus key edge cases when possible.
 
 Always keep the output limited to Markdown. If the QA log is empty, use \"No follow-up questions were needed.\"""",
+    "prd_questions_prompt.txt": """You are an expert product analyst. Your task is to analyze the current state of a PRD discussion and generate follow-up questions to clarify requirements.
+
+Current State:
+- Title: {title}
+- Summary: {summary}
+- Context: {context}
+
+Conversation History:
+{history}
+
+Based on the above, please provide:
+1. A concise updated summary of the feature (if more information was gathered).
+2. A list of 1-3 specific, high-impact questions to further define the product. 
+   - Questions can be open-ended or multiple choice.
+   - For multiple choice, format as: "Question? \n a) Option 1 \n b) Option 2"
+3. A flag "satisfied" (true/false) indicating if you have enough information to write a comprehensive PRD.
+
+Output MUST be in valid JSON format:
+{{
+  "summary": "Updated summary...",
+  "questions": [
+    "Question 1?",
+    "Question 2?"
+  ],
+  "satisfied": false
+}}
+""",
     "test_fix_prompt.txt": """The codebase currently has test or linting failures. Please fix them.
 
 ERROR OUTPUT:
@@ -264,6 +321,56 @@ TASK:
 4. Provide a HEALTH STATUS: [HEALTHY], [STALLED], or [FAILED].
 5. Keep it very concise (max 10 lines).
 """,
+    "implementation_prompt.txt": """You are the Implementation Agent. Your task is to execute a specific plan.
+
+PLAN TO EXECUTE:
+Title: {title}
+Description: {description}
+Success Criteria:
+{success_criteria}
+
+TASK:
+1. Implement the code and configuration required for THIS PLAN.
+2. Verify your changes against the success criteria.
+3. Include <promise>DONE</promise> in your response when the implementation is finished.
+""",
+    "implementation_review_prompt.txt": """Review the changes for the following plan:
+TITLE: {title}
+DESCRIPTION: {description}
+SUCCESS CRITERIA:
+{success_criteria}
+
+If the implementation meets all requirements, respond with: <review>PASSED</review>
+Otherwise, list the issues.
+""",
+    "git_fix_prompt.txt": """A git operation failed while trying to switch to branch '{branch_name}' for PRD '{project_name}'.
+
+ERROR:
+{error}
+
+CURRENT GIT STATUS:
+{git_status}
+
+TASK:
+Please resolve this git issue so the automated pipeline can continue. 
+You may need to stash changes, commit them, reset the branch, or merge. 
+Ensure the end state is that we are on branch '{branch_name}' and ready to work.
+""",
+    "discovery_prompt.txt": """Analyze the current codebase and generate the following four files:
+1. '{architecture_current}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
+2. '{infra_current}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
+3. '{architecture_spec}': Markdown specification of the DESIRED architecture, based on the codebase but cleaned up for a specification.
+4. '{infra_spec}': Markdown specification of the DESIRED infrastructure.
+
+The '-current.yaml' files must describe what is CURRENTLY implemented.
+The '.md' files in 'specs/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
+
+ACTUAL CODEBASE:
+(The agent has access to the filesystem to perform this analysis)
+
+Once you have analyzed the codebase and written ALL four files, include <promise>DONE</promise>.
+""",
+    "architecture_proposal_prompt.txt": """Analyze the PRDs in prds/ and propose a comprehensive 'architecture.yaml' file that defines the tech stack, database schema, and project structure.""",
     "Makefile": """.PHONY: test test-backend test-frontend test-infra test-integration test-regression lint lint-backend lint-frontend
 
 test: test-backend test-frontend test-infra test-integration test-regression lint
