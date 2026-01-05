@@ -13,12 +13,26 @@ from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
 
 PRD_DIR = pathlib.Path("prds")
+PROJECT_STATE_FILE = pathlib.Path("project-state.json")
 STATE_FILE = pathlib.Path(".ralph_state.json")
 LOGS_DIR = pathlib.Path("logs")
 COSTS_DIR = pathlib.Path("costs")
 INSTRUCTIONS_DIR = pathlib.Path("instructions")
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
+
+# Core lifecycle files
+ARCHITECTURE = pathlib.Path("architecture.yaml")
+ARCHITECTURE_CURRENT = pathlib.Path("architecture-current.yaml")
+OVERVIEW = pathlib.Path("project_overview.yaml")
+PROJECT_PLAN = pathlib.Path("project-plan.yaml")
+PROJECT_PLAN_CURRENT = pathlib.Path("project-plan-current.yaml")
+INFRA = pathlib.Path("infrastructure.yaml")
+INFRA_CURRENT = pathlib.Path("infrastructure-current.yaml")
+CICD = pathlib.Path("cicd.yaml")
+CICD_CURRENT = pathlib.Path("cicd-current.yaml")
+TESTING_CONFIG = pathlib.Path("testing.yaml")
+TESTING_CURRENT = pathlib.Path("testing-current.yaml")
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
@@ -82,6 +96,69 @@ def save_config(config, global_scope=False):
         ensure_gitignore(".vibe_google_creds.json")
         ensure_gitignore(".vibe_client_secrets.json")
         ensure_gitignore(".vibe_authorized_user.json")
+        ensure_gitignore("project-state.json")
+
+
+def load_project_state() -> Dict[str, Any]:
+    """Loads the project state, migrating from legacy if necessary."""
+    if not PROJECT_STATE_FILE.exists() and STATE_FILE.exists():
+        migrate_legacy_state()
+
+    if PROJECT_STATE_FILE.exists():
+        try:
+            return json.loads(PROJECT_STATE_FILE.read_text())
+        except Exception as e:
+            logger.error(f"Error loading project state: {e}")
+
+    # Default state structure
+    return {
+        "project_name": get_project_name(),
+        "phases": {
+            "setup": {"status": "pending", "hash": None},
+            "normalize": {"status": "pending", "hash": None},
+            "plan": {"status": "pending", "hash": None},
+            "implementation": {"status": "pending", "hash": None},
+            "infra": {"status": "pending", "hash": None},
+            "cicd": {"status": "pending", "hash": None},
+            "testing": {"status": "pending", "hash": None},
+            "deploy": {"status": "pending", "hash": None},
+        },
+        "completed_prds": [],
+        "started_prds": [],
+        "active_task": None,
+        "version": "1.0",
+    }
+
+
+def save_project_state(state: Dict[str, Any]):
+    """Saves the project state to project-state.json."""
+    PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
+    ensure_gitignore("project-state.json")
+
+
+def migrate_legacy_state():
+    """Migrates data from .ralph_state.json to project-state.json."""
+    if not STATE_FILE.exists():
+        return
+
+    try:
+        legacy_data = json.loads(STATE_FILE.read_text())
+        new_state = load_project_state()
+
+        # Migrate completed and started PRDs
+        new_state["completed_prds"] = legacy_data.get("completed_prds", [])
+        new_state["started_prds"] = legacy_data.get("started_prds", [])
+        new_state["active_task"] = legacy_data.get("active_task")
+
+        # Basic heuristic: if there are completed PRDs, maybe setup was done?
+        # But we'll stay conservative and let the user run setup.
+        
+        save_project_state(new_state)
+        logger.info(f"✅ Migrated legacy state to {PROJECT_STATE_FILE}")
+        # We keep the old file for safety for now, or we could delete it.
+        # STATE_FILE.unlink() 
+    except Exception as e:
+        logger.error(f"Failed to migrate legacy state: {e}")
 
 
 def load_global_servers() -> Dict[str, Any]:
@@ -415,6 +492,17 @@ def check_env_health() -> bool:
     return True
 
 
+def get_file_hash(filepath: pathlib.Path) -> Optional[str]:
+    """Returns the SHA256 hash of a file."""
+    if not filepath.exists():
+        return None
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+
 def is_git_repo():
     try:
         # Check if we are inside a git repository
@@ -622,63 +710,70 @@ def get_vibe_status_report():
     """Generates a comprehensive status report of the system."""
     import click
     from vibe_tools.cost import get_total_cost
-    from vibe_tools.ralph import load_state
     from vibe_tools.servers import get_server_configs, get_container_status
-    from vibe_tools.utils import check_env_health
-
+    
+    state = load_project_state()
     report = []
-    report.append(click.style("\n=== VIBE SYSTEM STATUS ===", fg="cyan", bold=True))
+    report.append(click.style("\n=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
 
-    # 1. Project Info
-    project_name = get_project_name()
+    # 1. Lifecycle Progress
+    report.append(click.style("\nLIFECYCLE PROGRESS:", fg="yellow", bold=True))
+    phases = state.get("phases", {})
+    order = ["setup", "normalize", "plan", "implementation", "infra", "cicd", "testing", "deploy"]
+    
+    next_action = None
+    for phase_id in order:
+        phase = phases.get(phase_id, {})
+        status = phase.get("status", "pending")
+        
+        if status == "completed":
+            status_display = click.style("✅ DONE", fg="green")
+        elif status == "in_progress":
+            status_display = click.style("⏳ IN_PROGRESS", fg="blue")
+            if not next_action:
+                next_action = f"vibe {phase_id}"
+        else:
+            status_display = click.style("⚪ PENDING", fg="white", dim=True)
+            if not next_action:
+                next_action = f"vibe {phase_id}"
+        
+        report.append(f"  - {phase_id:<15} {status_display}")
+
+    # 2. Next Steps
+    if next_action:
+        report.append(click.style("\nNEXT SUGGESTED ACTION:", fg="green", bold=True))
+        report.append(f"  > {next_action}")
+
+    # 3. Project Info
+    project_name = state.get("project_name", get_project_name())
     report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name}")
     report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
 
-    # 2. Environment Health
-    report.append(click.style("\nENVIRONMENT:", fg="yellow", bold=True))
-    config = load_config()
-    env_config = config.get("env")
-    
-    if check_env_health():
-        health_status = click.style("✅ Healthy", fg="green")
-    else:
-        health_status = click.style("❌ Unhealthy / Missing", fg="red")
-    
-    report.append(f"  Status:       {health_status}")
-    if env_config:
-        report.append(f"  Type:         {env_config.get('type', 'Unknown')}")
-        report.append(f"  Python:       {env_config.get('python_version', 'Unknown')}")
-        report.append(f"  Virtualenv:   {env_config.get('venv_name', 'None')}")
-    else:
-        report.append(f"  Config:       Not managed (Run 'vibe-setup env')")
-
-    # 3. PRD Progress
-    report.append(click.style("\nPRD PROGRESS:", fg="yellow", bold=True))
-    state = load_state()
-    completed = state.get("completed_prds", [])
-    started = state.get("started_prds", [])
+    # 4. PRD Progress (Detailed)
+    report.append(click.style("\nPRD FILES:", fg="yellow", bold=True))
     all_prds = collect_prd_files()
+    completed_prds = state.get("completed_prds", [])
+    started_prds = state.get("started_prds", [])
 
     if not all_prds:
         report.append("  No PRDs found in prds/")
     else:
         for prd in all_prds:
             name = prd.stem
-            if name in completed:
+            if name in completed_prds:
                 status = click.style("✅ DONE", fg="green")
-            elif name in started:
+            elif name in started_prds:
                 status = click.style("⏳ IN_PROGRESS", fg="blue")
             else:
                 status = click.style("⚪ PENDING", fg="white", dim=True)
             report.append(f"  - {name:<40} {status}")
 
-    # 3. Costs
+    # 5. Costs
     total_cost = get_total_cost()
     report.append(click.style("\nCOSTS:", fg="yellow", bold=True))
     report.append(f"  Total Estimated Project Cost: {click.style(f'${total_cost:.4f} USD', fg='green')}")
-    report.append(f"  Detailed log: {COSTS_DIR}/usage.csv")
 
-    # 4. Services
+    # 6. Services
     report.append(click.style("\nSERVICES:", fg="yellow", bold=True))
     configs = get_server_configs()
     if not configs:
@@ -696,26 +791,8 @@ def get_vibe_status_report():
             ports = ", ".join([f"{v}" for k, v in config.get("ports", {}).items()])
             report.append(f"  - {name:<15} {status_display:<20} {ports}")
 
-    # 5. Configuration & Environment
-    report.append(click.style("\nCONFIGURATION:", fg="yellow", bold=True))
-    config = load_config()
-    report.append(f"  Caffeinate:   {'ON' if config.get('caffeinate') else 'OFF'}")
-    report.append(f"  Verbose:      {'ON' if config.get('verbose') else 'OFF'}")
-    report.append(f"  Google Sheets: {'ENABLED' if config.get('use_google_sheets') and config.get('google_sheet_id') else 'DISABLED'}")
-    
-    google_api_key = get_google_api_key()
-    report.append(f"  Google API Key: {'SET' if google_api_key else click.style('NOT SET', fg='red')}")
-
-    # 6. Recent Errors (from logs)
-    report.append(click.style("\nRECENT LOGS:", fg="yellow", bold=True))
-    log_files = sorted(LOGS_DIR.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
-    if not log_files:
-        report.append("  No logs found.")
-    else:
-        for log in log_files:
-            size = log.stat().st_size / 1024
-            mtime = datetime.datetime.fromtimestamp(log.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-            report.append(f"  - {log.name:<40} {size:>6.1f} KB  {mtime}")
+    report.append("")
+    return "\n".join(report)
 
     report.append("")
     return "\n".join(report)

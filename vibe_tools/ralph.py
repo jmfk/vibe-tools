@@ -11,6 +11,17 @@ from vibe_tools.utils import (
     INSTRUCTIONS_DIR,
     PRD_DIR,
     STATE_FILE,
+    PROJECT_STATE_FILE,
+    ARCHITECTURE,
+    ARCHITECTURE_CURRENT,
+    OVERVIEW,
+    PROJECT_PLAN,
+    INFRA,
+    INFRA_CURRENT,
+    CICD,
+    CICD_CURRENT,
+    TESTING_CONFIG,
+    TESTING_CURRENT,
     collect_prd_files,
     ensure_dir,
     get_agent_command,
@@ -21,20 +32,157 @@ from vibe_tools.utils import (
     logger,
     run_agent,
     run_command,
+    load_project_state,
+    save_project_state,
+    get_file_hash,
 )
 
 BACKEND_ROOT = pathlib.Path("backend")
 FRONTEND_ROOT = pathlib.Path("frontend")
 PROMPTS_DIR = pathlib.Path("prompts")
 BASE_PROMPT_TEMPLATE = PROMPTS_DIR / "ralph_base_prompt.txt"
+PLANNER_PROMPT_TEMPLATE = PROMPTS_DIR / "planner_prompt.txt"
 REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
-ARCHITECTURE = pathlib.Path("prds/architecture.yaml")
-OVERVIEW = pathlib.Path("prds/project_overview.yaml")
-INFRA = pathlib.Path("prds/infrastructure.yaml")
-CICD = pathlib.Path("prds/cicd.yaml")
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
+
+
+class RalphLoop:
+    """Core reconciliation loop between Desired State and Actual State."""
+
+    def __init__(
+        self,
+        name: str,
+        desired_file: pathlib.Path,
+        current_file: pathlib.Path,
+        agent: str = "cursor-agent",
+        stream: bool = False,
+        caffeinate: bool = False,
+    ):
+        self.name = name
+        self.desired_file = desired_file
+        self.current_file = current_file
+        self.agent = agent
+        self.stream = stream
+        self.caffeinate = caffeinate
+
+    def run(self) -> bool:
+        """Executes the reconciliation loop."""
+        logger.info(f"🔄 Starting {self.name} Loop...")
+
+        if not self.desired_file.exists():
+            logger.error(f"❌ Desired file {self.desired_file} not found.")
+            return False
+
+        # 1. Compare Desired vs Current
+        desired_hash = get_file_hash(self.desired_file)
+        current_content = (
+            self.current_file.read_text() if self.current_file.exists() else "NOT FOUND"
+        )
+
+        # 2. Prepare prompt
+        prompt = f"""You are in the '{self.name}' phase of the project lifecycle.
+Your goal is to reconcile the DESIRED state (defined in {self.desired_file.name}) with the ACTUAL state (described in {self.current_file.name} and the current codebase).
+
+DESIRED STATE ({self.desired_file.name}):
+{self.desired_file.read_text()}
+
+ACTUAL STATE ({self.current_file.name}):
+{current_content}
+
+INSTRUCTIONS:
+1. Examine the current codebase and the actual state.
+2. Perform any necessary actions (coding, configuration, setup) to match the desired state.
+3. Update {self.current_file.name} to accurately reflect the new actual state once complete.
+4. Include {COMPLETION_PROMISE} in your response when the reconciliation is successful.
+"""
+        # 3. Run Agent
+        cmd = get_agent_command(self.agent, prompt)
+        output, code = run_agent(cmd, caffeinate=self.caffeinate, stream=self.stream)
+
+        if code == 0 and COMPLETION_PROMISE in output:
+            logger.info(f"✅ {self.name} reconciliation successful.")
+            return True
+        else:
+            logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
+            return False
+
+
+def run_planner_agent(agent: str, stream: bool = False) -> bool:
+    """Runs the Planner Agent to generate project-plan.yaml."""
+    architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
+    prds = ""
+    for prd_file in collect_prd_files():
+        prds += f"\n--- {prd_file.name} ---\n{prd_file.read_text()}\n"
+
+    if PLANNER_PROMPT_TEMPLATE.exists():
+        prompt_base = PLANNER_PROMPT_TEMPLATE.read_text()
+    else:
+        from vibe_tools.templates import TEMPLATES
+
+        prompt_base = TEMPLATES.get("planner_prompt.txt", "")
+
+    prompt = f"""{prompt_base}
+
+ARCHITECTURE:
+{architecture}
+
+PRDS:
+{prds}
+"""
+    cmd = get_agent_command(agent, prompt)
+    output, code = run_agent(cmd, stream=stream)
+    return code == 0 and COMPLETION_PROMISE in output
+
+
+def implementation_loop(agent: str, stream: bool = False) -> bool:
+    """Executes the implementation phase based on project-plan.yaml."""
+    if not PROJECT_PLAN.exists():
+        logger.error(f"❌ {PROJECT_PLAN} not found.")
+        return False
+
+    try:
+        import yaml
+
+        plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
+    except Exception as e:
+        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
+        return False
+
+    steps = plan_data.get("steps", [])
+    if not steps:
+        logger.warning("No steps found in project-plan.yaml.")
+        return True
+
+    for step in steps:
+        if step.get("status") == "completed":
+            continue
+
+        logger.info(f"🚀 Executing Step: {step.get('title')} ({step.get('id')})")
+
+        prompt = f"""You are the Implementation Agent. Your task is to execute a specific step from the project plan.
+
+STEP TO EXECUTE:
+Title: {step.get('title')}
+Description: {step.get('description')}
+Success Criteria:
+{chr(10).join(['- ' + c for c in step.get('success_criteria', [])])}
+
+TASK:
+1. Implement the code, tests, and configuration required for THIS STEP ONLY.
+2. Verify the changes against the success criteria.
+3. Update {PROJECT_PLAN.name} to set status of step '{step.get('id')}' to 'completed'.
+4. Include {COMPLETION_PROMISE} when the step is finished.
+"""
+        cmd = get_agent_command(agent, prompt)
+        output, code = run_agent(cmd, stream=stream)
+
+        if code != 0 or COMPLETION_PROMISE not in output:
+            logger.error(f"❌ Failed at step {step.get('id')}.")
+            return False
+
+    return True
 
 
 def _switch_to_main():
