@@ -334,6 +334,8 @@ CURRENT INFRASTRUCTURE (infrastructure.md):
 
 {instructions}
 
+{user_memory}
+
 CONVERSATION HISTORY:
 {history}
 
