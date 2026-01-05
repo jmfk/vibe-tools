@@ -1,7 +1,16 @@
+import os
 import pathlib
+import subprocess
+import sys
+import tempfile
 from typing import Dict, List, Optional, Tuple, Any
 
 import click
+
+try:
+    import readline
+except ImportError:
+    readline = None  # type: ignore
 
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
@@ -13,7 +22,46 @@ from vibe_tools.utils import (
     ARCH_CONFIG_FILE,
     ARCH_SESSION_FILE,
     get_instructions_context,
+    VIBE_PROJECT_DIR,
 )
+
+
+class ArchitectCompleter:
+    def __init__(self, architect):
+        self.architect = architect
+        self.commands = [
+            "/send", "/s", "/reset", "/r", "/mode", "/m", "/ask", "/agent",
+            "/show", "/edit", "/history", "/files", "/f", "/add", "/a",
+            "/list", "/l", "/exit", "/q", "/conf", "/help"
+        ]
+        self.subcommands = {
+            "/files": ["list", "add", "remove"],
+            "/f": ["list", "add", "remove"],
+            "/history": ["list", "view", "remove"],
+            "/list": ["memory"],
+            "/l": ["memory"],
+            "/conf": ["md", "code"],
+            "/show": ["arch", "infra"],
+        }
+
+    def complete(self, text, state):
+        buffer = readline.get_line_buffer() if readline else ""
+        parts = buffer.split()
+        
+        # If it's the first part, complete commands
+        if len(parts) <= 1 and buffer.startswith("/"):
+            options = [c for i, c in enumerate(self.commands) if c.startswith(text)]
+            return options[state] if state < len(options) else None
+        
+        # If it's a subcommand
+        if len(parts) >= 1:
+            cmd = parts[0].lower()
+            if cmd in self.subcommands:
+                subs = self.subcommands[cmd]
+                options = [s for s in subs if s.startswith(text)]
+                return options[state] if state < len(options) else None
+        
+        return None
 
 
 class InteractiveArchitect:
@@ -36,6 +84,33 @@ class InteractiveArchitect:
         self.config = self._load_config()
         self.mode = "ASK"  # Default mode
         self._load_session()
+        self._setup_readline()
+
+    def _setup_readline(self):
+        if readline:
+            readline.set_completer(ArchitectCompleter(self).complete)
+            if "libedit" in readline.__doc__:  # macOS compatibility
+                readline.parse_and_bind("bind ^I rl_complete")
+            else:
+                readline.parse_and_bind("tab: complete")
+            
+            # Setup history file
+            history_file = VIBE_PROJECT_DIR / ".architect_history"
+            if history_file.exists():
+                try:
+                    readline.read_history_file(str(history_file))
+                except Exception:
+                    pass
+            import atexit
+            atexit.register(self._save_readline_history, history_file)
+
+    def _save_readline_history(self, history_file):
+        if readline:
+            try:
+                readline.set_history_length(1000)
+                readline.write_history_file(str(history_file))
+            except Exception:
+                pass
 
     def _load_config(self) -> Dict[str, Any]:
         if ARCH_CONFIG_FILE.exists():
@@ -85,8 +160,17 @@ class InteractiveArchitect:
             self._ask_to_send()
 
         while True:
-            prompt_symbol = click.style(f"({self.mode}) 👤", fg="green" if self.mode == "ASK" else "red")
-            user_input = click.prompt(prompt_symbol, default="", show_default=False).strip()
+            mode_color = "green" if self.mode == "ASK" else "red"
+            prompt_symbol = f"({click.style(self.mode, fg=mode_color)}) 👤 "
+            
+            try:
+                # Using standard input for readline support
+                user_input = input(prompt_symbol).strip()
+            except EOFError:
+                break
+            except KeyboardInterrupt:
+                click.echo("\n🛑 Interrupted. Type /q to exit.")
+                continue
 
             if not user_input:
                 continue
@@ -96,26 +180,25 @@ class InteractiveArchitect:
                     break
                 continue
 
-            if self.current_query:
-                self.current_query += f"\n{user_input}"
-            else:
-                self.current_query = user_input
-            
-            self._save_session()
-            self._ask_to_send()
+            # Regular text input is no longer auto-appended
+            click.echo(click.style("ℹ️  Use /a <text> to add info to the pending prompt, or /s to send it.", fg="blue"))
+            if self.current_query or self.additional_files:
+                self._ask_to_send()
 
     def _ask_to_send(self):
+        if not self.current_query and not self.additional_files:
+            return
+            
         prompt = self._build_prompt()
         size_kb = len(prompt) / 1024
-        click.echo(click.style(f"\n📝 Current prompt size: {size_kb:.2f} KB", fg="yellow"))
-        click.echo("Type /send to dispatch to Architect, /reset to clear, or keep typing to add info.")
+        click.echo(click.style(f"\n📝 Pending prompt: {size_kb:.2f} KB", fg="yellow"))
+        click.echo("Type /s to send to Architect, /r to reset, or /a to add more info.")
 
     def _handle_slash_command(self, command_str: str) -> bool:
         """Returns True if the loop should exit."""
-        parts = command_str.split(" ", 2)
+        parts = command_str.split(" ", 1)
         cmd = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
-        sub_args = parts[2] if len(parts) > 2 else ""
 
         # Shortcuts/Aliases
         if cmd == "/s":
@@ -129,23 +212,34 @@ class InteractiveArchitect:
             args = "memory"
         elif cmd == "/f":
             cmd = "/files"
-            args = "list"
-        elif cmd == "/a" or cmd == "/add":
-            sub_args = args
-            args = "add"
-            cmd = "/files"
+            if not args:
+                args = "list"
+        elif cmd == "/a":
+            cmd = "/add"
 
         if cmd == "/help":
             self._show_help()
         elif cmd == "/send":
-            if not self.current_query:
-                click.echo("❌ Nothing to send. Type something first.")
+            if not self.current_query and not self.additional_files:
+                click.echo("❌ Nothing to send. Type something first using /a <text>.")
             else:
                 self._dispatch_agent()
         elif cmd == "/reset":
             self.current_query = ""
+            self.additional_files = []
             self._save_session()
-            click.echo("✅ Prompt reset.")
+            click.echo("✅ Pending prompt and files reset.")
+        elif cmd == "/add":
+            if args:
+                if self.current_query:
+                    self.current_query += f"\n{args}"
+                else:
+                    self.current_query = args
+                self._save_session()
+                click.echo(f"✅ Added text to pending prompt.")
+                self._ask_to_send()
+            else:
+                click.echo("❌ Usage: /add <text>")
         elif cmd == "/show":
             if args.lower() in ["arch", "architecture"]:
                 self._show_file(ARCHITECTURE_SPEC)
@@ -156,10 +250,16 @@ class InteractiveArchitect:
         elif cmd == "/edit":
             self._handle_edit_command(args)
         elif cmd == "/history":
-            self._handle_history_command(args, sub_args)
+            sub_parts = args.split(" ", 1)
+            sub_cmd = sub_parts[0] if sub_parts else "list"
+            sub_args = sub_parts[1] if len(sub_parts) > 1 else ""
+            self._handle_history_command(sub_cmd, sub_args)
             self._save_session()
         elif cmd == "/files":
-            self._handle_files_command(args, sub_args)
+            sub_parts = args.split(" ", 1)
+            sub_cmd = sub_parts[0] if sub_parts else "list"
+            sub_args = sub_parts[1] if len(sub_parts) > 1 else ""
+            self._handle_files_command(sub_cmd, sub_args)
             self._save_session()
         elif cmd == "/list":
             if args == "memory":
@@ -167,7 +267,10 @@ class InteractiveArchitect:
             else:
                 click.echo("❌ Usage: /list memory")
         elif cmd == "/conf":
-            self._handle_conf_command(args, sub_args)
+            sub_parts = args.split(" ", 1)
+            target = sub_parts[0] if sub_parts else ""
+            editor = sub_parts[1] if len(sub_parts) > 1 else ""
+            self._handle_conf_command(target, editor)
         elif cmd == "/mode" or cmd == "/m":
             self._handle_mode_command(args)
         elif cmd == "/ask":
@@ -299,6 +402,14 @@ class InteractiveArchitect:
             click.echo("(none)")
         for f in self.additional_files:
             click.echo(f"- {f}")
+        
+        click.echo(click.style("\nHistory Summary (Sent Prompts):", bold=True))
+        sent_prompts = [h for h in self.history if h['role'] == 'user']
+        if not sent_prompts:
+            click.echo("(none)")
+        for i, h in enumerate(sent_prompts):
+            title = h['content'].splitlines()[0][:60]
+            click.echo(f"[{i}] {title}...")
         click.echo("----------------------")
 
     def _build_prompt(self) -> str:
@@ -366,8 +477,6 @@ class InteractiveArchitect:
         self.history.append({"role": "user", "content": query})
         self.current_query = "" # Clear after successful send
         
-        mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
-
         # Check for file updates
         if "FILE_UPDATE:" in output:
             parts = output.split("FILE_UPDATE:", 1)
@@ -378,37 +487,141 @@ class InteractiveArchitect:
             header = lines[0]
             content = "\n".join(lines[1:])
             
-            if not self.stream and thinking:
-                click.echo(f"\n{mode_prefix} 🤖 {thinking}")
+            if thinking and not self.stream:
+                mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+                click.echo(f"\n{mode_prefix} 🤖 Thinking: {thinking}")
 
             if "arch" in header.lower():
                 ARCHITECTURE_SPEC.write_text(content)
                 click.echo(f"✅ Updated {ARCHITECTURE_SPEC}")
                 self.history.append({"role": "architect", "content": "Updated architecture.md"})
-                self._maybe_open_editor(ARCHITECTURE_SPEC)
+                self._handle_response_display(content, ARCHITECTURE_SPEC)
             elif "infra" in header.lower():
                 INFRA_SPEC.write_text(content)
                 click.echo(f"✅ Updated {INFRA_SPEC}")
                 self.history.append({"role": "architect", "content": "Updated infrastructure.md"})
-                self._maybe_open_editor(INFRA_SPEC)
+                self._handle_response_display(content, INFRA_SPEC)
             else:
-                if not self.stream:
-                    click.echo(f"\n{mode_prefix} 🤖 {output}")
                 self.history.append({"role": "architect", "content": output})
+                self._handle_response_display(output)
         else:
-            if not self.stream:
-                click.echo(f"\n{mode_prefix} 🤖 {output}")
             self.history.append({"role": "architect", "content": output})
+            self._handle_response_display(output)
 
         self._save_session()
         click.echo("")
 
+    def _handle_response_display(self, content: str, path: Optional[pathlib.Path] = None):
+        """Decide whether to show the response in terminal or open in an editor."""
+        if self.stream:
+            # Already displayed during stream, maybe just offer to open in editor
+            return
+
+        md_editor = self.config.get("md_editor")
+        code_editor = self.config.get("code_editor")
+        mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+
+        if not md_editor and not code_editor:
+            # Just show it
+            click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
+            if path and path.suffix == ".md":
+                self._print_styled_markdown(content)
+            elif content.strip().startswith("#"): # detected MD
+                self._print_styled_markdown(content)
+            else:
+                click.echo(content)
+            return
+
+        # Editors are configured, ask the user
+        detected = self._detect_content_type(content)
+        
+        options = ["s"]
+        prompt_parts = ["[s]how in terminal"]
+        if md_editor: 
+            options.append("m")
+            prompt_parts.append("[m]arkdown editor")
+        if code_editor: 
+            options.append("c")
+            prompt_parts.append("[c]ode editor")
+        
+        prompt_text = f"\n{mode_prefix} 🤖 Response ready. " + ", ".join(prompt_parts) + "?"
+        
+        # Decide default based on detection
+        default_choice = "s"
+        if detected == "md" and md_editor: default_choice = "m"
+        elif detected == "code" and code_editor: default_choice = "c"
+        
+        choice = click.prompt(prompt_text, type=click.Choice(options), default=default_choice, show_choices=False)
+        
+        if choice == "m":
+            self._open_in_editor(content, md_editor, ".md", path)
+        elif choice == "c":
+            suffix = path.suffix if path else ".txt"
+            self._open_in_editor(content, code_editor, suffix, path)
+        else:
+            click.echo(f"{mode_prefix} 🤖 ", nl=False)
+            if detected == "md":
+                self._print_styled_markdown(content)
+            else:
+                click.echo(content)
+
+    def _detect_content_type(self, content: str) -> str:
+        stripped = content.strip()
+        
+        # Obvious code block wrapper
+        if stripped.startswith("```") and stripped.endswith("```") and stripped.count("```") == 2:
+            return "code"
+
+        # Common code keywords (Python, JS, TS, etc.)
+        code_keywords = ["import ", "from ", "def ", "class ", "const ", "let ", "function ", "public ", "private ", "void ", "int ", "str "]
+        if any(k in content for k in code_keywords):
+            # Check if it also has significant MD markers to distinguish from MD containing code
+            if not (stripped.startswith("# ") or "\n# " in content or "\n## " in content):
+                return "code"
+            
+            # If it has both code keywords and MD headers, check ratio or just return MD
+            # But if headers are just '#' (could be comments), be careful.
+            # MD headers usually have space: "# Title"
+            has_md_headers = stripped.startswith("# ") or "\n# " in content or "\n## " in content
+            if not has_md_headers and ("{" in content and "}" in content):
+                return "code"
+
+        # MD markers: headers with spaces, bold, lists
+        if stripped.startswith("# ") or "\n# " in content or "\n- " in content or "\n* " in content or "**" in content:
+            return "md"
+            
+        if "```" in content:
+            return "code"
+            
+        return "md"
+
+    def _open_in_editor(self, content: str, editor: str, suffix: str, path: Optional[pathlib.Path] = None):
+        if not path:
+            # Create a temporary file for raw responses
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False) as f:
+                    f.write(content)
+                    path_str = f.name
+                click.echo(f"📝 Created temporary file: {path_str}")
+            except Exception as e:
+                click.echo(f"❌ Failed to create temporary file: {e}")
+                return
+        else:
+            path_str = str(path)
+            
+        try:
+            subprocess.Popen([editor, path_str])
+            click.echo(f"🚀 Opened in {editor}")
+        except Exception as e:
+            click.echo(f"❌ Failed to launch {editor}: {e}")
+
     def _maybe_open_editor(self, path: pathlib.Path):
+        # This is now handled by _handle_response_display during agent dispatch,
+        # but kept for legacy or other manual calls.
         editor = self.config.get("md_editor") if path.suffix == ".md" else self.config.get("code_editor")
         if editor:
             if click.confirm(f"🚀 Update detected. Open {path.name} in {editor}?", default=True):
                 try:
-                    import subprocess
                     subprocess.Popen([editor, str(path)])
                 except Exception as e:
                     click.echo(f"⚠️ Failed to launch {editor}: {e}")
