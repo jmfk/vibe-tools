@@ -347,6 +347,12 @@ class InteractiveArchitect:
         
         click.echo("⏳ Architect is thinking... (Ctrl-C to cancel)")
         command = get_agent_command(self.agent_type, prompt)
+        
+        # If streaming, show mode prefix before output
+        if self.stream:
+            mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+            click.echo(f"{mode_prefix} 🤖 ", nl=False)
+
         try:
             output, exit_code = run_agent(command, stream=self.stream)
         except KeyboardInterrupt:
@@ -359,11 +365,8 @@ class InteractiveArchitect:
 
         self.history.append({"role": "user", "content": query})
         self.current_query = "" # Clear after successful send
-        self._save_session()
         
-        # Display the result (only if it wasn't streamed)
-        if not self.stream:
-            click.echo(f"\n🤖 {output}")
+        mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
 
         # Check for file updates
         if "FILE_UPDATE:" in output:
@@ -375,28 +378,30 @@ class InteractiveArchitect:
             header = lines[0]
             content = "\n".join(lines[1:])
             
-            if thinking and not self.stream:
-                # If we're not streaming, we already printed the full output above
-                pass
+            if not self.stream and thinking:
+                click.echo(f"\n{mode_prefix} 🤖 {thinking}")
 
             if "arch" in header.lower():
                 ARCHITECTURE_SPEC.write_text(content)
                 click.echo(f"✅ Updated {ARCHITECTURE_SPEC}")
                 self.history.append({"role": "architect", "content": "Updated architecture.md"})
-                self._save_session()
                 self._maybe_open_editor(ARCHITECTURE_SPEC)
             elif "infra" in header.lower():
                 INFRA_SPEC.write_text(content)
                 click.echo(f"✅ Updated {INFRA_SPEC}")
                 self.history.append({"role": "architect", "content": "Updated infrastructure.md"})
-                self._save_session()
                 self._maybe_open_editor(INFRA_SPEC)
             else:
+                if not self.stream:
+                    click.echo(f"\n{mode_prefix} 🤖 {output}")
                 self.history.append({"role": "architect", "content": output})
-                self._save_session()
         else:
+            if not self.stream:
+                click.echo(f"\n{mode_prefix} 🤖 {output}")
             self.history.append({"role": "architect", "content": output})
-            self._save_session()
+
+        self._save_session()
+        click.echo("")
 
     def _maybe_open_editor(self, path: pathlib.Path):
         editor = self.config.get("md_editor") if path.suffix == ".md" else self.config.get("code_editor")
