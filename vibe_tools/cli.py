@@ -19,6 +19,7 @@ from vibe_tools.utils import (
     ensure_gitignore,
     get_agent_command,
     get_google_api_key,
+    get_main_branch,
     load_config,
     run_agent,
     run_command,
@@ -897,8 +898,11 @@ def rerun(prd_id):
         # Check if we are currently on that branch
         stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
         if stdout.strip() == branch_name:
-            click.echo(f"Currently on branch {branch_name}. Switching to main...")
-            run_command(["git", "checkout", "main"])
+            main_branch = get_main_branch()
+            click.echo(
+                f"Currently on branch {branch_name}. Switching to {main_branch}..."
+            )
+            run_command(["git", "checkout", main_branch])
 
         # Delete branch
         _, code = run_command(["git", "branch", "-D", branch_name], check=False)

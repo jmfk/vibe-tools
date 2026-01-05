@@ -16,6 +16,7 @@ from vibe_tools.utils import (
     get_agent_command,
     get_instructions_context,
     get_latest_context_file,
+    get_main_branch,
     is_dirty,
     logger,
     run_agent,
@@ -38,14 +39,15 @@ COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 def _switch_to_main():
     """Helper to commit dirty changes on feature branches before switching to main."""
+    main_branch = get_main_branch()
     if is_dirty():
         current_branch, _ = run_command(
             ["git", "branch", "--show-current"], check=False
         )
         current_branch = current_branch.strip()
-        if current_branch and current_branch != "main":
+        if current_branch and current_branch != main_branch:
             logger.info(
-                f"Uncommitted changes detected on '{current_branch}'. Committing before switching to 'main'..."
+                f"Uncommitted changes detected on '{current_branch}'. Committing before switching to '{main_branch}'..."
             )
             run_command(["git", "add", "."], check=False)
             run_command(
@@ -59,14 +61,23 @@ def _switch_to_main():
             )
         else:
             logger.warning(
-                "Uncommitted changes detected on 'main'. Please commit or stash them manually."
+                f"Uncommitted changes detected on '{main_branch}'. Please commit or stash them manually."
             )
 
-    run_command(["git", "checkout", "main"])
+    logger.debug(f"Switching to {main_branch}...")
+    stdout, code = run_command(["git", "checkout", main_branch], check=False)
+    if code != 0:
+        logger.error(f"Failed to switch to {main_branch}: {stdout}")
 
 
 def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream=False):
     """Robustly switches to a feature branch, using AI rescue if needed."""
+    # Check if we are already on this branch
+    stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
+    if stdout.strip() == branch_name:
+        logger.info(f"Already on branch '{branch_name}'.")
+        return
+
     # Check if branch exists in git
     _, code = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
     branch_exists = code == 0
@@ -622,7 +633,8 @@ def ralph_loop(
         )
 
     # Ensure we are on main branch
-    logger.info("Ensuring we are on 'main' branch...")
+    main_branch = get_main_branch()
+    logger.info(f"Ensuring we are on '{main_branch}' branch...")
     _switch_to_main()
 
     # Iterate only over numbered PRDs, excluding architecture, index, and overview
@@ -946,7 +958,8 @@ TASK:
                 )
 
                 if auto_merge:
-                    logger.info(f"Merging {branch_name} into main...")
+                    main_branch = get_main_branch()
+                    logger.info(f"Merging {branch_name} into {main_branch}...")
                     _switch_to_main()
                     run_command(["git", "merge", branch_name])
                 else:
@@ -963,7 +976,10 @@ TASK:
                 sys.exit(1)
 
     finally:
-        logger.info("Ralph Loop process complete. Returning to 'main' branch...")
+        main_branch = get_main_branch()
+        logger.info(
+            f"Ralph Loop process complete. Returning to '{main_branch}' branch..."
+        )
         _switch_to_main()
 
     print("All PRDs processed successfully.")

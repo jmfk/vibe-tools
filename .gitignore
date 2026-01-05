@@ -26,3 +26,5 @@ costs/
 
 .vibe_authorized_user.json
 node_modules/
+
+vibe_data/*
