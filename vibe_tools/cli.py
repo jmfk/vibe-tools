@@ -261,16 +261,39 @@ def init(ctx):
 def _perform_basic_init():
     """Helper to initialize the prompts directory and default templates."""
     maybe_init_git()
-    ensure_gitignore("logs/")
+    
+    from vibe_tools.utils import (
+        VIBE_PROJECT_DIR, 
+        INSTRUCTIONS_DIR, 
+        PRD_DIR, 
+        LOGS_DIR, 
+        COSTS_DIR,
+        VIBE_DATA_DIR,
+        ensure_gitignore,
+        ensure_dir,
+        migrate_to_project_dir,
+        ensure_project_structure
+    )
+
+    # First, migrate any existing files from root to project/
+    migrate_to_project_dir()
+    
+    # Ensure structure exists
+    ensure_project_structure()
+
+    ensure_dir(VIBE_PROJECT_DIR)
+    ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
+    
     prompts_dir = pathlib.Path("prompts")
     ensure_dir(prompts_dir)
 
     # Create new directories for instructions and specs
-    from vibe_tools.utils import INSTRUCTIONS_DIR
-
     ensure_dir(INSTRUCTIONS_DIR)
     ensure_dir(pathlib.Path("specs"))
-    ensure_dir(pathlib.Path("prds"))
+    ensure_dir(PRD_DIR)
+    ensure_dir(LOGS_DIR)
+    ensure_dir(COSTS_DIR)
+    ensure_dir(VIBE_DATA_DIR)
 
     for filename, content in TEMPLATES.items():
         if filename in ["dummy_backend_test", "dummy_frontend_test"]:
@@ -665,30 +688,30 @@ def setup(ctx, auto, import_code):
 
     if import_code:
         from vibe_tools.ralph import COMPLETION_PROMISE
-        click.echo("🔍 Analyzing codebase to generate current architecture and infrastructure definitions...")
-        prompt = f"""Analyze the current codebase and generate two comprehensive YAML files in the project root:
-1. '{ARCHITECTURE_CURRENT.name}': Describe the tech stack, directory structure, key dependencies, and test suites.
-2. '{INFRA_CURRENT.name}': Describe the infrastructure including databases, external services, caches, queues, and object storage.
+        click.echo("🔍 Analyzing codebase to generate architecture and infrastructure definitions...")
+        prompt = f"""Analyze the current codebase and generate four files in the project root:
+1. '{ARCHITECTURE_CURRENT.name}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
+2. '{INFRA_CURRENT.name}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
+3. '{ARCHITECTURE_SPEC}': Markdown specification of the DESIRED architecture, based on the codebase but cleaned up for a specification.
+4. '{INFRA_SPEC}': Markdown specification of the DESIRED infrastructure.
 
-The files should be in YAML format and provide a clear picture of the ACTUAL state of the project.
+The '-current.yaml' files must describe what is CURRENTLY implemented.
+The '.md' files in 'specs/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
 
 ACTUAL CODEBASE:
 (The agent has access to the filesystem to perform this analysis)
 
-Once you have analyzed the codebase and written BOTH the '{ARCHITECTURE_CURRENT.name}' and '{INFRA_CURRENT.name}' files, include {COMPLETION_PROMISE}.
+Once you have analyzed the codebase and written ALL four files, include {COMPLETION_PROMISE}.
 """
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
         
         if code == 0 and COMPLETION_PROMISE in output:
-            click.echo(f"✅ Generated {ARCHITECTURE_CURRENT} and {INFRA_CURRENT}")
-            
-            # Mark setup phase as complete since we've imported the code
-            state["phases"]["setup"]["status"] = "completed"
-            if ARCHITECTURE.exists():
-                state["phases"]["setup"]["hash"] = get_file_hash(ARCHITECTURE)
-            save_project_state(state)
-            click.echo("✅ Setup phase marked as COMPLETED in project-state.json.")
+            click.echo(f"✅ Generated current state and specification files.")
+            click.echo("\nNext Steps:")
+            click.echo(f"1. Review {ARCHITECTURE_SPEC} and {INFRA_SPEC}")
+            click.echo("2. Run 'vibe normalize' to create the desired state YAML files.")
+            click.echo("3. Run 'vibe setup' (without --import-code) to reconcile.")
         else:
             click.echo(f"❌ Failed to generate discovery files.")
         return
