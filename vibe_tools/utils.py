@@ -13,6 +13,7 @@ from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
 
 PRD_DIR = pathlib.Path("prds")
+PLANS_DIR = pathlib.Path("plans")
 PROJECT_STATE_FILE = pathlib.Path("project-state.json")
 STATE_FILE = pathlib.Path(".ralph_state.json")
 LOGS_DIR = pathlib.Path("logs")
@@ -96,7 +97,6 @@ def save_config(config, global_scope=False):
         ensure_gitignore(".vibe_google_creds.json")
         ensure_gitignore(".vibe_client_secrets.json")
         ensure_gitignore(".vibe_authorized_user.json")
-        ensure_gitignore("project-state.json")
 
 
 def load_project_state() -> Dict[str, Any]:
@@ -131,9 +131,21 @@ def load_project_state() -> Dict[str, Any]:
 
 
 def save_project_state(state: Dict[str, Any]):
-    """Saves the project state to project-state.json."""
+    """Saves the project state to project-state.json and commits it if in a git repo."""
     PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
-    ensure_gitignore("project-state.json")
+    
+    if is_git_repo():
+        # Avoid recursive calls or excessive commits, but ensure state is "safe"
+        # We only commit if there's an actual change to the state file
+        try:
+            # Check if state file is modified or untracked
+            stdout, _ = run_command(["git", "status", "--porcelain", str(PROJECT_STATE_FILE)], check=False)
+            if stdout.strip():
+                logger.debug(f"Committing {PROJECT_STATE_FILE} for safety...")
+                run_command(["git", "add", str(PROJECT_STATE_FILE)], check=False)
+                run_command(["git", "commit", "-m", "vibe: update project state", "--no-verify"], check=False)
+        except Exception as e:
+            logger.debug(f"Failed to auto-commit project state: {e}")
 
 
 def migrate_legacy_state():

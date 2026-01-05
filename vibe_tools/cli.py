@@ -855,12 +855,27 @@ def setup(ctx, auto, import_code):
 
     if import_code:
         click.echo("🔍 Analyzing codebase to generate architecture-current.yaml...")
-        # TODO: Implement codebase analysis logic
-        # For now, we'll use an agent to do it
-        prompt = "Analyze the current codebase and generate a comprehensive 'architecture-current.yaml' file that describes the current tech stack, directory structure, databases, and key dependencies."
+        prompt = f"""Analyze the current codebase and generate a comprehensive '{ARCHITECTURE_CURRENT.name}' file in the project root.
+The file should be in YAML format and describe:
+1. Tech stack (languages, frameworks, versions).
+2. Directory structure and key files.
+3. Databases and external services used.
+4. Key dependencies and their purposes.
+5. Existing test suites and how to run them.
+
+ACTUAL CODEBASE:
+(The agent has access to the filesystem to perform this analysis)
+
+Once you have analyzed the codebase and written the '{ARCHITECTURE_CURRENT.name}' file, include {COMPLETION_PROMISE}.
+"""
+        from vibe_tools.ralph import COMPLETION_PROMISE
         cmd = get_agent_command(agent, prompt)
-        run_agent(cmd, stream=stream)
-        click.echo(f"✅ Generated {ARCHITECTURE_CURRENT}")
+        output, code = run_agent(cmd, stream=stream)
+        
+        if code == 0 and COMPLETION_PROMISE in output:
+            click.echo(f"✅ Generated {ARCHITECTURE_CURRENT}")
+        else:
+            click.echo(f"❌ Failed to generate {ARCHITECTURE_CURRENT}")
         return
 
     if not ARCHITECTURE.exists():
@@ -905,25 +920,31 @@ def plan(ctx):
     state = load_project_state()
     if state["phases"]["setup"]["status"] != "completed":
         click.echo(
-            "❌ Setup phase must be completed before planning. Run 'vibe setup'."
+            "❌ Setup phase (Architecture) must be completed before planning. Run 'vibe setup'."
+        )
+        return
+
+    if not ARCHITECTURE_CURRENT.exists():
+        click.echo(
+            f"❌ {ARCHITECTURE_CURRENT} not found. Architecture must be initialized before planning. Run 'vibe setup'."
         )
         return
 
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
 
-    click.echo("🧠 Generating project-plan.yaml...")
-    # TODO: Implement Planner Agent logic
+    click.echo("🧠 Breaking down PRDs into implementation plans...")
     from vibe_tools.ralph import run_planner_agent
 
-    project_plan = run_planner_agent(agent, stream=stream)
-    if project_plan:
+    success = run_planner_agent(agent, stream=stream)
+    if success:
         state["phases"]["plan"]["status"] = "completed"
         state["phases"]["plan"]["hash"] = get_file_hash(PROJECT_PLAN)
         save_project_state(state)
         click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
+        click.echo(f"✅ Granular plans created in {PLANS_DIR}/")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Review/Edit project-plan.yaml")
+        click.echo("[ ] Review/Edit granular plans in plans/")
         click.echo("[ ] Start Building (vibe implement)")
     else:
         click.echo("❌ Project planning failed.")
@@ -934,6 +955,12 @@ def plan(ctx):
 def implement(ctx):
     """Phase 4: Implement. Iterates through the project-plan.yaml."""
     state = load_project_state()
+    if state["phases"]["setup"]["status"] != "completed" or not ARCHITECTURE_CURRENT.exists():
+        click.echo(
+            "❌ Setup phase (Architecture) must be completed before implementing. Run 'vibe setup'."
+        )
+        return
+
     if state["phases"]["plan"]["status"] != "completed":
         click.echo(
             "❌ Plan phase must be completed before implementing. Run 'vibe plan'."
@@ -961,7 +988,7 @@ def implement(ctx):
 @cli.command()
 @click.pass_context
 def infra(ctx):
-    """Phase 5: Infrastructure reconciliation."""
+    """Phase 5: Infrastructure reconciliation. Ensures services are reachable."""
     state = load_project_state()
     if state["phases"]["setup"]["status"] != "completed":
         click.echo(
@@ -981,10 +1008,18 @@ def infra(ctx):
         agent=agent,
         stream=stream,
     )
+    
+    # Custom instruction for infra verification
+    loop.instructions = [
+        "Specifically verify that all configured services (databases, queues, etc.) are reachable from the application environment.",
+        "Test connectivity using appropriate tools (e.g., pg_isready, redis-cli, curl).",
+        "Set up or update environment variables as needed."
+    ]
+
     if loop.run():
         state["phases"]["infra"]["status"] = "completed"
         save_project_state(state)
-        click.echo("✅ Infrastructure reconciliation complete.")
+        click.echo("✅ Infrastructure reconciliation and verification complete.")
         click.echo("\nNext Steps:")
         click.echo("[ ] Setup CI/CD (vibe cicd)")
         click.echo("[ ] Deployment (vibe deploy)")
@@ -995,7 +1030,7 @@ def infra(ctx):
 @cli.command()
 @click.pass_context
 def cicd(ctx):
-    """Phase 6: CI/CD reconciliation."""
+    """Phase 6: CI/CD reconciliation. Ensures deployment pipelines are ready."""
     state = load_project_state()
     if state["phases"]["setup"]["status"] != "completed":
         click.echo("❌ Setup phase must be completed before CI/CD. Run 'vibe setup'.")
@@ -1013,6 +1048,12 @@ def cicd(ctx):
         agent=agent,
         stream=stream,
     )
+    
+    loop.instructions = [
+        "Verify that all CI/CD pipelines and deployment strategies are correctly configured.",
+        "Ensure secrets and environment variables required for deployment are correctly handled."
+    ]
+
     if loop.run():
         state["phases"]["cicd"]["status"] = "completed"
         save_project_state(state)
@@ -1027,7 +1068,7 @@ def cicd(ctx):
 @cli.command()
 @click.pass_context
 def testing(ctx):
-    """Phase 7: Testing reconciliation."""
+    """Phase 7: Testing reconciliation. Ensures integration and regression tests pass."""
     state = load_project_state()
     if state["phases"]["setup"]["status"] != "completed":
         click.echo("❌ Setup phase must be completed before testing. Run 'vibe setup'.")
@@ -1045,6 +1086,13 @@ def testing(ctx):
         agent=agent,
         stream=stream,
     )
+    
+    loop.instructions = [
+        "Ensure all integration and regression tests are passing.",
+        "Update test configurations if the architecture or environment has changed.",
+        "Run 'make test-integration' and 'make test-regression' to verify."
+    ]
+
     if loop.run():
         state["phases"]["testing"]["status"] = "completed"
         save_project_state(state)
