@@ -8,6 +8,51 @@ from typing import List
 
 import click
 
+class OrderedGroup(click.Group):
+    """Custom Click Group to order commands in the help menu."""
+
+    def list_commands(self, ctx: click.Context) -> List[str]:
+        # Define the desired order of commands
+        order = [
+            # Phases 1-8
+            "setup",
+            "normalize",
+            "plan",
+            "implementation",
+            "infra",
+            "cicd",
+            "testing",
+            "deploy",
+            # Supporting tools
+            "ideation",
+            "prd",
+            "history",
+            "status",
+            "cost",
+            "docs",
+            "memory",
+            "remember",
+            "monitor",
+            "rerun",
+            "test-fix",
+            "coverage",
+            "init",
+            # Deprecated
+            "ralph",
+            "review-prd",
+            "write-prd",
+        ]
+
+        # Get the actual commands available
+        commands = super().list_commands(ctx)
+
+        # Order the commands based on the defined order, putting any unknown commands at the end
+        ordered_commands = [cmd for cmd in order if cmd in commands]
+        other_commands = sorted([cmd for cmd in commands if cmd not in order])
+
+        return ordered_commands + other_commands
+
+
 from vibe_tools.cost import finalize_cost_report, get_total_cost
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
@@ -51,7 +96,7 @@ REVIEW_PROMPT_TEMPLATE = PROMPTS_DIR / "review_prompt.txt"
 SPECS_DIR = pathlib.Path("specs")
 
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True, cls=OrderedGroup)
 @click.option(
     "--debug",
     is_flag=True,
@@ -183,7 +228,7 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
             click.echo("Run 'vibe-setup api' to configure LLM access.")
 
         click.echo("\nAvailable commands:")
-        for command in sorted(cli.list_commands(ctx)):
+        for command in cli.list_commands(ctx):
             cmd_obj = cli.get_command(ctx, command)
             if cmd_obj:
                 click.echo(f"  {command:<10} {cmd_obj.get_short_help_str()}")
