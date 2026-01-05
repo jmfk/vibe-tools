@@ -4,11 +4,9 @@ import sys
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.utils import get_agent_command, logger, run_agent
+from vibe_tools.utils import get_agent_command, logger, run_agent, get_prompt
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
-PROMPTS_DIR = pathlib.Path("prompts")
-TEST_FIX_PROMPT_TEMPLATE = PROMPTS_DIR / "test_fix_prompt.txt"
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
@@ -53,10 +51,6 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
     config = load_config()
     cost_logger = CostLogger(config)
 
-    if not PROMPTS_DIR.exists():
-        logger.error("Error: prompts directory not found. Please run 'vibe init' first.")
-        sys.exit(1)
-
     saved_state = load_state()
     start_iteration = saved_state["iteration"] if saved_state else 1
 
@@ -82,13 +76,12 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
 
         logger.info(f"❌ Tests or linting failed. [PHASE: fix] Asking {agent} to fix...")
 
-        if not TEST_FIX_PROMPT_TEMPLATE.exists():
-            print(
-                f"Error: Test fix prompt template not found at {TEST_FIX_PROMPT_TEMPLATE}. Please run 'vibe init'."
-            )
+        try:
+            prompt_base = get_prompt("test_fix_prompt.txt")
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
             sys.exit(1)
 
-        prompt_base = TEST_FIX_PROMPT_TEMPLATE.read_text()
         prompt = prompt_base.replace("{test_output}", test_output)
 
         cmd = get_agent_command(agent, prompt)

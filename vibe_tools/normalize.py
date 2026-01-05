@@ -5,28 +5,21 @@ import sys
 import click
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.utils import get_agent_command, run_agent, VIBE_PROJECT_DIR
+from vibe_tools.utils import get_agent_command, run_agent, VIBE_PROJECT_DIR, PRD_DIR, get_prompt
 
-PROMPTS_DIR = pathlib.Path("prompts")
-NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
 DEFAULT_SPECS_DIR = pathlib.Path("specs")
-PRDS_DIR = pathlib.Path("prds")
 
 
 def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False):
     from vibe_tools.cli import load_config
 
-    if not PROMPTS_DIR.exists():
-        print("Error: prompts directory not found. Please run 'vibe init' first.")
-        sys.exit(1)
-
     config = load_config()
     cost_logger = CostLogger(config)
 
-    if not NORMALIZATION_PROMPT_TEMPLATE.exists():
-        print(
-            f"Error: Normalization prompt template not found at {NORMALIZATION_PROMPT_TEMPLATE}. Please run 'vibe init'."
-        )
+    try:
+        prompt_base = get_prompt("pdr_normalization_prompt.txt")
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
         sys.exit(1)
 
     specs_dir = DEFAULT_SPECS_DIR
@@ -41,7 +34,7 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             specs_dir.mkdir(exist_ok=True)
 
     # Ensure prds directory exists
-    PRDS_DIR.mkdir(exist_ok=True)
+    PRD_DIR.mkdir(exist_ok=True)
 
     # Get files to process
     files_to_process = []
@@ -61,24 +54,22 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             return
 
     # Check for existing normalized files
-    existing_prds = list(PRDS_DIR.rglob("prd_*.yaml"))
+    existing_prds = list(PRD_DIR.rglob("prd_*.yaml"))
 
     overwrite_all = auto_overwrite
     if existing_prds and not auto_overwrite:
         if click.confirm(
-            f"Found {len(existing_prds)} existing files in {PRDS_DIR}/. Overwrite all?",
+            f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite all?",
             default=False,
         ):
             overwrite_all = True
-
-    prompt_base = NORMALIZATION_PROMPT_TEMPLATE.read_text()
 
     for spec_path in files_to_process:
         stem = spec_path.stem
 
         # Determine target PRD directory (preserving subdirectories)
         rel_dir = spec_path.parent.relative_to(specs_dir)
-        target_prd_dir = PRDS_DIR / rel_dir
+        target_prd_dir = PRD_DIR / rel_dir
         target_prd_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine output filename with normalized prefix and format
