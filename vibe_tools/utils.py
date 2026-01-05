@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import yaml
 from dotenv import load_dotenv, find_dotenv, set_key
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
@@ -105,30 +106,66 @@ def load_project_state() -> Dict[str, Any]:
     if not PROJECT_STATE_FILE.exists() and STATE_FILE.exists():
         migrate_legacy_state()
 
-    if PROJECT_STATE_FILE.exists():
-        try:
-            return json.loads(PROJECT_STATE_FILE.read_text())
-        except Exception as e:
-            logger.error(f"Error loading project state: {e}")
-
-    # Default state structure
-    return {
+    state = {
         "project_name": get_project_name(),
         "phases": {
-            "setup": {"status": "pending", "hash": None},
-            "normalize": {"status": "pending", "hash": None},
-            "plan": {"status": "pending", "hash": None},
-            "implement": {"status": "pending", "hash": None},
-            "infra": {"status": "pending", "hash": None},
-            "cicd": {"status": "pending", "hash": None},
-            "testing": {"status": "pending", "hash": None},
-            "deploy": {"status": "pending", "hash": None},
+            "setup": {"status": "pending", "hash": None, "depends_on": []},
+            "normalize": {"status": "pending", "hash": None, "depends_on": ["setup"]},
+            "plan": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
+            "implement": {"status": "pending", "hash": None, "depends_on": ["plan"]},
+            "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
+            "cicd": {"status": "pending", "hash": None, "depends_on": ["infra"]},
+            "testing": {"status": "pending", "hash": None, "depends_on": ["implement"]},
+            "deploy": {"status": "pending", "hash": None, "depends_on": ["infra", "cicd", "testing"]},
         },
+        "plans": {},
         "completed_prds": [],
         "started_prds": [],
         "active_task": None,
-        "version": "1.0",
+        "version": "1.1",
     }
+
+    if PROJECT_STATE_FILE.exists():
+        try:
+            stored_state = json.loads(PROJECT_STATE_FILE.read_text())
+            # Basic migration/merging
+            if "project_name" in stored_state:
+                state["project_name"] = stored_state["project_name"]
+            if "phases" in stored_state:
+                for phase_id, phase_data in stored_state["phases"].items():
+                    if phase_id in state["phases"]:
+                        state["phases"][phase_id].update(phase_data)
+            if "plans" in stored_state:
+                state["plans"] = stored_state["plans"]
+            if "completed_prds" in stored_state:
+                state["completed_prds"] = stored_state["completed_prds"]
+            if "started_prds" in stored_state:
+                state["started_prds"] = stored_state["started_prds"]
+            if "active_task" in stored_state:
+                state["active_task"] = stored_state["active_task"]
+            if "version" in stored_state:
+                # If we're loading an older version, we might want to trigger specific logic here
+                pass
+            return state
+        except Exception as e:
+            logger.error(f"Error loading project state: {e}")
+
+    return state
+
+
+def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
+    """Returns a list of missing dependencies for a phase."""
+    phases = state.get("phases", {})
+    if phase_id not in phases:
+        return []
+
+    missing = []
+    for dep_id in phases[phase_id].get("depends_on", []):
+        dep_phase = phases.get(dep_id, {})
+        if dep_phase.get("status") != "completed":
+            missing.append(dep_id)
+    
+    return missing
 
 
 def save_project_state(state: Dict[str, Any]):
@@ -747,22 +784,22 @@ def get_vibe_status_report():
         sync_status = ""
         if phase_id in phase_files:
             desired_file, current_file = phase_files[phase_id]
-            if desired_file.exists():
-                stored_hash = phase.get("hash")
-                current_hash = get_file_hash(desired_file)
-                if stored_hash and current_hash == stored_hash:
-                    sync_status = click.style(" (In Sync)", fg="dim green")
+            if desired_file.exists() and current_file.exists():
+                if get_file_hash(desired_file) == get_file_hash(current_file):
+                    sync_status = click.style(" (In Sync)", fg="green", dim=True)
                 else:
-                    sync_status = click.style(" (Out of Sync)", fg="dim yellow")
+                    sync_status = click.style(" (Out of Sync)", fg="yellow", dim=True)
+            elif desired_file.exists():
+                sync_status = click.style(" (Needs Init)", fg="red", dim=True)
 
         if status == "completed":
             status_display = click.style("✅ DONE", fg="green") + sync_status
         elif status == "in_progress":
-            status_display = click.style("⏳ IN_PROGRESS", fg="blue")
+            status_display = click.style("⏳ IN_PROGRESS", fg="blue") + sync_status
             if not next_action:
                 next_action = f"vibe {phase_id}"
         else:
-            status_display = click.style("⚪ PENDING", fg="white", dim=True)
+            status_display = click.style("⚪ PENDING", fg="white", dim=True) + sync_status
             if not next_action:
                 next_action = f"vibe {phase_id}"
         
@@ -788,20 +825,43 @@ def get_vibe_status_report():
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
     if PROJECT_PLAN.exists():
         plan_status = click.style("✅ Found", fg="green")
+        report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
+        
+        try:
+            plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
+            phases = plan_data.get("phases", {})
+            
+            for phase_name in ["setup", "infra", "implementation", "cicd"]:
+                if phase_name not in phases:
+                    continue
+                
+                phase_data = phases[phase_name]
+                report.append(f"    {click.style(phase_name.upper(), underline=True)}:")
+                
+                if phase_name == "implementation":
+                    prds = phase_data.get("prds", [])
+                    for prd in prds:
+                        report.append(f"      PRD: {prd.get('id')}")
+                        for p in prd.get("plans", []):
+                            p_status = p.get("status", "pending")
+                            if p_status == "completed":
+                                p_status_display = click.style("✅", fg="green")
+                            else:
+                                p_status_display = click.style("⚪", fg="white", dim=True)
+                            report.append(f"        - {p_status_display} {p.get('id')}")
+                else:
+                    for p in phase_data.get("plans", []):
+                        p_status = p.get("status", "pending")
+                        if p_status == "completed":
+                            p_status_display = click.style("✅", fg="green")
+                        else:
+                            p_status_display = click.style("⚪", fg="white", dim=True)
+                        report.append(f"      - {p_status_display} {p.get('id')}")
+        except Exception as e:
+            report.append(f"  Error parsing {PROJECT_PLAN.name}: {e}")
     else:
         plan_status = click.style("⚪ Missing", fg="white", dim=True)
-    report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
-    
-    if PLANS_DIR.exists():
-        plans = sorted(list(PLANS_DIR.glob("*.md")))
-        if plans:
-            report.append(f"  - {PLANS_DIR.name}/")
-            for p in plans:
-                report.append(f"    - {p.name:<30} ✅")
-        else:
-            report.append(f"  - {PLANS_DIR.name}/ (Empty)")
-    else:
-        report.append(f"  - {PLANS_DIR.name}/ (Not created)")
+        report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
 
     # 5. Instructions
     report.append(click.style("\nINSTRUCTIONS:", fg="yellow", bold=True))

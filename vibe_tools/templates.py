@@ -104,26 +104,42 @@ GOAL:
 Break down the requirements into logical, decoupled building blocks. Optimize for build speed by identifying components that can be built in parallel once their base dependencies are met.
 
 TASK:
-1. Break down all PRDs into granular implementation plans.
-2. Group related functionality but keep components decoupled where possible.
-3. For each plan, create a separate Markdown file in the 'plans/' directory (e.g., 'plans/01_setup_auth.md').
-4. Each Markdown plan MUST include:
+1. Break down all PRDs and Architecture into granular implementation plans.
+2. Group plans into logical PHASES: Setup, Infra, Implementation, and CI/CD.
+3. For the "Implementation" phase, group plans by their source PRD.
+4. For each plan, create a separate Markdown file in the 'plans/' directory (e.g., 'plans/01_setup_auth.md').
+5. Each Markdown plan MUST include:
    - Title
    - Description
    - Dependencies: IDs of other plans that MUST be completed first.
    - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
    - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-5. Order these plans for optimal build speed: Infrastructure and shared services first, then independent features.
-6. Create a 'project-plan.yaml' in the root directory that acts as an index of all plans in their intended order.
+6. Create a 'project-plan.yaml' in the root directory that acts as an index of all plans, organized by phase and PRD.
 
-SCHEMA for project-plan.yaml index:
-plans:
-  - id: "01_setup_auth"
-    file: "plans/01_setup_auth.md"
-    status: "pending"
-  - id: "02_implement_user_api"
-    file: "plans/02_implement_user_api.md"
-    status: "pending"
+SCHEMA for project-plan.yaml:
+phases:
+  setup:
+    plans:
+      - id: "01_init_repo"
+        file: "plans/01_init_repo.md"
+        status: "pending"
+  infra:
+    plans:
+      - id: "02_db_setup"
+        file: "plans/02_db_setup.md"
+        status: "pending"
+  implementation:
+    prds:
+      - id: "prd_01_minimal_htmx"
+        plans:
+          - id: "03_htmx_base"
+            file: "plans/03_htmx_base.md"
+            status: "pending"
+  cicd:
+    plans:
+      - id: "04_github_actions"
+        file: "plans/04_github_actions.md"
+        status: "pending"
 
 Include <promise>DONE</promise> when all files are saved.
 """,
@@ -247,6 +263,33 @@ TASK:
 3. Detect any "BLOCKER" messages in files or signs of failure/stalling.
 4. Provide a HEALTH STATUS: [HEALTHY], [STALLED], or [FAILED].
 5. Keep it very concise (max 10 lines).
+""",
+    "reconciliation_prompt.txt": """You are in the '{name}' phase of the project lifecycle.
+Your goal is to reconcile the DESIRED state with the ACTUAL state of the codebase.
+
+PHASE: {name}
+MODE: {mode}  # INITIALIZATION or MIGRATION
+DESIRED FILE: {desired_file}
+CURRENT FILE: {current_file}
+
+DESIRED STATE content:
+---
+{desired_content}
+---
+
+ACTUAL STATE content (from {current_file}):
+---
+{current_content}
+---
+
+INSTRUCTIONS for {mode}:
+1. Examine the current codebase and compare it against the DESIRED state.
+2. If mode is MIGRATION, identify the deltas between the ACTUAL state and the DESIRED state.
+3. Perform all necessary actions (coding, configuration, setup, migrations) to bring the codebase into alignment with the DESIRED state.
+4. Ensure all changes are robust, follow project patterns, and are documented in the code where appropriate.
+5. IMPORTANT: Once the reconciliation is complete, you MUST update '{current_file}' to exactly match the new state (which should now align with the DESIRED state).
+6. {custom_instructions}
+7. Include <promise>DONE</promise> in your response ONLY when the reconciliation is successful and '{current_file}' has been updated.
 """,
     "Makefile": """.PHONY: test test-backend test-frontend test-infra test-integration test-regression lint lint-backend lint-frontend
 
