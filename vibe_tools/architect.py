@@ -345,9 +345,13 @@ class InteractiveArchitect:
         prompt = self._build_prompt()
         query = self.current_query
         
-        click.echo("⏳ Architect is thinking...")
+        click.echo("⏳ Architect is thinking... (Ctrl-C to cancel)")
         command = get_agent_command(self.agent_type, prompt)
-        output, exit_code = run_agent(command, stream=self.stream)
+        try:
+            output, exit_code = run_agent(command, stream=self.stream)
+        except KeyboardInterrupt:
+            click.echo("\n🛑 Agent cancelled.")
+            return
 
         if exit_code != 0:
             click.echo("❌ Architect failed to respond.")

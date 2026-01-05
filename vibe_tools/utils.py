@@ -478,7 +478,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
                 sys.stdout.flush()
             else:
                 # Live progress to stdout (bypassing file log for spammy progress)
-                sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}")
+                sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s, Ctrl-C to cancel)... {preview}")
                 sys.stdout.flush()
 
             # Also log to debug file immediately

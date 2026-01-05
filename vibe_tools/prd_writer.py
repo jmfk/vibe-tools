@@ -133,7 +133,12 @@ class PRDWriter:
             qa=qa_section,
         )
 
-        output, exit_code = self.agent_runner(prompt)
+        try:
+            output, exit_code = self.agent_runner(prompt)
+        except KeyboardInterrupt:
+            click.echo("\n🛑 Generation cancelled.")
+            raise click.Abort()
+
         if exit_code != 0:
             raise click.ClickException("Gemini failed to generate the PRD markdown.")
 
@@ -400,7 +405,7 @@ class InteractivePRD(PRDWriter):
             click.echo(f"⚠️ Failed to parse AI response: {e}")
 
     def _generate_draft(self):
-        click.echo("⏳ Generating PRD draft...")
+        click.echo("⏳ Generating PRD draft... (Ctrl-C to cancel)")
         interview_data = {
             "history": self.history,
             "summary": self.current_summary,
