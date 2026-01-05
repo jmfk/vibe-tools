@@ -16,10 +16,10 @@ class OrderedGroup(click.Group):
         # Define the desired order of commands
         order = [
             # Phases 1-8
+            "normalize",
             "setup",
             "architect",
             "pm",
-            "normalize",
             "plan",
             "implement",
             "infra",
@@ -404,7 +404,7 @@ def coverage(ctx):
 )
 @click.pass_context
 def normalize(ctx, input_file, yes):
-    """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
+    """Phase 1: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     state = load_project_state()
     missing = check_dependencies("normalize", state)
@@ -426,7 +426,7 @@ def normalize(ctx, input_file, yes):
 
     click.echo("\nNext Steps:")
     click.echo("[ ] Review/Edit generated YAMLs in prds/")
-    click.echo("[ ] Generate Project Plan (vibe plan)")
+    click.echo("[ ] Architecture Setup (vibe setup)")
 
 
 @cli.command()
@@ -714,7 +714,7 @@ def cost():
 )
 @click.pass_context
 def setup(ctx, auto, import_code):
-    """Phase 1: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
+    """Phase 2: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
     from vibe_tools.ralph import RalphLoop
 
     state = load_project_state()
@@ -789,7 +789,6 @@ Once you have analyzed the codebase and written ALL four files, include {COMPLET
         save_project_state(state)
         click.echo("\n✅ Architecture setup complete. project-state.json updated.")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Normalize Specs (vibe normalize)")
         click.echo("[ ] Generate Project Plan (vibe plan)")
     else:
         click.echo("❌ Architecture setup failed.")
