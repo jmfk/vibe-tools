@@ -307,8 +307,7 @@ lint-frontend:
   });
 });
 """,
-}
-
+    "README": """
 Global commands for Cursor Ralph loop and coverage improvement.
 
 ## Configuration
