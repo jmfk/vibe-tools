@@ -5,7 +5,7 @@ import sys
 import click
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.utils import get_agent_command, run_agent
+from vibe_tools.utils import get_agent_command, run_agent, VIBE_PROJECT_DIR
 
 PROMPTS_DIR = pathlib.Path("prompts")
 NORMALIZATION_PROMPT_TEMPLATE = PROMPTS_DIR / "pdr_normalization_prompt.txt"
@@ -83,9 +83,11 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
 
         # Determine output filename with normalized prefix and format
         # 1. Special case for shared global context files ("global truths")
-        global_truths = ["architecture", "project_overview", "infrastructure", "cicd"]
+        global_truths = ["architecture", "project_overview", "infrastructure", "cicd", "testing"]
         if stem.lower() in global_truths:
             output_filename = f"{stem.lower()}.yaml"
+            # Global truths go to the project directory, not prds/
+            output_path = VIBE_PROJECT_DIR / output_filename
         else:
             # 2. Handle PRD prefixes and format
             # Strip case-insensitive "prd" or "PRD" prefix if followed by -, _, or space
@@ -96,8 +98,7 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             
             # Ensure it starts with prd_
             output_filename = f"prd_{normalized_stem.lower()}.yaml"
-        
-        output_path = target_prd_dir / output_filename
+            output_path = target_prd_dir / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD
         if output_path.exists():

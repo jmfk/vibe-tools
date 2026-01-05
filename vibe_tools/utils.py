@@ -14,35 +14,112 @@ from dotenv import load_dotenv, find_dotenv, set_key
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
 
-PRD_DIR = pathlib.Path("prds")
-PLANS_DIR = pathlib.Path("plans")
-PROJECT_STATE_FILE = pathlib.Path("project-state.json")
-STATE_FILE = pathlib.Path(".ralph_state.json")
-LOGS_DIR = pathlib.Path("logs")
-COSTS_DIR = pathlib.Path("costs")
-INSTRUCTIONS_DIR = pathlib.Path("instructions")
-CONFIG_FILE = pathlib.Path(".vibe_config.json")
+VIBE_PROJECT_DIR = pathlib.Path("project")
+
+PRD_DIR = VIBE_PROJECT_DIR / "prds"
+PLANS_DIR = VIBE_PROJECT_DIR / "plans"
+PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
+STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
+LOGS_DIR = VIBE_PROJECT_DIR / "logs"
+COSTS_DIR = VIBE_PROJECT_DIR / "costs"
+INSTRUCTIONS_DIR = VIBE_PROJECT_DIR / "instructions"
+VIBE_DATA_DIR = VIBE_PROJECT_DIR / "data"
+CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
-ARCHITECTURE = pathlib.Path("architecture.yaml")
-ARCHITECTURE_CURRENT = pathlib.Path("architecture-current.yaml")
-OVERVIEW = pathlib.Path("project_overview.yaml")
-PROJECT_PLAN = pathlib.Path("project-plan.yaml")
-PROJECT_PLAN_CURRENT = pathlib.Path("project-plan-current.yaml")
-INFRA = pathlib.Path("infrastructure.yaml")
-INFRA_CURRENT = pathlib.Path("infrastructure-current.yaml")
-CICD = pathlib.Path("cicd.yaml")
-CICD_CURRENT = pathlib.Path("cicd-current.yaml")
-TESTING_CONFIG = pathlib.Path("testing.yaml")
-TESTING_CURRENT = pathlib.Path("testing-current.yaml")
+ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
+ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
+ARCHITECTURE_SPEC = pathlib.Path("specs/architecture.md")
+OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
+PROJECT_PLAN = VIBE_PROJECT_DIR / "project-plan.yaml"
+PROJECT_PLAN_CURRENT = VIBE_PROJECT_DIR / "project-plan-current.yaml"
+INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
+INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
+INFRA_SPEC = pathlib.Path("specs/infrastructure.md")
+CICD = VIBE_PROJECT_DIR / "cicd.yaml"
+CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
+CICD_SPEC = pathlib.Path("specs/cicd.md")
+TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
+TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
+TESTING_SPEC = pathlib.Path("specs/testing.md")
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
+
 # Ensure directories exist
-LOGS_DIR.mkdir(exist_ok=True)
-COSTS_DIR.mkdir(exist_ok=True)
-GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
+def ensure_project_structure():
+    """Ensures that the core project directories exist."""
+    VIBE_PROJECT_DIR.mkdir(exist_ok=True)
+    LOGS_DIR.mkdir(exist_ok=True)
+    COSTS_DIR.mkdir(exist_ok=True)
+    PRD_DIR.mkdir(exist_ok=True)
+    INSTRUCTIONS_DIR.mkdir(exist_ok=True)
+    GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
+
+
+def migrate_to_project_dir():
+    """Migrates files and directories from the project root to the 'project/' directory."""
+    migration_map = {
+        pathlib.Path("prds"): PRD_DIR,
+        pathlib.Path("plans"): PLANS_DIR,
+        pathlib.Path("project-state.json"): PROJECT_STATE_FILE,
+        pathlib.Path(".ralph_state.json"): STATE_FILE,
+        pathlib.Path("logs"): LOGS_DIR,
+        pathlib.Path("costs"): COSTS_DIR,
+        pathlib.Path("instructions"): INSTRUCTIONS_DIR,
+        pathlib.Path("vibe_data"): VIBE_DATA_DIR,
+        pathlib.Path(".vibe_config.json"): CONFIG_FILE,
+        pathlib.Path("architecture.yaml"): ARCHITECTURE,
+        pathlib.Path("architecture-current.yaml"): ARCHITECTURE_CURRENT,
+        pathlib.Path("project_overview.yaml"): OVERVIEW,
+        pathlib.Path("project-plan.yaml"): PROJECT_PLAN,
+        pathlib.Path("project-plan-current.yaml"): PROJECT_PLAN_CURRENT,
+        pathlib.Path("infrastructure.yaml"): INFRA,
+        pathlib.Path("infrastructure-current.yaml"): INFRA_CURRENT,
+        pathlib.Path("cicd.yaml"): CICD,
+        pathlib.Path("cicd-current.yaml"): CICD_CURRENT,
+        pathlib.Path("testing.yaml"): TESTING_CONFIG,
+        pathlib.Path("testing-current.yaml"): TESTING_CURRENT,
+    }
+
+    import shutil
+
+    for old_path, new_path in migration_map.items():
+        if old_path.exists():
+            # Special case: don't migrate if it's already in the project dir (shouldn't happen with these paths)
+            if old_path == new_path:
+                continue
+
+            try:
+                # Ensure parent directory of new_path exists
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+
+                if old_path.is_dir():
+                    # For directories, if the new directory already exists, move contents
+                    if new_path.exists():
+                        for item in old_path.iterdir():
+                            target = new_path / item.name
+                            if not target.exists():
+                                shutil.move(str(item), str(target))
+                        # Remove old empty directory if possible
+                        try:
+                            old_path.rmdir()
+                        except OSError:
+                            pass
+                    else:
+                        shutil.move(str(old_path), str(new_path))
+                else:
+                    # For files, if new_path exists, maybe don't overwrite?
+                    # Usually migration means we want the old one to win if it's the one being moved.
+                    if not new_path.exists():
+                        shutil.move(str(old_path), str(new_path))
+                    else:
+                        # If both exist, we could backup the old one or just delete it if they are same
+                        # For now, let's just move it and overwrite if it's a migration
+                        old_path.unlink()  # Simple cleanup if new already exists
+            except Exception as e:
+                logger.error(f"Failed to migrate {old_path} to {new_path}: {e}")
 
 
 def get_project_name():
@@ -93,12 +170,8 @@ def save_config(config, global_scope=False):
         GLOBAL_CONFIG_FILE.write_text(json.dumps(config, indent=2))
     else:
         CONFIG_FILE.write_text(json.dumps(config, indent=2))
-        ensure_gitignore(".vibe_config.json")
+        ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
         ensure_gitignore(".env")
-        ensure_gitignore("logs/")
-        ensure_gitignore(".vibe_google_creds.json")
-        ensure_gitignore(".vibe_client_secrets.json")
-        ensure_gitignore(".vibe_authorized_user.json")
 
 
 def load_project_state() -> Dict[str, Any]:
@@ -525,8 +598,8 @@ def check_env_health() -> bool:
         logger.warning("❌ Missing 'backend/__init__.py'.")
         return False
 
-    if not pathlib.Path("vibe_data").exists():
-        logger.warning("❌ Missing local data directory 'vibe_data/'.")
+    if not VIBE_DATA_DIR.exists():
+        logger.warning(f"❌ Missing local data directory '{VIBE_DATA_DIR}/'.")
         return False
 
     # 4. If managed env is configured, check if we're in it
@@ -714,9 +787,8 @@ def sync_env_file():
         env_lines.append("")
 
     # 4. Local Storage
-    vibe_data = pathlib.Path("vibe_data")
-    if vibe_data.exists():
-        env_lines.append(f"VIBE_DATA_DIR={vibe_data.absolute()}")
+    if VIBE_DATA_DIR.exists():
+        env_lines.append(f"VIBE_DATA_DIR={VIBE_DATA_DIR.absolute()}")
         env_lines.append("")
 
     # 5. S3 / Object Store

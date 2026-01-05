@@ -548,14 +548,13 @@ def google():
 
 def ensure_infrastructure():
     """Ensure that the required project infrastructure (directories and files) exists."""
-    from vibe_tools.utils import ensure_dir, ensure_gitignore
+    from vibe_tools.utils import ensure_dir, ensure_gitignore, VIBE_DATA_DIR
 
-    # 1. Create vibe_data directory
-    vibe_data = pathlib.Path("vibe_data")
-    if not vibe_data.exists():
-        click.echo(f"Creating storage directory: {vibe_data}")
-        vibe_data.mkdir(parents=True, exist_ok=True)
-        ensure_gitignore("vibe_data/*")
+    # 1. Create storage directory
+    if not VIBE_DATA_DIR.exists():
+        click.echo(f"Creating storage directory: {VIBE_DATA_DIR}")
+        VIBE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        ensure_gitignore(str(VIBE_DATA_DIR) + "/*")
 
 
 @setup_cli.command()
