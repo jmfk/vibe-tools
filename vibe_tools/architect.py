@@ -72,6 +72,24 @@ class InteractiveArchitect:
         args = parts[1] if len(parts) > 1 else ""
         sub_args = parts[2] if len(parts) > 2 else ""
 
+        # Shortcuts/Aliases
+        if cmd == "/s":
+            cmd = "/send"
+        elif cmd == "/r":
+            cmd = "/reset"
+        elif cmd == "/q":
+            cmd = "/exit"
+        elif cmd == "/l":
+            cmd = "/list"
+            args = "memory"
+        elif cmd == "/f":
+            cmd = "/files"
+            args = "list"
+        elif cmd == "/a" or cmd == "/add":
+            sub_args = args
+            args = "add"
+            cmd = "/files"
+
         if cmd == "/help":
             self._show_help()
         elif cmd == "/send":
@@ -107,14 +125,15 @@ class InteractiveArchitect:
 
     def _show_help(self):
         click.echo("\nAvailable commands:")
-        click.echo("  /send            - Dispatch current prompt to Architect")
-        click.echo("  /reset           - Clear the current pending prompt")
+        click.echo("  /send, /s        - Dispatch current prompt to Architect")
+        click.echo("  /reset, /r       - Clear the current pending prompt")
         click.echo("  /show [arch|infra] - Display current specs")
         click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
-        click.echo("  /files [list|add <path>|remove <path>]  - Manage additional context files")
-        click.echo("  /list memory     - List all pending text and files in memory")
+        click.echo("  /files, /f [list|add <path>|remove <path>] - Manage additional context files")
+        click.echo("  /add, /a <path>  - Shortcut to add a file to context")
+        click.echo("  /list memory, /l - List all pending text and files in memory")
         click.echo("  /help            - Show this help message")
-        click.echo("  /exit            - Exit the session")
+        click.echo("  /exit, /q        - Exit the session")
 
     def _handle_history_command(self, sub_cmd, args):
         if not sub_cmd or sub_cmd == "list":
