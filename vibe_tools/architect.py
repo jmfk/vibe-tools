@@ -108,7 +108,14 @@ class InteractiveArchitect:
         """Send query to agent and handle response."""
         template_path = self.prompts_dir / self.PROMPT_FILENAME
         if not template_path.exists():
-            raise click.ClickException(f"Missing prompt template: {template_path}")
+            from vibe_tools.templates import TEMPLATES
+            content = TEMPLATES.get(self.PROMPT_FILENAME)
+            if content:
+                ensure_dir(self.prompts_dir)
+                template_path.write_text(content)
+                click.echo(f"✅ Created missing prompt template: {template_path}")
+            else:
+                raise click.ClickException(f"Missing prompt template: {template_path}")
 
         arch_content = ARCHITECTURE_SPEC.read_text() if ARCHITECTURE_SPEC.exists() else "No architecture.md found."
         infra_content = INFRA_SPEC.read_text() if INFRA_SPEC.exists() else "No infrastructure.md found."
