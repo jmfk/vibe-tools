@@ -78,6 +78,7 @@ from vibe_tools.utils import (
     load_config,
     load_project_state,
     save_project_state,
+    check_dependencies,
     get_file_hash,
     run_agent,
     run_command,
@@ -222,8 +223,43 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
 
 
 @cli.command()
-def init():
-    """Initialize the prompts directory and default templates."""
+@click.pass_context
+def init(ctx):
+    """Interactive guided project initialization."""
+    click.echo(click.style("\n=== VIBE PROJECT INITIALIZATION ===", fg="cyan", bold=True))
+    click.echo("Welcome! Let's get your project set up for automated development.\n")
+
+    click.echo("Please select your starting scenario:")
+    click.echo(click.style("  A) Idea Only", bold=True) + " - You have an idea and want to define requirements interactively.")
+    click.echo(click.style("  B) Human Specs", bold=True) + " - You already have human-written markdown specs in 'specs/'.")
+    click.echo(click.style("  C) Adoption", bold=True) + " - You have an existing codebase and want Vibe to discover it.")
+    click.echo(click.style("  D) Architecture Ready", bold=True) + " - You have an 'architecture.yaml' ready to go.")
+    click.echo(click.style("  E) Manual Setup", bold=True) + " - Just initialize the folders and templates for manual work.")
+
+    choice = click.prompt("\nSelect scenario", type=click.Choice(["A", "B", "C", "D", "E"], case_sensitive=False), default="E").upper()
+
+    # Always perform basic initialization first
+    _perform_basic_init()
+
+    if choice == "A":
+        click.echo("\n🚀 Starting interactive ideation...")
+        ctx.invoke(ideation)
+    elif choice == "B":
+        click.echo("\n📄 Please ensure your specs are in 'specs/'. Next step: 'vibe normalize'")
+    elif choice == "C":
+        click.echo("\n🔍 Starting codebase discovery...")
+        ctx.invoke(setup, import_code=True)
+    elif choice == "D":
+        click.echo("\n🏗️  Starting architecture setup...")
+        ctx.invoke(setup)
+    else:
+        click.echo("\n✅ Basic initialization complete.")
+
+    click.echo("\nRun 'vibe status' at any time to see your project progress.")
+
+
+def _perform_basic_init():
+    """Helper to initialize the prompts directory and default templates."""
     maybe_init_git()
     ensure_gitignore("logs/")
     prompts_dir = pathlib.Path("prompts")
@@ -246,10 +282,10 @@ def init():
             file_path = prompts_dir / filename
 
         if not file_path.exists():
-            print(f"Creating template: {file_path}")
+            click.echo(f"Creating template: {file_path}")
             file_path.write_text(content)
         else:
-            print(f"Template already exists: {file_path}")
+            click.echo(f"Template already exists: {file_path}")
 
 
 @cli.command()
@@ -314,6 +350,12 @@ def coverage(ctx):
 def normalize(ctx, input_file, yes):
     """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
+    state = load_project_state()
+    missing = check_dependencies("normalize", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        return
+
     from vibe_tools.normalize import normalize_prd
 
     normalize_prd(
@@ -622,28 +664,33 @@ def setup(ctx, auto, import_code):
     stream = ctx.obj.get("stream", False)
 
     if import_code:
-        click.echo("🔍 Analyzing codebase to generate architecture-current.yaml...")
-        prompt = f"""Analyze the current codebase and generate a comprehensive '{ARCHITECTURE_CURRENT.name}' file in the project root.
-The file should be in YAML format and describe:
-1. Tech stack (languages, frameworks, versions).
-2. Directory structure and key files.
-3. Databases and external services used.
-4. Key dependencies and their purposes.
-5. Existing test suites and how to run them.
+        click.echo("🔍 Analyzing codebase to generate current architecture and infrastructure definitions...")
+        prompt = f"""Analyze the current codebase and generate two comprehensive YAML files in the project root:
+1. '{ARCHITECTURE_CURRENT.name}': Describe the tech stack, directory structure, key dependencies, and test suites.
+2. '{INFRA_CURRENT.name}': Describe the infrastructure including databases, external services, caches, queues, and object storage.
+
+The files should be in YAML format and provide a clear picture of the ACTUAL state of the project.
 
 ACTUAL CODEBASE:
 (The agent has access to the filesystem to perform this analysis)
 
-Once you have analyzed the codebase and written the '{ARCHITECTURE_CURRENT.name}' file, include {COMPLETION_PROMISE}.
+Once you have analyzed the codebase and written BOTH the '{ARCHITECTURE_CURRENT.name}' and '{INFRA_CURRENT.name}' files, include {COMPLETION_PROMISE}.
 """
         from vibe_tools.ralph import COMPLETION_PROMISE
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
         
         if code == 0 and COMPLETION_PROMISE in output:
-            click.echo(f"✅ Generated {ARCHITECTURE_CURRENT}")
+            click.echo(f"✅ Generated {ARCHITECTURE_CURRENT} and {INFRA_CURRENT}")
+            
+            # Mark setup phase as complete since we've imported the code
+            state["phases"]["setup"]["status"] = "completed"
+            if ARCHITECTURE.exists():
+                state["phases"]["setup"]["hash"] = get_file_hash(ARCHITECTURE)
+            save_project_state(state)
+            click.echo("✅ Setup phase marked as COMPLETED in project-state.json.")
         else:
-            click.echo(f"❌ Failed to generate {ARCHITECTURE_CURRENT}")
+            click.echo(f"❌ Failed to generate discovery files.")
         return
 
     if not ARCHITECTURE.exists():
@@ -686,10 +733,9 @@ Once you have analyzed the codebase and written the '{ARCHITECTURE_CURRENT.name}
 def plan(ctx):
     """Phase 3: Project Planning. Generates project-plan.yaml from PRDs and Architecture."""
     state = load_project_state()
-    if state["phases"]["setup"]["status"] != "completed":
-        click.echo(
-            "❌ Setup phase must be completed before planning. Run 'vibe setup'."
-        )
+    missing = check_dependencies("plan", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -717,10 +763,9 @@ def plan(ctx):
 def implement(ctx):
     """Phase 4: Implement. Iterates through the project-plan.yaml."""
     state = load_project_state()
-    if state["phases"]["plan"]["status"] != "completed":
-        click.echo(
-            "❌ Plan phase must be completed before implementing. Run 'vibe plan'."
-        )
+    missing = check_dependencies("implement", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
 
     from vibe_tools.ralph import implementation_loop
@@ -746,10 +791,9 @@ def implement(ctx):
 def infra(ctx):
     """Phase 5: Infrastructure reconciliation. Ensures services are reachable."""
     state = load_project_state()
-    if state["phases"]["setup"]["status"] != "completed":
-        click.echo(
-            "❌ Setup phase must be completed before infrastructure. Run 'vibe setup'."
-        )
+    missing = check_dependencies("infra", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -788,8 +832,9 @@ def infra(ctx):
 def cicd(ctx):
     """Phase 6: CI/CD reconciliation. Ensures deployment pipelines are ready."""
     state = load_project_state()
-    if state["phases"]["setup"]["status"] != "completed":
-        click.echo("❌ Setup phase must be completed before CI/CD. Run 'vibe setup'.")
+    missing = check_dependencies("cicd", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -826,8 +871,9 @@ def cicd(ctx):
 def testing(ctx):
     """Phase 7: Testing reconciliation. Ensures integration and regression tests pass."""
     state = load_project_state()
-    if state["phases"]["setup"]["status"] != "completed":
-        click.echo("❌ Setup phase must be completed before testing. Run 'vibe setup'.")
+    missing = check_dependencies("testing", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -864,15 +910,11 @@ def testing(ctx):
 def deploy(ctx):
     """Phase 8: Deployment."""
     state = load_project_state()
-    if (
-        state["phases"]["infra"]["status"] != "completed"
-        or state["phases"]["cicd"]["status"] != "completed"
-        or state["phases"]["testing"]["status"] != "completed"
-    ):
-        click.echo(
-            "❌ Infra, CI/CD, and Testing phases must be completed before deployment."
-        )
+    missing = check_dependencies("deploy", state)
+    if missing:
+        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
         return
+
     # TODO: Implement deployment logic
     click.echo("🚀 Triggering deployment...")
     state["phases"]["deploy"]["status"] = "completed"

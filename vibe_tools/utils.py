@@ -168,7 +168,22 @@ def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
         dep_phase = phases.get(dep_id, {})
         if dep_phase.get("status") != "completed":
             missing.append(dep_id)
+    
+    return missing
 
+
+def check_plan_dependencies(plan_id: str, state: Dict[str, Any]) -> List[str]:
+    """Returns a list of missing dependencies for a plan."""
+    plans = state.get("plans", {})
+    if plan_id not in plans:
+        return []
+
+    missing = []
+    for dep_id in plans[plan_id].get("depends_on", []):
+        dep_plan = plans.get(dep_id, {})
+        if dep_plan.get("status") != "completed":
+            missing.append(dep_id)
+    
     return missing
 
 
