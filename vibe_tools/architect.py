@@ -676,9 +676,9 @@ class InteractiveArchitect:
     def _handle_response_display(
         self, content: str, path: Optional[pathlib.Path] = None
     ):
-        """Decide whether to show the response in terminal or open in an editor."""
+        """Show the response in terminal first, then offer to open in an editor."""
         if self.stream:
-            # Already displayed during stream, maybe just offer to open in editor
+            # Already displayed during stream
             return
 
         md_editor = self.config.get("md_editor")
@@ -686,59 +686,49 @@ class InteractiveArchitect:
         mode_prefix = click.style(
             f"({self.mode})", fg="green" if self.mode == "ASK" else "red"
         )
-
-        if not md_editor and not code_editor:
-            # Just show it
-            click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
-            if path and path.suffix == ".md":
-                self._print_styled_markdown(content)
-            elif content.strip().startswith("#"):  # detected MD
-                self._print_styled_markdown(content)
-            else:
-                click.echo(content)
-            return
-
-        # Editors are configured, ask the user
         detected = self._detect_content_type(content)
 
-        options = ["s"]
-        prompt_parts = ["[s]how in terminal"]
-        if md_editor:
-            options.append("m")
-            prompt_parts.append("[m]arkdown editor")
-        if code_editor:
-            options.append("c")
-            prompt_parts.append("[c]ode editor")
-
-        prompt_text = (
-            f"\n{mode_prefix} 🤖 Response ready. " + ", ".join(prompt_parts) + "?"
-        )
-
-        # Decide default based on detection
-        default_choice = "s"
-        if detected == "md" and md_editor:
-            default_choice = "m"
-        elif detected == "code" and code_editor:
-            default_choice = "c"
-
-        choice = click.prompt(
-            prompt_text,
-            type=click.Choice(options),
-            default=default_choice,
-            show_choices=False,
-        )
-
-        if choice == "m":
-            self._open_in_editor(content, md_editor, ".md", path)
-        elif choice == "c":
-            suffix = path.suffix if path else ".txt"
-            self._open_in_editor(content, code_editor, suffix, path)
+        # 1. Print to terminal first
+        click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
+        if path and path.suffix == ".md":
+            self._print_styled_markdown(content)
+        elif detected == "md":
+            self._print_styled_markdown(content)
         else:
-            click.echo(f"{mode_prefix} 🤖 ", nl=False)
-            if detected == "md":
-                self._print_styled_markdown(content)
-            else:
-                click.echo(content)
+            click.echo(content)
+
+        # 2. If editors are configured, ask if they want to open it there
+        if md_editor or code_editor:
+            options = ["n"]
+            prompt_parts = ["[n]o"]
+            if md_editor:
+                options.append("m")
+                prompt_parts.append("[m]arkdown editor")
+            if code_editor:
+                options.append("c")
+                prompt_parts.append("[c]ode editor")
+
+            prompt_text = f"🚀 Open in " + ", ".join(prompt_parts) + "?"
+
+            # Decide default based on detection
+            default_choice = "n"
+            if detected == "md" and md_editor:
+                default_choice = "m"
+            elif detected == "code" and code_editor:
+                default_choice = "c"
+
+            choice = click.prompt(
+                prompt_text,
+                type=click.Choice(options),
+                default=default_choice,
+                show_choices=False,
+            )
+
+            if choice == "m":
+                self._open_in_editor(content, md_editor, ".md", path)
+            elif choice == "c":
+                suffix = path.suffix if path else ".txt"
+                self._open_in_editor(content, code_editor, suffix, path)
 
     def _detect_content_type(self, content: str) -> str:
         stripped = content.strip()
