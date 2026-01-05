@@ -468,7 +468,8 @@ vibe --help
 - `vibe init`: Initialize templates and prompt directories.
 - `vibe status`: Display a comprehensive system status report (costs, PRDs, servers, logs).
 - `vibe docs`: Display the project documentation (README.md).
-- `vibe prd`: Interactive PRD writer with slash commands (preferred).
+- `vibe architect`: Interactive Architecture & Infrastructure manager (preferred for system design).
+- `vibe prd`: Interactive PRD writer with slash commands.
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
 - `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.
 - `vibe memory`: Save a global instruction ("memory") always sent to the agent.
@@ -480,6 +481,34 @@ vibe --help
 - `vibe review-prd`: [DEPRECATED] List and view markdown specs with optional agentic review.
 - `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
 - `vibe-setup google`: Configure Google Sheets for cost logging.
+
+## Vibe Architect
+
+`vibe architect` is an interactive shell for managing and refining your project's **Architecture** and **Infrastructure** specifications. It uses an AI agent to help you reason about your system and automatically update your `.md` files in `specs/`.
+
+### Key Features
+
+- **Interactive Shell**: Persistent history, tab completion for slash commands, and multi-line prompt support.
+- **Two Modes**:
+  - **ASK** (Default): The agent provides analysis and guidance without modifying files.
+  - **AGENT**: The agent is authorized to propose machine-readable updates to `architecture.md` and `infrastructure.md`.
+- **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `project/architect-session.json`.
+- **Editor Integration**: Configure your favorite Markdown or Code editor (e.g., Typora, VS Code) to open response files or specifications.
+- **Context Management**: Attach additional files to the agent's context using `/f add`.
+- **Session Memory**: Add persistent instructions that are sent with every prompt using `/a` or `/add`.
+
+### Slash Commands
+
+- `/send`, `/s`: Dispatch the current pending prompt to the Architect.
+- `/reset`, `/r`: Clear the current session memory and pending prompt.
+- `/add`, `/a <text>`: Add persistent instructions to the session memory.
+- `/mode`, `/m [ASK|AGENT]`: Switch between interaction modes.
+- `/files`, `/f [list|add <path>|remove <path>]`: Manage additional files included in the prompt context.
+- `/list memory`, `/l`: View your pending prompt, session memory, and history summary.
+- `/conf [md|code] <cmd>`: Configure external editors (e.g., `/conf md typora`).
+- `/help`, `/h`: Show available commands.
+- `/c`: Clear the terminal prompt history.
+- `/exit`, `/q`: Exit the session.
 
 ### Local Infrastructure
 
