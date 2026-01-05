@@ -30,33 +30,39 @@ class ArchitectCompleter:
     def __init__(self, architect):
         self.architect = architect
         # Sort commands so cycling order is predictable (alphabetical)
+        # We only show the full commands in the completion list
         self.commands = sorted([
-            "/send", "/s", "/reset", "/r", "/mode", "/m", "/ask", "/agent",
-            "/show", "/edit", "/history", "/files", "/f", "/add", "/a",
-            "/list", "/l", "/exit", "/q", "/conf", "/help"
+            "/send", "/reset", "/mode", "/ask", "/agent",
+            "/show", "/edit", "/history", "/files", "/add",
+            "/list", "/exit", "/conf", "/help"
         ])
         self.subcommands = {
             "/files": sorted(["list", "add", "remove"]),
-            "/f": sorted(["list", "add", "remove"]),
             "/history": sorted(["list", "view", "remove"]),
             "/list": sorted(["memory"]),
-            "/l": sorted(["memory"]),
             "/conf": sorted(["md", "code"]),
             "/show": sorted(["arch", "infra"]),
         }
 
     def complete(self, text, state):
         buffer = readline.get_line_buffer() if readline else ""
+        
+        # If there's no space, we are completing the primary command
+        if " " not in buffer:
+            if buffer.startswith("/"):
+                options = [c for c in self.commands if c.startswith(text)]
+                return options[state] if state < len(options) else None
+            return None
+        
+        # We have at least one space, so we are in subcommand/argument territory
         parts = buffer.split()
-        
-        # If it's the first part, complete commands
-        if len(parts) <= 1 and buffer.startswith("/"):
-            options = [c for i, c in enumerate(self.commands) if c.startswith(text)]
-            return options[state] if state < len(options) else None
-        
-        # If it's a subcommand
-        if len(parts) >= 1:
-            cmd = parts[0].lower()
+        if not parts:
+            return None
+            
+        cmd = parts[0].lower()
+        # Only complete if we are currently on the second word (the subcommand)
+        # Check if there is only one space in the buffer (ignoring trailing)
+        if buffer.count(" ") == 1 or (buffer.count(" ") > 1 and not text):
             if cmd in self.subcommands:
                 subs = self.subcommands[cmd]
                 options = [s for s in subs if s.startswith(text)]
@@ -99,10 +105,12 @@ class InteractiveArchitect:
             if "libedit" in readline.__doc__:  # macOS compatibility
                 # macOS default is often libedit
                 readline.parse_and_bind("bind ^I menu-complete")
+                readline.parse_and_bind('bind "\033[Z" backward-menu-complete')
                 readline.parse_and_bind("bind -e") # use emacs keybindings
             else:
                 # GNU Readline
                 readline.parse_and_bind("tab: menu-complete")
+                readline.parse_and_bind('"\e[Z": menu-complete-backward')
                 # Bind Escape to clear line
                 readline.parse_and_bind('"\e": kill-whole-line')
             
@@ -172,13 +180,20 @@ class InteractiveArchitect:
             self._ask_to_send()
 
         while True:
-            mode_color = "green" if self.mode == "ASK" else "red"
-            # Wrap ANSI codes in \001 and \002 for readline to correctly calculate prompt length
-            # Also ensure no trailing spaces are outside the escape sequence
-            raw_prefix = f"({self.mode})"
-            styled_prefix = click.style(raw_prefix, fg=mode_color)
-            styled_icon = click.style(" 👤 ", bold=True)
-            prompt_symbol = f"\001{styled_prefix}\002\001{styled_icon}\002"
+            mode_color_code = "32" if self.mode == "ASK" else "31"  # Green or Red
+            # Standard ANSI escape codes
+            # \001 (RL_PROMPT_START_IGNORE) and \002 (RL_PROMPT_END_IGNORE) 
+            # MUST wrap ONLY the non-printing escape sequences.
+            
+            ESC = "\x1b"
+            START = "\001"
+            END = "\002"
+            
+            RESET = f"{START}{ESC}[0m{END}"
+            MODE_COLOR = f"{START}{ESC}[{mode_color_code}m{END}"
+            BOLD = f"{START}{ESC}[1m{END}"
+            
+            prompt_symbol = f"{MODE_COLOR}({self.mode}){RESET} {BOLD}👤{RESET} "
             
             try:
                 # Using standard input for readline support
@@ -224,6 +239,13 @@ class InteractiveArchitect:
             cmd = "/reset"
         elif cmd == "/q":
             cmd = "/exit"
+        elif cmd == "/h":
+            cmd = "/help"
+        elif cmd == "/c":
+            if readline:
+                readline.clear_history()
+                click.echo("✅ Shell history cleared.")
+            return False
         elif cmd == "/l":
             cmd = "/list"
             args = "memory"
@@ -305,16 +327,17 @@ class InteractiveArchitect:
         click.echo("\nAvailable commands:")
         click.echo("  /send, /s        - Dispatch current prompt to Architect")
         click.echo("  /reset, /r       - Clear the current pending prompt")
+        click.echo("  /add, /a <text>  - Add text to the pending prompt")
         click.echo("  /mode, /m [ASK|AGENT] - Switch between modes")
         click.echo("  /ask, /agent     - Shortcut to switch modes")
         click.echo("  /show [arch|infra] - Display current specs")
         click.echo("  /edit [path]     - Open file in code editor")
         click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
         click.echo("  /files, /f [list|add <path>|remove <path>] - Manage additional context files")
-        click.echo("  /add, /a <path>  - Shortcut to add a file to context")
-        click.echo("  /list memory, /l - List all pending text and files in memory")
+        click.echo("  /list memory, /l - List pending text, files, and history summary")
         click.echo("  /conf [md|code] <editor_cmd> - Configure preferred editor (e.g. /conf md typora)")
-        click.echo("  /help            - Show this help message")
+        click.echo("  /help, /h        - Show this help message")
+        click.echo("  /c               - Clear the shell prompt history")
         click.echo("  /exit, /q        - Exit the session")
 
     def _handle_conf_command(self, target, editor):
