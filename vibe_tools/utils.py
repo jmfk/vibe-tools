@@ -335,6 +335,9 @@ def setup_logging(command_name):
     """Initializes logging for a specific command run."""
     global LOG_FILE, file_handler, stream_handler
 
+    # Ensure LOGS_DIR exists before creating the log file
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
     # Generate timestamped log filename with command name
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     LOG_FILE = LOGS_DIR / f"vibe_{command_name}_{timestamp}.log"
