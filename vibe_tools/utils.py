@@ -117,7 +117,7 @@ def load_project_state() -> Dict[str, Any]:
             "setup": {"status": "pending", "hash": None},
             "normalize": {"status": "pending", "hash": None},
             "plan": {"status": "pending", "hash": None},
-            "implementation": {"status": "pending", "hash": None},
+            "implement": {"status": "pending", "hash": None},
             "infra": {"status": "pending", "hash": None},
             "cicd": {"status": "pending", "hash": None},
             "testing": {"status": "pending", "hash": None},
@@ -719,7 +719,7 @@ def get_vibe_status_report():
     # 1. Lifecycle Progress
     report.append(click.style("\nLIFECYCLE PROGRESS:", fg="yellow", bold=True))
     phases = state.get("phases", {})
-    order = ["setup", "normalize", "plan", "implementation", "infra", "cicd", "testing", "deploy"]
+    order = ["setup", "normalize", "plan", "implement", "infra", "cicd", "testing", "deploy"]
     
     next_action = None
     for phase_id in order:

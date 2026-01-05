@@ -141,8 +141,8 @@ PRDS:
     return code == 0 and COMPLETION_PROMISE in output
 
 
-def implementation_loop(agent: str, stream: bool = False) -> bool:
-    """Executes the implementation phase based on project-plan.yaml."""
+def implement_loop(agent: str, stream: bool = False) -> bool:
+    """Executes the implement phase based on project-plan.yaml."""
     if not PROJECT_PLAN.exists():
         logger.error(f"❌ {PROJECT_PLAN} not found.")
         return False
@@ -875,7 +875,7 @@ def ralph_loop(
                         prd_name=project_name,
                         iteration=i,
                         phase="build",
-                        purpose="implementation",
+                        purpose="implement",
                     )
 
                     iteration_output = output
