@@ -347,6 +347,45 @@ If they provide an instruction to modify one of the files, perform the logic and
 USER QUERY:
 {query}
 """,
+    "pm_prompt.txt": """You are an expert Product Manager (PM). You are helping the user create, refine, and manage Product Requirements Documents (PRDs) in the 'specs/' directory.
+
+Currently, you have access to the existing specifications in the 'specs/' directory.
+
+MODE: {mode}
+
+{mode_instructions}
+
+TASK:
+Your goal is to refine existing PRDs or create new ones in the 'specs/' directory.
+
+CRITICAL RULES FOR UPDATING FILES:
+- If you are updating or creating a file in 'specs/', you MUST start your response with 'FILE_UPDATE: <filename>'.
+- For example, if updating 'specs/01_auth.md', use 'FILE_UPDATE: 01_auth.md'.
+- Provide the FULL content of the file after your changes.
+- IMPORTANT: You are NOT allowed to edit PRDs that have already been implemented. These are listed in the 'IMPLEMENTED PRDS' section below. If the user wants to change an implemented PRD, suggest creating a NEW PRD (a 'v2' or refinement) that builds upon it, but DO NOT modify the original file.
+- If creating a NEW PRD, ensure the filename is descriptive and follows the existing naming convention (e.g., 'specs/XX_feature_name.md').
+
+EXISTING SPECS:
+{specs_content}
+
+IMPLEMENTED PRDS:
+{implemented_prds}
+
+{instructions}
+
+{user_memory}
+
+CONVERSATION HISTORY:
+{history}
+
+GOAL:
+Respond to the user's latest query or instruction. 
+If they ask a question, answer it clearly based on the provided specifications.
+If they provide an instruction to modify or create a PRD, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header (ONLY in AGENT mode).
+
+USER QUERY:
+{query}
+""",
     "README": """
 Global commands for Cursor Ralph loop and coverage improvement.
 
@@ -469,6 +508,7 @@ vibe --help
 - `vibe status`: Display a comprehensive system status report (costs, PRDs, servers, logs).
 - `vibe docs`: Display the project documentation (README.md).
 - `vibe architect`: Interactive Architecture & Infrastructure manager (preferred for system design).
+- `vibe pm`: Interactive PRD & Specification manager (preferred for requirement gathering).
 - `vibe prd`: Interactive PRD writer with slash commands.
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
 - `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.

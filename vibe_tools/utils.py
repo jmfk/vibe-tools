@@ -46,6 +46,9 @@ TESTING_SPEC = pathlib.Path("specs/testing.md")
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
+PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
+PM_SESSION_FILE = VIBE_PROJECT_DIR / "pm-session.json"
+SPECS_DIR = pathlib.Path("specs")
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 
@@ -519,18 +522,45 @@ def run_agent(cmd, caffeinate=False, stream=False):
     return output, process.returncode
 
 
+def get_agent_processes() -> List[Dict[str, Any]]:
+    """Returns a list of active agent processes."""
+    targets = ["cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
+    processes = []
+
+    try:
+        # ps -eo pid,ppid,start,command
+        # We'll use pgrep -fl to find matching processes
+        for target in targets:
+            stdout, code = run_command(["pgrep", "-fl", target], check=False)
+            if code == 0 and stdout.strip():
+                for line in stdout.strip().splitlines():
+                    parts = line.split(maxsplit=1)
+                    if len(parts) == 2:
+                        pid, cmd = parts
+                        processes.append({"pid": pid, "command": cmd, "target": target})
+    except Exception as e:
+        logger.error(f"Error getting agent processes: {e}")
+
+    return processes
+
+
 def cleanup_stale_processes():
     """Kills stale pytest, cursor-agent, and caffeinate processes."""
     logger.info("Cleaning up stale processes associated with vibe-tools...")
 
     targets = ["pytest", "cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
+    killed = []
 
     for target in targets:
-        logger.info(f"Killing '{target}' processes...")
-        # Use pkill with full string matching
-        subprocess.run(["pkill", "-f", target], check=False)
+        # Check if any processes exist before killing
+        stdout, code = run_command(["pgrep", "-f", target], check=False)
+        if code == 0 and stdout.strip():
+            logger.info(f"Killing '{target}' processes...")
+            subprocess.run(["pkill", "-f", target], check=False)
+            killed.append(target)
 
     logger.info("Cleanup complete.")
+    return killed
 
 
 def get_agent_command(agent_type, prompt):
