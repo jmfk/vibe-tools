@@ -28,3 +28,5 @@ costs/
 node_modules/
 
 vibe_data/*
+
+project/
