@@ -121,6 +121,7 @@ vibe --help
 - `vibe status`: Display a comprehensive system status report (costs, PRDs, servers, logs).
 - `vibe docs`: Display the project documentation (README.md).
 - `vibe architect`: Interactive Architecture & Infrastructure manager (preferred for system design).
+- `vibe pm`: Interactive PRD & Specification manager (preferred for requirement gathering).
 - `vibe prd`: Interactive PRD writer with slash commands.
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
 - `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.

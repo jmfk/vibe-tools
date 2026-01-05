@@ -8,6 +8,7 @@ from typing import List
 
 import click
 
+
 class OrderedGroup(click.Group):
     """Custom Click Group to order commands in the help menu."""
 
@@ -17,6 +18,7 @@ class OrderedGroup(click.Group):
             # Phases 1-8
             "setup",
             "architect",
+            "pm",
             "normalize",
             "plan",
             "implement",
@@ -35,6 +37,8 @@ class OrderedGroup(click.Group):
             "remember",
             "monitor",
             "rerun",
+            "ps",
+            "kill",
             "test-fix",
             "coverage",
             "init",
@@ -85,10 +89,12 @@ from vibe_tools.utils import (
     save_project_state,
     check_dependencies,
     get_file_hash,
+    get_agent_processes,
     run_agent,
     run_command,
     save_config,
     setup_logging,
+    cleanup_stale_processes,
 )
 from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
 from dotenv import load_dotenv, find_dotenv
@@ -230,17 +236,38 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
 @click.pass_context
 def init(ctx):
     """Interactive guided project initialization."""
-    click.echo(click.style("\n=== VIBE PROJECT INITIALIZATION ===", fg="cyan", bold=True))
+    click.echo(
+        click.style("\n=== VIBE PROJECT INITIALIZATION ===", fg="cyan", bold=True)
+    )
     click.echo("Welcome! Let's get your project set up for automated development.\n")
 
     click.echo("Please select your starting scenario:")
-    click.echo(click.style("  A) Idea Only", bold=True) + " - You have an idea and want to define requirements interactively.")
-    click.echo(click.style("  B) Human Specs", bold=True) + " - You already have human-written markdown specs in 'specs/'.")
-    click.echo(click.style("  C) Adoption", bold=True) + " - You have an existing codebase and want Vibe to discover it.")
-    click.echo(click.style("  D) Architecture Ready", bold=True) + " - You have an 'architecture.yaml' ready to go.")
-    click.echo(click.style("  E) Manual Setup", bold=True) + " - Just initialize the folders and templates for manual work.")
+    click.echo(
+        click.style("  A) Idea Only", bold=True)
+        + " - You have an idea and want to define requirements interactively."
+    )
+    click.echo(
+        click.style("  B) Human Specs", bold=True)
+        + " - You already have human-written markdown specs in 'specs/'."
+    )
+    click.echo(
+        click.style("  C) Adoption", bold=True)
+        + " - You have an existing codebase and want Vibe to discover it."
+    )
+    click.echo(
+        click.style("  D) Architecture Ready", bold=True)
+        + " - You have an 'architecture.yaml' ready to go."
+    )
+    click.echo(
+        click.style("  E) Manual Setup", bold=True)
+        + " - Just initialize the folders and templates for manual work."
+    )
 
-    choice = click.prompt("\nSelect scenario", type=click.Choice(["A", "B", "C", "D", "E"], case_sensitive=False), default="E").upper()
+    choice = click.prompt(
+        "\nSelect scenario",
+        type=click.Choice(["A", "B", "C", "D", "E"], case_sensitive=False),
+        default="E",
+    ).upper()
 
     # Always perform basic initialization first
     _perform_basic_init()
@@ -249,7 +276,9 @@ def init(ctx):
         click.echo("\n🚀 Starting interactive ideation...")
         ctx.invoke(ideation)
     elif choice == "B":
-        click.echo("\n📄 Please ensure your specs are in 'specs/'. Next step: 'vibe normalize'")
+        click.echo(
+            "\n📄 Please ensure your specs are in 'specs/'. Next step: 'vibe normalize'"
+        )
     elif choice == "C":
         click.echo("\n🔍 Starting codebase discovery...")
         ctx.invoke(setup, import_code=True)
@@ -265,29 +294,29 @@ def init(ctx):
 def _perform_basic_init():
     """Helper to initialize the prompts directory and default templates."""
     maybe_init_git()
-    
+
     from vibe_tools.utils import (
-        VIBE_PROJECT_DIR, 
-        INSTRUCTIONS_DIR, 
-        PRD_DIR, 
-        LOGS_DIR, 
+        VIBE_PROJECT_DIR,
+        INSTRUCTIONS_DIR,
+        PRD_DIR,
+        LOGS_DIR,
         COSTS_DIR,
         VIBE_DATA_DIR,
         ensure_gitignore,
         ensure_dir,
         migrate_to_project_dir,
-        ensure_project_structure
+        ensure_project_structure,
     )
 
     # First, migrate any existing files from root to project/
     migrate_to_project_dir()
-    
+
     # Ensure structure exists
     ensure_project_structure()
 
     ensure_dir(VIBE_PROJECT_DIR)
     ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
-    
+
     prompts_dir = pathlib.Path("prompts")
     ensure_dir(prompts_dir)
 
@@ -380,7 +409,9 @@ def normalize(ctx, input_file, yes):
     state = load_project_state()
     missing = check_dependencies("normalize", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     from vibe_tools.normalize import normalize_prd
@@ -693,11 +724,13 @@ def setup(ctx, auto, import_code):
     if import_code:
         from vibe_tools.ralph import COMPLETION_PROMISE
         from vibe_tools.utils import ensure_project_structure
-        
+
         # Ensure project directory exists before agent runs
         ensure_project_structure()
-        
-        click.echo("🔍 Analyzing codebase to generate architecture and infrastructure definitions...")
+
+        click.echo(
+            "🔍 Analyzing codebase to generate architecture and infrastructure definitions..."
+        )
         prompt = f"""Analyze the current codebase and generate the following four files:
 1. '{ARCHITECTURE_CURRENT}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
 2. '{INFRA_CURRENT}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
@@ -714,12 +747,14 @@ Once you have analyzed the codebase and written ALL four files, include {COMPLET
 """
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, stream=stream)
-        
+
         if code == 0 and COMPLETION_PROMISE in output:
             click.echo(f"✅ Generated current state and specification files.")
             click.echo("\nNext Steps:")
             click.echo(f"1. Review {ARCHITECTURE_SPEC} and {INFRA_SPEC}")
-            click.echo("2. Run 'vibe normalize' to create the desired state YAML files.")
+            click.echo(
+                "2. Run 'vibe normalize' to create the desired state YAML files."
+            )
             click.echo("3. Run 'vibe setup' (without --import-code) to reconcile.")
         else:
             click.echo(f"❌ Failed to generate discovery files.")
@@ -775,13 +810,29 @@ def architect(ctx, query):
 
 
 @cli.command()
+@click.argument("query", required=False)
+@click.pass_context
+def pm(ctx, query):
+    """Interactive PRD and specification manager."""
+    from vibe_tools.pm import InteractivePM
+
+    pm_tool = InteractivePM(
+        agent_type=ctx.obj.get("agent", "cursor-agent"),
+        stream=ctx.obj.get("stream", True),
+    )
+    pm_tool.run_loop(query)
+
+
+@cli.command()
 @click.pass_context
 def plan(ctx):
     """Phase 3: Project Planning. Generates project-plan.yaml from PRDs and Architecture."""
     state = load_project_state()
     missing = check_dependencies("plan", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -811,7 +862,9 @@ def implement(ctx):
     state = load_project_state()
     missing = check_dependencies("implement", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     from vibe_tools.ralph import implementation_loop
@@ -839,7 +892,9 @@ def infra(ctx):
     state = load_project_state()
     missing = check_dependencies("infra", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -854,12 +909,12 @@ def infra(ctx):
         agent=agent,
         stream=stream,
     )
-    
+
     # Custom instruction for infra verification
     loop.instructions = [
         "Specifically verify that all configured services (databases, queues, etc.) are reachable from the application environment.",
         "Test connectivity using appropriate tools (e.g., pg_isready, redis-cli, curl).",
-        "Set up or update environment variables as needed."
+        "Set up or update environment variables as needed.",
     ]
 
     if loop.run():
@@ -880,7 +935,9 @@ def cicd(ctx):
     state = load_project_state()
     missing = check_dependencies("cicd", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -895,10 +952,10 @@ def cicd(ctx):
         agent=agent,
         stream=stream,
     )
-    
+
     loop.instructions = [
         "Verify that all CI/CD pipelines and deployment strategies are correctly configured.",
-        "Ensure secrets and environment variables required for deployment are correctly handled."
+        "Ensure secrets and environment variables required for deployment are correctly handled.",
     ]
 
     if loop.run():
@@ -919,7 +976,9 @@ def testing(ctx):
     state = load_project_state()
     missing = check_dependencies("testing", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -934,11 +993,11 @@ def testing(ctx):
         agent=agent,
         stream=stream,
     )
-    
+
     loop.instructions = [
         "Ensure all integration and regression tests are passing.",
         "Update test configurations if the architecture or environment has changed.",
-        "Run 'make test-integration' and 'make test-regression' to verify."
+        "Run 'make test-integration' and 'make test-regression' to verify.",
     ]
 
     if loop.run():
@@ -958,7 +1017,9 @@ def deploy(ctx):
     state = load_project_state()
     missing = check_dependencies("deploy", state)
     if missing:
-        click.echo(f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first.")
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
         return
 
     # TODO: Implement deployment logic
@@ -1149,6 +1210,47 @@ def rerun(prd_id):
         click.echo(f"Branch {branch_name} does not exist. Nothing to delete.")
 
     click.echo(f"\nReady to rerun: {project_name} state has been reset.")
+
+
+@cli.command()
+def ps():
+    """List active agent processes."""
+    processes = get_agent_processes()
+    if not processes:
+        click.echo("No active agent processes found.")
+        return
+
+    click.echo(f"{'PID':<10} {'TARGET':<20} {'COMMAND'}")
+    click.echo("-" * 60)
+    for p in processes:
+        click.echo(f"{p['pid']:<10} {p['target']:<20} {p['command']}")
+
+
+@cli.command()
+@click.option("--yes", "-y", is_flag=True, help="Automatically confirm kill.")
+def kill(yes):
+    """Kill all active agent processes."""
+    processes = get_agent_processes()
+    if not processes:
+        click.echo("No active agent processes found.")
+        return
+
+    if not yes:
+        click.echo("Active agent processes:")
+        for p in processes:
+            click.echo(f"  - {p['pid']}: {p['command']}")
+
+        if not click.confirm(
+            "\nAre you sure you want to kill all these processes?", default=False
+        ):
+            click.echo("Aborted.")
+            return
+
+    killed = cleanup_stale_processes()
+    if killed:
+        click.echo(f"✅ Killed processes for: {', '.join(killed)}")
+    else:
+        click.echo("No processes were killed.")
 
 
 if __name__ == "__main__":
