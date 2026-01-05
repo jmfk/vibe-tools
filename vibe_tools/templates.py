@@ -98,6 +98,27 @@ TASK:
 If everything looks correct, respond with: <review>PASSED</review>
 Otherwise, list the issues and do NOT include the pass tag.
 """,
+    "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a granular, dependency-aware 'project-plan.yaml'.
+
+TASK:
+1. Break down all PRDs into granular implementation steps.
+2. Order these steps for optimal build speed (e.g., backend models before frontend UI).
+3. Define specific Success Criteria (including test targets) for each step.
+4. Output the result into a 'project-plan.yaml' file in the root directory.
+
+SCHEMA for project-plan.yaml:
+steps:
+  - id: step_id
+    title: "Step Title"
+    description: "Detailed description of what to do"
+    dependencies: [dep_id1, dep_id2]
+    status: pending | completed
+    success_criteria:
+      - "Criteria 1"
+      - "Criteria 2"
+
+Include <promise>DONE</promise> when the plan is saved.
+""",
     "prd_generation_prompt.txt": """You are an expert product writer who turns discussions into concise PRDs.
 
 The user has supplied this information:

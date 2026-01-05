@@ -14,6 +14,16 @@ from vibe_tools.utils import (
     COSTS_DIR,
     PRD_DIR,
     STATE_FILE,
+    PROJECT_STATE_FILE,
+    ARCHITECTURE,
+    ARCHITECTURE_CURRENT,
+    PROJECT_PLAN,
+    INFRA,
+    INFRA_CURRENT,
+    CICD,
+    CICD_CURRENT,
+    TESTING_CONFIG,
+    TESTING_CURRENT,
     enable_console_debug,
     ensure_dir,
     ensure_gitignore,
@@ -21,6 +31,9 @@ from vibe_tools.utils import (
     get_google_api_key,
     get_main_branch,
     load_config,
+    load_project_state,
+    save_project_state,
+    get_file_hash,
     run_agent,
     run_command,
     save_config,
@@ -248,7 +261,15 @@ def init():
 )
 @click.pass_context
 def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
-    """Run the Ralph loop for processing PRDs."""
+    """[LEGACY] Run the Ralph loop for processing PRDs. Use vibe setup/plan/implementation instead."""
+    click.echo("⚠️ 'vibe ralph' is legacy. Please use the new modular commands:")
+    click.echo("  vibe setup          - Phase 1: Architecture")
+    click.echo("  vibe normalize      - Phase 2: Standardize Specs")
+    click.echo("  vibe plan           - Phase 3: Project Planning")
+    click.echo("  vibe implementation - Phase 4: Building")
+    click.echo("")
+    if not click.confirm("Proceed with legacy Ralph loop?", default=False):
+        return
     maybe_init_git()
     agent = ctx.obj.get("agent", "cursor-agent")
     config = load_config().get("ralph", {})
@@ -740,11 +761,221 @@ def cost():
 
 
 @cli.command()
-def cleanup():
-    """Clean up stale pytest, cursor-agent, and caffeinate processes."""
-    from vibe_tools.utils import cleanup_stale_processes
+@click.option(
+    "--auto",
+    is_flag=True,
+    help="Automatically propose architecture if architecture.yaml is missing.",
+)
+@click.option(
+    "--import-code",
+    "import_code",
+    is_flag=True,
+    help="Import existing codebase to generate architecture-current.yaml.",
+)
+@click.pass_context
+def setup(ctx, auto, import_code):
+    """Phase 1: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
+    from vibe_tools.ralph import RalphLoop
 
-    cleanup_stale_processes()
+    state = load_project_state()
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    if import_code:
+        click.echo("🔍 Analyzing codebase to generate architecture-current.yaml...")
+        # TODO: Implement codebase analysis logic
+        # For now, we'll use an agent to do it
+        prompt = "Analyze the current codebase and generate a comprehensive 'architecture-current.yaml' file that describes the current tech stack, directory structure, databases, and key dependencies."
+        cmd = get_agent_command(agent, prompt)
+        run_agent(cmd, stream=stream)
+        click.echo(f"✅ Generated {ARCHITECTURE_CURRENT}")
+        return
+
+    if not ARCHITECTURE.exists():
+        if auto:
+            click.echo("Proposing architecture.yaml based on PRDs...")
+            # TODO: Implement auto-proposal logic
+            prompt = "Analyze the PRDs in prds/ and propose a comprehensive 'architecture.yaml' file that defines the tech stack, database schema, and project structure."
+            cmd = get_agent_command(agent, prompt)
+            run_agent(cmd, stream=stream)
+        else:
+            click.echo(
+                f"❌ {ARCHITECTURE} not found. Use --auto to propose one or create it manually."
+            )
+            return
+
+    # Run the reconciliation loop
+    loop = RalphLoop(
+        name="Architecture Setup",
+        desired_file=ARCHITECTURE,
+        current_file=ARCHITECTURE_CURRENT,
+        agent=agent,
+        stream=stream,
+    )
+
+    success = loop.run()
+    if success:
+        state["phases"]["setup"]["status"] = "completed"
+        state["phases"]["setup"]["hash"] = get_file_hash(ARCHITECTURE)
+        save_project_state(state)
+        click.echo("\n✅ Architecture setup complete. project-state.json updated.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Normalize Specs (vibe normalize)")
+        click.echo("[ ] Generate Project Plan (vibe plan)")
+    else:
+        click.echo("❌ Architecture setup failed.")
+
+
+@cli.command()
+@click.pass_context
+def plan(ctx):
+    """Phase 3: Project Planning. Generates project-plan.yaml from PRDs and Architecture."""
+    state = load_project_state()
+    if state["phases"]["setup"]["status"] != "completed":
+        click.echo(
+            "❌ Setup phase must be completed before planning. Run 'vibe setup'."
+        )
+        return
+
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    click.echo("🧠 Generating project-plan.yaml...")
+    # TODO: Implement Planner Agent logic
+    from vibe_tools.ralph import run_planner_agent
+
+    project_plan = run_planner_agent(agent, stream=stream)
+    if project_plan:
+        state["phases"]["plan"]["status"] = "completed"
+        state["phases"]["plan"]["hash"] = get_file_hash(PROJECT_PLAN)
+        save_project_state(state)
+        click.echo(f"\n✅ Project plan generated: {PROJECT_PLAN}")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Start Building (vibe implementation)")
+    else:
+        click.echo("❌ Project planning failed.")
+
+
+@cli.command()
+@click.pass_context
+def implementation(ctx):
+    """Phase 4: Implementation. Iterates through the project-plan.yaml."""
+    state = load_project_state()
+    if state["phases"]["plan"]["status"] != "completed":
+        click.echo(
+            "❌ Plan phase must be completed before implementation. Run 'vibe plan'."
+        )
+        return
+
+    from vibe_tools.ralph import implementation_loop
+
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    success = implementation_loop(agent, stream=stream)
+    if success:
+        state["phases"]["implementation"]["status"] = "completed"
+        save_project_state(state)
+        click.echo("✅ Implementation complete.")
+    else:
+        click.echo("❌ Implementation failed.")
+
+
+@cli.command()
+@click.pass_context
+def infra(ctx):
+    """Phase 5: Infrastructure reconciliation."""
+    from vibe_tools.ralph import RalphLoop
+
+    state = load_project_state()
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    loop = RalphLoop(
+        name="Infrastructure",
+        desired_file=INFRA,
+        current_file=INFRA_CURRENT,
+        agent=agent,
+        stream=stream,
+    )
+    if loop.run():
+        state["phases"]["infra"]["status"] = "completed"
+        save_project_state(state)
+
+
+@cli.command()
+@click.pass_context
+def cicd(ctx):
+    """Phase 6: CI/CD reconciliation."""
+    from vibe_tools.ralph import RalphLoop
+
+    state = load_project_state()
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    loop = RalphLoop(
+        name="CI/CD",
+        desired_file=CICD,
+        current_file=CICD_CURRENT,
+        agent=agent,
+        stream=stream,
+    )
+    if loop.run():
+        state["phases"]["cicd"]["status"] = "completed"
+        save_project_state(state)
+
+
+@cli.command()
+@click.pass_context
+def testing(ctx):
+    """Phase 7: Testing reconciliation."""
+    from vibe_tools.ralph import RalphLoop
+
+    state = load_project_state()
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    loop = RalphLoop(
+        name="Testing",
+        desired_file=TESTING_CONFIG,
+        current_file=TESTING_CURRENT,
+        agent=agent,
+        stream=stream,
+    )
+    if loop.run():
+        state["phases"]["testing"]["status"] = "completed"
+        save_project_state(state)
+
+
+@cli.command()
+@click.pass_context
+def deploy(ctx):
+    """Phase 8: Deployment."""
+    state = load_project_state()
+    if (
+        state["phases"]["infra"]["status"] != "completed"
+        or state["phases"]["cicd"]["status"] != "completed"
+    ):
+        click.echo("❌ Infra and CI/CD phases must be completed before deployment.")
+        return
+    # TODO: Implement deployment logic
+    click.echo("🚀 Triggering deployment...")
+
+
+@cli.command()
+@click.pass_context
+def ideation(ctx):
+    """Scenario E: Interactive ideation to generate PRDs."""
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    click.echo("💡 Starting interactive ideation session...")
+    prompt = "I have an idea for a project. Please walk me through an interactive loop to define the core PRDs and requirements. Ask me questions one by one until we have enough to generate initial PRD files in 'specs/'."
+    cmd = get_agent_command(agent, prompt)
+    run_agent(cmd, stream=stream)
+    click.echo("✅ Ideation complete. Specs generated in specs/.")
+    click.echo("\nNext Steps:")
+    click.echo("[ ] Setup Architecture (vibe setup --auto)")
 
 
 @cli.command()
