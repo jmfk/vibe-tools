@@ -64,6 +64,12 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "command": "server /data --console-address :9011",
         "description": "MinIO S3-compatible (AWS-style virtual addressing)",
     },
+    "imgproxy": {
+        "image": "darthsim/imgproxy:latest",
+        "container_name": "vibe-imgproxy",
+        "ports": {"8080/tcp": 8080},
+        "description": "imgproxy for on-the-fly image resizing and conversion",
+    },
 }
 
 def get_server_configs() -> Dict[str, Any]:
