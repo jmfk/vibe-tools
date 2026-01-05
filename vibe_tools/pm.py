@@ -23,6 +23,8 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     SPECS_DIR,
     load_project_state,
+    get_agent_processes,
+    cleanup_stale_processes,
 )
 
 
@@ -43,6 +45,8 @@ class PMCompleter:
                 "/files",
                 "/add",
                 "/list",
+                "/ps",
+                "/kill",
                 "/exit",
                 "/conf",
                 "/help",
@@ -54,6 +58,7 @@ class PMCompleter:
             "/list": sorted(["memory"]),
             "/conf": sorted(["md", "code"]),
             "/show": sorted(["specs"]),
+            "/kill": sorted(["all"]),
         }
 
     def complete(self, text, state):
@@ -310,6 +315,35 @@ class InteractivePM:
         elif cmd == "/list":
             if args == "memory": self._list_memory()
             else: click.echo("❌ Usage: /list memory")
+        elif cmd == "/ps":
+            processes = get_agent_processes()
+            if not processes:
+                click.echo("No active agent processes found.")
+            else:
+                click.echo(f"{'PID':<10} {'TARGET':<20} {'COMMAND'}")
+                click.echo("-" * 60)
+                for p in processes:
+                    click.echo(f"{p['pid']:<10} {p['target']:<20} {p['command']}")
+        elif cmd == "/kill":
+            processes = get_agent_processes()
+            if not processes:
+                click.echo("No active agent processes found.")
+            else:
+                if not args or "all" in args.lower():
+                    click.echo("Active agent processes:")
+                    for p in processes:
+                        click.echo(f"  - {p['pid']}: {p['command']}")
+                    
+                    if click.confirm("\nAre you sure you want to kill all these processes?", default=False):
+                        killed = cleanup_stale_processes()
+                        if killed:
+                            click.echo(f"✅ Killed processes for: {', '.join(killed)}")
+                        else:
+                            click.echo("No processes were killed.")
+                    else:
+                        click.echo("Aborted.")
+                else:
+                    click.echo("❌ Usage: /kill [all]")
         elif cmd == "/conf":
             sub_parts = args.split(" ", 1)
             target = sub_parts[0] if sub_parts else ""
@@ -335,6 +369,8 @@ class InteractivePM:
         click.echo("  /edit [path]     - Open file in code editor")
         click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
         click.echo("  /files, /f [list|add <path>|remove <path>] - Manage additional context files")
+        click.echo("  /ps              - List active agent processes")
+        click.echo("  /kill [all]      - Kill active agent processes")
         click.echo("  /list memory, /l - List pending text, files, and history summary")
         click.echo("  /conf [md|code] <editor_cmd> - Configure preferred editor")
         click.echo("  /help, /h        - Show this help message")
