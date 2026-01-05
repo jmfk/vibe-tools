@@ -546,9 +546,62 @@ def google():
         click.echo("Invalid choice.")
 
 
+def ensure_infrastructure():
+    """Ensure that the required project infrastructure (directories and files) exists."""
+    from vibe_tools.templates import TEMPLATES
+    from vibe_tools.utils import ensure_dir, get_project_name, ensure_gitignore
+
+    # 1. Offer to create pyproject.toml if missing
+    if not pathlib.Path("pyproject.toml").exists():
+        if click.confirm(
+            "\n'pyproject.toml' is missing. Create a default one?", default=True
+        ):
+            click.echo("Creating default pyproject.toml...")
+            content = TEMPLATES["pyproject.toml"].replace(
+                "{project_name}", get_project_name()
+            )
+            pathlib.Path("pyproject.toml").write_text(content)
+
+    # 2. Create vibe_data directory
+    vibe_data = pathlib.Path("vibe_data")
+    if not vibe_data.exists():
+        click.echo(f"Creating storage directory: {vibe_data}")
+        vibe_data.mkdir(parents=True, exist_ok=True)
+        ensure_gitignore("vibe_data/*")
+
+    # 3. Initialize package structure (__init__.py files)
+    # If pyproject.toml exists, we ensure 'backend' package structure exists
+    # If directories already exist, we also ensure they have __init__.py
+    for path in [
+        pathlib.Path("backend"),
+        pathlib.Path("backend/tests"),
+    ]:
+        # Create directory if it's expected (due to pyproject.toml) or already exists
+        if path.exists() or pathlib.Path("pyproject.toml").exists():
+            if not path.exists():
+                click.echo(f"Creating {path} directory...")
+                path.mkdir(parents=True, exist_ok=True)
+
+            init_file = path / "__init__.py"
+            if not init_file.exists():
+                click.echo(f"Initializing {init_file}")
+                init_file.write_text(TEMPLATES["empty_init"])
+
+    # 4. Initialize conftest.py
+    backend_tests = pathlib.Path("backend/tests")
+    if backend_tests.exists():
+        conftest = backend_tests / "conftest.py"
+        if not conftest.exists():
+            click.echo(f"Initializing {conftest}")
+            conftest.write_text(TEMPLATES["conftest.py"])
+
+
 @setup_cli.command()
 def deps():
     """Install required Python and Frontend dependencies."""
+    # Ensure basic infrastructure is present
+    ensure_infrastructure()
+
     click.echo("\n--- Installing Dependencies ---")
 
     # 1. Always install essential tools for the loop
@@ -658,46 +711,7 @@ def env(python_version):
     run_command(["pyenv", "local", venv_name])
 
     # 7. Initialize Project Infrastructure
-    click.echo("\n--- Initializing Project Infrastructure ---")
-    from vibe_tools.templates import TEMPLATES
-    from vibe_tools.utils import ensure_dir
-
-    # Create vibe_data directory
-    vibe_data = pathlib.Path("vibe_data")
-    if not vibe_data.exists():
-        click.echo(f"Creating storage directory: {vibe_data}")
-        vibe_data.mkdir(parents=True, exist_ok=True)
-        ensure_gitignore("vibe_data/*")
-
-    # Initialize __init__.py files
-    for path in [
-        pathlib.Path("backend"),
-        pathlib.Path("backend/tests"),
-    ]:
-        if path.exists():
-            init_file = path / "__init__.py"
-            if not init_file.exists():
-                click.echo(f"Initializing {init_file}")
-                init_file.write_text(TEMPLATES["empty_init"])
-
-    # Initialize conftest.py
-    backend_tests = pathlib.Path("backend/tests")
-    if backend_tests.exists():
-        conftest = backend_tests / "conftest.py"
-        if not conftest.exists():
-            click.echo(f"Initializing {conftest}")
-            conftest.write_text(TEMPLATES["conftest.py"])
-
-    # Offer to create pyproject.toml
-    if not pathlib.Path("pyproject.toml").exists():
-        if click.confirm(
-            "\n'pyproject.toml' is missing. Create a default one?", default=True
-        ):
-            click.echo("Creating default pyproject.toml...")
-            content = TEMPLATES["pyproject.toml"].replace(
-                "{project_name}", get_project_name()
-            )
-            pathlib.Path("pyproject.toml").write_text(content)
+    ensure_infrastructure()
 
     # 8. Install dependencies
     click.echo("\nInstalling dependencies...")

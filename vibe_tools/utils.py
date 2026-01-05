@@ -196,7 +196,8 @@ def rotate_log():
 
 def is_merged(branch_name):
     """Checks if a branch is merged into main."""
-    _, code = run_command(["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False)
+    main_branch = get_main_branch()
+    _, code = run_command(["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False)
     return code == 0
 
 
@@ -428,12 +429,24 @@ def is_git_repo():
         return False
 
 
-def get_changed_files(base_branch="main"):
+def get_main_branch():
+    """Returns 'main' or 'master' depending on which one exists."""
+    _, code = run_command(["git", "rev-parse", "--verify", "main"], check=False)
+    if code == 0:
+        return "main"
+    _, code = run_command(["git", "rev-parse", "--verify", "master"], check=False)
+    if code == 0:
+        return "master"
+    return "main"  # Default fallback
+
+
+def get_changed_files(base_branch=None):
     """Returns files changed relative to the base branch."""
     if not is_git_repo():
         return []
 
-    stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
+    if base_branch is None:
+        base_branch = get_main_branch()
     if code != 0:
         merge_base = base_branch
     else:
