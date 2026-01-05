@@ -44,6 +44,8 @@ TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
 TESTING_SPEC = pathlib.Path("specs/testing.md")
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
+ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
+ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 

@@ -117,7 +117,7 @@ SPECS_DIR = pathlib.Path("specs")
 )
 @click.option(
     "--stream/--no-stream",
-    default=True,
+    default=False,
     help="Stream agent output in real-time to the console.",
 )
 @click.option(
