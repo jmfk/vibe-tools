@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{project_name}"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "httpx",
+    "python-dotenv",
+]
+
+[tool.setuptools]
+packages = ["backend"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

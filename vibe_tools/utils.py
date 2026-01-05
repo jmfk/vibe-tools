@@ -168,7 +168,7 @@ def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
         dep_phase = phases.get(dep_id, {})
         if dep_phase.get("status") != "completed":
             missing.append(dep_id)
-    
+
     return missing
 
 
@@ -183,7 +183,7 @@ def check_plan_dependencies(plan_id: str, state: Dict[str, Any]) -> List[str]:
         dep_plan = plans.get(dep_id, {})
         if dep_plan.get("status") != "completed":
             missing.append(dep_id)
-    
+
     return missing
 
 
@@ -885,22 +885,54 @@ def get_vibe_status_report():
         plan_status = click.style("✅ Found", fg="green")
         report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
 
-        try:
-            plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
-            phases = plan_data.get("phases", {})
+        # Granular plans from project-state.json (Source of Truth)
+        state_plans = state.get("plans", {})
+        if state_plans:
+            # Sort plans by ID if possible, or just iterate
+            for plan_id, plan_info in state_plans.items():
+                status = plan_info.get("status", "pending")
+                if status == "completed":
+                    status_display = click.style("✅ DONE", fg="green")
+                elif status == "in_progress":
+                    status_display = click.style("⏳ IN_PROGRESS", fg="blue")
+                else:
+                    status_display = click.style("⚪ PENDING", fg="white", dim=True)
 
-            for phase_name in ["setup", "infra", "implementation", "cicd"]:
-                if phase_name not in phases:
-                    continue
+                deps = plan_info.get("depends_on", [])
+                dep_str = f" (Needs: {', '.join(deps)})" if deps else ""
+                report.append(f"    - {plan_id:<30} {status_display}{dep_str}")
+        else:
+            # Fallback to parsing the index file if state["plans"] is empty
+            try:
+                plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
+                phases = plan_data.get("phases", {})
 
-                phase_data = phases[phase_name]
-                report.append(f"    {click.style(phase_name.upper(), underline=True)}:")
+                for phase_name in ["setup", "infra", "implementation", "cicd"]:
+                    if phase_name not in phases:
+                        continue
 
-                if phase_name == "implementation":
-                    prds = phase_data.get("prds", [])
-                    for prd in prds:
-                        report.append(f"      PRD: {prd.get('id')}")
-                        for p in prd.get("plans", []):
+                    phase_data = phases[phase_name]
+                    report.append(
+                        f"    {click.style(phase_name.upper(), underline=True)}:"
+                    )
+
+                    if phase_name == "implementation":
+                        prds = phase_data.get("prds", [])
+                        for prd in prds:
+                            report.append(f"      PRD: {prd.get('id')}")
+                            for p in prd.get("plans", []):
+                                p_status = p.get("status", "pending")
+                                if p_status == "completed":
+                                    p_status_display = click.style("✅", fg="green")
+                                else:
+                                    p_status_display = click.style(
+                                        "⚪", fg="white", dim=True
+                                    )
+                                report.append(
+                                    f"        - {p_status_display} {p.get('id')}"
+                                )
+                    else:
+                        for p in phase_data.get("plans", []):
                             p_status = p.get("status", "pending")
                             if p_status == "completed":
                                 p_status_display = click.style("✅", fg="green")
@@ -908,17 +940,9 @@ def get_vibe_status_report():
                                 p_status_display = click.style(
                                     "⚪", fg="white", dim=True
                                 )
-                            report.append(f"        - {p_status_display} {p.get('id')}")
-                else:
-                    for p in phase_data.get("plans", []):
-                        p_status = p.get("status", "pending")
-                        if p_status == "completed":
-                            p_status_display = click.style("✅", fg="green")
-                        else:
-                            p_status_display = click.style("⚪", fg="white", dim=True)
-                        report.append(f"      - {p_status_display} {p.get('id')}")
-        except Exception as e:
-            report.append(f"  Error parsing {PROJECT_PLAN.name}: {e}")
+                            report.append(f"      - {p_status_display} {p.get('id')}")
+            except Exception as e:
+                report.append(f"  Error parsing {PROJECT_PLAN.name}: {e}")
     else:
         plan_status = click.style("⚪ Missing", fg="white", dim=True)
         report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
