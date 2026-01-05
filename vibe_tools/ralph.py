@@ -111,6 +111,11 @@ class RalphLoop:
 
 def run_planner_agent(agent: str, stream: bool = False) -> bool:
     """Runs the Planner Agent to generate Markdown plans and project-plan.yaml index."""
+    # Reset plans in project-state.json
+    state = load_project_state()
+    state["plans"] = {}
+    save_project_state(state)
+
     architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
     prds = ""
     for prd_file in collect_prd_files():
@@ -206,6 +211,21 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
 
             yaml_path.write_text(clean_output)
             logger.info(f"✅ Saved: {yaml_path}")
+
+            # Sync to project-state.json
+            try:
+                plan_data = yaml.safe_load(clean_output)
+                state = load_project_state()
+                plan_id = plan_data.get("id")
+                if plan_id:
+                    state["plans"][plan_id] = {
+                        "status": plan_data.get("status", "pending"),
+                        "depends_on": plan_data.get("dependencies", []),
+                        "title": plan_data.get("title", plan_id)
+                    }
+                    save_project_state(state)
+            except Exception as e:
+                logger.error(f"Failed to sync plan {plan_file.name} to state: {e}")
         else:
             logger.error(f"❌ Failed to normalize plan {plan_file.name}")
             return False
