@@ -765,7 +765,7 @@ Once you have analyzed the codebase and written ALL four files, include {COMPLET
 @click.argument("query", required=False)
 @click.pass_context
 def architect(ctx, query):
-    """Interactive architecture and infrastructure spec manager."""
+    """Phase 1: Interactive architecture and infrastructure spec manager."""
     from vibe_tools.architect import InteractiveArchitect
 
     architect_tool = InteractiveArchitect(
