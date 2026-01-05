@@ -5,16 +5,11 @@ The infrastructure is designed to be "boring" and reliable, prioritizing standar
 
 ## 2. Primary Services
 
-### 2.1 Database (PostgreSQL)
-- **Role**: Primary source of truth for application state.
-- **Management**: Managed via Tortoise-ORM and Aerich for migrations.
-- **Local Dev**: Standard Docker container (`postgres:latest`).
-
-### 2.2 Cache & Queue (Redis)
+### 2.1 Cache & Queue (Redis)
 - **Role**: Session storage, caching, and potentially background task management.
 - **Local Dev**: Alpine-based Docker container (`redis:alpine`).
 
-### 2.3 Object Storage (S3)
+### 2.2 Object Storage (S3)
 - **Role**: Storage for user-uploaded content, assets, and backups.
 - **Compatibility**: Must support standard S3 API (AWS, Linode, MinIO).
 - **Configuration**: Managed via environment variables and `vibe-setup`.
