@@ -187,9 +187,9 @@ def load_project_state() -> Dict[str, Any]:
     state = {
         "project_name": get_project_name(),
         "phases": {
-            "setup": {"status": "pending", "hash": None, "depends_on": []},
-            "normalize": {"status": "pending", "hash": None, "depends_on": ["setup"]},
-            "plan": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
+            "normalize": {"status": "pending", "hash": None, "depends_on": []},
+            "setup": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
+            "plan": {"status": "pending", "hash": None, "depends_on": ["setup"]},
             "implement": {"status": "pending", "hash": None, "depends_on": ["plan"]},
             "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
             "cicd": {"status": "pending", "hash": None, "depends_on": ["infra"]},
@@ -931,8 +931,8 @@ def get_vibe_status_report():
     }
 
     order = [
-        "setup",
         "normalize",
+        "setup",
         "plan",
         "implement",
         "infra",
