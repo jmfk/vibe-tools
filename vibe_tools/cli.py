@@ -116,9 +116,8 @@ SPECS_DIR = pathlib.Path("specs")
     help="Output verbose information (like prompts) to the terminal.",
 )
 @click.option(
-    "--stream",
-    is_flag=True,
-    default=False,
+    "--stream/--no-stream",
+    default=True,
     help="Stream agent output in real-time to the console.",
 )
 @click.option(
@@ -770,7 +769,7 @@ def architect(ctx, query):
 
     architect_tool = InteractiveArchitect(
         agent_type=ctx.obj.get("agent", "cursor-agent"),
-        stream=ctx.obj.get("stream", False),
+        stream=ctx.obj.get("stream", True),
     )
     architect_tool.run_loop(query)
 

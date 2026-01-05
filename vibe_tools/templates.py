@@ -313,30 +313,28 @@ Currently, you have access to two main specification files:
 1. Architecture Specification (architecture.md)
 2. Infrastructure Specification (infrastructure.md)
 
-CURRENT ARCHITECTURE:
+TASK:
+Your goal is to refine these specifications based on user instructions.
+
+CRITICAL RULES FOR UPDATING FILES:
+- If you are updating the Architecture Specification, you MUST start your response with 'FILE_UPDATE: arch'.
+- If you are updating the Infrastructure Specification, you MUST start your response with 'FILE_UPDATE: infra'.
+- DO NOT mix content from one file into the other unless explicitly asked to move information.
+- Provide the FULL content of the file after your changes.
+
+CURRENT ARCHITECTURE (architecture.md):
 {architecture_content}
 
-CURRENT INFRASTRUCTURE:
+CURRENT INFRASTRUCTURE (infrastructure.md):
 {infrastructure_content}
 
 CONVERSATION HISTORY:
 {history}
 
 GOAL:
-Your task is to respond to the user's latest query or instruction. 
+Respond to the user's latest query or instruction. 
 If they ask a question, answer it clearly based on the provided specifications.
-If they provide an instruction to modify one of the files, you should perform the logic and output the FULL updated content of that file.
-
-RESPONSE FORMAT:
-If you are just answering a question:
-Simply provide the text answer.
-
-If you are updating a file:
-Start your response with 'FILE_UPDATE: [arch|infra]' followed by the full new content of the file.
-Example:
-FILE_UPDATE: arch
-# Architecture
-... full content here ...
+If they provide an instruction to modify one of the files, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header.
 
 USER QUERY:
 {query}

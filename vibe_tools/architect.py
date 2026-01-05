@@ -22,12 +22,14 @@ class InteractiveArchitect:
         self,
         agent_type: str = "cursor-agent",
         prompts_dir: Optional[pathlib.Path] = None,
-        stream: bool = False,
+        stream: bool = True,
     ):
         self.agent_type = agent_type
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
         self.stream = stream
         self.history: List[Dict[str, str]] = []
+        self.current_query: str = ""
+        self.additional_files: List[pathlib.Path] = []
 
     def run_loop(self, initial_prompt: Optional[str] = None):
         """Main interactive loop."""
@@ -36,7 +38,8 @@ class InteractiveArchitect:
         click.echo("Type /help for available commands.\n")
 
         if initial_prompt:
-            self._handle_query(initial_prompt)
+            self.current_query = initial_prompt
+            self._ask_to_send()
 
         while True:
             user_input = click.prompt("👤", default="", show_default=False).strip()
@@ -49,16 +52,36 @@ class InteractiveArchitect:
                     break
                 continue
 
-            self._handle_query(user_input)
+            if self.current_query:
+                self.current_query += f"\n{user_input}"
+            else:
+                self.current_query = user_input
+            
+            self._ask_to_send()
+
+    def _ask_to_send(self):
+        prompt = self._build_prompt()
+        size_kb = len(prompt) / 1024
+        click.echo(click.style(f"\n📝 Current prompt size: {size_kb:.2f} KB", fg="yellow"))
+        click.echo("Type /send to dispatch to Architect, /reset to clear, or keep typing to add info.")
 
     def _handle_slash_command(self, command_str: str) -> bool:
         """Returns True if the loop should exit."""
-        parts = command_str.split(" ", 1)
+        parts = command_str.split(" ", 2)
         cmd = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
+        sub_args = parts[2] if len(parts) > 2 else ""
 
         if cmd == "/help":
             self._show_help()
+        elif cmd == "/send":
+            if not self.current_query:
+                click.echo("❌ Nothing to send. Type something first.")
+            else:
+                self._dispatch_agent()
+        elif cmd == "/reset":
+            self.current_query = ""
+            click.echo("✅ Prompt reset.")
         elif cmd == "/show":
             if args.lower() in ["arch", "architecture"]:
                 self._show_file(ARCHITECTURE_SPEC)
@@ -66,20 +89,15 @@ class InteractiveArchitect:
                 self._show_file(INFRA_SPEC)
             else:
                 click.echo("❌ Usage: /show [arch|infra]")
-        elif cmd in ["/edit", "/update"]:
-            target = ""
-            instr = ""
-            if args.lower().startswith("arch"):
-                target = "arch"
-                instr = args[4:].strip()
-            elif args.lower().startswith("infra"):
-                target = "infra"
-                instr = args[5:].strip()
-            
-            if not target or not instr:
-                click.echo(f"❌ Usage: {cmd} [arch|infra] <instructions>")
+        elif cmd == "/history":
+            self._handle_history_command(args, sub_args)
+        elif cmd == "/files":
+            self._handle_files_command(args, sub_args)
+        elif cmd == "/list":
+            if args == "memory":
+                self._list_memory()
             else:
-                self._handle_query(f"Update {target}: {instr}")
+                click.echo("❌ Usage: /list memory")
         elif cmd == "/exit" or cmd == "/quit":
             return True
         else:
@@ -89,23 +107,73 @@ class InteractiveArchitect:
 
     def _show_help(self):
         click.echo("\nAvailable commands:")
-        click.echo("  /show arch       - Display architecture.md")
-        click.echo("  /show infra      - Display infrastructure.md")
-        click.echo("  /edit arch <msg> - Propose changes to architecture.md")
-        click.echo("  /edit infra <msg>- Propose changes to infrastructure.md")
+        click.echo("  /send            - Dispatch current prompt to Architect")
+        click.echo("  /reset           - Clear the current pending prompt")
+        click.echo("  /show [arch|infra] - Display current specs")
+        click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
+        click.echo("  /files [list|add <path>|remove <path>]  - Manage additional context files")
+        click.echo("  /list memory     - List all pending text and files in memory")
         click.echo("  /help            - Show this help message")
         click.echo("  /exit            - Exit the session")
 
-    def _show_file(self, path: pathlib.Path):
-        if not path.exists():
-            click.echo(f"❌ File not found: {path}")
-            return
-        click.echo(f"\n--- {path.name} ---")
-        click.echo(path.read_text())
-        click.echo(f"--- END OF {path.name} ---\n")
+    def _handle_history_command(self, sub_cmd, args):
+        if not sub_cmd or sub_cmd == "list":
+            if not self.history:
+                click.echo("📜 History is empty.")
+            for i, h in enumerate(self.history):
+                click.echo(f"[{i}] {h['role'].upper()}: {h['content'][:100]}...")
+        elif sub_cmd == "view":
+            try:
+                idx = int(args)
+                h = self.history[idx]
+                click.echo(f"\n--- History [{idx}] ({h['role'].upper()}) ---")
+                click.echo(h['content'])
+            except (ValueError, IndexError):
+                click.echo("❌ Invalid history index.")
+        elif sub_cmd == "remove":
+            try:
+                idx = int(args)
+                removed = self.history.pop(idx)
+                click.echo(f"✅ Removed history item [{idx}]: {removed['role']}")
+            except (ValueError, IndexError):
+                click.echo("❌ Invalid history index.")
 
-    def _handle_query(self, query: str):
-        """Send query to agent and handle response."""
+    def _handle_files_command(self, sub_cmd, args):
+        if not sub_cmd or sub_cmd == "list":
+            if not self.additional_files:
+                click.echo("📁 No additional files added.")
+            for f in self.additional_files:
+                click.echo(f"- {f}")
+        elif sub_cmd == "add":
+            p = pathlib.Path(args)
+            if p.exists() and p.is_file():
+                if p not in self.additional_files:
+                    self.additional_files.append(p)
+                    click.echo(f"✅ Added file: {p}")
+                else:
+                    click.echo("ℹ️ File already in context.")
+            else:
+                click.echo(f"❌ File not found: {args}")
+        elif sub_cmd == "remove":
+            p = pathlib.Path(args)
+            if p in self.additional_files:
+                self.additional_files.remove(p)
+                click.echo(f"✅ Removed file: {p}")
+            else:
+                click.echo(f"❌ File not in context: {args}")
+
+    def _list_memory(self):
+        click.echo("\n--- Current Memory ---")
+        click.echo(click.style("Pending Prompt:", bold=True))
+        click.echo(self.current_query or "(empty)")
+        click.echo(click.style("\nIncluded Files:", bold=True))
+        if not self.additional_files:
+            click.echo("(none)")
+        for f in self.additional_files:
+            click.echo(f"- {f}")
+        click.echo("----------------------")
+
+    def _build_prompt(self) -> str:
         template_path = self.prompts_dir / self.PROMPT_FILENAME
         if not template_path.exists():
             from vibe_tools.templates import TEMPLATES
@@ -113,7 +181,6 @@ class InteractiveArchitect:
             if content:
                 ensure_dir(self.prompts_dir)
                 template_path.write_text(content)
-                click.echo(f"✅ Created missing prompt template: {template_path}")
             else:
                 raise click.ClickException(f"Missing prompt template: {template_path}")
 
@@ -121,14 +188,26 @@ class InteractiveArchitect:
         infra_content = INFRA_SPEC.read_text() if INFRA_SPEC.exists() else "No infrastructure.md found."
 
         history_text = "\n".join([f"{h['role'].upper()}: {h['content']}" for h in self.history])
+        
+        # Build additional files context
+        files_context = ""
+        for f in self.additional_files:
+            try:
+                files_context += f"\n\n--- FILE: {f} ---\n{f.read_text()}\n--- END FILE: {f} ---"
+            except Exception as e:
+                click.echo(f"⚠️ Error reading {f}: {e}")
 
-        prompt = template_path.read_text().format(
+        return template_path.read_text().format(
             architecture_content=arch_content,
             infrastructure_content=infra_content,
-            history=history_text,
-            query=query,
+            history=history_text + files_context,
+            query=self.current_query,
         )
 
+    def _dispatch_agent(self):
+        prompt = self._build_prompt()
+        query = self.current_query
+        
         click.echo("⏳ Architect is thinking...")
         command = get_agent_command(self.agent_type, prompt)
         output, exit_code = run_agent(command, stream=self.stream)
@@ -138,13 +217,21 @@ class InteractiveArchitect:
             return
 
         self.history.append({"role": "user", "content": query})
+        self.current_query = "" # Clear after successful send
         
         # Check for file updates
-        if output.startswith("FILE_UPDATE:"):
-            lines = output.splitlines()
+        if "FILE_UPDATE:" in output:
+            parts = output.split("FILE_UPDATE:", 1)
+            thinking = parts[0].strip()
+            update_part = parts[1].strip()
+            
+            lines = update_part.splitlines()
             header = lines[0]
             content = "\n".join(lines[1:])
             
+            if thinking:
+                click.echo(f"\n💭 {thinking}")
+
             if "arch" in header.lower():
                 ARCHITECTURE_SPEC.write_text(content)
                 click.echo(f"✅ Updated {ARCHITECTURE_SPEC}")
