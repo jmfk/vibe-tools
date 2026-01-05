@@ -56,7 +56,7 @@ def get_project_name():
                 url = url[:-4]
             project_name = url.split("/")[-1].split(":")[-1]
             return project_name.lower().replace("-", "_").replace(" ", "_")
-    
+
     # Fallback to directory name
     return pathlib.Path.cwd().name.lower().replace("-", "_").replace(" ", "_")
 
@@ -64,7 +64,7 @@ def get_project_name():
 def load_config():
     """Loads and merges global and project-local configuration."""
     config = {}
-    
+
     # Load global config first
     if GLOBAL_CONFIG_FILE.exists():
         try:
@@ -83,7 +83,7 @@ def load_config():
             config.update(local_config)
         except Exception as e:
             logger.debug(f"Error loading local config: {e}")
-            
+
     return config
 
 
@@ -116,7 +116,11 @@ def load_project_state() -> Dict[str, Any]:
             "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
             "cicd": {"status": "pending", "hash": None, "depends_on": ["infra"]},
             "testing": {"status": "pending", "hash": None, "depends_on": ["implement"]},
-            "deploy": {"status": "pending", "hash": None, "depends_on": ["infra", "cicd", "testing"]},
+            "deploy": {
+                "status": "pending",
+                "hash": None,
+                "depends_on": ["infra", "cicd", "testing"],
+            },
         },
         "plans": {},
         "completed_prds": [],
@@ -164,7 +168,7 @@ def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
         dep_phase = phases.get(dep_id, {})
         if dep_phase.get("status") != "completed":
             missing.append(dep_id)
-    
+
     return missing
 
 
@@ -189,11 +193,11 @@ def migrate_legacy_state():
 
         # Basic heuristic: if there are completed PRDs, maybe setup was done?
         # But we'll stay conservative and let the user run setup.
-        
+
         save_project_state(new_state)
         logger.info(f"✅ Migrated legacy state to {PROJECT_STATE_FILE}")
         # We keep the old file for safety for now, or we could delete it.
-        # STATE_FILE.unlink() 
+        # STATE_FILE.unlink()
     except Exception as e:
         logger.error(f"Failed to migrate legacy state: {e}")
 
@@ -250,7 +254,9 @@ def setup_logging(command_name):
     # File handler
     file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    )
     logger.addHandler(file_handler)
 
     # Stream handler (console)
@@ -311,7 +317,9 @@ def rotate_log():
 def is_merged(branch_name):
     """Checks if a branch is merged into main."""
     main_branch = get_main_branch()
-    _, code = run_command(["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False)
+    _, code = run_command(
+        ["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False
+    )
     return code == 0
 
 
@@ -370,7 +378,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
             full_output.append(line)
             elapsed = int(time.time() - start_time)
             preview = line.strip()[:80]
-            
+
             if stream:
                 # Direct streaming to stdout
                 sys.stdout.write(line)
@@ -379,7 +387,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
                 # Live progress to stdout (bypassing file log for spammy progress)
                 sys.stdout.write(f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}")
                 sys.stdout.flush()
-            
+
             # Also log to debug file immediately
             logger.debug(f"AGENT_LIVE: {line.strip()}")
     except KeyboardInterrupt:
@@ -462,40 +470,46 @@ def check_env_health() -> bool:
     """Checks if the current environment is healthy and correctly configured."""
     config = load_config()
     env_config = config.get("env")
-    
+
     # 1. Check if backend is importable
     try:
         import backend
+
         logger.debug("✅ 'backend' package is importable.")
     except ImportError:
-        logger.warning("❌ 'backend' package is NOT importable. Project structure may be broken.")
+        logger.warning(
+            "❌ 'backend' package is NOT importable. Project structure may be broken."
+        )
         return False
 
     # 2. Check for essential tools
     missing_tools = []
-    
+
     # Backend tools
     for tool in ["python3", "pip", "ruff", "pytest"]:
         _, code = run_command([tool, "--version"], check=False)
         if code != 0:
             missing_tools.append(tool)
-            
+
     # Frontend tools (if frontend directory exists)
     if pathlib.Path("frontend").exists():
         for tool in ["node", "npm", "npx"]:
             _, code = run_command([tool, "--version"], check=False)
             if code != 0:
                 missing_tools.append(tool)
-                
+
     if missing_tools:
         logger.warning(f"❌ Missing essential tools: {', '.join(missing_tools)}")
         return False
 
     # 3. Check for package structure
-    if pathlib.Path("backend").exists() and not (pathlib.Path("backend") / "__init__.py").exists():
+    if (
+        pathlib.Path("backend").exists()
+        and not (pathlib.Path("backend") / "__init__.py").exists()
+    ):
         logger.warning("❌ Missing 'backend/__init__.py'.")
         return False
-        
+
     if not pathlib.Path("vibe_data").exists():
         logger.warning("❌ Missing local data directory 'vibe_data/'.")
         return False
@@ -509,21 +523,35 @@ def check_env_health() -> bool:
             # but we want to know if the *active* pyenv environment is correct
             # or if we are at least in a context where the project venv is intended
             if "pipx" in current_prefix:
-                # We are running globally via pipx. We should check if the 
+                # We are running globally via pipx. We should check if the
                 # user has activated their project venv or if we are in the project dir
                 # For now, let's look at the PYENV_VERSION or similar env vars
                 import os
-                pyenv_version = os.environ.get("PYENV_VERSION") or os.environ.get("VIRTUAL_ENV")
-                if venv_name not in str(pyenv_version) and venv_name not in current_prefix:
-                    logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
-                    logger.warning(f"   Note: You are running 'vibe' via pipx global install.")
-                    logger.warning(f"   Please run 'pyenv activate {venv_name}' or ensure it's set in .python-version")
+
+                pyenv_version = os.environ.get("PYENV_VERSION") or os.environ.get(
+                    "VIRTUAL_ENV"
+                )
+                if (
+                    venv_name not in str(pyenv_version)
+                    and venv_name not in current_prefix
+                ):
+                    logger.warning(
+                        f"⚠️  Managed environment '{venv_name}' is configured but not active."
+                    )
+                    logger.warning(
+                        f"   Note: You are running 'vibe' via pipx global install."
+                    )
+                    logger.warning(
+                        f"   Please run 'pyenv activate {venv_name}' or ensure it's set in .python-version"
+                    )
                     return False
             elif venv_name not in current_prefix:
-                logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
+                logger.warning(
+                    f"⚠️  Managed environment '{venv_name}' is configured but not active."
+                )
                 logger.warning(f"   Current environment: {current_prefix}")
                 return False
-            
+
             logger.debug(f"✅ Environment check passed.")
 
     return True
@@ -583,7 +611,9 @@ def get_changed_files(base_branch=None):
     else:
         changed = stdout.strip().splitlines() if stdout.strip() else []
 
-    stdout, code = run_command(["git", "ls-files", "--others", "--exclude-standard"], check=False)
+    stdout, code = run_command(
+        ["git", "ls-files", "--others", "--exclude-standard"], check=False
+    )
     if code == 0 and stdout.strip():
         changed.extend(stdout.strip().splitlines())
 
@@ -655,7 +685,7 @@ def sync_env_file():
     if redis:
         env_lines.append(f"REDIS_HOST={redis.get('host', 'localhost')}")
         env_lines.append(f"REDIS_PORT={redis.get('port', 6379)}")
-        password = redis.get('password', '')
+        password = redis.get("password", "")
         env_lines.append(f"REDIS_PASSWORD={password}")
         env_lines.append(f"REDIS_DB={redis.get('database', 0)}")
         redis_url = f"redis://{':' + password + '@' if password else ''}{redis.get('host')}:{redis.get('port')}/{redis.get('database')}"
@@ -748,7 +778,7 @@ def get_vibe_status_report():
     import click
     from vibe_tools.cost import get_total_cost
     from vibe_tools.servers import get_server_configs, get_container_status
-    
+
     state = load_project_state()
     report = []
     report.append(click.style("\n=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
@@ -758,10 +788,12 @@ def get_vibe_status_report():
     version = state.get("version", "1.0")
     report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name} (v{version})")
     report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
-    
+
     active_task = state.get("active_task")
     if active_task:
-        report.append(f"{click.style('ACTIVE TASK:', bold=True)} {click.style(active_task, fg='yellow')}")
+        report.append(
+            f"{click.style('ACTIVE TASK:', bold=True)} {click.style(active_task, fg='yellow')}"
+        )
 
     # 2. Lifecycle Progress
     report.append(click.style("\nLIFECYCLE PROGRESS:", fg="yellow", bold=True))
@@ -773,14 +805,23 @@ def get_vibe_status_report():
         "cicd": (CICD, CICD_CURRENT),
         "testing": (TESTING_CONFIG, TESTING_CURRENT),
     }
-    
-    order = ["setup", "normalize", "plan", "implement", "infra", "cicd", "testing", "deploy"]
-    
+
+    order = [
+        "setup",
+        "normalize",
+        "plan",
+        "implement",
+        "infra",
+        "cicd",
+        "testing",
+        "deploy",
+    ]
+
     next_action = None
     for phase_id in order:
         phase = phases.get(phase_id, {})
         status = phase.get("status", "pending")
-        
+
         sync_status = ""
         if phase_id in phase_files:
             desired_file, current_file = phase_files[phase_id]
@@ -799,10 +840,12 @@ def get_vibe_status_report():
             if not next_action:
                 next_action = f"vibe {phase_id}"
         else:
-            status_display = click.style("⚪ PENDING", fg="white", dim=True) + sync_status
+            status_display = (
+                click.style("⚪ PENDING", fg="white", dim=True) + sync_status
+            )
             if not next_action:
                 next_action = f"vibe {phase_id}"
-        
+
         report.append(f"  - {phase_id:<15} {status_display}")
 
     # 3. Core Configuration
@@ -826,18 +869,18 @@ def get_vibe_status_report():
     if PROJECT_PLAN.exists():
         plan_status = click.style("✅ Found", fg="green")
         report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
-        
+
         try:
             plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
             phases = plan_data.get("phases", {})
-            
+
             for phase_name in ["setup", "infra", "implementation", "cicd"]:
                 if phase_name not in phases:
                     continue
-                
+
                 phase_data = phases[phase_name]
                 report.append(f"    {click.style(phase_name.upper(), underline=True)}:")
-                
+
                 if phase_name == "implementation":
                     prds = phase_data.get("prds", [])
                     for prd in prds:
@@ -847,7 +890,9 @@ def get_vibe_status_report():
                             if p_status == "completed":
                                 p_status_display = click.style("✅", fg="green")
                             else:
-                                p_status_display = click.style("⚪", fg="white", dim=True)
+                                p_status_display = click.style(
+                                    "⚪", fg="white", dim=True
+                                )
                             report.append(f"        - {p_status_display} {p.get('id')}")
                 else:
                     for p in phase_data.get("plans", []):
@@ -903,7 +948,9 @@ def get_vibe_status_report():
     # 8. Costs
     total_cost = get_total_cost()
     report.append(click.style("\nCOSTS:", fg="yellow", bold=True))
-    report.append(f"  Total Estimated Project Cost: {click.style(f'${total_cost:.4f} USD', fg='green')}")
+    report.append(
+        f"  Total Estimated Project Cost: {click.style(f'${total_cost:.4f} USD', fg='green')}"
+    )
 
     # 9. Services
     report.append(click.style("\nSERVICES:", fg="yellow", bold=True))
@@ -919,7 +966,7 @@ def get_vibe_status_report():
                 status_display = click.style("🛑 Stopped", fg="red")
             else:
                 status_display = click.style("⚪ Not Installed", fg="white", dim=True)
-            
+
             ports = ", ".join([f"{v}" for k, v in config.get("ports", {}).items()])
             report.append(f"  - {name:<15} {status_display:<20} {ports}")
 
