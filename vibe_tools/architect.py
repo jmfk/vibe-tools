@@ -29,19 +29,20 @@ from vibe_tools.utils import (
 class ArchitectCompleter:
     def __init__(self, architect):
         self.architect = architect
-        self.commands = [
+        # Sort commands so cycling order is predictable (alphabetical)
+        self.commands = sorted([
             "/send", "/s", "/reset", "/r", "/mode", "/m", "/ask", "/agent",
             "/show", "/edit", "/history", "/files", "/f", "/add", "/a",
             "/list", "/l", "/exit", "/q", "/conf", "/help"
-        ]
+        ])
         self.subcommands = {
-            "/files": ["list", "add", "remove"],
-            "/f": ["list", "add", "remove"],
-            "/history": ["list", "view", "remove"],
-            "/list": ["memory"],
-            "/l": ["memory"],
-            "/conf": ["md", "code"],
-            "/show": ["arch", "infra"],
+            "/files": sorted(["list", "add", "remove"]),
+            "/f": sorted(["list", "add", "remove"]),
+            "/history": sorted(["list", "view", "remove"]),
+            "/list": sorted(["memory"]),
+            "/l": sorted(["memory"]),
+            "/conf": sorted(["md", "code"]),
+            "/show": sorted(["arch", "infra"]),
         }
 
     def complete(self, text, state):
@@ -89,10 +90,21 @@ class InteractiveArchitect:
     def _setup_readline(self):
         if readline:
             readline.set_completer(ArchitectCompleter(self).complete)
+            # Remove / from delimiters so /command is treated as one word
+            readline.set_completer_delims(' \t\n;')
+            
+            if hasattr(readline, 'set_auto_history'):
+                readline.set_auto_history(True)
+            
             if "libedit" in readline.__doc__:  # macOS compatibility
-                readline.parse_and_bind("bind ^I rl_complete")
+                # macOS default is often libedit
+                readline.parse_and_bind("bind ^I menu-complete")
+                readline.parse_and_bind("bind -e") # use emacs keybindings
             else:
-                readline.parse_and_bind("tab: complete")
+                # GNU Readline
+                readline.parse_and_bind("tab: menu-complete")
+                # Bind Escape to clear line
+                readline.parse_and_bind('"\e": kill-whole-line')
             
             # Setup history file
             history_file = VIBE_PROJECT_DIR / ".architect_history"
@@ -161,7 +173,12 @@ class InteractiveArchitect:
 
         while True:
             mode_color = "green" if self.mode == "ASK" else "red"
-            prompt_symbol = f"({click.style(self.mode, fg=mode_color)}) 👤 "
+            # Wrap ANSI codes in \001 and \002 for readline to correctly calculate prompt length
+            # Also ensure no trailing spaces are outside the escape sequence
+            raw_prefix = f"({self.mode})"
+            styled_prefix = click.style(raw_prefix, fg=mode_color)
+            styled_icon = click.style(" 👤 ", bold=True)
+            prompt_symbol = f"\001{styled_prefix}\002\001{styled_icon}\002"
             
             try:
                 # Using standard input for readline support
