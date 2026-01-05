@@ -21,6 +21,7 @@ from vibe_tools.utils import (
     logger,
     load_project_state,
     save_project_state,
+    check_plan_dependencies,
     get_main_branch,
     is_dirty,
     collect_prd_files,
@@ -221,7 +222,7 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
                     state["plans"][plan_id] = {
                         "status": plan_data.get("status", "pending"),
                         "depends_on": plan_data.get("dependencies", []),
-                        "title": plan_data.get("title", plan_id)
+                        "title": plan_data.get("title", plan_id),
                     }
                     save_project_state(state)
             except Exception as e:
@@ -283,6 +284,20 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
         for plan_info in plans_to_run:
             plan_id = plan_info.get("id")
+
+            # Check plan-level dependencies from project-state.json
+            state = load_project_state()
+            if plan_id in state.get("plans", {}):
+                if state["plans"][plan_id].get("status") == "completed":
+                    continue
+
+                missing_deps = check_plan_dependencies(plan_id, state)
+                if missing_deps:
+                    logger.warning(
+                        f"⚠️ Skipping plan {plan_id}: Missing dependencies: {', '.join(missing_deps)}"
+                    )
+                    continue
+
             plan_md_path = pathlib.Path(plan_info.get("file"))
             plan_yaml_path = plan_md_path.with_suffix(".yaml")
 
@@ -294,9 +309,6 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 plan_data = yaml.safe_load(plan_yaml_path.read_text())
             except Exception as e:
                 logger.error(f"Failed to parse {plan_yaml_path}: {e}")
-                continue
-
-            if plan_data.get("status") == "completed":
                 continue
 
             logger.info(f"🚀 Executing Plan: {plan_data.get('title')} ({plan_id})")
@@ -372,12 +384,16 @@ Otherwise, list the issues.
                 commit_cmd = get_agent_command(agent, commit_prompt)
                 run_agent(commit_cmd, stream=stream)
 
-                # Update status
+                # Update status in project-state.json
+                state = load_project_state()
+                if plan_id not in state["plans"]:
+                    state["plans"][plan_id] = {}
+                state["plans"][plan_id]["status"] = "completed"
+                save_project_state(state)
+
+                # Update status in individual YAML (for backward compatibility/redundancy)
                 plan_data["status"] = "completed"
                 plan_yaml_path.write_text(yaml.dump(plan_data))
-
-                # Also update project-plan.yaml if possible (but it's nested, so we'd need to rewrite the whole thing)
-                # For now, the source of truth for status is the plan YAML.
 
                 # Switch back to main
                 _switch_to_main()
