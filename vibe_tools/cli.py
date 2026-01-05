@@ -261,8 +261,17 @@ def init():
 )
 @click.pass_context
 def ralph(ctx, review, tests, coverage, auto_merge, fast, budget):
-    """[LEGACY] Run the Ralph loop for processing PRDs. Use vibe setup/plan/implementation instead."""
-    click.echo("⚠️ 'vibe ralph' is legacy. Please use the new modular commands:")
+    """[DEPRECATED] legacy Ralph loop. Use vibe setup/plan/implementation instead."""
+    click.echo(click.style("\n" + "!" * 60, fg="red", bold=True))
+    click.echo(
+        click.style(
+            "!!! DEPRECATED: 'vibe ralph' is legacy and will be removed !!!",
+            fg="red",
+            bold=True,
+        )
+    )
+    click.echo(click.style("!" * 60 + "\n", fg="red", bold=True))
+    click.echo("Please use the new modular commands:")
     click.echo("  vibe setup          - Phase 1: Architecture")
     click.echo("  vibe normalize      - Phase 2: Standardize Specs")
     click.echo("  vibe plan           - Phase 3: Project Planning")
@@ -525,10 +534,13 @@ def monitor(ctx, interval):
 )
 @click.pass_context
 def review_prd(ctx, review):
-    """[DEPRECATED] List specs PRDs, display one, and optionally run the Gemini review prompt."""
+    """[DEPRECATED] List specs PRDs, display one, and optionally run review."""
     click.echo(
-        "⚠️ 'review-prd' is deprecated. 'vibe prd' now includes a /review command during creation."
+        click.style(
+            "\n!!! DEPRECATED: 'review-prd' is deprecated !!!", fg="yellow", bold=True
+        )
     )
+    click.echo("'vibe prd' now includes a /review command during creation.\n")
     ensure_dir(SPECS_DIR)
 
     prd_files = _list_spec_files()
@@ -643,10 +655,13 @@ def prd(ctx, title, type):
 )
 @click.pass_context
 def write_prd(ctx, title, type):
-    """[DEPRECATED] Use 'vibe prd' instead. Runs the legacy dspy interview loop."""
+    """[DEPRECATED] Use 'vibe prd' instead."""
     click.echo(
-        "⚠️ 'write-prd' is deprecated. Please use 'vibe prd' for the new interactive experience."
+        click.style(
+            "\n!!! DEPRECATED: 'write-prd' is deprecated !!!", fg="yellow", bold=True
+        )
     )
+    click.echo("Please use 'vibe prd' for the new interactive experience.\n")
     from vibe_tools.prd_writer import PRDWriter
 
     initial_prompt = title or click.prompt(
@@ -668,7 +683,15 @@ def write_prd(ctx, title, type):
 
 @cli.command()
 def history():
-    """List the status of all PRDs."""
+    """[DEPRECATED] List the status of all PRDs."""
+    click.echo(
+        click.style(
+            "\n!!! DEPRECATED: 'history' uses legacy Ralph state !!!",
+            fg="yellow",
+            bold=True,
+        )
+    )
+    click.echo("Use 'vibe status' for the current project state.\n")
     if not PRD_DIR.exists():
         click.echo(f"PRD directory {PRD_DIR} not found.")
         return
@@ -1190,7 +1213,7 @@ def rerun(prd_id):
     else:
         click.echo(f"Branch {branch_name} does not exist. Nothing to delete.")
 
-    click.echo(f"\nReady to rerun: 'vibe ralph' will now pick up {project_name} again.")
+    click.echo(f"\nReady to rerun: {project_name} state has been reset.")
 
 
 if __name__ == "__main__":

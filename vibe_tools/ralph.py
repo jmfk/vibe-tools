@@ -1,3 +1,8 @@
+"""
+DEPRECATED: This module contains the legacy Ralph loop implementation.
+It is kept for reference only. Please use the modular commands in cli.py instead.
+"""
+
 import hashlib
 import json
 import pathlib
