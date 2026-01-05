@@ -7,7 +7,7 @@ help:
 	@echo "  make install-deps - Install Python dependencies (pip install -e .)"
 	@echo "  make setup        - Run interactive environment setup"
 	@echo "  make batch        - Run the Cursor batch process (run_cursor_batch.py)"
-	@echo "  make loop         - Run the Ralph loop process (run_cursor_ralph_loop.py)"
+	@echo "  make loop         - [DEPRECATED] Run the legacy Ralph loop process"
 	@echo "  make monitor      - Run the progress monitor (monitor.py)"
 	@echo "  make run          - Run the FastAPI app locally (uvicorn)"
 	@echo "  make migrate-init - Initialize Aerich migrations"
@@ -72,6 +72,7 @@ batch:
 	python3 run_cursor_batch.py
 
 loop:
+	@echo "⚠️  make loop is deprecated. Use the new vibe commands instead."
 	vibe ralph
 
 monitor:
