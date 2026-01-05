@@ -264,33 +264,6 @@ TASK:
 4. Provide a HEALTH STATUS: [HEALTHY], [STALLED], or [FAILED].
 5. Keep it very concise (max 10 lines).
 """,
-    "reconciliation_prompt.txt": """You are in the '{name}' phase of the project lifecycle.
-Your goal is to reconcile the DESIRED state with the ACTUAL state of the codebase.
-
-PHASE: {name}
-MODE: {mode}  # INITIALIZATION or MIGRATION
-DESIRED FILE: {desired_file}
-CURRENT FILE: {current_file}
-
-DESIRED STATE content:
----
-{desired_content}
----
-
-ACTUAL STATE content (from {current_file}):
----
-{current_content}
----
-
-INSTRUCTIONS for {mode}:
-1. Examine the current codebase and compare it against the DESIRED state.
-2. If mode is MIGRATION, identify the deltas between the ACTUAL state and the DESIRED state.
-3. Perform all necessary actions (coding, configuration, setup, migrations) to bring the codebase into alignment with the DESIRED state.
-4. Ensure all changes are robust, follow project patterns, and are documented in the code where appropriate.
-5. IMPORTANT: Once the reconciliation is complete, you MUST update '{current_file}' to exactly match the new state (which should now align with the DESIRED state).
-6. {custom_instructions}
-7. Include <promise>DONE</promise> in your response ONLY when the reconciliation is successful and '{current_file}' has been updated.
-""",
     "Makefile": """.PHONY: test test-backend test-frontend test-infra test-integration test-regression lint lint-backend lint-frontend
 
 test: test-backend test-frontend test-infra test-integration test-regression lint
@@ -334,48 +307,7 @@ lint-frontend:
   });
 });
 """,
-    "pyproject.toml": """[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "{project_name}"
-version = "0.1.0"
-dependencies = [
-    "fastapi",
-    "uvicorn",
-    "pydantic",
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "ruff",
-    "httpx",
-    "python-dotenv",
-]
-
-[tool.setuptools]
-packages = ["backend"]
-
-[tool.ruff]
-line-length = 120
-target-version = "py311"
-""",
-    "conftest.py": """import pytest
-import os
-import sys
-
-# Ensure the root directory is in PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
-@pytest.fixture(autouse=True)
-def setup_env(monkeypatch):
-    # Ensure tests use the local data directory
-    data_dir = os.environ.get("VIBE_DATA_DIR", "vibe_data")
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir, exist_ok=True)
-""",
-    "empty_init": "# Package marker\n",
-    "README": """# vibe-tools
+}
 
 Global commands for Cursor Ralph loop and coverage improvement.
 
