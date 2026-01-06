@@ -110,7 +110,7 @@ SPECS_DIR = pathlib.Path("specs")
 @click.option(
     "--verbose",
     is_flag=True,
-    default=None,
+    default=True,
     help="Output verbose information (like prompts) to the terminal.",
 )
 @click.option(
