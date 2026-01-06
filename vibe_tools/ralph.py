@@ -538,11 +538,11 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
                 save_project_state(state)
 
-                # Update status in individual YAML (for backward compatibility/redundancy)
-                # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible,
-                # but project-plan.yaml does it for plans. For PRDs we use state.json mostly)
-                if not is_direct_prd:
-                    plan_data["status"] = "completed"
+            # Update status in individual YAML (for backward compatibility/redundancy)
+            # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible).
+            # For PRDs we use state.json mostly.
+            if not is_direct_prd:
+                plan_data["status"] = "completed"
                     plan_yaml_path.write_text(yaml.dump(plan_data))
 
                 # Switch back to main
