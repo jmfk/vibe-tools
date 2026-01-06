@@ -87,6 +87,7 @@ from vibe_tools.utils import (
     ensure_gitignore,
     get_agent_command,
     get_agent_processes,
+    get_automerge_branch,
     get_file_hash,
     get_google_api_key,
     get_main_branch,
@@ -96,6 +97,7 @@ from vibe_tools.utils import (
     reset_prd_state,
     run_agent,
     run_command,
+    save_config,
     save_project_state,
     setup_logging,
 )
@@ -1278,6 +1280,48 @@ def branch_merge(ctx, src, dst):
     from vibe_tools.branches import merge_branches
 
     merge_branches(src, dst)
+
+
+@branch_group.command(name="automerge")
+@click.argument("branch_name", required=False)
+@click.pass_context
+def branch_automerge(ctx, branch_name):
+    """Get or set the automerge branch."""
+    config = load_config()
+    if "ralph" not in config:
+        config["ralph"] = {}
+
+    if branch_name:
+        main_branch = get_main_branch()
+        if branch_name == main_branch:
+            click.echo(
+                click.style(
+                    f"❌ Automerge branch cannot be the main branch ({main_branch}).",
+                    fg="red",
+                )
+            )
+            return
+
+        config["ralph"]["automerge_branch"] = branch_name
+        save_config(config)
+        click.echo(f"✅ Automerge branch set to: {click.style(branch_name, fg='cyan')}")
+
+        # Verify if branch exists, if not, inform user it will be created on first use
+        _, code = run_command(
+            ["git", "rev-parse", "--verify", branch_name], check=False
+        )
+        if code != 0:
+            click.echo(
+                click.style(
+                    f"ℹ️ Branch '{branch_name}' does not exist yet. It will be created when needed.",
+                    fg="yellow",
+                )
+            )
+    else:
+        current_automerge = get_automerge_branch(config)
+        click.echo(
+            f"Current automerge branch: {click.style(current_automerge, fg='cyan')}"
+        )
 
 
 @branch_group.command(name="investigate")

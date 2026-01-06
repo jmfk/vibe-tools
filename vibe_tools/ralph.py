@@ -19,6 +19,7 @@ from vibe_tools.utils import (
     check_plan_dependencies,
     collect_prd_files,
     get_agent_command,
+    get_automerge_branch,
     get_file_hash,
     get_main_branch,
     get_prompt,
@@ -560,8 +561,46 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
             save_project_state(state)
 
-            # Switch back to main
-            switch_to_main()
+            # Auto-merge if enabled
+            auto_merge = config.get("ralph", {}).get("auto_merge", False)
+            if auto_merge:
+                automerge_branch = get_automerge_branch(config)
+                main_branch = get_main_branch()
+
+                if automerge_branch == main_branch:
+                    logger.warning(
+                        f"⚠️  Automerge branch is set to '{main_branch}'. Skipping automated merge to protect main."
+                    )
+                    switch_to_main()
+                else:
+                    logger.info(
+                        f"🔄 Auto-merging {branch_name} into {automerge_branch}..."
+                    )
+
+                    # Ensure automerge branch exists
+                    _, code = run_command(
+                        ["git", "rev-parse", "--verify", automerge_branch], check=False
+                    )
+                    if code != 0:
+                        logger.info(
+                            f"🌿 Creating automerge branch '{automerge_branch}' from {main_branch}"
+                        )
+                        run_command(["git", "checkout", main_branch], check=False)
+                        run_command(
+                            ["git", "checkout", "-b", automerge_branch], check=False
+                        )
+                        # Switch back to the feature branch for the merge tool to work as expected
+                        run_command(["git", "checkout", branch_name], check=False)
+
+                    from vibe_tools.branches import merge_branches
+
+                    merge_branches(branch_name, automerge_branch)
+
+                    # After merge, we should be on automerge_branch. Switch back to main for next plan.
+                    switch_to_main()
+            else:
+                # Switch back to main
+                switch_to_main()
         else:
             logger.error(
                 f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."

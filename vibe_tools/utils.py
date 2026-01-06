@@ -771,6 +771,15 @@ def get_main_branch():
     return "main"  # Default fallback
 
 
+def get_automerge_branch(config=None):
+    """Returns the configured automerge branch or defaults to 'automerge'."""
+    if config is None:
+        config = load_config()
+
+    ralph_config = config.get("ralph", {})
+    return ralph_config.get("automerge_branch", "automerge")
+
+
 def get_changed_files(base_branch=None):
     """Returns files changed relative to the base branch."""
     if not is_git_repo():
@@ -1208,6 +1217,18 @@ def get_vibe_status_report():
 
     # 7. Next Branch Info
     report.append(click.style("\nNEXT BRANCH:", fg="yellow", bold=True))
+
+    config = load_config()
+    ralph_config = config.get("ralph", {})
+    auto_merge = ralph_config.get("auto_merge", False)
+    automerge_branch = get_automerge_branch(config)
+
+    if auto_merge:
+        report.append(f"  - Automerge: {click.style('ENABLED', fg='green')}")
+        report.append(f"  - Target:    {click.style(automerge_branch, fg='cyan')}")
+    else:
+        report.append(f"  - Automerge: {click.style('DISABLED', fg='white', dim=True)}")
+
     next_plan_id = None
     for phase_id in order:
         if phase_id == "implement":
