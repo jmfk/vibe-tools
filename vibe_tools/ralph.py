@@ -360,6 +360,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             logger.error(f"Failed to parse {plan_yaml_path}: {e}")
             continue
 
+        if plan_data is None:
+            plan_data = {}
+
         if is_direct_prd:
             title = plan_info.get("title", plan_id.replace("prd_", "").replace("_", " ").title())
             description = plan_yaml_path.read_text()
@@ -367,17 +370,26 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             # Extract success criteria
             capabilities = plan_data.get("CAPABILITIES", {})
             success_criteria = []
-            if isinstance(capabilities.get("interaction_mechanisms"), list):
-                success_criteria.extend(capabilities["interaction_mechanisms"])
-            if isinstance(capabilities.get("patterns"), list):
-                success_criteria.extend(capabilities["patterns"])
-            if isinstance(capabilities.get("routing"), list):
-                success_criteria.extend(capabilities["routing"])
+
+            if isinstance(capabilities, dict):
+                if isinstance(capabilities.get("interaction_mechanisms"), list):
+                    success_criteria.extend(capabilities["interaction_mechanisms"])
+                if isinstance(capabilities.get("patterns"), list):
+                    success_criteria.extend(capabilities["patterns"])
+                if isinstance(capabilities.get("routing"), list):
+                    success_criteria.extend(capabilities["routing"])
+            elif isinstance(capabilities, list):
+                success_criteria.extend(capabilities)
+            elif isinstance(capabilities, str):
+                success_criteria.append(capabilities)
 
             if not success_criteria:
                 success_criteria = ["Implement all capabilities defined in the PRD."]
             test_targets = ["test"]
         else:
+            if not isinstance(plan_data, dict):
+                logger.error(f"Plan data in {plan_yaml_path} is not a dictionary. Skipping.")
+                continue
             title = plan_data.get("title", plan_id)
             description = plan_data.get("description", "")
             success_criteria = plan_data.get("success_criteria", [])
