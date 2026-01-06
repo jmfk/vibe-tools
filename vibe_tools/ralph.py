@@ -16,6 +16,10 @@ from vibe_tools.utils import (
     COMPILED_PLANS_DIR,
     PROJECT_PLAN,
     ARCHITECTURE,
+    ARCHITECTURE_SPEC,
+    INFRA_SPEC,
+    CICD_SPEC,
+    TESTING_SPEC,
     get_agent_command,
     run_agent,
     run_command,
@@ -67,6 +71,17 @@ class RalphLoop:
 
         if not self.desired_file.exists():
             logger.error(f"❌ Desired file {self.desired_file} not found.")
+            # Check if there's a corresponding .md spec that needs normalization
+            if self.name.lower() == "architecture setup" and ARCHITECTURE_SPEC.exists():
+                logger.info(
+                    f"💡 Found {ARCHITECTURE_SPEC}. Run 'vibe normalize' first."
+                )
+            elif self.name.lower() == "infrastructure" and INFRA_SPEC.exists():
+                logger.info(f"💡 Found {INFRA_SPEC}. Run 'vibe normalize' first.")
+            elif self.name.lower() == "ci/cd" and CICD_SPEC.exists():
+                logger.info(f"💡 Found {CICD_SPEC}. Run 'vibe normalize' first.")
+            elif self.name.lower() == "testing" and TESTING_SPEC.exists():
+                logger.info(f"💡 Found {TESTING_SPEC}. Run 'vibe normalize' first.")
             return False
 
         # 1. Compare Desired vs Current

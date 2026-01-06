@@ -759,9 +759,17 @@ def setup(ctx, auto, import_code):
             cmd = get_agent_command(agent, prompt)
             run_agent(cmd, stream=stream)
         else:
-            click.echo(
-                f"❌ {ARCHITECTURE} not found. Use --auto to propose one or create it manually."
-            )
+            if ARCHITECTURE_SPEC.exists():
+                click.echo(
+                    f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists."
+                )
+                click.echo(
+                    "   Run 'vibe normalize' to generate the required YAML file."
+                )
+            else:
+                click.echo(
+                    f"❌ {ARCHITECTURE} not found. Use --auto to propose one or create it manually."
+                )
             return
 
     # Run the reconciliation loop
@@ -869,6 +877,14 @@ def infra(ctx):
         )
         return
 
+    if not INFRA.exists():
+        if INFRA_SPEC.exists():
+            click.echo(f"❌ {INFRA} not found, but {INFRA_SPEC} exists.")
+            click.echo("   Run 'vibe normalize' to generate the required YAML file.")
+        else:
+            click.echo(f"❌ {INFRA} not found. Please create it or run discovery.")
+        return
+
     from vibe_tools.ralph import RalphLoop
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -912,6 +928,14 @@ def cicd(ctx):
         )
         return
 
+    if not CICD.exists():
+        if CICD_SPEC.exists():
+            click.echo(f"❌ {CICD} not found, but {CICD_SPEC} exists.")
+            click.echo("   Run 'vibe normalize' to generate the required YAML file.")
+        else:
+            click.echo(f"❌ {CICD} not found. Please create it or run discovery.")
+        return
+
     from vibe_tools.ralph import RalphLoop
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -951,6 +975,16 @@ def testing(ctx):
         click.echo(
             f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
         )
+        return
+
+    if not TESTING_CONFIG.exists():
+        if TESTING_SPEC.exists():
+            click.echo(f"❌ {TESTING_CONFIG} not found, but {TESTING_SPEC} exists.")
+            click.echo("   Run 'vibe normalize' to generate the required YAML file.")
+        else:
+            click.echo(
+                f"❌ {TESTING_CONFIG} not found. Please create it or run discovery."
+            )
         return
 
     from vibe_tools.ralph import RalphLoop
