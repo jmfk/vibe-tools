@@ -4,6 +4,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import click
@@ -21,7 +22,10 @@ AgentRunner = Callable[[str], Tuple[str, int]]
 
 
 class PRDWriter:
-    """Interactive PRD writer that uses dspy for Q&A and Gemini for markdown output."""
+    """[DEPRECATED] Interactive PRD writer that uses dspy for Q&A and Gemini for markdown output.
+
+    Use `vibe pm` (InteractivePM) instead.
+    """
 
     PROMPT_FILENAME = "prd_generation_prompt.txt"
     MAX_INTERVIEW_ROUNDS = 8
@@ -36,6 +40,11 @@ class PRDWriter:
         prd_type: str = "feature",
         stream: bool = False,
     ):
+        warnings.warn(
+            "PRDWriter is deprecated and will be removed in a future version. Use vibe pm instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.agent_type = agent_type
         self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("specs"))
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
@@ -260,12 +269,20 @@ class PRDWriter:
 
 
 class InteractivePRD(PRDWriter):
-    """Integrated interactive script for writing PRDs."""
+    """[DEPRECATED] Integrated interactive script for writing PRDs.
+
+    Use `vibe pm` (InteractivePM) instead.
+    """
 
     QUESTIONS_PROMPT_FILENAME = "prd_questions_prompt.txt"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        warnings.warn(
+            "InteractivePRD is deprecated and will be removed in a future version. Use vibe pm instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.history: List[Dict[str, str]] = []
         self.pending_questions: List[str] = []
         self.current_summary: str = ""
