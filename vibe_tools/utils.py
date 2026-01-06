@@ -1206,26 +1206,29 @@ def get_vibe_status_report():
         report.append(click.style("\nNEXT SUGGESTED ACTION:", fg="green", bold=True))
         report.append(f"  > {next_action}")
 
-    # 7. PRD Progress (Detailed)
-    report.append(click.style("\nPRD FILES:", fg="yellow", bold=True))
-    all_prds = collect_prd_files()
-    completed_prds = state.get("completed_prds", [])
-    started_prds = state.get("started_prds", [])
+    # 7. Next Branch Info
+    report.append(click.style("\nNEXT BRANCH:", fg="yellow", bold=True))
+    next_plan_id = None
+    for phase_id in order:
+        if phase_id == "implement":
+            all_plans = state.get("plans", {})
+            if all_plans:
+                # Find the first pending plan
+                for pid, pinfo in all_plans.items():
+                    if pinfo.get("status") == "pending":
+                        next_plan_id = pid
+                        break
+        if next_plan_id:
+            break
 
-    if not all_prds:
-        report.append(
-            f"  {click.style('⚪ No machine PRDs found', fg='white', dim=True)} (Run 'vibe pm' then 'vibe normalize')"
-        )
+    if next_plan_id:
+        plan_info = state["plans"][next_plan_id]
+        branch = plan_info.get("branch", f"feature/{next_plan_id}")
+        parent = plan_info.get("parent_branch", get_main_branch())
+        report.append(f"  - Next:   {click.style(branch, fg='cyan')}")
+        report.append(f"  - Based Off: {click.style(parent, fg='blue')}")
     else:
-        for prd in all_prds:
-            name = prd.stem
-            if name in completed_prds:
-                status = click.style("✅ DONE", fg="green")
-            elif name in started_prds:
-                status = click.style("⏳ IN_PROGRESS", fg="blue")
-            else:
-                status = click.style("⚪ PENDING", fg="white", dim=True)
-            report.append(f"  - {name:<40} {status}")
+        report.append("  - No pending implementation plans found.")
 
     # 8. Costs
     total_cost = get_total_cost()

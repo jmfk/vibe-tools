@@ -21,6 +21,13 @@ def display_branches_table():
         return
     
     branches = stdout.splitlines()
+
+    # Determine the next branch (first pending plan)
+    next_branch = None
+    for pid, pinfo in plans.items():
+        if pinfo.get("status") == "pending":
+            next_branch = pinfo.get("branch", f"feature/{pid}")
+            break
     
     console = Console()
     table = Table(title="Vibe Project Branches")
@@ -39,6 +46,10 @@ def display_branches_table():
         depends_on = "-"
         parent_branch = branch_lineage.get(branch, "-")
         merged = "-"
+
+        branch_display = branch
+        if branch == next_branch:
+            branch_display = f"[bold green]* {branch}[/bold green]"
 
         if branch == main_branch:
             table.add_row(f"[bold]{branch}[/bold]", "-", "-", "-", "-", "-")
@@ -68,13 +79,134 @@ def display_branches_table():
             deps = plan_info.get("depends_on", [])
             depends_on = ", ".join(deps) if deps else "-"
             
+            # Use parent_branch from plan if available
+            parent_branch = plan_info.get("parent_branch") or branch_lineage.get(branch, "-")
+            
             is_merged_into_main = is_merged(branch)
             merged = "[green]✅[/green]" if is_merged_into_main else "[red]❌[/red]"
             
-            table.add_row(branch, plan_id, status, depends_on, parent_branch, merged)
+            table.add_row(branch_display, plan_id, status, depends_on, parent_branch, merged)
         else:
             # Branch exists but not tied to a known vibe plan
-            table.add_row(branch, "-", "-", "-", parent_branch, "-")
+            table.add_row(branch_display, "-", "-", "-", parent_branch, "-")
 
     console.print(table)
+
+
+def set_branch_base(branch: str, base: str):
+    """Sets the base branch for a feature branch in state and plans."""
+    state = load_project_state()
+    
+    # Update branch_lineage
+    if "branch_lineage" not in state:
+        state["branch_lineage"] = {}
+    state["branch_lineage"][branch] = base
+    
+    # Update corresponding plan if it exists
+    plan_id = None
+    if branch.startswith("feature/"):
+        plan_id = branch.replace("feature/", "")
+    
+    if plan_id and plan_id in state.get("plans", {}):
+        state["plans"][plan_id]["parent_branch"] = base
+    elif branch in state.get("plans", {}):
+         state["plans"][branch]["parent_branch"] = base
+
+    from vibe_tools.utils import save_project_state
+    save_project_state(state)
+    click.echo(f"✅ Set base for {click.style(branch, fg='cyan')} to {click.style(base, fg='blue')}")
+
+
+def merge_branches(src: str, dst: str):
+    """Merges src branch into dst branch and updates lineage."""
+    from vibe_tools.utils import run_command, load_project_state, save_project_state
+    
+    click.echo(f"🔄 Merging {click.style(src, fg='cyan')} into {click.style(dst, fg='cyan')}...")
+    
+    # 1. Checkout dst
+    _, code = run_command(["git", "checkout", dst], check=False)
+    if code != 0:
+        click.echo(f"❌ Failed to checkout {dst}")
+        return
+    
+    # 2. Merge src
+    stdout, code = run_command(["git", "merge", src], check=False)
+    if code != 0:
+        click.echo(f"❌ Merge failed:\n{stdout}")
+        return
+    
+    # 3. Update state - dst now depends on or is based on src's parent or similar
+    # In this case, the user explicitly merged, so we record dst's parent as src
+    state = load_project_state()
+    if "branch_lineage" not in state:
+        state["branch_lineage"] = {}
+    state["branch_lineage"][dst] = src
+    
+    # Update plan if exists
+    plan_id = None
+    if dst.startswith("feature/"):
+        plan_id = dst.replace("feature/", "")
+    
+    if plan_id and plan_id in state.get("plans", {}):
+        state["plans"][plan_id]["parent_branch"] = src
+    elif dst in state.get("plans", {}):
+        state["plans"][dst]["parent_branch"] = src
+
+    save_project_state(state)
+    click.echo(f"✅ Successfully merged and updated lineage: {dst} -> {src}")
+
+
+def investigate_git_lineage():
+    """Heuristically reconstruct branch lineage from git history."""
+    from vibe_tools.utils import run_command, load_project_state, save_project_state, get_main_branch
+    
+    click.echo("🔍 Investigating git history to reconstruct lineage...")
+    
+    stdout, code = run_command(["git", "branch", "--format=%(refname:short)"], check=False)
+    if code != 0:
+        return
+    
+    branches = stdout.splitlines()
+    main_branch = get_main_branch()
+    state = load_project_state()
+    if "branch_lineage" not in state:
+        state["branch_lineage"] = {}
+    
+    for branch in branches:
+        if branch == main_branch:
+            continue
+            
+        # Find the merge base with all other branches to find the closest parent
+        best_parent = main_branch
+        best_base_date = 0
+        
+        for other in branches:
+            if other == branch:
+                continue
+            
+            # Get the merge base
+            base_sha, code = run_command(["git", "merge-base", branch, other], check=False)
+            if code == 0 and base_sha:
+                # Get the date of the merge base commit
+                date_str, _ = run_command(["git", "show", "-s", "--format=%ct", base_sha], check=False)
+                if date_str:
+                    date_val = int(date_str)
+                    if date_val > best_base_date:
+                        best_base_date = date_val
+                        best_parent = other
+        
+        state["branch_lineage"][branch] = best_parent
+        
+        # Sync with plans
+        plan_id = None
+        if branch.startswith("feature/"):
+            plan_id = branch.replace("feature/", "")
+        
+        if plan_id and plan_id in state.get("plans", {}):
+            state["plans"][plan_id]["parent_branch"] = best_parent
+        elif branch in state.get("plans", {}):
+            state["plans"][branch]["parent_branch"] = best_parent
+
+    save_project_state(state)
+    click.echo("✅ Reconstructed branch lineage from history.")
 
