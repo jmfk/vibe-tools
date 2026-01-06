@@ -60,7 +60,12 @@ class RalphLoop:
         self.stream = stream
         self.caffeinate = caffeinate
         self.instructions = []
-        self.branch_name = branch_name or f"vibe/{name.lower().replace(' ', '_')}"
+
+        config = load_config()
+        if config.get("ralph", {}).get("auto_merge", False):
+            self.branch_name = branch_name or get_automerge_branch(config)
+        else:
+            self.branch_name = branch_name or f"vibe/{name.lower().replace(' ', '_')}"
 
     def run(self) -> bool:
         """Executes the reconciliation loop."""
@@ -190,7 +195,10 @@ def generate_prd_plan() -> bool:
 
     for prd_path in prds:
         prd_id = prd_path.stem
-        branch_name = f"feature/{prd_id}"
+        if auto_merge:
+            branch_name = get_automerge_branch(config)
+        else:
+            branch_name = f"feature/{prd_id}"
 
         # Ensure it's in state["plans"]
         if prd_id not in state["plans"]:
@@ -652,6 +660,11 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 if automerge_branch == main_branch:
                     logger.warning(
                         f"⚠️  Automerge branch is set to '{main_branch}'. Skipping automated merge to protect main."
+                    )
+                    switch_to_main()
+                elif branch_name == automerge_branch:
+                    logger.info(
+                        f"✅ Already on automerge branch '{automerge_branch}'. Skipping redundant merge."
                     )
                     switch_to_main()
                 else:

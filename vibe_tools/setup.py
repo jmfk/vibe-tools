@@ -15,6 +15,7 @@ from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_dir,
     ensure_gitignore,
+    get_automerge_branch,
     get_google_api_key,
     get_main_branch,
     get_project_name,
@@ -583,9 +584,13 @@ def install_deps():
     if current_branch.strip() == main_branch:
         from vibe_tools.ralph import _switch_to_branch
 
-        _switch_to_branch(
-            "vibe/dependencies", agent="internal", project_name="dependencies"
-        )
+        config = load_config()
+        if config.get("ralph", {}).get("auto_merge", False):
+            target_branch = get_automerge_branch(config)
+        else:
+            target_branch = "vibe/dependencies"
+
+        _switch_to_branch(target_branch, agent="internal", project_name="dependencies")
 
     click.echo("\n--- Installing Dependencies ---")
 
