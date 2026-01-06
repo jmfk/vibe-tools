@@ -29,7 +29,11 @@ def test_discover_backend_test_cmd(tmp_path):
     (tester.backend_root / "tests").mkdir(parents=True)
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
-        assert tester.discover_backend_test_cmd() == ["pytest", "-v", str(tester.backend_root / "tests")]
+        assert tester.discover_backend_test_cmd() == [
+            "pytest",
+            "-v",
+            str(tester.backend_root / "tests"),
+        ]
 
 
 def test_discover_frontend_test_cmd(tmp_path):
@@ -94,12 +98,15 @@ def test_discover_frontend_lint_cmd(tmp_path):
 def test_run_tests_with_failures(tmp_path):
     tester = ProjectTester()
     tester.makefile = tmp_path / "Makefile"
-    tester.makefile.write_text("test-backend:\n\techo test\ntest-frontend:\n\techo test")
+    tester.makefile.write_text(
+        "test-backend:\n\techo test\ntest-frontend:\n\techo test"
+    )
 
     with patch("vibe_tools.testing.run_command") as mock_run:
         # One pass, one fail
         mock_run.side_effect = [("pass", 0), ("fail", 1)]
-        output, passed, env_failures = tester.run_tests()
+        output, passed, env_failures, failed_targets = tester.run_tests()
         assert not passed
         assert "TARGET: test-backend" in output
         assert "TARGET: test-frontend" in output
+        assert "test-frontend" in failed_targets
