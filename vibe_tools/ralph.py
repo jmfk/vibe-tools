@@ -302,7 +302,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     plans_to_run = state.get("plans", {})
 
     if not plans_to_run:
-        logger.info("ℹ️ No plans found in state.json. Falling back to direct PRD discovery.")
+        logger.info(
+            "ℹ️ No plans found in state.json. Falling back to direct PRD discovery."
+        )
         generate_prd_plan()
         state = load_project_state()
         plans_to_run = state.get("plans", {})
@@ -364,7 +366,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             plan_data = {}
 
         if is_direct_prd:
-            title = plan_info.get("title", plan_id.replace("prd_", "").replace("_", " ").title())
+            title = plan_info.get(
+                "title", plan_id.replace("prd_", "").replace("_", " ").title()
+            )
             description = plan_yaml_path.read_text()
 
             # Extract success criteria
@@ -388,7 +392,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             test_targets = ["test"]
         else:
             if not isinstance(plan_data, dict):
-                logger.error(f"Plan data in {plan_yaml_path} is not a dictionary. Skipping.")
+                logger.error(
+                    f"Plan data in {plan_yaml_path} is not a dictionary. Skipping."
+                )
                 continue
             title = plan_data.get("title", plan_id)
             description = plan_data.get("description", "")
@@ -403,155 +409,150 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         success = False
         for i in range(1, max_impl_iterations + 1):
             logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
-            # ... rest of the iteration logic ...
 
-                # 1. Implementation
+            # 1. Implementation
+            try:
+                prompt_template = get_prompt("implementation_prompt.txt")
+            except FileNotFoundError as e:
+                logger.error(f"Error: {e}")
+                return False
+
+            prompt = prompt_template.format(
+                title=title,
+                description=description,
+                success_criteria=chr(10).join(
+                    ["- " + str(c) for c in success_criteria]
+                ),
+            )
+            cmd = get_agent_command(agent, prompt)
+            output, code = run_agent(cmd, stream=stream)
+
+            if code != 0 or COMPLETION_PROMISE in output:
+                if code != 0:
+                    log_issue(
+                        "implement",
+                        i,
+                        max_impl_iterations,
+                        f"Agent failed with exit code {code}",
+                    )
+                else:
+                    log_issue(
+                        "implement",
+                        i,
+                        max_impl_iterations,
+                        "Agent did not provide completion promise",
+                    )
+                logger.warning(f"⏳ Implementation in progress for {plan_id}...")
+                continue
+
+            # 2. Quality Gates
+            logger.info("🧪 Running Quality Gates...")
+            passed_gates = True
+
+            if tests:
+                from vibe_tools.testing import ProjectTester
+
+                tester = ProjectTester()
+
+                be_targets = [t for t in test_targets if tester.is_backend_target(t)]
+                fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
+
+                # Run Backend Debug Loop
+                if be_targets:
+                    logger.info(
+                        f"🧬 Starting Backend Debug Loop for: {', '.join(be_targets)}"
+                    )
+                    if not debugging_loop(
+                        agent,
+                        be_targets,
+                        stream=stream,
+                        iterations=max_debug_iterations,
+                    ):
+                        passed_gates = False
+
+                # Run Frontend Debug Loop
+                if passed_gates and fe_targets:
+                    logger.info(
+                        f"🎨 Starting Frontend Debug Loop for: {', '.join(fe_targets)}"
+                    )
+                    if not debugging_loop(
+                        agent,
+                        fe_targets,
+                        stream=stream,
+                        iterations=max_debug_iterations,
+                    ):
+                        passed_gates = False
+
+            if passed_gates and review:
+                logger.info("🔎 Running Agentic Review...")
                 try:
-                    prompt_template = get_prompt("implementation_prompt.txt")
+                    review_prompt_template = get_prompt(
+                        "implementation_review_prompt.txt"
+                    )
                 except FileNotFoundError as e:
                     logger.error(f"Error: {e}")
                     return False
 
-                prompt = prompt_template.format(
+                review_prompt = review_prompt_template.format(
                     title=title,
                     description=description,
                     success_criteria=chr(10).join(
                         ["- " + str(c) for c in success_criteria]
                     ),
                 )
-                cmd = get_agent_command(agent, prompt)
-                output, code = run_agent(cmd, stream=stream)
-
-                if code != 0 or COMPLETION_PROMISE not in output:
-                    if code != 0:
-                        log_issue(
-                            "implement",
-                            i,
-                            max_impl_iterations,
-                            f"Agent failed with exit code {code}",
-                        )
-                    else:
-                        log_issue(
-                            "implement",
-                            i,
-                            max_impl_iterations,
-                            "Agent did not provide completion promise",
-                        )
-                    logger.warning(f"⏳ Implementation in progress for {plan_id}...")
-                    continue
-
-                # 2. Quality Gates
-                logger.info("🧪 Running Quality Gates...")
-                passed_gates = True
-
-                if tests:
-                    from vibe_tools.testing import ProjectTester
-
-                    tester = ProjectTester()
-
-                    be_targets = [
-                        t for t in test_targets if tester.is_backend_target(t)
-                    ]
-                    fe_targets = [
-                        t for t in test_targets if tester.is_frontend_target(t)
-                    ]
-
-                    # Run Backend Debug Loop
-                    if be_targets:
-                        logger.info(
-                            f"🧬 Starting Backend Debug Loop for: {', '.join(be_targets)}"
-                        )
-                        if not debugging_loop(
-                            agent,
-                            be_targets,
-                            stream=stream,
-                            iterations=max_debug_iterations,
-                        ):
-                            passed_gates = False
-
-                    # Run Frontend Debug Loop
-                    if passed_gates and fe_targets:
-                        logger.info(
-                            f"🎨 Starting Frontend Debug Loop for: {', '.join(fe_targets)}"
-                        )
-                        if not debugging_loop(
-                            agent,
-                            fe_targets,
-                            stream=stream,
-                            iterations=max_debug_iterations,
-                        ):
-                            passed_gates = False
-
-                if passed_gates and review:
-                    logger.info("🔎 Running Agentic Review...")
-                    try:
-                        review_prompt_template = get_prompt(
-                            "implementation_review_prompt.txt"
-                        )
-                    except FileNotFoundError as e:
-                        logger.error(f"Error: {e}")
-                        return False
-
-                    review_prompt = review_prompt_template.format(
-                        title=title,
-                        description=description,
-                        success_criteria=chr(10).join(
-                            ["- " + str(c) for c in success_criteria]
-                        ),
+                review_cmd = get_agent_command(agent, review_prompt)
+                review_output, _ = run_agent(review_cmd, stream=stream)
+                if "<review>PASSED</review>" not in review_output:
+                    log_issue(
+                        "implement_review",
+                        i,
+                        max_impl_iterations,
+                        "Agentic review failed",
                     )
-                    review_cmd = get_agent_command(agent, review_prompt)
-                    review_output, _ = run_agent(review_cmd, stream=stream)
-                    if "<review>PASSED</review>" not in review_output:
-                        log_issue(
-                            "implement_review",
-                            i,
-                            max_impl_iterations,
-                            "Agentic review failed",
-                        )
-                        logger.error("❌ Agentic review failed.")
-                        passed_gates = False
+                    logger.error("❌ Agentic review failed.")
+                    passed_gates = False
 
-                if passed_gates:
-                    success = True
-                    break
-                else:
-                    logger.info("🔄 Retrying implementation to fix quality issues...")
-
-            if success:
-                log_success("implement", f"Plan {plan_id} completed successfully.")
-                logger.info(f"✅ Plan {plan_id} completed successfully.")
-                # Commit changes
-                commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
-                commit_cmd = get_agent_command(agent, commit_prompt)
-                run_agent(commit_cmd, stream=stream)
-
-                # Update status in project-state.json
-                state = load_project_state()
-                if plan_id not in state["plans"]:
-                    state["plans"][plan_id] = {}
-                state["plans"][plan_id]["status"] = "completed"
-
-                # If it's a direct PRD, also mark it in completed_prds
-                if is_direct_prd:
-                    if plan_id not in state.get("completed_prds", []):
-                        state["completed_prds"].append(plan_id)
-
-                save_project_state(state)
-
-            # Update status in individual YAML (for backward compatibility/redundancy)
-            # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible).
-            # For PRDs we use state.json mostly.
-            if not is_direct_prd:
-                plan_data["status"] = "completed"
-                    plan_yaml_path.write_text(yaml.dump(plan_data))
-
-                # Switch back to main
-                _switch_to_main()
+            if passed_gates:
+                success = True
+                break
             else:
-                logger.error(
-                    f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."
-                )
-                return False
+                logger.info("🔄 Retrying implementation to fix quality issues...")
+
+        if success:
+            log_success("implement", f"Plan {plan_id} completed successfully.")
+            logger.info(f"✅ Plan {plan_id} completed successfully.")
+            # Commit changes
+            commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
+            commit_cmd = get_agent_command(agent, commit_prompt)
+            run_agent(commit_cmd, stream=stream)
+
+            # Update status in project-state.json
+            state = load_project_state()
+            if plan_id not in state["plans"]:
+                state["plans"][plan_id] = {}
+            state["plans"][plan_id]["status"] = "completed"
+
+            # If it's a direct PRD, also mark it in completed_prds
+            if is_direct_prd:
+                if plan_id not in state.get("completed_prds", []):
+                    state["completed_prds"].append(plan_id)
+
+            save_project_state(state)
+
+        # Update status in individual YAML (for backward compatibility/redundancy)
+        # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible).
+        # For PRDs we use state.json mostly.
+        if not is_direct_prd:
+            plan_data["status"] = "completed"
+            plan_yaml_path.write_text(yaml.dump(plan_data))
+
+            # Switch back to main
+            _switch_to_main()
+        elif not success:
+            logger.error(
+                f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."
+            )
+            return False
 
     return True
 
