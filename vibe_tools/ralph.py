@@ -25,6 +25,7 @@ from vibe_tools.utils import (
     get_main_branch,
     get_prompt,
     is_dirty,
+    load_config,
     load_project_state,
     log_issue,
     log_start,
@@ -261,7 +262,6 @@ def debugging_loop(
     agent: str, targets: List[str], stream: bool = False, iterations: int = 5
 ) -> bool:
     """Runs a set of test targets in a loop until they pass or max iterations reached."""
-    from vibe_tools.cli import load_config
     from vibe_tools.testing import ProjectTester
 
     tester = ProjectTester()
