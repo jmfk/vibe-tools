@@ -38,6 +38,7 @@ class OrderedGroup(click.Group):
             "kill",
             "test-fix",
             "coverage",
+            "branch",
             "branches",
             "branch-resolve",
             "init",
