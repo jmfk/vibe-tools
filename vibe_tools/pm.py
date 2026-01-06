@@ -23,6 +23,7 @@ from vibe_tools.utils import (
     get_prompt,
     load_project_state,
     logger,
+    reset_prd_state,
     run_agent,
 )
 
@@ -45,6 +46,8 @@ class PMCompleter:
                 "/add",
                 "/list",
                 "/ls",
+                "/implemented",
+                "/i",
                 "/ps",
                 "/kill",
                 "/exit",
@@ -279,6 +282,7 @@ class InteractivePM:
                 cmd = "/files"
             else:
                 cmd = "/focus"
+        elif cmd == "/i": cmd = "/implemented"
         elif cmd == "/a": cmd = "/add"
         elif cmd == "/switch": cmd = "/focus"
 
@@ -289,6 +293,8 @@ class InteractivePM:
                 click.echo("❌ Nothing to send. Type something first.")
             else:
                 self._dispatch_agent()
+        elif cmd == "/implemented":
+            self._handle_implemented_command()
         elif cmd == "/reset":
             self.pending_prompt = ""
             self.session_memory = ""
@@ -397,6 +403,7 @@ class InteractivePM:
         click.echo("  /focus, /f, /switch <name|idx> - Focus on a specific PRD (empty to clear)")
         click.echo("  /create <name>   - Create a new PRD file in specs/")
         click.echo("  /delete <name|idx> - Delete a PRD file from specs/")
+        click.echo("  /implemented, /i - List implemented PRDs (batched) and optionally reset them")
         click.echo("  /show [specs|file] - Display current specs or a specific file")
         click.echo("  /edit [path]     - Open file in code editor")
         click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
@@ -408,6 +415,70 @@ class InteractivePM:
         click.echo("  /help, /h        - Show this help message")
         click.echo("  /c               - Clear the shell prompt history")
         click.echo("  /exit, /q        - Exit the session")
+
+    def _handle_implemented_command(self):
+        state = load_project_state()
+        completed = state.get("completed_prds", [])
+
+        if not completed:
+            click.echo("No implemented PRDs found.")
+            return
+
+        # Sort reverse (last implemented first)
+        completed = list(reversed(completed))
+
+        batch_size = 10
+        current_idx = 0
+
+        while current_idx < len(completed):
+            batch = completed[current_idx : current_idx + batch_size]
+            click.echo(
+                click.style(
+                    f"\n--- Implemented PRDs (Batch {current_idx // batch_size + 1}) ---",
+                    fg="green",
+                    bold=True,
+                )
+            )
+            for i, prd_name in enumerate(batch, 1):
+                click.echo(f"  {i}. {prd_name}")
+
+            click.echo("-" * 40)
+            options = ["q"]
+            prompt_parts = ["[q]uit"]
+
+            if current_idx + batch_size < len(completed):
+                options.append("n")
+                prompt_parts.append("[n]ext batch")
+
+            # Add number options
+            num_options = [str(i) for i in range(1, len(batch) + 1)]
+            options.extend(num_options)
+            prompt_parts.append("[1-10] to reset")
+
+            prompt_text = f"Select an option ({', '.join(prompt_parts)})"
+            
+            # Use click.prompt which handles input validation
+            choice = click.prompt(prompt_text, type=click.Choice(options), default="q", show_choices=False)
+
+            if choice == "q":
+                break
+            elif choice == "n":
+                current_idx += batch_size
+            elif choice in num_options:
+                selected_prd = batch[int(choice) - 1]
+                if click.confirm(f"Are you sure you want to reset '{selected_prd}'?", default=False):
+                    messages = reset_prd_state(selected_prd)
+                    for msg in messages:
+                        click.echo(f"✅ {msg}")
+                    # Update completed list for display
+                    completed.remove(selected_prd)
+                    if not completed:
+                        click.echo("No more implemented PRDs.")
+                        break
+                else:
+                    click.echo("Reset cancelled.")
+        
+        click.echo("Done.")
 
     def _handle_conf_command(self, target, editor):
         if not target or target not in ["md", "code"]:

@@ -918,6 +918,58 @@ def collect_prd_files():
     return sorted(list(PRD_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
 
 
+def reset_prd_state(project_name: str) -> List[str]:
+    """
+    Resets the state of a PRD and deletes its branch.
+    Returns a list of messages describing the actions taken.
+    """
+    messages = []
+    state = load_project_state()
+    state_changed = False
+
+    # 1. Clear active task
+    active_task = state.get("active_task")
+    if active_task and active_task.get("prd_name") == project_name:
+        state["active_task"] = None
+        state_changed = True
+        messages.append(f"Cleared active task for {project_name}.")
+
+    # 2. Remove from completed_prds
+    if project_name in state.get("completed_prds", []):
+        state["completed_prds"].remove(project_name)
+        state_changed = True
+        messages.append(f"Removed {project_name} from completed PRDs.")
+
+    # 3. Remove from started_prds
+    if project_name in state.get("started_prds", []):
+        state["started_prds"].remove(project_name)
+        state_changed = True
+        messages.append(f"Removed {project_name} from started PRDs.")
+
+    if state_changed:
+        save_project_state(state)
+
+    # 4. Handle git branch
+    branch_name = f"feature/{project_name}"
+    _, check_branch = run_command(
+        ["git", "rev-parse", "--verify", branch_name], check=False
+    )
+    if check_branch == 0:
+        stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
+        if stdout.strip() == branch_name:
+            main_branch = get_main_branch()
+            run_command(["git", "checkout", main_branch], check=False)
+            messages.append(f"Switched from {branch_name} to {main_branch}.")
+
+        _, code = run_command(["git", "branch", "-D", branch_name], check=False)
+        if code == 0:
+            messages.append(f"Deleted branch {branch_name}.")
+        else:
+            messages.append(f"Failed to delete branch {branch_name}.")
+
+    return messages
+
+
 def get_instructions_context():
     """Reads all files in INSTRUCTIONS_DIR and returns them as a formatted string."""
     if not INSTRUCTIONS_DIR.exists():

@@ -32,10 +32,12 @@ class OrderedGroup(click.Group):
             "remember",
             "monitor",
             "rerun",
+            "implemented",
             "ps",
             "kill",
             "test-fix",
             "coverage",
+            "branches",
             "init",
             # Deprecated
             "ralph",
@@ -77,6 +79,7 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     check_dependencies,
     cleanup_stale_processes,
+    collect_prd_files,
     enable_console_debug,
     ensure_dir,
     ensure_gitignore,
@@ -88,6 +91,7 @@ from vibe_tools.utils import (
     get_prompt,
     load_config,
     load_project_state,
+    reset_prd_state,
     run_agent,
     run_command,
     save_project_state,
@@ -1154,60 +1158,89 @@ def rerun(prd_id):
         return
 
     project_name = prd_file.stem
-    branch_name = f"feature/{project_name}"
-
     click.echo(f"Rerunning PRD: {project_name}")
 
-    # 1. Clear saved state if it matches this PRD or is in completed_prds
-    state = load_project_state()
-    state_changed = False
-
-    # Check active task
-    active_task = state.get("active_task")
-    if active_task and active_task.get("prd_name") == project_name:
-        state["active_task"] = None
-        state_changed = True
-        click.echo("✅ Cleared saved active task state.")
-
-    # Check completed prds
-    if project_name in state.get("completed_prds", []):
-        state["completed_prds"].remove(project_name)
-        state_changed = True
-        click.echo("✅ Removed from completed PRDs list.")
-
-    # Check started prds
-    if project_name in state.get("started_prds", []):
-        state["started_prds"].remove(project_name)
-        state_changed = True
-        click.echo("✅ Removed from started PRDs list.")
-
-    if state_changed:
-        save_project_state(state)
-
-    # 2. Delete the branch if it exists
-    _, check_branch = run_command(
-        ["git", "rev-parse", "--verify", branch_name], check=False
-    )
-    if check_branch == 0:
-        # Check if we are currently on that branch
-        stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
-        if stdout.strip() == branch_name:
-            main_branch = get_main_branch()
-            click.echo(
-                f"Currently on branch {branch_name}. Switching to {main_branch}..."
-            )
-            run_command(["git", "checkout", main_branch])
-
-        # Delete branch
-        _, code = run_command(["git", "branch", "-D", branch_name], check=False)
-        if code == 0:
-            click.echo(f"✅ Deleted branch {branch_name}.")
-        else:
-            click.echo(f"❌ Failed to delete branch {branch_name}.")
-    else:
-        click.echo(f"Branch {branch_name} does not exist. Nothing to delete.")
+    messages = reset_prd_state(project_name)
+    for msg in messages:
+        click.echo(f"✅ {msg}")
 
     click.echo(f"\nReady to rerun: {project_name} state has been reset.")
+
+
+@cli.command()
+def implemented():
+    """List implemented PRDs (batched) and optionally reset them."""
+    state = load_project_state()
+    completed = state.get("completed_prds", [])
+
+    if not completed:
+        click.echo("No implemented PRDs found.")
+        return
+
+    # Sort reverse (last implemented first)
+    completed = list(reversed(completed))
+
+    batch_size = 10
+    current_idx = 0
+
+    while current_idx < len(completed):
+        batch = completed[current_idx : current_idx + batch_size]
+        click.echo(
+            click.style(
+                f"\n--- Implemented PRDs (Batch {current_idx // batch_size + 1}) ---",
+                fg="green",
+                bold=True,
+            )
+        )
+        for i, prd_name in enumerate(batch, 1):
+            click.echo(f"  {i}. {prd_name}")
+
+        click.echo("-" * 40)
+        options = ["q"]
+        prompt_parts = ["[q]uit"]
+
+        if current_idx + batch_size < len(completed):
+            options.append("n")
+            prompt_parts.append("[n]ext batch")
+
+        # Add number options
+        num_options = [str(i) for i in range(1, len(batch) + 1)]
+        options.extend(num_options)
+        prompt_parts.append("[1-10] to reset")
+
+        prompt_text = f"Select an option ({', '.join(prompt_parts)})"
+        choice = click.prompt(prompt_text, type=click.Choice(options), default="q")
+
+        if choice == "q":
+            break
+        elif choice == "n":
+            current_idx += batch_size
+        elif choice in num_options:
+            selected_prd = batch[int(choice) - 1]
+            if click.confirm(
+                f"Are you sure you want to reset '{selected_prd}'?", default=False
+            ):
+                messages = reset_prd_state(selected_prd)
+                for msg in messages:
+                    click.echo(f"✅ {msg}")
+                # Update completed list for display
+                completed.remove(selected_prd)
+                if not completed:
+                    click.echo("No more implemented PRDs.")
+                    break
+            else:
+                click.echo("Reset cancelled.")
+
+    click.echo("Done.")
+
+
+@cli.command()
+@click.pass_context
+def branches(ctx):
+    """List all local branches and their dependencies."""
+    from vibe_tools.branches import display_branches_table
+
+    display_branches_table()
 
 
 @cli.command()
