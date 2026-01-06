@@ -856,9 +856,10 @@ def switch_to_main():
                 check=False,
             )
         else:
-            logger.warning(
-                f"Uncommitted changes detected on '{main_branch}'. Please commit or stash them manually."
+            logger.error(
+                f"Uncommitted changes detected on '{main_branch}'. Refusing to auto-commit to main branch to keep it clean."
             )
+            return
 
     logger.debug(f"Switching to {main_branch}...")
     stdout, code = run_command(["git", "checkout", main_branch], check=False)
@@ -991,6 +992,14 @@ def reset_prd_state(project_name: str) -> List[str]:
 
     # 4. Handle git branch
     branch_name = f"feature/{project_name}"
+
+    # Do not delete the automerge branch
+    config = load_config()
+    automerge_branch = get_automerge_branch(config)
+    if branch_name == automerge_branch:
+        messages.append(f"Skipping deletion of automerge branch {branch_name}.")
+        return messages
+
     _, check_branch = run_command(
         ["git", "rev-parse", "--verify", branch_name], check=False
     )
