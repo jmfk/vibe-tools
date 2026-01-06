@@ -1,4 +1,4 @@
-.PHONY: help install batch monitor docker-build docker-run clean test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra cleanup git-reset
+.PHONY: help install batch monitor docker-build docker-run clean test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra cleanup git-reset reconcile
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  make test-fix     - Run the test fix loop (run_test_fix_loop.py)"
 	@echo "  make coverage     - Run tests and show coverage report"
 	@echo "  make coverage-loop - Run the automatic coverage improvement loop"
+	@echo "  make reconcile    - Reconcile LLM costs between usage.csv and Cursor export"
 	@echo "  make lint-backend - Run backend linting and type checking"
 	@echo "  make frontend-install - Install Frontend dependencies"
 	@echo "  make frontend-build   - Build Frontend for production"
@@ -111,3 +112,6 @@ cleanup:
 git-reset:
 	git fetch origin
 	git reset --hard origin/main
+
+reconcile:
+	@python3 vibe_tools/reconcile.py stats/usage.csv stats/usage-events-2026-01-06.csv
