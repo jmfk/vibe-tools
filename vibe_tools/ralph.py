@@ -59,6 +59,10 @@ class RalphLoop:
 
     def run(self) -> bool:
         """Executes the reconciliation loop."""
+        log_start(
+            self.name,
+            f"Reconciling {self.desired_file.name} vs {self.current_file.name}",
+        )
         logger.info(f"🔄 Starting {self.name} Loop...")
 
         if not self.desired_file.exists():
@@ -111,15 +115,18 @@ class RalphLoop:
         output, code = run_agent(cmd, caffeinate=self.caffeinate, stream=self.stream)
 
         if code == 0 and COMPLETION_PROMISE in output:
+            log_success(self.name, "Reconciliation successful.")
             logger.info(f"✅ {self.name} reconciliation successful.")
             return True
         else:
+            log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
             logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
             return False
 
 
 def run_planner_agent(agent: str, stream: bool = False) -> bool:
     """Runs the Planner Agent to generate Markdown plans and project-plan.yaml index."""
+    log_start("planner", "Generating implementation plans")
     # Reset plans in project-state.json
     state = load_project_state()
     state["plans"] = {}
@@ -172,7 +179,14 @@ INSTRUCTIONS:
         # Step 2: Normalize the generated plans
         from vibe_tools.normalize import normalize_plans
 
-        return normalize_plans(agent, stream=stream)
+        success = normalize_plans(agent, stream=stream)
+        if success:
+            log_success("planner", "Plans generated and normalized successfully.")
+        else:
+            log_issue("planner", 1, 1, "Normalization of plans failed.")
+        return success
+
+    log_issue("planner", 1, 1, "Planner agent failed to complete.")
     return False
 
 
