@@ -78,6 +78,18 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
     for spec_path in files_to_process:
         stem = spec_path.stem
 
+        # Clean the stem by stripping ANY leading 'prd' markers (repeatedly if needed)
+        # and replacing dashes/spaces with underscores.
+        clean_stem = stem.lower()
+        while True:
+            new_stem = re.sub(r"^prd[-_ ]?", "", clean_stem)
+            if new_stem == clean_stem:
+                break
+            clean_stem = new_stem
+        
+        # Replace remaining dashes/spaces with underscores for consistency
+        clean_stem = re.sub(r"[- ]", "_", clean_stem)
+
         # Determine target PRD directory (preserving subdirectories)
         rel_dir = spec_path.parent.relative_to(specs_dir)
         target_prd_dir = PRD_DIR / rel_dir
@@ -86,20 +98,14 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
         # Determine output filename with normalized prefix and format
         # 1. Special case for shared global context files ("global truths")
         global_truths = ["architecture", "project_overview", "infrastructure", "cicd", "testing"]
-        if stem.lower() in global_truths:
-            output_filename = f"{stem.lower()}.yaml"
-            # Global truths go to the project directory, not prds/
-            output_path = VIBE_PROJECT_DIR / output_filename
+        if clean_stem in global_truths:
+            output_filename = f"{clean_stem}.yaml"
+            # Global truths now go to the PRD directory (prds/)
+            output_path = PRD_DIR / output_filename
         else:
             # 2. Handle PRD prefixes and format
-            # Strip case-insensitive "prd" or "PRD" prefix if followed by -, _, or space
-            normalized_stem = re.sub(r"^(prd|PRD)[-_ ]?", "", stem)
-
-            # Replace remaining dashes with underscores for consistency
-            normalized_stem = normalized_stem.replace("-", "_")
-
             # Ensure it starts with prd_
-            output_filename = f"prd_{normalized_stem.lower()}.yaml"
+            output_filename = f"prd_{clean_stem}.yaml"
             output_path = target_prd_dir / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD

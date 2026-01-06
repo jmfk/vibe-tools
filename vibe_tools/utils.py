@@ -28,17 +28,17 @@ CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
-ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
+ARCHITECTURE = PRD_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
 ARCHITECTURE_SPEC = pathlib.Path("specs/architecture.md")
-OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
-INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
+OVERVIEW = PRD_DIR / "project_overview.yaml"
+INFRA = PRD_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
 INFRA_SPEC = pathlib.Path("specs/infrastructure.md")
-CICD = VIBE_PROJECT_DIR / "cicd.yaml"
+CICD = PRD_DIR / "cicd.yaml"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
 CICD_SPEC = pathlib.Path("specs/cicd.md")
-TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
+TESTING_CONFIG = PRD_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
 TESTING_SPEC = pathlib.Path("specs/testing.md")
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
