@@ -357,12 +357,12 @@ You may need to stash changes, commit them, reset the branch, or merge.
 Ensure the end state is that we are on branch '{branch_name}' and ready to work.
 """,
     "discovery_prompt.txt": """Analyze the current codebase and generate the following four files:
-1. '{architecture_current}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites.
+1. '{architecture_current}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites (including test entry points like pytest or npm test).
 2. '{infra_current}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.
 3. '{architecture_spec}': Markdown specification of the DESIRED architecture, based on the codebase but cleaned up for a specification.
 4. '{infra_spec}': Markdown specification of the DESIRED infrastructure.
 
-The '-current.yaml' files must describe what is CURRENTLY implemented.
+The '-current.yaml' files must describe what is CURRENTLY implemented. Pay special attention to identifying how tests are currently run for both frontend and backend.
 The '.md' files in 'specs/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
 
 ACTUAL CODEBASE:
