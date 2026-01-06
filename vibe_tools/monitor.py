@@ -1,10 +1,9 @@
 import datetime
-import pathlib
 import sys
 import time
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.utils import get_agent_command, run_agent, run_command, get_prompt
+from vibe_tools.utils import get_agent_command, get_prompt, run_agent, run_command
 
 
 def get_status_report(agent, interval, cost_logger=None, stream=False):

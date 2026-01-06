@@ -1,9 +1,7 @@
-import os
 import pathlib
 import subprocess
-import sys
 import tempfile
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional
 
 import click
 
@@ -13,19 +11,19 @@ except ImportError:
     readline = None  # type: ignore
 
 from vibe_tools.utils import (
-    ARCHITECTURE_SPEC,
-    INFRA_SPEC,
-    ensure_dir,
-    get_agent_command,
-    run_agent,
-    logger,
-    get_prompt,
     ARCH_CONFIG_FILE,
     ARCH_SESSION_FILE,
-    get_instructions_context,
+    ARCHITECTURE_SPEC,
+    INFRA_SPEC,
     VIBE_PROJECT_DIR,
-    get_agent_processes,
     cleanup_stale_processes,
+    ensure_dir,
+    get_agent_command,
+    get_agent_processes,
+    get_instructions_context,
+    get_prompt,
+    logger,
+    run_agent,
 )
 
 
@@ -130,9 +128,9 @@ class InteractiveArchitect:
             else:
                 # GNU Readline
                 readline.parse_and_bind("tab: menu-complete")
-                readline.parse_and_bind('"\e[Z": menu-complete-backward')
+                readline.parse_and_bind(r'"\e[Z": menu-complete-backward')
                 # Bind Escape to clear line
-                readline.parse_and_bind('"\e": kill-whole-line')
+                readline.parse_and_bind(r'"\e": kill-whole-line')
 
             # Setup history file
             history_file = VIBE_PROJECT_DIR / ".architect_history"
@@ -742,7 +740,7 @@ class InteractiveArchitect:
                 options.append("c")
                 prompt_parts.append("[c]ode editor")
 
-            prompt_text = f"🚀 Open in " + ", ".join(prompt_parts) + "?"
+            prompt_text = "🚀 Open in " + ", ".join(prompt_parts) + "?"
 
             # Decide default based on detection
             default_choice = "n"

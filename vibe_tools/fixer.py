@@ -6,12 +6,12 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
 from vibe_tools.utils import (
     get_agent_command,
-    logger,
-    run_agent,
     get_prompt,
     log_issue,
     log_start,
     log_success,
+    logger,
+    run_agent,
 )
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")

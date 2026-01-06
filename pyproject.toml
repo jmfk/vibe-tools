@@ -12,24 +12,18 @@ dependencies = [
     "gspread",
     "google-auth",
     "google-auth-oauthlib",
-    "fastapi",
-    "uvicorn",
-    "tortoise-orm",
-    "aerich",
-    "pydantic[email]",
-    "httpx",
+    "python-dotenv",
+    "rich",
+    "PyYAML",
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
     "ruff",
     "mypy",
-    "python-dotenv",
-    "rich",
-    "PyYAML",
 ]
 
 [tool.setuptools]
-packages = ["vibe_tools", "backend"]
+packages = ["vibe_tools"]
 
 [project.scripts]
 vibe = "vibe_tools.cli:cli"
@@ -55,7 +49,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"backend/tests/*" = ["E501"]
+"tests/*" = ["E501"]
 "vibe_tools/*" = ["E501"] # Some long f-strings are better kept on one line for readability in CLI
 
 [tool.mypy]

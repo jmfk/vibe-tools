@@ -1,9 +1,8 @@
-import pathlib
 import sys
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.utils import get_agent_command, logger, run_agent, run_command, get_prompt
+from vibe_tools.utils import get_agent_command, get_prompt, logger, run_agent, run_command
 
 MAX_ITERATIONS = 5
 COMPLETION_PROMISE = "<promise>DONE</promise>"

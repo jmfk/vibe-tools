@@ -9,7 +9,7 @@ from vibe_tools.utils import get_changed_files, logger, run_command
 class ProjectTester:
     __test__ = False
 
-    def __init__(self, backend_root="backend", frontend_root="frontend"):
+    def __init__(self, backend_root=".", frontend_root="frontend"):
         self.backend_root = pathlib.Path(backend_root)
         self.frontend_root = pathlib.Path(frontend_root)
         self.makefile = pathlib.Path("Makefile")
@@ -30,8 +30,8 @@ class ProjectTester:
         if self.has_make_target("test"):
             return ["make", "test"]
 
-        # If backend/tests does not exist, skip testing
-        backend_tests = self.backend_root / "tests"
+        # If tests directory does not exist, skip testing
+        backend_tests = pathlib.Path("tests")
         if not backend_tests.exists():
             return None
 
@@ -84,13 +84,13 @@ class ProjectTester:
 
         if component == "infra":
             # Coverage for the tools themselves
-            return ["pytest", "--cov=vibe_tools", "--cov-report=term-missing", "backend/tests/"]
+            return ["pytest", "--cov=vibe_tools", "--cov-report=term-missing", "tests/"]
 
         if component == "backend" or component is None:
             if self.has_make_target("coverage"):
                 return ["make", "coverage"]
             if self.backend_root.exists():
-                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", f"{self.backend_root}/tests/"]
+                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
 
         return None
 
@@ -150,7 +150,7 @@ class ProjectTester:
                     "sh: ": "Shell command error.",
                     "pyenv: ": "Pyenv environment error.",
                 }
-                
+
                 detected_reason = None
                 for indicator, reason in tool_missing_indicators.items():
                     if indicator in lower_output:
@@ -194,9 +194,9 @@ class ProjectTester:
     def _filter_targets_by_changes(self, targets, changed_files):
         """Filters targets based on which files have changed."""
         filtered = []
-        
+
         has_backend_changes = any(
-            f.startswith("backend/") or f.startswith("vibe_tools/") or f == "pyproject.toml" or f == "Makefile"
+            f.startswith("vibe_tools/") or f == "pyproject.toml" or f == "Makefile" or f.startswith("tests/")
             for f in changed_files
         )
         has_frontend_changes = any(
@@ -216,7 +216,7 @@ class ProjectTester:
             else:
                 # If we don't know, play it safe and include it
                 filtered.append(target)
-                
+
         return filtered
 
     def get_coverage_report(self, component=None, caffeinate=False):
@@ -234,7 +234,7 @@ class ProjectTester:
         if not match:
             # Fallback for vitest table format if it's different
             match = re.search(r"All files\s+.*?\s+(\d+)\s+", output)
-            
+
         if match:
             total_cov = int(match.group(1))
         else:

@@ -1,9 +1,10 @@
 import json
-import pathlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 from click.testing import CliRunner
-from vibe_tools.setup import setup_cli, check_connection
+
+from vibe_tools.setup import check_connection, setup_cli
 
 SERVICE_TEST_DETECTIONS = {
     "postgres": {"host": "127.0.0.1", "port": 15432, "container_name": "postgres-docker"},
@@ -50,12 +51,12 @@ def test_check_connection_failure():
 def test_setup_test_command(runner, mock_config, monkeypatch, tmp_path):
     monkeypatch.setattr("vibe_tools.utils.CONFIG_FILE", mock_config)
     monkeypatch.setattr("vibe_tools.utils.GLOBAL_CONFIG_FILE", tmp_path / "global_config.json")
-    
+
     with patch("vibe_tools.setup.check_connection") as mock_check:
         mock_check.side_effect = [True, False] # postgres ok, redis fails
-        
+
         result = runner.invoke(setup_cli, ["test"])
-        
+
         assert result.exit_code == 0
         assert "PostgreSQL" in result.output
         assert "✅ Connected" in result.output
