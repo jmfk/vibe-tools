@@ -227,6 +227,68 @@ def generate_prd_plan() -> bool:
     return True
 
 
+def debugging_loop(
+    agent: str, targets: List[str], stream: bool = False, iterations: int = 5
+) -> bool:
+    """Runs a set of test targets in a loop until they pass or max iterations reached."""
+    from vibe_tools.testing import ProjectTester
+    from vibe_tools.cost import CostLogger
+    from vibe_tools.cli import load_config
+
+    tester = ProjectTester()
+    config = load_config()
+    cost_logger = CostLogger(config)
+
+    for i in range(1, iterations + 1):
+        logger.info(
+            f"🧪 [DEBUG LOOP] Running targets: {', '.join(targets)} (Iteration {i}/{iterations})"
+        )
+
+        test_output, tests_passed, env_failures = tester.run_tests(
+            targets=targets, parallel=False
+        )
+
+        if tests_passed:
+            logger.info(f"✅ Targets {', '.join(targets)} passed!")
+            return True
+
+        logger.warning(f"❌ Targets failed. Asking {agent} to fix...")
+
+        try:
+            prompt_template = get_prompt("test_fix_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
+            return False
+
+        prompt = prompt_template.format(test_output=test_output)
+        cmd = get_agent_command(agent, prompt)
+        agent_output, _ = run_agent(cmd, stream=stream)
+
+        # Log costs
+        from vibe_tools.cost import AGENT_DEFAULT_MODEL
+
+        cost_logger.log_run(
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+            prompt=prompt,
+            output=agent_output,
+            prd_name="N/A",
+            iteration=i,
+            phase="debug_loop",
+            purpose=f"fixing_{'_'.join(targets)}",
+        )
+
+        if COMPLETION_PROMISE not in agent_output:
+            logger.warning(
+                "⏳ Agent did not signal completion with <promise>DONE</promise>. Continuing loop..."
+            )
+
+    logger.error(
+        f"❌ Failed to fix {', '.join(targets)} after {iterations} iterations."
+    )
+    return False
+
+
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Executes the implementation phase based on granular YAML plans or direct PRDs."""
     plans_from_prds = False
@@ -392,13 +454,32 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 passed_gates = True
 
                 if tests:
-                    for target in test_targets:
-                        logger.info(f"Running test target: {target}")
-                        _, test_code = run_command(["make", target], check=False)
-                        if test_code != 0:
-                            logger.error(f"❌ Test target {target} failed.")
+                    from vibe_tools.testing import ProjectTester
+
+                    tester = ProjectTester()
+
+                    be_targets = [
+                        t for t in test_targets if tester.is_backend_target(t)
+                    ]
+                    fe_targets = [
+                        t for t in test_targets if tester.is_frontend_target(t)
+                    ]
+
+                    # Run Backend Debug Loop
+                    if be_targets:
+                        logger.info(
+                            f"🧬 Starting Backend Debug Loop for: {', '.join(be_targets)}"
+                        )
+                        if not debugging_loop(agent, be_targets, stream=stream):
                             passed_gates = False
-                            break
+
+                    # Run Frontend Debug Loop
+                    if passed_gates and fe_targets:
+                        logger.info(
+                            f"🎨 Starting Frontend Debug Loop for: {', '.join(fe_targets)}"
+                        )
+                        if not debugging_loop(agent, fe_targets, stream=stream):
+                            passed_gates = False
 
                 if passed_gates and review:
                     logger.info("🔎 Running Agentic Review...")
