@@ -13,7 +13,6 @@ from vibe_tools.utils import (
     ARCHITECTURE,
     ARCHITECTURE_SPEC,
     CICD_SPEC,
-    COMPILED_PLANS_DIR,
     INFRA_SPEC,
     PRD_DIR,
     TESTING_SPEC,
@@ -136,71 +135,6 @@ class RalphLoop:
             log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
             logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
             return False
-
-
-def run_planner_agent(agent: str, stream: bool = False) -> bool:
-    """Runs the Planner Agent to generate Markdown plans and update state.json."""
-    log_start("planner", "Generating implementation plans")
-    # Reset plans in project-state.json
-    state = load_project_state()
-    state["plans"] = {}
-    save_project_state(state)
-
-    architecture = ARCHITECTURE.read_text() if ARCHITECTURE.exists() else "NOT FOUND"
-
-    # Read specs from specs/ as the primary source of truth
-    specs_content = ""
-    from vibe_tools.utils import SPECS_DIR
-
-    if SPECS_DIR.exists():
-        for spec_file in sorted(SPECS_DIR.rglob("*.md")):
-            specs_content += f"\n\n--- FILE: {spec_file} ---\n{spec_file.read_text()}\n--- END FILE: {spec_file} ---"
-    else:
-        specs_content = "No specs/ directory found."
-
-    try:
-        prompt_base = get_prompt("planner_prompt.txt")
-    except FileNotFoundError as e:
-        logger.error(f"Error: {e}")
-        return False
-
-    prompt = f"""{prompt_base}
-
-ARCHITECTURE:
-{architecture}
-
-SPECS (Primary Requirements):
-{specs_content}
-
-INSTRUCTIONS:
-1. Review the architecture and the provided specs.
-2. Create detailed implementation plans for each feature/change.
-3. Write each plan as a separate Markdown file in 'project/plans/'.
-4. Each plan must follow the structure:
-   - # Plan: [Title]
-   - ID: [unique_slug]
-   - Status: pending
-   - Description: ...
-   - Success Criteria:
-     - [ ] ...
-   - Dependencies: [list of plan IDs]
-"""
-    cmd = get_agent_command(agent, prompt)
-    output, code = run_agent(cmd, stream=stream)
-
-    if code == 0 and COMPLETION_PROMISE in output:
-        # Step 2: Normalize the generated plans
-        from vibe_tools.normalize import normalize_plans
-
-        success = normalize_plans(agent, stream=stream)
-        if success:
-            log_success("planner", "Plans generated and normalized successfully.")
-        else:
-            log_issue("planner", 1, 1, "Normalization of plans failed.")
-        return success
-
-    log_issue("planner", 1, 1, "Planner agent failed to complete.")
-    return False
 
 
 def generate_prd_plan() -> bool:
@@ -327,8 +261,6 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     logger.info("📍 Starting Implementation Phase")
 
     for plan_id, plan_info in plans_to_run.items():
-        is_direct_prd = plan_info.get("is_direct_prd", False)
-
         # Check plan-level status and dependencies
         if plan_info.get("status") == "completed":
             continue
@@ -344,9 +276,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         if not plan_file_str:
             # If path missing, try fallback to PRD_DIR
             plan_file_path = PRD_DIR / f"{plan_id}.yaml"
-            if plan_file_path.is_file():
-                is_direct_prd = True
-            else:
+            if not plan_file_path.is_file():
                 logger.error(
                     f"Plan {plan_id} has no file path and fallback {plan_file_path} not found. Skipping."
                 )
@@ -358,17 +288,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 fallback_path = PRD_DIR / f"{plan_id}.yaml"
                 if fallback_path.is_file():
                     plan_file_path = fallback_path
-                    is_direct_prd = True
                 else:
                     logger.error(
                         f"Plan file {plan_file_path} not found and no fallback in {PRD_DIR}. Skipping."
                     )
                     continue
 
-        if is_direct_prd:
-            plan_yaml_path = plan_file_path
-        else:
-            plan_yaml_path = COMPILED_PLANS_DIR / (plan_file_path.stem + ".yaml")
+        plan_yaml_path = plan_file_path
 
         if not plan_yaml_path.is_file():
             logger.error(
@@ -385,41 +311,30 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         if plan_data is None:
             plan_data = {}
 
-        if is_direct_prd:
-            title = plan_info.get(
-                "title", plan_id.replace("prd_", "").replace("_", " ").title()
-            )
-            description = plan_yaml_path.read_text()
+        title = plan_info.get(
+            "title", plan_id.replace("prd_", "").replace("_", " ").title()
+        )
+        description = plan_yaml_path.read_text()
 
-            # Extract success criteria
-            capabilities = plan_data.get("CAPABILITIES", {})
-            success_criteria = []
+        # Extract success criteria
+        capabilities = plan_data.get("CAPABILITIES", {})
+        success_criteria = []
 
-            if isinstance(capabilities, dict):
-                if isinstance(capabilities.get("interaction_mechanisms"), list):
-                    success_criteria.extend(capabilities["interaction_mechanisms"])
-                if isinstance(capabilities.get("patterns"), list):
-                    success_criteria.extend(capabilities["patterns"])
-                if isinstance(capabilities.get("routing"), list):
-                    success_criteria.extend(capabilities["routing"])
-            elif isinstance(capabilities, list):
-                success_criteria.extend(capabilities)
-            elif isinstance(capabilities, str):
-                success_criteria.append(capabilities)
+        if isinstance(capabilities, dict):
+            if isinstance(capabilities.get("interaction_mechanisms"), list):
+                success_criteria.extend(capabilities["interaction_mechanisms"])
+            if isinstance(capabilities.get("patterns"), list):
+                success_criteria.extend(capabilities["patterns"])
+            if isinstance(capabilities.get("routing"), list):
+                success_criteria.extend(capabilities["routing"])
+        elif isinstance(capabilities, list):
+            success_criteria.extend(capabilities)
+        elif isinstance(capabilities, str):
+            success_criteria.append(capabilities)
 
-            if not success_criteria:
-                success_criteria = ["Implement all capabilities defined in the PRD."]
-            test_targets = ["test"]
-        else:
-            if not isinstance(plan_data, dict):
-                logger.error(
-                    f"Plan data in {plan_yaml_path} is not a dictionary. Skipping."
-                )
-                continue
-            title = plan_data.get("title", plan_id)
-            description = plan_data.get("description", "")
-            success_criteria = plan_data.get("success_criteria", [])
-            test_targets = plan_data.get("test_targets", ["test"])
+        if not success_criteria:
+            success_criteria = ["Implement all capabilities defined in the PRD."]
+        test_targets = ["test"]
 
         logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
         log_start("implement", f"Plan: {title} ({plan_id})")
@@ -552,23 +467,15 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 state["plans"][plan_id] = {}
             state["plans"][plan_id]["status"] = "completed"
 
-            # If it's a direct PRD, also mark it in completed_prds
-            if is_direct_prd:
-                if plan_id not in state.get("completed_prds", []):
-                    state["completed_prds"].append(plan_id)
+            # Mark in completed_prds
+            if plan_id not in state.get("completed_prds", []):
+                state["completed_prds"].append(plan_id)
 
             save_project_state(state)
 
-        # Update status in individual YAML (for backward compatibility/redundancy)
-        # Only if it's not a direct PRD (we don't want to modify the source PRD YAML if possible).
-        # For PRDs we use state.json mostly.
-        if not is_direct_prd:
-            plan_data["status"] = "completed"
-            plan_yaml_path.write_text(yaml.dump(plan_data))
-
             # Switch back to main
             switch_to_main()
-        elif not success:
+        else:
             logger.error(
                 f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."
             )

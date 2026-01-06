@@ -18,8 +18,6 @@ from dotenv import find_dotenv, load_dotenv, set_key
 VIBE_PROJECT_DIR = pathlib.Path("project")
 
 PRD_DIR = VIBE_PROJECT_DIR / "prds"
-PLANS_DIR = VIBE_PROJECT_DIR / "plans"
-COMPILED_PLANS_DIR = VIBE_PROJECT_DIR / "compiled_plans"
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
 LOGS_DIR = VIBE_PROJECT_DIR / "logs"
@@ -95,8 +93,6 @@ def ensure_project_structure():
     LOGS_DIR.mkdir(exist_ok=True)
     COSTS_DIR.mkdir(exist_ok=True)
     PRD_DIR.mkdir(exist_ok=True)
-    PLANS_DIR.mkdir(exist_ok=True)
-    COMPILED_PLANS_DIR.mkdir(exist_ok=True)
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
 
@@ -105,7 +101,6 @@ def migrate_to_project_dir():
     """Migrates files and directories from the project root to the 'project/' directory."""
     migration_map = {
         pathlib.Path("prds"): PRD_DIR,
-        pathlib.Path("plans"): PLANS_DIR,
         pathlib.Path("project-state.json"): PROJECT_STATE_FILE,
         pathlib.Path(".ralph_state.json"): STATE_FILE,
         pathlib.Path("logs"): LOGS_DIR,

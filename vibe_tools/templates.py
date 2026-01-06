@@ -125,55 +125,6 @@ INSTRUCTIONS for {mode}:
 6. {custom_instructions}
 7. Include <promise>DONE</promise> in your response ONLY when the reconciliation is successful and '{current_file}' has been updated.
 """,
-    "planner_prompt.txt": """You are the Planner Agent. Your task is to analyze the Project Requirements (PRDs) and the Architecture definition to create a set of granular, dependency-aware implementation plans.
-
-GOAL:
-Break down the requirements into logical, decoupled building blocks. Optimize for build speed by identifying components that can be built in parallel once their base dependencies are met.
-
-TASK:
-1. Break down all PRDs and Architecture into granular implementation plans.
-2. Group plans into logical PHASES: Setup, Infra, Implement, and CI/CD.
-3. For the "Implement" phase, group plans by their source PRD.
-4. For each plan, create a separate Markdown file in the 'project/plans/' directory (e.g., 'project/plans/01_setup_auth.md').
-5. Each Markdown plan MUST include:
-   - Title
-   - Description
-   - PRD References: For each PRD this plan originates from, include:
-     - A link to the Markdown Spec file (e.g., [PRD-01](specs/PRD-01-minimal-htmx-server.md))
-     - The full YAML content of the PRD inside a collapsed `<details>` block.
-   - Dependencies: IDs of other plans that MUST be completed first.
-   - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
-   - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-
-Include <promise>DONE</promise> when all files are saved.
-""",
-    "plan_normalization_prompt.txt": """You are a Plan Normalizer. Your task is to convert a Markdown implementation plan into a machine-consumable YAML format.
-
-CRITICAL: Success criteria and test targets are the primary quality gates for the automated implementation loop. They must be extracted accurately as lists of strings.
-
-Rules:
-- Extract all fields accurately.
-- Ensure 'dependencies' is an array of strings (plan IDs).
-- Ensure 'success_criteria' is an array of strings (specific, testable conditions).
-- Ensure 'test_targets' is an array of strings (Makefile targets).
-- Output valid YAML only.
-- DO NOT wrap the output in markdown code blocks.
-- No explanations.
-
-YAML SCHEMA:
-id: "plan_id"
-title: "Plan Title"
-description: "Detailed description"
-dependencies: ["dep1", "dep2"]
-success_criteria:
-  - "Criteria 1"
-test_targets:
-  - "test-target-1"
-status: "pending"
-
-BEGIN PLAN:
-{plan_content}
-""",
     "prd_generation_prompt.txt": """You are an expert product writer who turns discussions into concise PRDs.
 
 The user has supplied this information:
