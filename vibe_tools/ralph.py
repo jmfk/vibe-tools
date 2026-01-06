@@ -446,7 +446,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             cmd = get_agent_command(agent, prompt)
             output, code = run_agent(cmd, stream=stream)
 
-            if code != 0 or COMPLETION_PROMISE in output:
+            if code != 0 or COMPLETION_PROMISE not in output:
                 if code != 0:
                     log_issue(
                         "implement",
