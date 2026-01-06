@@ -17,31 +17,14 @@ TASK:
    - Dependencies: IDs of other plans that MUST be completed first.
    - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
    - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-6. Create a 'project-plan.yaml' in the root directory that acts as an index of all plans, organized by phase and PRD.
+6. Update 'project/state.json' by adding all generated plans to the "plans" object.
 
-SCHEMA for project-plan.yaml:
-phases:
-  setup:
-    plans:
-      - id: "01_init_repo"
-        file: "plans/01_init_repo.md"
-        status: "pending"
-  infra:
-    plans:
-      - id: "02_db_setup"
-        file: "plans/02_db_setup.md"
-        status: "pending"
-  implementation:
-    prds:
-      - id: "prd_01_minimal_htmx"
-        plans:
-          - id: "03_htmx_base"
-            file: "plans/03_htmx_base.md"
-            status: "pending"
-  cicd:
-    plans:
-      - id: "04_github_actions"
-        file: "plans/04_github_actions.md"
-        status: "pending"
+FORMAT for state.json "plans" entry:
+  "plan_id": {
+    "status": "pending",
+    "depends_on": ["dependency_id"],
+    "title": "Short Title",
+    "file": "plans/plan_filename.md"
+  }
 
-Include <promise>DONE</promise> when all files are saved.
+Include <promise>DONE</promise> when all files are saved and state.json is updated.

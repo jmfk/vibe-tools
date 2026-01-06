@@ -10,7 +10,6 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     COMPILED_PLANS_DIR,
     PRD_DIR,
-    PROJECT_PLAN,
     VIBE_PROJECT_DIR,
     get_agent_command,
     get_prompt,
@@ -161,44 +160,17 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             print(f"❌ Failed to normalize {spec_path.name}")
 
 
-def _extract_all_plans(index_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Helper to extract all plan objects from the nested phases/prds structure."""
-    all_plans = []
-    phases = index_data.get("phases", {})
-
-    # Standard phases: setup, infra, cicd
-    for phase_name in ["setup", "infra", "cicd"]:
-        phase_data = phases.get(phase_name, {})
-        all_plans.extend(phase_data.get("plans", []))
-
-    # Implementation phase: grouped by PRDs
-    implement = phases.get("implement", {})
-    prds = implement.get("prds", [])
-    for prd in prds:
-        all_plans.extend(prd.get("plans", []))
-
-    return all_plans
-
-
 def normalize_plans(agent: str, stream: bool = False) -> bool:
     """Normalizes Markdown plans in plans/ into machine-consumable YAML files in compiled_plans/."""
     from vibe_tools.utils import migrate_to_project_dir
 
     migrate_to_project_dir()
 
-    if not PROJECT_PLAN.exists():
-        logger.error(f"❌ {PROJECT_PLAN} not found. Planning failed.")
-        return False
+    state = load_project_state()
+    all_plans = state.get("plans", {})
 
-    try:
-        index_data = yaml.safe_load(PROJECT_PLAN.read_text())
-    except Exception as e:
-        logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
-        return False
-
-    all_plans = _extract_all_plans(index_data)
     if not all_plans:
-        logger.warning("No plans found in project-plan.yaml index.")
+        logger.warning("No plans found in state.json.")
         return True
 
     try:
@@ -209,9 +181,16 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
 
     COMPILED_PLANS_DIR.mkdir(exist_ok=True)
 
-    for plan_info in all_plans:
-        plan_file = pathlib.Path(plan_info.get("file"))
+    for plan_id, plan_info in all_plans.items():
+        file_path = plan_info.get("file")
+        if not file_path:
+            continue
+
+        plan_file = pathlib.Path(file_path)
         if not plan_file.exists():
+            # If it's a direct PRD, it's already normalized
+            if plan_info.get("is_direct_prd"):
+                continue
             logger.error(f"Plan file {plan_file} not found.")
             continue
 
@@ -251,6 +230,8 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
                         "status": plan_data.get("status", "pending"),
                         "depends_on": plan_data.get("dependencies", []),
                         "title": plan_data.get("title", plan_id),
+                        "file": str(plan_file),
+                        "is_direct_prd": False
                     }
                     save_project_state(state)
             except Exception as e:

@@ -16,7 +16,6 @@ from vibe_tools.utils import (
     COMPILED_PLANS_DIR,
     INFRA_SPEC,
     PRD_DIR,
-    PROJECT_PLAN,
     TESTING_SPEC,
     check_plan_dependencies,
     collect_prd_files,
@@ -139,7 +138,7 @@ class RalphLoop:
 
 
 def run_planner_agent(agent: str, stream: bool = False) -> bool:
-    """Runs the Planner Agent to generate Markdown plans and project-plan.yaml index."""
+    """Runs the Planner Agent to generate Markdown plans and update state.json."""
     log_start("planner", "Generating implementation plans")
     # Reset plans in project-state.json
     state = load_project_state()
@@ -184,7 +183,6 @@ INSTRUCTIONS:
    - Success Criteria:
      - [ ] ...
    - Dependencies: [list of plan IDs]
-5. Finally, update 'project/project-plan.yaml' to index all plans.
 """
     cmd = get_agent_command(agent, prompt)
     output, code = run_agent(cmd, stream=stream)
@@ -205,58 +203,33 @@ INSTRUCTIONS:
 
 
 def generate_prd_plan() -> bool:
-    """Generates a project-plan.yaml that tracks PRDs directly instead of granular plans."""
+    """Analyzes PRDs and updates project-state.json with plans."""
     prds = collect_prd_files()
     if not prds:
         logger.warning("No PRDs found in project/prds/ to generate plan.")
         return False
 
-    plan_data = {
-        "phases": {
-            "setup": {"plans": []},
-            "implement": {"prds": []},
-            "testing": {"plans": []},
-            "infra": {"plans": []},
-            "cicd": {"plans": []},
-            "deploy": {"plans": []},
-        }
-    }
-
     state = load_project_state()
 
     for prd_path in prds:
         prd_id = prd_path.stem
-        # Structure it so implementation_loop can find it as a single 'plan' per PRD
-        plan_data["phases"]["implement"]["prds"].append(
-            {
-                "id": prd_id,
-                "plans": [
-                    {
-                        "id": prd_id,
-                        "file": str(prd_path),
-                        "status": state.get("plans", {})
-                        .get(prd_id, {})
-                        .get("status", "pending"),
-                        "is_direct_prd": True,
-                    }
-                ],
-            }
-        )
-
-        # Also ensure it's in state["plans"]
+        # Ensure it's in state["plans"]
         if prd_id not in state["plans"]:
             state["plans"][prd_id] = {
                 "status": "pending",
                 "depends_on": [],
                 "title": prd_id.replace("prd_", "").replace("_", " ").title(),
+                "file": str(prd_path),
+                "is_direct_prd": True,
             }
+        else:
+            # Update file path if needed
+            state["plans"][prd_id]["file"] = str(prd_path)
+            state["plans"][prd_id]["is_direct_prd"] = True
 
     save_project_state(state)
 
-    with open(PROJECT_PLAN, "w") as f:
-        yaml.dump(plan_data, f, sort_keys=False)
-
-    logger.info(f"✅ Generated PRD-based project plan: {PROJECT_PLAN}")
+    logger.info("✅ Updated project state with plans from PRDs.")
     return True
 
 
@@ -324,146 +297,101 @@ def debugging_loop(
 
 
 def implementation_loop(agent: str, stream: bool = False) -> bool:
-    """Executes the implementation phase based on granular YAML plans or direct PRDs."""
-    plans_from_prds = False
-    if not PROJECT_PLAN.exists():
-        logger.info(
-            f"ℹ️ {PROJECT_PLAN} not found. Falling back to direct PRD implementation."
-        )
-        prds = collect_prd_files()
-        if not prds:
-            logger.error(f"❌ No PRDs found in {PRD_DIR}.")
-            return False
+    """Executes the implementation phase based on granular YAML plans or direct PRDs from state.json."""
+    state = load_project_state()
+    plans_to_run = state.get("plans", {})
 
-        plans_to_run_direct = []
-        for prd_path in prds:
-            plan_id = prd_path.stem
-            plans_to_run_direct.append(
-                {"id": plan_id, "file": str(prd_path), "is_direct_prd": True}
-            )
+    if not plans_to_run:
+        logger.info("ℹ️ No plans found in state.json. Falling back to direct PRD discovery.")
+        generate_prd_plan()
+        state = load_project_state()
+        plans_to_run = state.get("plans", {})
 
-        phases = {
-            "implement": {"prds": [{"id": "direct", "plans": plans_to_run_direct}]}
-        }
-        plans_from_prds = True
-    else:
-        try:
-            index_data = yaml.safe_load(PROJECT_PLAN.read_text())
-        except Exception as e:
-            logger.error(f"Failed to parse {PROJECT_PLAN}: {e}")
-            return False
-        phases = index_data.get("phases", {})
-
-    if not phases:
-        logger.warning("No phases found in project-plan.yaml index.")
-        return True
+    if not plans_to_run:
+        logger.error(f"❌ No plans or PRDs found.")
+        return False
 
     config = load_config()
     iterations_config = config.get("iterations", {})
     max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
+    # ... rest of the setup ...
     max_debug_iterations = iterations_config.get("debug", 5)
 
     ralph_config = config.get("ralph", {})
     review = ralph_config.get("review", True)
     tests = ralph_config.get("tests", True)
 
-    # Order of phases to execute
-    phase_order = ["setup", "implement", "testing", "infra", "cicd", "deploy"]
+    logger.info("📍 Starting Implementation Phase")
 
-    for phase_name in phase_order:
-        if phase_name not in phases:
+    for plan_id, plan_info in plans_to_run.items():
+        is_direct_prd = plan_info.get("is_direct_prd", False)
+
+        # Check plan-level status and dependencies
+        if plan_info.get("status") == "completed":
             continue
 
-        phase_data = phases[phase_name]
-        plans_to_run = []
+        missing_deps = check_plan_dependencies(plan_id, state)
+        if missing_deps:
+            logger.warning(
+                f"⚠️ Skipping plan {plan_id}: Missing dependencies: {', '.join(missing_deps)}"
+            )
+            continue
 
-        if phase_name == "implement":
-            # For implementation, we have nested PRDs
-            prds = phase_data.get("prds", [])
-            for prd in prds:
-                plans_to_run.extend(prd.get("plans", []))
+        plan_file_path = pathlib.Path(plan_info.get("file", ""))
+        if not plan_file_path or not plan_file_path.exists():
+            # If path missing, try fallback to PRD_DIR
+            plan_file_path = PRD_DIR / f"{plan_id}.yaml"
+            if not plan_file_path.exists():
+                logger.error(f"Plan file for {plan_id} not found. Skipping.")
+                continue
+
+        if is_direct_prd:
+            plan_yaml_path = plan_file_path
         else:
-            # For other phases, plans are top-level
-            plans_to_run = phase_data.get("plans", [])
+            plan_yaml_path = COMPILED_PLANS_DIR / (plan_file_path.stem + ".yaml")
 
-        if not plans_to_run:
+        if not plan_yaml_path.exists():
+            logger.error(f"Normalized plan {plan_yaml_path} not found. Skipping.")
             continue
 
-        logger.info(f"📍 Starting Phase: {phase_name.upper()}")
+        try:
+            plan_data = yaml.safe_load(plan_yaml_path.read_text())
+        except Exception as e:
+            logger.error(f"Failed to parse {plan_yaml_path}: {e}")
+            continue
 
-        for plan_info in plans_to_run:
-            plan_id = plan_info.get("id")
-            is_direct_prd = plan_info.get("is_direct_prd", False)
+        if is_direct_prd:
+            title = plan_info.get("title", plan_id.replace("prd_", "").replace("_", " ").title())
+            description = plan_yaml_path.read_text()
 
-            # Check plan-level dependencies from project-state.json
-            state = load_project_state()
-            if plan_id in state.get("plans", {}):
-                if state["plans"][plan_id].get("status") == "completed":
-                    continue
+            # Extract success criteria
+            capabilities = plan_data.get("CAPABILITIES", {})
+            success_criteria = []
+            if isinstance(capabilities.get("interaction_mechanisms"), list):
+                success_criteria.extend(capabilities["interaction_mechanisms"])
+            if isinstance(capabilities.get("patterns"), list):
+                success_criteria.extend(capabilities["patterns"])
+            if isinstance(capabilities.get("routing"), list):
+                success_criteria.extend(capabilities["routing"])
 
-                missing_deps = check_plan_dependencies(plan_id, state)
-                if missing_deps:
-                    logger.warning(
-                        f"⚠️ Skipping plan {plan_id}: Missing dependencies: {', '.join(missing_deps)}"
-                    )
-                    continue
+            if not success_criteria:
+                success_criteria = ["Implement all capabilities defined in the PRD."]
+            test_targets = ["test"]
+        else:
+            title = plan_data.get("title", plan_id)
+            description = plan_data.get("description", "")
+            success_criteria = plan_data.get("success_criteria", [])
+            test_targets = plan_data.get("test_targets", ["test"])
 
-            plan_file_path = pathlib.Path(plan_info.get("file"))
+        logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
+        log_start("implement", f"Plan: {title} ({plan_id})")
+        branch_name = f"feature/{plan_id}"
+        _switch_to_branch(branch_name, agent, plan_id, stream=stream)
 
-            if is_direct_prd:
-                # For direct PRD, the file is the YAML already
-                plan_yaml_path = plan_file_path
-            else:
-                # For planned implementation, the file is the Markdown plan
-                plan_yaml_path = COMPILED_PLANS_DIR / (plan_file_path.stem + ".yaml")
-
-            if not plan_yaml_path.exists():
-                logger.error(f"Normalized plan {plan_yaml_path} not found. Skipping.")
-                continue
-
-            try:
-                plan_data = yaml.safe_load(plan_yaml_path.read_text())
-            except Exception as e:
-                logger.error(f"Failed to parse {plan_yaml_path}: {e}")
-                continue
-
-            if is_direct_prd:
-                # Synthesize plan_data from PRD structure if needed
-                # Normalized PRDs have SYSTEM_CONTRACT, DOMAIN_MODEL, CAPABILITIES, OUTPUT_TARGETS
-                # We can use the whole YAML as the description
-                title = plan_id.replace("prd_", "").replace("_", " ").title()
-                description = plan_yaml_path.read_text()
-
-                # Extract success criteria from various parts of the PRD
-                capabilities = plan_data.get("CAPABILITIES", {})
-                success_criteria = []
-                if isinstance(capabilities.get("interaction_mechanisms"), list):
-                    success_criteria.extend(capabilities["interaction_mechanisms"])
-                if isinstance(capabilities.get("patterns"), list):
-                    success_criteria.extend(capabilities["patterns"])
-                if isinstance(capabilities.get("routing"), list):
-                    success_criteria.extend(capabilities["routing"])
-
-                if not success_criteria:
-                    success_criteria = [
-                        "Implement all capabilities defined in the PRD."
-                    ]
-
-                test_targets = ["test"]
-            else:
-                title = plan_data.get("title", plan_id)
-                description = plan_data.get("description", "")
-                success_criteria = plan_data.get("success_criteria", [])
-                test_targets = plan_data.get("test_targets", ["test"])
-
-            logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
-            log_start("implement", f"Plan: {title} ({plan_id})")
-            branch_name = f"feature/{plan_id}"
-            _switch_to_branch(branch_name, agent, plan_id, stream=stream)
-
-            success = False
-            for i in range(1, max_impl_iterations + 1):
-                logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
+        success = False
+        for i in range(1, max_impl_iterations + 1):
+            logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
+            # ... rest of the iteration logic ...
 
                 # 1. Implementation
                 try:
