@@ -50,6 +50,7 @@ class RalphLoop:
         agent: str = "cursor-agent",
         stream: bool = False,
         caffeinate: bool = False,
+        branch_name: str = None,
     ):
         self.name = name
         self.desired_file = desired_file
@@ -58,6 +59,7 @@ class RalphLoop:
         self.stream = stream
         self.caffeinate = caffeinate
         self.instructions = []
+        self.branch_name = branch_name or f"vibe/{name.lower().replace(' ', '_')}"
 
     def run(self) -> bool:
         """Executes the reconciliation loop."""
@@ -66,6 +68,9 @@ class RalphLoop:
             f"Reconciling {self.desired_file.name} vs {self.current_file.name}",
         )
         logger.info(f"🔄 Starting {self.name} Loop...")
+
+        # Switch to the dedicated branch before starting
+        _switch_to_branch(self.branch_name, self.agent, self.name, stream=self.stream)
 
         if not self.desired_file.exists():
             logger.error(f"❌ Desired file {self.desired_file} not found.")
@@ -130,6 +135,21 @@ class RalphLoop:
         if code == 0 and COMPLETION_PROMISE in output:
             log_success(self.name, "Reconciliation successful.")
             logger.info(f"✅ {self.name} reconciliation successful.")
+
+            # Commit changes if dirty
+            if is_dirty():
+                logger.info(f"💾 Committing changes on {self.branch_name}...")
+                run_command(["git", "add", "."], check=False)
+                run_command(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        f"vibe: reconciliation step '{self.name}' complete",
+                    ],
+                    check=False,
+                )
+
             return True
         else:
             log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
@@ -416,6 +436,22 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 logger.warning(f"⏳ Implementation in progress for {plan_id}...")
                 continue
 
+            # Commit iteration changes if dirty
+            if is_dirty():
+                logger.info(
+                    f"💾 Committing iteration {i} changes for {plan_id} on {branch_name}..."
+                )
+                run_command(["git", "add", "."], check=False)
+                run_command(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        f"vibe: implementation iteration {i} for plan '{plan_id}'",
+                    ],
+                    check=False,
+                )
+
             # 2. Quality Gates
             logger.info("🧪 Running Quality Gates...")
             passed_gates = True
@@ -492,7 +528,22 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         if success:
             log_success("implement", f"Plan {plan_id} completed successfully.")
             logger.info(f"✅ Plan {plan_id} completed successfully.")
-            # Commit changes
+
+            # Commit any final adjustments from debug loops or review
+            if is_dirty():
+                logger.info(f"💾 Committing final adjustments for {plan_id}...")
+                run_command(["git", "add", "."], check=False)
+                run_command(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        f"vibe: final adjustments for plan '{plan_id}'",
+                    ],
+                    check=False,
+                )
+
+            # Commit changes via agent
             commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
             commit_cmd = get_agent_command(agent, commit_prompt)
             run_agent(commit_cmd, stream=stream)
