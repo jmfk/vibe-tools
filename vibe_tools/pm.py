@@ -44,17 +44,24 @@ class PMCompleter:
                 "/files",
                 "/add",
                 "/list",
+                "/ls",
                 "/ps",
                 "/kill",
                 "/exit",
                 "/conf",
                 "/help",
+                "/focus",
+                "/f",
+                "/switch",
+                "/create",
+                "/delete",
             ]
         )
         self.subcommands = {
             "/files": sorted(["list", "add", "remove"]),
             "/history": sorted(["list", "view", "remove"]),
-            "/list": sorted(["memory"]),
+            "/list": sorted(["memory", "specs"]),
+            "/ls": sorted(["memory", "specs"]),
             "/conf": sorted(["md", "code"]),
             "/show": sorted(["specs"]),
             "/kill": sorted(["all"]),
@@ -106,6 +113,7 @@ class InteractivePM:
         self.additional_files: List[pathlib.Path] = []
         self.config = self._load_config()
         self.mode = "ASK"  # Default mode
+        self.focused_prd: Optional[str] = None
         self._load_session()
         self._setup_readline()
 
@@ -169,6 +177,7 @@ class InteractivePM:
                     pathlib.Path(f) for f in data.get("additional_files", [])
                 ]
                 self.mode = data.get("mode", "ASK")
+                self.focused_prd = data.get("focused_prd")
             except Exception as e:
                 logger.debug(f"Error loading PM session: {e}")
 
@@ -181,6 +190,7 @@ class InteractivePM:
             "session_memory": self.session_memory,
             "additional_files": [str(f) for f in self.additional_files],
             "mode": self.mode,
+            "focused_prd": self.focused_prd,
         }
         PM_SESSION_FILE.write_text(json.dumps(data, indent=2))
 
@@ -203,7 +213,8 @@ class InteractivePM:
             RESET = f"{START}{ESC}[0m{END}"
             MODE_COLOR = f"{START}{ESC}[{mode_color_code}m{END}"
             BOLD = f"{START}{ESC}[1m{END}"
-            prompt_symbol = f"{MODE_COLOR}({self.mode}){RESET} {BOLD}👤{RESET} "
+            focus_text = f" [{self.focused_prd}]" if self.focused_prd else ""
+            prompt_symbol = f"{MODE_COLOR}({self.mode}){focus_text}{RESET} {BOLD}👤{RESET} "
 
             try:
                 user_input = input(prompt_symbol).strip()
@@ -258,10 +269,18 @@ class InteractivePM:
         elif cmd == "/l":
             cmd = "/list"
             args = "memory"
+        elif cmd == "/ls":
+            cmd = "/list"
+            if not args: args = "specs"
         elif cmd == "/f":
-            cmd = "/files"
-            if not args: args = "list"
+            if not args:
+                cmd = "/focus"
+            elif args in ["list", "add", "remove"]:
+                cmd = "/files"
+            else:
+                cmd = "/focus"
         elif cmd == "/a": cmd = "/add"
+        elif cmd == "/switch": cmd = "/focus"
 
         if cmd == "/help":
             self._show_help()
@@ -274,8 +293,18 @@ class InteractivePM:
             self.pending_prompt = ""
             self.session_memory = ""
             self.additional_files = []
+            self.focused_prd = None
             self._save_session()
-            click.echo("✅ Session memory and pending prompt reset.")
+            click.echo("✅ Session memory, pending prompt, and focus reset.")
+        elif cmd == "/focus":
+            self._handle_focus_command(args)
+            self._save_session()
+        elif cmd == "/create":
+            self._handle_create_command(args)
+            self._save_session()
+        elif cmd == "/delete":
+            self._handle_delete_command(args)
+            self._save_session()
         elif cmd == "/add":
             if args:
                 if self.session_memory: self.session_memory += f"\n{args}"
@@ -289,7 +318,7 @@ class InteractivePM:
             else:
                 click.echo("❌ Usage: /add <text>")
         elif cmd == "/show":
-            if args.lower() in ["specs", "spec"]:
+            if args.lower() in ["specs", "spec"] or not args:
                 self._list_specs()
             elif args:
                 p = SPECS_DIR / args
@@ -313,7 +342,8 @@ class InteractivePM:
             self._save_session()
         elif cmd == "/list":
             if args == "memory": self._list_memory()
-            else: click.echo("❌ Usage: /list memory")
+            elif args == "specs" or not args: self._list_specs()
+            else: click.echo("❌ Usage: /list [memory|specs]")
         elif cmd == "/ps":
             processes = get_agent_processes()
             if not processes:
@@ -364,13 +394,16 @@ class InteractivePM:
         click.echo("  /add, /a <text>  - Add text to the persistent session memory")
         click.echo("  /mode, /m [ASK|AGENT] - Switch between modes")
         click.echo("  /ask, /agent     - Shortcut to switch modes")
+        click.echo("  /focus, /f, /switch <name|idx> - Focus on a specific PRD (empty to clear)")
+        click.echo("  /create <name>   - Create a new PRD file in specs/")
+        click.echo("  /delete <name|idx> - Delete a PRD file from specs/")
         click.echo("  /show [specs|file] - Display current specs or a specific file")
         click.echo("  /edit [path]     - Open file in code editor")
         click.echo("  /history [list|view <idx>|remove <idx>] - Manage interaction history")
         click.echo("  /files, /f [list|add <path>|remove <path>] - Manage additional context files")
         click.echo("  /ps              - List active agent processes")
         click.echo("  /kill [all]      - Kill active agent processes")
-        click.echo("  /list memory, /l - List pending text, files, and history summary")
+        click.echo("  /list [memory|specs], /ls, /l - List pending items or PRDs")
         click.echo("  /conf [md|code] <editor_cmd> - Configure preferred editor")
         click.echo("  /help, /h        - Show this help message")
         click.echo("  /c               - Clear the shell prompt history")
@@ -495,12 +528,98 @@ class InteractivePM:
         click.echo("\n--- Files in specs/ ---")
         state = load_project_state()
         completed = state.get("completed_prds", [])
-        for f in sorted(SPECS_DIR.glob("*.md")):
+        files = sorted(SPECS_DIR.glob("*.md"))
+        for i, f in enumerate(files):
             status = ""
             if f.stem in completed or f.name in completed:
                 status = click.style(" [IMPLEMENTED]", fg="green")
-            click.echo(f"- {f.name}{status}")
+            
+            prefix = f"[{i}] "
+            name_style = {"fg": "white"}
+            if self.focused_prd == f.name:
+                name_style = {"fg": "cyan", "bold": True}
+                prefix = click.style(prefix, fg="cyan", bold=True)
+            
+            click.echo(f"{prefix}{click.style(f.name, **name_style)}{status}")
         click.echo("----------------------")
+
+    def _handle_focus_command(self, args):
+        if not args:
+            self.focused_prd = None
+            click.echo("✅ Focus cleared.")
+            return
+
+        files = sorted(SPECS_DIR.glob("*.md"))
+        target = None
+
+        # Try index based selection
+        try:
+            idx = int(args)
+            if 0 <= idx < len(files):
+                target = files[idx]
+        except ValueError:
+            # Try fuzzy matching or exact match
+            for f in files:
+                if args.lower() in f.name.lower():
+                    target = f
+                    break
+        
+        if target:
+            self.focused_prd = target.name
+            click.echo(f"✅ Focused on: {click.style(target.name, fg='cyan', bold=True)}")
+        else:
+            click.echo(f"❌ Could not find PRD matching: {args}")
+
+    def _handle_create_command(self, args):
+        if not args:
+            click.echo("❌ Usage: /create <filename>")
+            return
+        
+        filename = args
+        if not filename.endswith(".md"):
+            filename += ".md"
+        
+        target_path = SPECS_DIR / filename
+        if target_path.exists():
+            click.echo(f"❌ File already exists: {target_path}")
+            return
+        
+        ensure_dir(SPECS_DIR)
+        template = f"# {args.replace('_', ' ').title()}\n\n## Summary\n\n## Requirements\n"
+        target_path.write_text(template)
+        self.focused_prd = filename
+        click.echo(f"✅ Created and focused: {target_path}")
+
+    def _handle_delete_command(self, args):
+        if not args:
+            click.echo("❌ Usage: /delete <filename|idx>")
+            return
+        
+        files = sorted(SPECS_DIR.glob("*.md"))
+        target = None
+
+        try:
+            idx = int(args)
+            if 0 <= idx < len(files):
+                target = files[idx]
+        except ValueError:
+            target_path = SPECS_DIR / args
+            if not target_path.suffix:
+                target_path = target_path.with_suffix(".md")
+            if target_path.exists():
+                target = target_path
+
+        if not target or not target.exists():
+            click.echo(f"❌ File not found: {args}")
+            return
+        
+        if click.confirm(f"Are you sure you want to delete {target.name}?", default=False):
+            target.unlink()
+            if self.focused_prd == target.name:
+                self.focused_prd = None
+            click.echo(f"✅ Deleted {target.name}")
+        else:
+            click.echo("Aborted.")
 
     def _build_prompt(self) -> str:
         try:
@@ -510,13 +629,26 @@ class InteractivePM:
 
         # Build specs context
         specs_context = ""
+        primary_focus = ""
         if SPECS_DIR.exists():
+            other_specs = []
             for f in sorted(SPECS_DIR.glob("*.md")):
                 try:
-                    specs_context += f"\n\n--- FILE: specs/{f.name} ---\n{f.read_text()}\n--- END FILE: specs/{f.name} ---"
+                    if self.focused_prd == f.name:
+                        content = f.read_text()
+                        primary_focus = f"PRIMARY FOCUS PRD (Update this if needed):\nFILE: specs/{f.name}\n\n{content}"
+                    else:
+                        other_specs.append(f.name)
                 except Exception as e:
                     logger.warning(f"Error reading {f}: {e}")
-        else: specs_context = "No specs/ directory found."
+            
+            if other_specs:
+                specs_context = "OTHER AVAILABLE PRDs (for context only):\n" + "\n".join([f"- {name}" for name in other_specs])
+        else:
+            specs_context = "No specs/ directory found."
+
+        if not primary_focus:
+            primary_focus = "No specific PRD is currently focused. You may suggest creating a new one or choose one from the available specs."
 
         state = load_project_state()
         implemented_prds = state.get("completed_prds", [])
@@ -535,7 +667,8 @@ class InteractivePM:
         if self.mode == "ASK":
             mode_instructions = "CURRENT MODE: ASK. Do NOT generate any FILE_UPDATE commands. Only provide analysis, answers, or guidance."
         else:
-            mode_instructions = "CURRENT MODE: AGENT. You ARE authorized to create or update files in 'specs/' using the 'FILE_UPDATE: <filename>' tag."
+            default_file = f"\nIf you are proposing changes, focus on the PRIMARY FOCUS file by default: 'FILE_UPDATE: {self.focused_prd}'" if self.focused_prd else ""
+            mode_instructions = f"CURRENT MODE: AGENT. You ARE authorized to create or update files in 'specs/' using the 'FILE_UPDATE: <filename>' tag.{default_file}"
 
         user_memory_text = ""
         if self.session_memory:
@@ -544,6 +677,7 @@ class InteractivePM:
         return prompt_template.format(
             mode=self.mode,
             mode_instructions=mode_instructions,
+            primary_focus=primary_focus,
             specs_content=specs_context,
             implemented_prds=implemented_text,
             instructions=instructions,
