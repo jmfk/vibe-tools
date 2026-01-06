@@ -339,21 +339,40 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             )
             continue
 
-        plan_file_path = pathlib.Path(plan_info.get("file", ""))
-        if not plan_file_path or not plan_file_path.exists():
+        plan_file_str = plan_info.get("file")
+        if not plan_file_str:
             # If path missing, try fallback to PRD_DIR
             plan_file_path = PRD_DIR / f"{plan_id}.yaml"
-            if not plan_file_path.exists():
-                logger.error(f"Plan file for {plan_id} not found. Skipping.")
+            if plan_file_path.is_file():
+                is_direct_prd = True
+            else:
+                logger.error(
+                    f"Plan {plan_id} has no file path and fallback {plan_file_path} not found. Skipping."
+                )
                 continue
+        else:
+            plan_file_path = pathlib.Path(plan_file_str)
+            if not plan_file_path.is_file():
+                # Try fallback to PRD_DIR
+                fallback_path = PRD_DIR / f"{plan_id}.yaml"
+                if fallback_path.is_file():
+                    plan_file_path = fallback_path
+                    is_direct_prd = True
+                else:
+                    logger.error(
+                        f"Plan file {plan_file_path} not found and no fallback in {PRD_DIR}. Skipping."
+                    )
+                    continue
 
         if is_direct_prd:
             plan_yaml_path = plan_file_path
         else:
             plan_yaml_path = COMPILED_PLANS_DIR / (plan_file_path.stem + ".yaml")
 
-        if not plan_yaml_path.exists():
-            logger.error(f"Normalized plan {plan_yaml_path} not found. Skipping.")
+        if not plan_yaml_path.is_file():
+            logger.error(
+                f"Normalized plan {plan_yaml_path} not found or is not a file. Skipping."
+            )
             continue
 
         try:
