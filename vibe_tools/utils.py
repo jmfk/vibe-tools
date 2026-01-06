@@ -56,25 +56,38 @@ GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 def log_issue(loop_name: str, iteration: int, max_iterations: int, description: str):
     """Logs a concise one-line issue to the terminal and a detailed marker to the log file."""
+    from vibe_tools.cost import get_total_cost
+
+    total_cost = get_total_cost()
     marker = f"==== ISSUE: [{loop_name.upper()}] ITERATION [{iteration}/{max_iterations}] ===="
     logger.debug(f"\n{marker}\nReason: {description}\n{'=' * len(marker)}")
     logger.info(
-        f"⚠️  [{loop_name.upper()}] Iteration {iteration}/{max_iterations}: {description}"
+        f"⚠️  [{loop_name.upper()}] Iteration {iteration}/{max_iterations}: {description} (Total Cost: ${total_cost:.2f})"
     )
 
 
 def log_start(loop_name: str, description: str):
     """Logs a concise one-line start message to the terminal and a marker to the log file."""
+    from vibe_tools.cost import get_total_cost
+
+    total_cost = get_total_cost()
     marker = f"==== START: [{loop_name.upper()}] ===="
     logger.debug(f"\n{marker}\nContext: {description}\n{'=' * len(marker)}")
-    logger.info(f"🚀 [{loop_name.upper()}] Starting: {description}")
+    logger.info(
+        f"🚀 [{loop_name.upper()}] Starting: {description} (Total Cost: ${total_cost:.2f})"
+    )
 
 
 def log_success(loop_name: str, description: str):
     """Logs a concise one-line success message to the terminal and a marker to the log file."""
+    from vibe_tools.cost import get_total_cost
+
+    total_cost = get_total_cost()
     marker = f"==== SUCCESS: [{loop_name.upper()}] ===="
     logger.debug(f"\n{marker}\nResult: {description}\n{'=' * len(marker)}")
-    logger.info(f"✅ [{loop_name.upper()}] Completed: {description}")
+    logger.info(
+        f"✅ [{loop_name.upper()}] Completed: {description} (Total Cost: ${total_cost:.2f})"
+    )
 
 
 # Ensure directories exist
@@ -508,8 +521,11 @@ def run_agent(cmd, caffeinate=False, stream=False):
                 sys.stdout.flush()
             else:
                 # Live progress to stdout (bypassing file log for spammy progress)
+                from vibe_tools.cost import get_total_cost
+
+                total_cost = get_total_cost()
                 sys.stdout.write(
-                    f"\r\033[K⏳ Agent working ({elapsed}s, Ctrl-C to cancel)... {preview}"
+                    f"\r\033[K⏳ Agent working ({elapsed}s) | Cost: ${total_cost:.2f} | [CTRL-C] to stop | {preview}"
                 )
                 sys.stdout.flush()
 
