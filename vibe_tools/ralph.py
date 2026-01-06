@@ -33,6 +33,7 @@ from vibe_tools.utils import (
     run_agent,
     run_command,
     save_project_state,
+    switch_to_main,
 )
 
 MAX_ITERATIONS = 10
@@ -566,7 +567,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             plan_yaml_path.write_text(yaml.dump(plan_data))
 
             # Switch back to main
-            _switch_to_main()
+            switch_to_main()
         elif not success:
             logger.error(
                 f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."
@@ -574,39 +575,6 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             return False
 
     return True
-
-
-def _switch_to_main():
-    """Helper to commit dirty changes on feature branches before switching to main."""
-    main_branch = get_main_branch()
-    if is_dirty():
-        current_branch, _ = run_command(
-            ["git", "branch", "--show-current"], check=False
-        )
-        current_branch = current_branch.strip()
-        if current_branch and current_branch != main_branch:
-            logger.info(
-                f"Uncommitted changes detected on '{current_branch}'. Committing before switching to '{main_branch}'..."
-            )
-            run_command(["git", "add", "."], check=False)
-            run_command(
-                [
-                    "git",
-                    "commit",
-                    "-m",
-                    f"vibe: automatic commit of partial work on {current_branch}",
-                ],
-                check=False,
-            )
-        else:
-            logger.warning(
-                f"Uncommitted changes detected on '{main_branch}'. Please commit or stash them manually."
-            )
-
-    logger.debug(f"Switching to {main_branch}...")
-    stdout, code = run_command(["git", "checkout", main_branch], check=False)
-    if code != 0:
-        logger.error(f"Failed to switch to {main_branch}: {stdout}")
 
 
 def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream=False):
