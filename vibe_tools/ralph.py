@@ -166,9 +166,17 @@ def generate_prd_plan() -> bool:
         return False
 
     state = load_project_state()
+    config = load_config()
+
+    # Determine the starting point for the lineage
+    auto_merge = config.get("ralph", {}).get("auto_merge", False)
+    if auto_merge:
+        base_branch = get_automerge_branch(config)
+    else:
+        base_branch = get_main_branch()
 
     # Track lineage and find parent branch
-    last_completed_branch = get_main_branch()
+    last_completed_branch = base_branch
     completed_plans = [
         p_id
         for p_id, p_info in state["plans"].items()
@@ -283,6 +291,74 @@ def debugging_loop(
     return False
 
 
+def check_automerge_sync(config) -> bool:
+    """Verifies that the automerge branch is up to date with the main branch."""
+    auto_merge = config.get("ralph", {}).get("auto_merge", False)
+    if not auto_merge:
+        return True
+
+    import click
+
+    automerge_branch = get_automerge_branch(config)
+    main_branch = get_main_branch()
+
+    # Ensure automerge branch exists
+    _, code = run_command(
+        ["git", "rev-parse", "--verify", automerge_branch], check=False
+    )
+    if code != 0:
+        logger.info(
+            f"🌿 Automerge branch '{automerge_branch}' does not exist. It will be created from {main_branch}."
+        )
+        run_command(["git", "checkout", main_branch], check=False)
+        run_command(["git", "checkout", "-b", automerge_branch], check=False)
+        return True
+
+    # Check if there are commits in main not in automerge
+    stdout, code = run_command(
+        ["git", "log", f"{automerge_branch}..{main_branch}", "--oneline"], check=False
+    )
+    if code == 0 and stdout.strip():
+        click.echo(
+            click.style(
+                f"\n⚠️  The automerge branch '{automerge_branch}' is behind '{main_branch}'.",
+                fg="yellow",
+                bold=True,
+            )
+        )
+        click.echo(
+            f"The following commits are in '{main_branch}' but not in '{automerge_branch}':"
+        )
+        click.echo(stdout.strip())
+
+        if click.confirm(
+            f"\nWould you like to merge '{main_branch}' into '{automerge_branch}' now?",
+            default=True,
+        ):
+            run_command(["git", "checkout", automerge_branch], check=False)
+            stdout, code = run_command(["git", "merge", main_branch], check=False)
+            if code != 0:
+                click.echo(
+                    click.style(f"❌ Merge failed with conflicts:\n{stdout}", fg="red")
+                )
+                return click.confirm(
+                    "Proceed anyway with existing conflicts?", default=False
+                )
+            click.echo(
+                click.style(
+                    f"✅ Merged '{main_branch}' into '{automerge_branch}'.", fg="green"
+                )
+            )
+            return True
+        else:
+            return click.confirm(
+                "Proceed anyway? (This might cause issues with the branch lineage)",
+                default=False,
+            )
+
+    return True
+
+
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Executes the implementation phase based on granular YAML plans or direct PRDs from state.json."""
     state = load_project_state()
@@ -301,6 +377,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         return False
 
     config = load_config()
+
+    # Check automerge sync before starting
+    if not check_automerge_sync(config):
+        logger.error("❌ Aborted due to automerge sync failure or user cancellation.")
+        return False
+
     iterations_config = config.get("iterations", {})
     max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
     # ... rest of the setup ...
