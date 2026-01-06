@@ -267,17 +267,26 @@ def init(ctx):
 
     if choice == "A":
         click.echo(
-            "\n📄 Please ensure your specs are in 'specs/'. Next step: 'vibe normalize'"
+            "\n📄 Basic initialization complete. Your human specs should be in 'specs/'."
         )
     elif choice == "B":
         click.echo("\n🔍 Starting codebase discovery...")
         ctx.invoke(setup, import_code=True)
     elif choice == "C":
-        click.echo("\n🏗️  Starting architecture setup...")
-        ctx.invoke(setup)
+        click.echo("\n🏗️  Basic initialization complete. 'architecture.yaml' is ready.")
     else:
         click.echo("\n✅ Basic initialization complete.")
 
+    click.echo("\nNext Steps:")
+    click.echo(
+        f"  {click.style('vibe architect', fg='cyan'):<20} Refine architecture and infrastructure"
+    )
+    click.echo(
+        f"  {click.style('vibe pm', fg='magenta'):<20} Refine PRDs and product specs"
+    )
+    click.echo(
+        f"  {click.style('vibe normalize', fg='yellow'):<20} Standardize all specs into machine-readable YAML"
+    )
     click.echo("\nRun 'vibe status' at any time to see your project progress.")
 
 
@@ -686,18 +695,13 @@ def cost():
 
 @cli.command()
 @click.option(
-    "--auto",
-    is_flag=True,
-    help="Automatically propose architecture if architecture.yaml is missing.",
-)
-@click.option(
     "--import-code",
     "import_code",
     is_flag=True,
     help="Import existing codebase to generate architecture-current.yaml.",
 )
 @click.pass_context
-def setup(ctx, auto, import_code):
+def setup(ctx, import_code):
     """Phase 3: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
     from vibe_tools.ralph import RalphLoop
 
@@ -743,28 +747,14 @@ def setup(ctx, auto, import_code):
         return
 
     if not ARCHITECTURE.exists():
-        if auto:
-            click.echo("Proposing architecture.yaml based on PRDs...")
-            try:
-                prompt = get_prompt("architecture_proposal_prompt.txt")
-            except FileNotFoundError as e:
-                click.echo(f"Error: {e}")
-                return
-            cmd = get_agent_command(agent, prompt)
-            run_agent(cmd, stream=stream)
+        if ARCHITECTURE_SPEC.exists():
+            click.echo(f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists.")
+            click.echo("   Run 'vibe normalize' to generate the required YAML file.")
         else:
-            if ARCHITECTURE_SPEC.exists():
-                click.echo(
-                    f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists."
-                )
-                click.echo(
-                    "   Run 'vibe normalize' to generate the required YAML file."
-                )
-            else:
-                click.echo(
-                    f"❌ {ARCHITECTURE} not found. Use --auto to propose one or create it manually."
-                )
-            return
+            click.echo(
+                f"❌ {ARCHITECTURE} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+            )
+        return
 
     # Run the reconciliation loop
     loop = RalphLoop(
@@ -841,6 +831,15 @@ def implement(ctx):
         )
         return
 
+    from vibe_tools.utils import collect_prd_files
+
+    if not collect_prd_files():
+        click.echo("❌ No machine-readable PRD YAMLs found in project/prds/.")
+        click.echo(
+            "   Run 'vibe pm' to refine specs and 'vibe normalize' to generate them."
+        )
+        return
+
     from vibe_tools.ralph import implementation_loop
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -876,7 +875,9 @@ def infra(ctx):
             click.echo(f"❌ {INFRA} not found, but {INFRA_SPEC} exists.")
             click.echo("   Run 'vibe normalize' to generate the required YAML file.")
         else:
-            click.echo(f"❌ {INFRA} not found. Please create it or run discovery.")
+            click.echo(
+                f"❌ {INFRA} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+            )
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -927,7 +928,9 @@ def cicd(ctx):
             click.echo(f"❌ {CICD} not found, but {CICD_SPEC} exists.")
             click.echo("   Run 'vibe normalize' to generate the required YAML file.")
         else:
-            click.echo(f"❌ {CICD} not found. Please create it or run discovery.")
+            click.echo(
+                f"❌ {CICD} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+            )
         return
 
     from vibe_tools.ralph import RalphLoop
@@ -977,7 +980,7 @@ def testing(ctx):
             click.echo("   Run 'vibe normalize' to generate the required YAML file.")
         else:
             click.echo(
-                f"❌ {TESTING_CONFIG} not found. Please create it or run discovery."
+                f"❌ {TESTING_CONFIG} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
             )
         return
 

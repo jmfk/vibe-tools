@@ -62,9 +62,8 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
         # Find all markdown files in specs and subdirectories
         files_to_process = list(specs_dir.rglob("*.md"))
         if not files_to_process:
-            print(
-                f"No markdown files found in {specs_dir}/. Please add your PRDs as .md files there."
-            )
+            print(f"❌ No markdown specs found in {specs_dir}/.")
+            print("   Run 'vibe pm' or 'vibe architect' to create them first.")
             return
 
     # Check for existing normalized files

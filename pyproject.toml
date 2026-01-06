@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "vibe-tools"
 version = "0.1.0"
 description = "Global commands for Cursor Ralph loop and coverage improvement"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "click",
     "gspread",
