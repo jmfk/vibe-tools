@@ -62,6 +62,20 @@ def log_issue(loop_name: str, iteration: int, max_iterations: int, description: 
     )
 
 
+def log_start(loop_name: str, description: str):
+    """Logs a concise one-line start message to the terminal and a marker to the log file."""
+    marker = f"==== START: [{loop_name.upper()}] ===="
+    logger.debug(f"\n{marker}\nContext: {description}\n{'=' * len(marker)}")
+    logger.info(f"🚀 [{loop_name.upper()}] Starting: {description}")
+
+
+def log_success(loop_name: str, description: str):
+    """Logs a concise one-line success message to the terminal and a marker to the log file."""
+    marker = f"==== SUCCESS: [{loop_name.upper()}] ===="
+    logger.debug(f"\n{marker}\nResult: {description}\n{'=' * len(marker)}")
+    logger.info(f"✅ [{loop_name.upper()}] Completed: {description}")
+
+
 # Ensure directories exist
 def ensure_project_structure():
     """Ensures that the core project directories exist."""
@@ -493,15 +507,9 @@ def run_agent(cmd, caffeinate=False, stream=False):
                 sys.stdout.flush()
             else:
                 # Live progress to stdout (bypassing file log for spammy progress)
-                # Clear line, then print preview, then newline, then grey Ctrl-C instruction
-                elapsed = int(time.time() - start_time)
-                preview = line.strip()[:80]
-                grey = "\033[90m"
-                reset = "\033[0m"
                 sys.stdout.write(
-                    f"\r\033[K⏳ Agent working ({elapsed}s)... {preview}\n"
+                    f"\r\033[K⏳ Agent working ({elapsed}s, Ctrl-C to cancel)... {preview}"
                 )
-                sys.stdout.write(f"\r\033[K{grey}Ctrl-C to save & quit{reset}\033[1A")
                 sys.stdout.flush()
 
             # Also log to debug file immediately
@@ -528,7 +536,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
             process.stdout.close()
         process.wait()
 
-    sys.stdout.write("\r\033[K\n\033[K\033[1A")
+    sys.stdout.write("\r\033[K")
     sys.stdout.flush()
 
     output = "".join(full_output)

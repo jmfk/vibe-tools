@@ -45,6 +45,13 @@ class PRDWriter:
         self.prd_type = prd_type
         self.stream = stream
 
+        # Load configurable iterations
+        from vibe_tools.utils import load_config
+        config = load_config()
+        self.max_interview_rounds = config.get("iterations", {}).get(
+            "prd_interview", self.MAX_INTERVIEW_ROUNDS
+        )
+
     def create_prd(self, initial_request: str) -> pathlib.Path:
         """Run the interview and write the resulting markdown PRD."""
         prompt = (initial_request or "").strip()
@@ -65,7 +72,7 @@ class PRDWriter:
         last_summary = initial_request
         satisfied = False
 
-        for iteration in range(self.MAX_INTERVIEW_ROUNDS):
+        for iteration in range(self.max_interview_rounds):
             payload = {
                 "initial_request": initial_request,
                 "context": context_summary,

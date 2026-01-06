@@ -106,6 +106,12 @@ class ProjectTester:
             return False
         return True
 
+    def get_summary(self, failed_targets):
+        """Returns a concise summary string of failed targets."""
+        if not failed_targets:
+            return "No targets failed."
+        return f"Targets failed: {', '.join(failed_targets)}"
+
     def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=False):
         """Runs test and lint targets, optionally filtered by changed files."""
         # Force parallel=False by default for debugging loops to keep output clean
@@ -180,9 +186,10 @@ class ProjectTester:
         outputs = [r["output"] for r in results]
         all_passed = all(r["passed"] for r in results)
         env_failures = [r["target"] for r in results if r["env_failure"]]
+        failed_targets = [r["target"] for r in results if not r["passed"] and not r["env_failure"]]
 
         combined_output = "\n\n".join(outputs)
-        return combined_output, all_passed, env_failures
+        return combined_output, all_passed, env_failures, failed_targets
 
     def _filter_targets_by_changes(self, targets, changed_files):
         """Filters targets based on which files have changed."""
