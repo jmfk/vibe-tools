@@ -1,4 +1,4 @@
-.PHONY: help install batch loop monitor docker-build docker-run clean run migrate-init migrate test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra cleanup git-reset
+.PHONY: help install batch monitor docker-build docker-run clean test coverage coverage-loop frontend-install frontend-build frontend-lint frontend-test frontend-coverage frontend-run test-backend test-frontend test-infra test-integration test-regression lint-backend lint-frontend lint-infra cleanup git-reset
 
 # Default target
 help:
@@ -6,12 +6,7 @@ help:
 	@echo "  make install      - Install dependencies and setup environment"
 	@echo "  make install-deps - Install Python dependencies (pip install -e .)"
 	@echo "  make setup        - Run interactive environment setup"
-	@echo "  make batch        - Run the Cursor batch process (run_cursor_batch.py)"
-	@echo "  make loop         - [DEPRECATED] Run the legacy Ralph loop process"
 	@echo "  make monitor      - Run the progress monitor (monitor.py)"
-	@echo "  make run          - Run the FastAPI app locally (uvicorn)"
-	@echo "  make migrate-init - Initialize Aerich migrations"
-	@echo "  make migrate      - Run Aerich migrations"
 	@echo "  make test         - Run all tests with pytest"
 	@echo "  make test-fix     - Run the test fix loop (run_test_fix_loop.py)"
 	@echo "  make coverage     - Run tests and show coverage report"
@@ -29,22 +24,22 @@ help:
 	@echo "  make git-reset    - Reset local main branch to match origin/main"
 
 test-backend:
-	PYTHONPATH=.:backend pytest -v backend/tests/
+	PYTHONPATH=. pytest -v tests/
 
 test-frontend:
 	cd frontend && npx vitest --run
 
 test-infra:
 	@echo "Running infra tests..."
-	pytest backend/tests/test_cli.py
+	pytest tests/test_cli.py
 
 test-integration:
-	@echo "Running integration tests..."
-	pytest backend/tests/test_api.py
+	@echo "Running integration tests (placeholder)..."
+	# pytest tests/test_api.py # Removed as api test was for legacy backend
 
 test-regression:
 	@echo "Running regression tests..."
-	pytest backend/tests/test_utils.py
+	pytest tests/test_utils.py
 
 lint-backend:
 	@echo "Running backend lint (ruff)..."
@@ -68,32 +63,14 @@ setup:
 install:
 	./install.sh
 
-batch:
-	python3 run_cursor_batch.py
-
-loop:
-	@echo "⚠️  make loop is deprecated. Use the new vibe commands instead."
-	vibe ralph
-
 monitor:
 	vibe monitor --interval 60
-
-run:
-	uvicorn backend.main:app --reload --port 8000
-
-migrate-init:
-	aerich init -t backend.core.db.TORTOISE_ORM
-	aerich init-db
-
-migrate:
-	aerich migrate
-	aerich upgrade
 
 test:
 	PYTHONPATH=. pytest -v
 
 coverage:
-	pytest --cov=backend --cov=vibe_tools --cov-report=term-missing backend/tests/
+	pytest --cov=vibe_tools --cov-report=term-missing tests/
 
 coverage-loop:
 	vibe coverage
@@ -134,4 +111,3 @@ cleanup:
 git-reset:
 	git fetch origin
 	git reset --hard origin/main
-

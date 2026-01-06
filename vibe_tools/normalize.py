@@ -1,26 +1,24 @@
 import pathlib
 import re
 import sys
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import click
+import yaml
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
-    get_agent_command,
-    run_agent,
-    VIBE_PROJECT_DIR,
-    PRD_DIR,
-    PLANS_DIR,
     COMPILED_PLANS_DIR,
+    PRD_DIR,
     PROJECT_PLAN,
+    VIBE_PROJECT_DIR,
+    get_agent_command,
     get_prompt,
     load_project_state,
+    logger,
+    run_agent,
     save_project_state,
-    logger
 )
-
-import yaml
 
 DEFAULT_SPECS_DIR = pathlib.Path("specs")
 
@@ -99,10 +97,10 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             # 2. Handle PRD prefixes and format
             # Strip case-insensitive "prd" or "PRD" prefix if followed by -, _, or space
             normalized_stem = re.sub(r"^(prd|PRD)[-_ ]?", "", stem)
-            
+
             # Replace remaining dashes with underscores for consistency
             normalized_stem = normalized_stem.replace("-", "_")
-            
+
             # Ensure it starts with prd_
             output_filename = f"prd_{normalized_stem.lower()}.yaml"
             output_path = target_prd_dir / output_filename
@@ -220,7 +218,7 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
 
         # Target is in COMPILED_PLANS_DIR
         yaml_path = COMPILED_PLANS_DIR / (plan_file.stem + ".yaml")
-        
+
         # Optimization: skip if yaml is newer than markdown
         if yaml_path.exists() and yaml_path.stat().st_mtime > plan_file.stat().st_mtime:
             continue

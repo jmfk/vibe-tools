@@ -1,15 +1,16 @@
-import click
 import datetime
-import json
 import pathlib
 import socket
 import subprocess
 from typing import Any, Dict, Optional
-from dotenv import load_dotenv, find_dotenv
+
+import click
+from dotenv import find_dotenv, load_dotenv
 
 # Load environment variables from .env file at startup
 load_dotenv(find_dotenv() or ".env")
 
+from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_dir,
@@ -23,7 +24,6 @@ from vibe_tools.utils import (
     save_google_api_key,
     save_project_state,
 )
-from vibe_tools.templates import TEMPLATES
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "postgres": {
@@ -343,7 +343,7 @@ def check_connection(service_key: str, details: Dict[str, Any]) -> bool:
     try:
         with socket.create_connection((host, int(port)), timeout=2.0):
             return True
-    except (socket.error, ValueError):
+    except (OSError, ValueError):
         return False
 
 
@@ -354,7 +354,7 @@ def configure_service(service_key: str):
 
     click.echo(f"Checking connection to {metadata['display']}...")
     if check_connection(service_key, details):
-        click.echo(f"✅ Connection successful!")
+        click.echo("✅ Connection successful!")
     else:
         click.echo(
             f"⚠️  Warning: Could not connect to {metadata['display']} at {details.get('host')}:{details.get('port')}."
@@ -561,7 +561,7 @@ def google():
 
 def ensure_infrastructure():
     """Ensure that the required project infrastructure (directories and files) exists."""
-    from vibe_tools.utils import ensure_dir, ensure_gitignore, VIBE_DATA_DIR
+    from vibe_tools.utils import VIBE_DATA_DIR, ensure_gitignore
 
     # 1. Create storage directory
     if not VIBE_DATA_DIR.exists():

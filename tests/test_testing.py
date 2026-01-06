@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock, patch
 
 from vibe_tools.testing import ProjectTester
@@ -16,24 +17,27 @@ def test_has_make_target(tmp_path):
 
 
 def test_discover_backend_test_cmd(tmp_path):
-    tester = ProjectTester()
-    tester.makefile = tmp_path / "Makefile"
+    old_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        tester = ProjectTester()
+        # 1. Makefile has target
+        tester.makefile.write_text("test:\n\techo test")
+        assert tester.discover_backend_test_cmd() == ["make", "test"]
 
-    # 1. Makefile has target
-    tester.makefile.write_text("test:\n\techo test")
-    assert tester.discover_backend_test_cmd() == ["make", "test"]
+        # 2. No Makefile, but tests directory exists
+        tester.makefile.unlink()
+        (tmp_path / "tests").mkdir()
 
-    # 2. No Makefile, but pytest in path
-    tester.makefile.unlink()
-    tester.backend_root = tmp_path / "backend"
-    (tester.backend_root / "tests").mkdir(parents=True)
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0)
-        assert tester.discover_backend_test_cmd() == [
-            "pytest",
-            "-v",
-            str(tester.backend_root / "tests"),
-        ]
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            assert tester.discover_backend_test_cmd() == [
+                "pytest",
+                "-v",
+                "tests",
+            ]
+    finally:
+        os.chdir(old_cwd)
 
 
 def test_discover_frontend_test_cmd(tmp_path):
@@ -66,13 +70,12 @@ def test_discover_coverage_cmd(tmp_path):
     assert tester.discover_coverage_cmd() == ["make", "coverage"]
 
     tester.makefile.unlink()
-    tester.backend_root = tmp_path / "backend"
-    tester.backend_root.mkdir()
+    tester.backend_root = tmp_path
     assert tester.discover_coverage_cmd() == [
         "pytest",
         f"--cov={tester.backend_root}",
         "--cov-report=term-missing",
-        f"{tester.backend_root}/tests/",
+        "tests/",
     ]
 
 

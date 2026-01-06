@@ -3,38 +3,36 @@ Core engine for the modular project lifecycle.
 Includes the Planner Agent, Reconciliation Loops, and Implementation Loop.
 """
 
-import hashlib
-import json
 import pathlib
+from typing import List
+
 import yaml
-from typing import Any, List, Dict
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
-    PRD_DIR,
-    PLANS_DIR,
-    COMPILED_PLANS_DIR,
-    PROJECT_PLAN,
     ARCHITECTURE,
     ARCHITECTURE_SPEC,
-    INFRA_SPEC,
     CICD_SPEC,
+    COMPILED_PLANS_DIR,
+    INFRA_SPEC,
+    PRD_DIR,
+    PROJECT_PLAN,
     TESTING_SPEC,
-    get_agent_command,
-    run_agent,
-    run_command,
-    get_file_hash,
-    logger,
-    get_prompt,
-    load_project_state,
-    save_project_state,
     check_plan_dependencies,
-    get_main_branch,
-    is_dirty,
     collect_prd_files,
+    get_agent_command,
+    get_file_hash,
+    get_main_branch,
+    get_prompt,
+    is_dirty,
+    load_project_state,
     log_issue,
     log_start,
     log_success,
+    logger,
+    run_agent,
+    run_command,
+    save_project_state,
 )
 
 MAX_ITERATIONS = 10
@@ -263,9 +261,8 @@ def debugging_loop(
     agent: str, targets: List[str], stream: bool = False, iterations: int = 5
 ) -> bool:
     """Runs a set of test targets in a loop until they pass or max iterations reached."""
-    from vibe_tools.testing import ProjectTester
-    from vibe_tools.cost import CostLogger
     from vibe_tools.cli import load_config
+    from vibe_tools.testing import ProjectTester
 
     tester = ProjectTester()
     config = load_config()
@@ -301,7 +298,6 @@ def debugging_loop(
         agent_output, _ = run_agent(cmd, stream=stream)
 
         # Log costs
-        from vibe_tools.cost import AGENT_DEFAULT_MODEL
 
         cost_logger.log_run(
             agent=agent,

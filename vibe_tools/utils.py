@@ -9,10 +9,11 @@ import signal
 import subprocess
 import sys
 import time
-import yaml
-from dotenv import load_dotenv, find_dotenv, set_key
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
+
+import yaml
+from dotenv import find_dotenv, load_dotenv, set_key
 
 VIBE_PROJECT_DIR = pathlib.Path("project")
 
@@ -690,7 +691,7 @@ def check_env_health() -> bool:
                         f"⚠️  Managed environment '{venv_name}' is configured but not active."
                     )
                     logger.warning(
-                        f"   Note: You are running 'vibe' via pipx global install."
+                        "   Note: You are running 'vibe' via pipx global install."
                     )
                     logger.warning(
                         f"   Please run 'pyenv activate {venv_name}' or ensure it's set in .python-version"
@@ -703,7 +704,7 @@ def check_env_health() -> bool:
                 logger.warning(f"   Current environment: {current_prefix}")
                 return False
 
-            logger.debug(f"✅ Environment check passed.")
+            logger.debug("✅ Environment check passed.")
 
     return True
 
@@ -942,8 +943,9 @@ def get_latest_context_file(pattern):
 def get_vibe_status_report():
     """Generates a comprehensive status report of the system."""
     import click
+
     from vibe_tools.cost import get_total_cost
-    from vibe_tools.servers import get_server_configs, get_container_status
+    from vibe_tools.servers import get_container_status, get_server_configs
 
     state = load_project_state()
     report = []

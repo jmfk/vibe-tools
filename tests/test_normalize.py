@@ -9,12 +9,9 @@ def test_normalize_prd_no_files(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    with patch("vibe_tools.normalize.PRDS_DIR", prds_dir):
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
         with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-            with patch("vibe_tools.normalize.PROMPTS_DIR", tmp_path / "prompts"):
-                (tmp_path / "prompts").mkdir()
-                (tmp_path / "prompts" / "pdr_normalization_prompt.txt").write_text("prompt")
-
+            with patch("vibe_tools.normalize.get_prompt", return_value="prompt"):
                 normalize_prd(agent="cursor-agent")
                 # No files found should return early
                 assert len(list(prds_dir.glob("*.yaml"))) == 0
@@ -28,13 +25,9 @@ def test_normalize_prd_with_file(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    prompts_dir = tmp_path / "prompts"
-    prompts_dir.mkdir()
-    (prompts_dir / "pdr_normalization_prompt.txt").write_text("normalize {PASTE HUMAN PRD HERE}")
-
-    with patch("vibe_tools.normalize.PRDS_DIR", prds_dir):
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
         with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-            with patch("vibe_tools.normalize.PROMPTS_DIR", prompts_dir):
+            with patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"):
                 with patch("vibe_tools.normalize.run_agent") as mock_agent:
                     mock_agent.return_value = ("yaml content", 0)
                     normalize_prd(agent="cursor-agent")
@@ -54,15 +47,11 @@ def test_normalize_prd_recursive(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    prompts_dir = tmp_path / "prompts"
-    prompts_dir.mkdir()
-    (prompts_dir / "pdr_normalization_prompt.txt").write_text("normalize {PASTE HUMAN PRD HERE}")
-
-    with patch("vibe_tools.normalize.PRDS_DIR", prds_dir):
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
         with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
             # Also patch the CLI load_config which is called inside normalize_prd
             with patch("vibe_tools.cli.load_config", return_value={}):
-                with patch("vibe_tools.normalize.PROMPTS_DIR", prompts_dir):
+                with patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"):
                     with patch("vibe_tools.normalize.run_agent") as mock_agent:
                         mock_agent.return_value = ("yaml infra content", 0)
                         normalize_prd(agent="cursor-agent")

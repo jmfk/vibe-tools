@@ -1,9 +1,7 @@
-import os
 import pathlib
 import subprocess
-import sys
 import tempfile
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional
 
 import click
 
@@ -13,19 +11,19 @@ except ImportError:
     readline = None  # type: ignore
 
 from vibe_tools.utils import (
-    ensure_dir,
-    get_agent_command,
-    run_agent,
-    logger,
-    get_prompt,
     PM_CONFIG_FILE,
     PM_SESSION_FILE,
-    get_instructions_context,
-    VIBE_PROJECT_DIR,
     SPECS_DIR,
-    load_project_state,
-    get_agent_processes,
+    VIBE_PROJECT_DIR,
     cleanup_stale_processes,
+    ensure_dir,
+    get_agent_command,
+    get_agent_processes,
+    get_instructions_context,
+    get_prompt,
+    load_project_state,
+    logger,
+    run_agent,
 )
 
 
@@ -125,8 +123,8 @@ class InteractivePM:
                 readline.parse_and_bind("bind -e")
             else:
                 readline.parse_and_bind("tab: menu-complete")
-                readline.parse_and_bind('"\e[Z": menu-complete-backward')
-                readline.parse_and_bind('"\e": kill-whole-line')
+                readline.parse_and_bind(r'"\e[Z": menu-complete-backward')
+                readline.parse_and_bind(r'"\e": kill-whole-line')
 
             history_file = VIBE_PROJECT_DIR / ".pm_history"
             if history_file.exists():
@@ -334,7 +332,7 @@ class InteractivePM:
                     click.echo("Active agent processes:")
                     for p in processes:
                         click.echo(f"  - {p['pid']}: {p['command']}")
-                    
+
                     if click.confirm("\nAre you sure you want to kill all these processes?", default=False):
                         killed = cleanup_stale_processes()
                         if killed:
@@ -597,7 +595,7 @@ class InteractivePM:
             # Check if implemented
             filename = header
             if filename.startswith("specs/"): filename = filename[6:]
-            
+
             state = load_project_state()
             completed = state.get("completed_prds", [])
             if filename in completed or filename.replace(".md", "") in completed:
@@ -639,7 +637,7 @@ class InteractivePM:
                 options.append("c")
                 prompt_parts.append("[c]ode editor")
 
-            prompt_text = f"🚀 Open in " + ", ".join(prompt_parts) + "?"
+            prompt_text = "🚀 Open in " + ", ".join(prompt_parts) + "?"
             default_choice = "n"
             if detected == "md" and md_editor: default_choice = "m"
             elif detected == "code" and code_editor: default_choice = "c"

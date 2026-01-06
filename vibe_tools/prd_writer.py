@@ -11,11 +11,10 @@ import click
 from vibe_tools.utils import (
     ensure_dir,
     get_agent_command,
-    run_agent,
     get_google_api_key,
     get_prompt,
+    run_agent,
 )
-
 
 DspyRunner = Callable[[Dict[str, Any]], Dict[str, Any]]
 AgentRunner = Callable[[str], Tuple[str, int]]

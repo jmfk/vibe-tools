@@ -1,9 +1,6 @@
 import atexit
-import datetime
-import json
 import logging
 import pathlib
-import subprocess
 from typing import List
 
 import click
@@ -56,48 +53,45 @@ class OrderedGroup(click.Group):
         return ordered_commands + other_commands
 
 
+from dotenv import find_dotenv, load_dotenv
+
 from vibe_tools.cost import finalize_cost_report, get_total_cost
+from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
-    VIBE_PROJECT_DIR,
-    COSTS_DIR,
-    PRD_DIR,
-    STATE_FILE,
-    PROJECT_STATE_FILE,
     ARCHITECTURE,
     ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
-    PROJECT_PLAN,
-    INFRA,
-    INFRA_CURRENT,
-    INFRA_SPEC,
     CICD,
     CICD_CURRENT,
     CICD_SPEC,
+    COSTS_DIR,
+    INFRA,
+    INFRA_CURRENT,
+    INFRA_SPEC,
+    PRD_DIR,
     TESTING_CONFIG,
     TESTING_CURRENT,
     TESTING_SPEC,
+    VIBE_PROJECT_DIR,
+    check_dependencies,
+    cleanup_stale_processes,
     enable_console_debug,
     ensure_dir,
     ensure_gitignore,
     get_agent_command,
+    get_agent_processes,
+    get_file_hash,
     get_google_api_key,
     get_main_branch,
+    get_prompt,
     load_config,
     load_project_state,
-    save_project_state,
-    check_dependencies,
-    get_file_hash,
-    get_prompt,
-    get_agent_processes,
     run_agent,
     run_command,
-    save_config,
+    save_project_state,
     setup_logging,
-    cleanup_stale_processes,
 )
-from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
-from dotenv import load_dotenv, find_dotenv
 
 # Load environment variables from .env file at startup
 load_dotenv(find_dotenv() or ".env")
@@ -292,16 +286,15 @@ def _perform_basic_init():
     maybe_init_git()
 
     from vibe_tools.utils import (
-        VIBE_PROJECT_DIR,
-        INSTRUCTIONS_DIR,
-        PRD_DIR,
-        LOGS_DIR,
         COSTS_DIR,
+        INSTRUCTIONS_DIR,
+        LOGS_DIR,
+        PRD_DIR,
         VIBE_DATA_DIR,
-        ensure_gitignore,
+        VIBE_PROJECT_DIR,
         ensure_dir,
-        migrate_to_project_dir,
         ensure_project_structure,
+        migrate_to_project_dir,
     )
 
     # First, migrate any existing files from root to project/
@@ -400,7 +393,7 @@ def normalize(ctx, input_file, yes):
         )
         return
 
-    from vibe_tools.normalize import normalize_prd, normalize_plans
+    from vibe_tools.normalize import normalize_prd
 
     click.echo("🔄 Normalizing specs...")
     normalize_prd(
@@ -643,10 +636,11 @@ def status():
 @cli.command()
 def docs():
     """Display the project documentation (README.md)."""
-    from vibe_tools.templates import TEMPLATES
     from rich.console import Console
     from rich.markdown import Markdown
     from rich.theme import Theme
+
+    from vibe_tools.templates import TEMPLATES
 
     content = TEMPLATES.get("README", "Documentation not found in templates.")
 
@@ -737,7 +731,7 @@ def setup(ctx, auto, import_code):
         output, code = run_agent(cmd, stream=stream)
 
         if code == 0 and COMPLETION_PROMISE in output:
-            click.echo(f"✅ Generated current state and specification files.")
+            click.echo("✅ Generated current state and specification files.")
             click.echo("\nNext Steps:")
             click.echo(f"1. Review {ARCHITECTURE_SPEC} and {INFRA_SPEC}")
             click.echo(
@@ -745,7 +739,7 @@ def setup(ctx, auto, import_code):
             )
             click.echo("3. Run 'vibe setup' (without --import-code) to reconcile.")
         else:
-            click.echo(f"❌ Failed to generate discovery files.")
+            click.echo("❌ Failed to generate discovery files.")
         return
 
     if not ARCHITECTURE.exists():
