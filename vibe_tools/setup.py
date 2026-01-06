@@ -17,9 +17,11 @@ from vibe_tools.utils import (
     get_google_api_key,
     get_project_name,
     load_config,
+    load_project_state,
     run_command,
     save_config,
     save_google_api_key,
+    save_project_state,
 )
 from vibe_tools.templates import TEMPLATES
 
@@ -599,6 +601,11 @@ def deps():
     if pathlib.Path("frontend/package.json").exists():
         click.echo("Found frontend/package.json. Installing npm dependencies...")
         run_command(["npm", "install", "--prefix", "frontend"], caffeinate=True)
+
+    # Update project state to mark deps as completed
+    state = load_project_state()
+    state["phases"]["deps"]["status"] = "completed"
+    save_project_state(state)
 
     click.echo("✅ Dependencies installed.")
 
