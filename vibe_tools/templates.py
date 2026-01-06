@@ -281,6 +281,30 @@ Please resolve this git issue so the automated pipeline can continue.
 You may need to stash changes, commit them, reset the branch, or merge. 
 Ensure the end state is that we are on branch '{branch_name}' and ready to work.
 """,
+    "git_resolve_prompt.txt": """You are a Git Expert. The user's branch stack or history has become tangled or has conflicts.
+
+GIT STATUS:
+{git_status}
+
+GIT LOG (recent):
+{git_log}
+
+ALL BRANCHES:
+{git_branches}
+
+VIBE BRANCH LINEAGE (Desired):
+{lineage}
+
+TASK:
+1. Analyze the current git state and the desired lineage.
+2. Resolve any conflicts, failed rebases, or detached HEAD states.
+3. Ensure that the branch stack matches the desired lineage as closely as possible.
+4. If a branch should be based on another but isn't, rebase it.
+5. Provide the exact commands you are running or have run.
+6. When the history is clean and aligned with the lineage, include <promise>DONE</promise>.
+
+Respond with the actions you are taking. Output code only where possible, or clear step-by-step resolution.
+""",
     "discovery_prompt.txt": """Analyze the current codebase and generate the following four files:
 1. '{architecture_current}': YAML describing the ACTUAL tech stack, directory structure, key dependencies, and test suites (including test entry points like pytest or npm test).
 2. '{infra_current}': YAML describing the ACTUAL infrastructure including databases, external services, caches, queues, and object storage.

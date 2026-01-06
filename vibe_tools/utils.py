@@ -232,6 +232,7 @@ def load_project_state() -> Dict[str, Any]:
             },
         },
         "plans": {},
+        "branch_lineage": {},  # Maps branch -> parent_branch
         "completed_prds": [],
         "started_prds": [],
         "active_task": None,
@@ -250,6 +251,8 @@ def load_project_state() -> Dict[str, Any]:
                         state["phases"][phase_id].update(phase_data)
             if "plans" in stored_state:
                 state["plans"] = stored_state["plans"]
+            if "branch_lineage" in stored_state:
+                state["branch_lineage"] = stored_state["branch_lineage"]
             if "completed_prds" in stored_state:
                 state["completed_prds"] = stored_state["completed_prds"]
             if "started_prds" in stored_state:

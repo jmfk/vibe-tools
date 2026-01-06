@@ -28,16 +28,20 @@ def display_branches_table():
     table.add_column("Plan ID", style="magenta")
     table.add_column("Status", style="bold")
     table.add_column("Depends On", style="yellow")
+    table.add_column("Parent Branch", style="blue")
     table.add_column("Merged", justify="center")
+
+    branch_lineage = state.get("branch_lineage", {})
 
     for branch in branches:
         plan_id = None
         status = "-"
         depends_on = "-"
+        parent_branch = branch_lineage.get(branch, "-")
         merged = "-"
 
         if branch == main_branch:
-            table.add_row(f"[bold]{branch}[/bold]", "-", "-", "-", "-")
+            table.add_row(f"[bold]{branch}[/bold]", "-", "-", "-", "-", "-")
             continue
 
         # Try to match branch to plan ID
@@ -67,10 +71,10 @@ def display_branches_table():
             is_merged_into_main = is_merged(branch)
             merged = "[green]✅[/green]" if is_merged_into_main else "[red]❌[/red]"
             
-            table.add_row(branch, plan_id, status, depends_on, merged)
+            table.add_row(branch, plan_id, status, depends_on, parent_branch, merged)
         else:
             # Branch exists but not tied to a known vibe plan
-            table.add_row(branch, "-", "-", "-", "-")
+            table.add_row(branch, "-", "-", "-", parent_branch, "-")
 
     console.print(table)
 
