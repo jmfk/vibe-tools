@@ -773,6 +773,13 @@ def setup(ctx, auto, import_code):
         stream=stream,
     )
 
+    loop.instructions = [
+        "Initialize or update the testing infrastructure for both frontend and backend.",
+        "Ensure the Makefile has working 'test-backend' and 'test-frontend' targets that match the architecture.",
+        "Create dummy test files (e.g., backend/tests/test_initial.py, frontend/src/initial.test.ts) to verify the harness.",
+        "Ensure test dependencies and scripts are present in pyproject.toml and package.json.",
+    ]
+
     success = loop.run()
     if success:
         state["phases"]["setup"]["status"] = "completed"
@@ -786,7 +793,8 @@ def setup(ctx, auto, import_code):
         generate_prd_plan()
 
         click.echo("\nNext Steps:")
-        click.echo("[ ] Start Building (vibe implement)")
+        click.echo("1. Run 'vibe-setup deps' to install any new testing dependencies.")
+        click.echo("2. Start Building (vibe implement)")
     else:
         click.echo("❌ Architecture setup failed.")
 
