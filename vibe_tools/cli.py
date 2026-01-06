@@ -280,13 +280,13 @@ def init(ctx):
 
     click.echo("\nNext Steps:")
     click.echo(
-        f"  {click.style('vibe architect', fg='cyan'):<20} Refine architecture and infrastructure"
+        f"  {click.style('vibe architect', fg='cyan'):<20} Phase 1: Refine architecture and infrastructure"
     )
     click.echo(
-        f"  {click.style('vibe pm', fg='magenta'):<20} Refine PRDs and product specs"
+        f"  {click.style('vibe pm', fg='magenta'):<20} Phase 1: Refine PRDs and product specs"
     )
     click.echo(
-        f"  {click.style('vibe normalize', fg='yellow'):<20} Standardize all specs into machine-readable YAML"
+        f"  {click.style('vibe normalize', fg='yellow'):<20} Phase 2: Standardize all specs into machine-readable YAML"
     )
     click.echo("\nRun 'vibe status' at any time to see your project progress.")
 
@@ -347,9 +347,11 @@ def ralph():
     )
     click.echo(click.style("!" * 60 + "\n", fg="red", bold=True))
     click.echo("Please use the new modular commands:")
-    click.echo("  vibe setup          - Phase 1: Architecture")
+    click.echo("  vibe architect      - Phase 1: Architecture")
+    click.echo("  vibe pm             - Phase 1: PRDs")
     click.echo("  vibe normalize      - Phase 2: Standardize Specs")
-    click.echo("  vibe implement      - Phase 3: Building")
+    click.echo("  vibe setup          - Phase 3: Architecture Setup")
+    click.echo("  vibe implement      - Phase 5: Building")
     click.echo("")
 
 
@@ -417,6 +419,7 @@ def normalize(ctx, input_file, yes):
     click.echo("\nNext Steps:")
     click.echo("[ ] Review/Edit generated YAMLs in project/prds/")
     click.echo("[ ] Architecture Setup (vibe setup)")
+    click.echo("[ ] Install Dependencies (vibe deps)")
     click.echo("[ ] Start Building (vibe implement)")
 
 
@@ -798,7 +801,7 @@ def setup(ctx, import_code):
 
 @cli.command()
 def deps():
-    """Install required Python and Frontend dependencies."""
+    """Phase 4: Install required Python and Frontend dependencies."""
     install_deps()
     click.echo("✅ Dependencies installed.")
 
@@ -834,7 +837,7 @@ def pm(ctx, query):
 @cli.command()
 @click.pass_context
 def implement(ctx):
-    """Phase 4: Implement. Iterates through the project-plan.yaml."""
+    """Phase 5: Implement. Iterates through the project-plan.yaml."""
     state = load_project_state()
     missing = check_dependencies("implement", state)
     if missing:
@@ -864,8 +867,6 @@ def implement(ctx):
         click.echo("✅ Implementation complete.")
         click.echo("\nNext Steps:")
         click.echo("[ ] Run Tests & Reconciliation (vibe testing)")
-        click.echo("[ ] Setup Infrastructure (vibe infra)")
-        click.echo("[ ] Setup CI/CD (vibe cicd)")
     else:
         click.echo("❌ Implementation failed.")
 
@@ -873,7 +874,7 @@ def implement(ctx):
 @cli.command()
 @click.pass_context
 def infra(ctx):
-    """Phase 5: Infrastructure reconciliation. Ensures services are reachable."""
+    """Phase 7: Infrastructure reconciliation. Ensures services are reachable."""
     state = load_project_state()
     missing = check_dependencies("infra", state)
     if missing:
@@ -918,7 +919,6 @@ def infra(ctx):
         click.echo("✅ Infrastructure reconciliation and verification complete.")
         click.echo("\nNext Steps:")
         click.echo("[ ] Setup CI/CD (vibe cicd)")
-        click.echo("[ ] Deployment (vibe deploy)")
     else:
         click.echo("❌ Infrastructure reconciliation failed.")
 
@@ -926,7 +926,7 @@ def infra(ctx):
 @cli.command()
 @click.pass_context
 def cicd(ctx):
-    """Phase 6: CI/CD reconciliation. Ensures deployment pipelines are ready."""
+    """Phase 8: CI/CD reconciliation. Ensures deployment pipelines are ready."""
     state = load_project_state()
     missing = check_dependencies("cicd", state)
     if missing:
@@ -968,7 +968,6 @@ def cicd(ctx):
         save_project_state(state)
         click.echo("✅ CI/CD reconciliation complete.")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Setup Infrastructure (vibe infra)")
         click.echo("[ ] Deployment (vibe deploy)")
     else:
         click.echo("❌ CI/CD reconciliation failed.")
@@ -977,7 +976,7 @@ def cicd(ctx):
 @cli.command()
 @click.pass_context
 def testing(ctx):
-    """Phase 7: Testing reconciliation. Ensures integration and regression tests pass."""
+    """Phase 6: Testing reconciliation. Ensures integration and regression tests pass."""
     state = load_project_state()
     missing = check_dependencies("testing", state)
     if missing:
@@ -1020,7 +1019,7 @@ def testing(ctx):
         save_project_state(state)
         click.echo("✅ Testing reconciliation complete.")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Deployment (vibe deploy)")
+        click.echo("[ ] Setup Infrastructure (vibe infra)")
     else:
         click.echo("❌ Testing reconciliation failed.")
 
@@ -1028,7 +1027,7 @@ def testing(ctx):
 @cli.command()
 @click.pass_context
 def deploy(ctx):
-    """Phase 8: Deployment."""
+    """Phase 9: Deployment."""
     state = load_project_state()
     missing = check_dependencies("deploy", state)
     if missing:

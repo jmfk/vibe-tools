@@ -214,9 +214,11 @@ def generate_prd_plan() -> bool:
     plan_data = {
         "phases": {
             "setup": {"plans": []},
-            "infra": {"plans": []},
             "implement": {"prds": []},
+            "testing": {"plans": []},
+            "infra": {"plans": []},
             "cicd": {"plans": []},
+            "deploy": {"plans": []},
         }
     }
 
@@ -366,7 +368,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     tests = ralph_config.get("tests", True)
 
     # Order of phases to execute
-    phase_order = ["setup", "implement", "testing", "infra", "cicd"]
+    phase_order = ["setup", "implement", "testing", "infra", "cicd", "deploy"]
 
     for phase_name in phase_order:
         if phase_name not in phases:
