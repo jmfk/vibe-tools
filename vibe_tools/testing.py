@@ -94,8 +94,21 @@ class ProjectTester:
 
         return None
 
-    def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=True):
+    def is_frontend_target(self, target):
+        """Returns True if the target is related to the frontend."""
+        return "frontend" in target.lower()
+
+    def is_backend_target(self, target):
+        """Returns True if the target is related to the backend or generic."""
+        # Generic 'test' or 'lint' or 'coverage' are usually backend-first in this project
+        # or we treat them as BE if not explicitly FE.
+        if self.is_frontend_target(target):
+            return False
+        return True
+
+    def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=False):
         """Runs test and lint targets, optionally filtered by changed files."""
+        # Force parallel=False by default for debugging loops to keep output clean
         if targets is None:
             targets = [
                 "test-backend",

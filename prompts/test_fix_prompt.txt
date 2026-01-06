@@ -1,10 +1,16 @@
 The codebase currently has test or linting failures. Please fix them.
 
+You are explicitly authorized and encouraged to:
+1. Fix the underlying issues in the implementation code.
+2. Fix or update the test code if the tests are incorrect or outdated.
+3. Install missing requirements (e.g., `pip install ...`, `npm install ...`) if dependencies are missing.
+4. Adjust environment variables, configuration files, or the testing environment as needed.
+
 ERROR OUTPUT:
 {test_output}
 
 TASK:
 1. Analyze the errors provided above.
-2. Fix the underlying issues in the backend (FastAPI) or frontend (React).
-3. Ensure that after your changes, the project builds and tests pass.
+2. Fix the issues in the backend (FastAPI) or frontend (React) and their respective environments.
+3. Ensure that after your changes, the target tests pass.
 4. Include <promise>DONE</promise> in your response once you believe the issues are fixed.
