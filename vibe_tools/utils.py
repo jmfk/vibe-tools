@@ -347,7 +347,7 @@ def setup_logging(command_name):
 
     # Generate timestamped log filename with command name
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    LOG_FILE = LOGS_DIR / f"vibe_{command_name}_{timestamp}.log"
+    LOG_FILE = LOGS_DIR / f"{timestamp}_vibe_{command_name}.log"
 
     # File handler
     file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
