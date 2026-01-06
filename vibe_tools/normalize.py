@@ -12,16 +12,21 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     get_agent_command,
     get_prompt,
+    is_dirty,
     load_project_state,
     logger,
     run_agent,
+    run_command,
     save_project_state,
 )
+from vibe_tools.ralph import _switch_to_branch
 
 DEFAULT_SPECS_DIR = pathlib.Path("specs")
 
 
-def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False):
+def normalize_prd(
+    agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False
+):
     # ... existing code ...
     from vibe_tools.cli import load_config
 
@@ -86,9 +91,13 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             if new_stem == clean_stem:
                 break
             clean_stem = new_stem
-        
+
         # Replace remaining dashes/spaces with underscores for consistency
         clean_stem = re.sub(r"[- ]", "_", clean_stem)
+
+        # Switch to normalization branch for this PRD
+        branch_name = f"vibe/normalize/{clean_stem}"
+        _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
 
         # Determine target PRD directory (preserving subdirectories)
         rel_dir = spec_path.parent.relative_to(specs_dir)
@@ -97,7 +106,13 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
 
         # Determine output filename with normalized prefix and format
         # 1. Special case for shared global context files ("global truths")
-        global_truths = ["architecture", "project_overview", "infrastructure", "cicd", "testing"]
+        global_truths = [
+            "architecture",
+            "project_overview",
+            "infrastructure",
+            "cicd",
+            "testing",
+        ]
         if clean_stem in global_truths:
             output_filename = f"{clean_stem}.yaml"
             # Global truths now go to the PRD directory (prds/)
@@ -113,14 +128,20 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             md_mtime = spec_path.stat().st_mtime
             yaml_mtime = output_path.stat().st_mtime
             if yaml_mtime > md_mtime and not overwrite_all:
-                print(f"⏩ Skipping {spec_path.name} (already up-to-date at {output_path.name})")
+                print(
+                    f"⏩ Skipping {spec_path.name} (already up-to-date at {output_path.name})"
+                )
                 continue
 
         if output_path.exists() and not overwrite_all:
-            if not click.confirm(f"Overwrite existing {output_path.name}?", default=False):
+            if not click.confirm(
+                f"Overwrite existing {output_path.name}?", default=False
+            ):
                 continue
 
-        print(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using {agent}...")
+        print(
+            f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using {agent}..."
+        )
 
         human_prd = spec_path.read_text()
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)
@@ -155,11 +176,32 @@ def normalize_prd(agent, input_file=None, auto_overwrite=False, caffeinate=False
             output_path.write_text(clean_output)
             print(f"✅ Saved: {output_path}")
 
+            # Commit changes if dirty
+            if is_dirty():
+                logger.info(
+                    f"💾 Committing normalization for {spec_path.name} on {branch_name}..."
+                )
+                run_command(["git", "add", "."], check=False)
+                run_command(
+                    ["git", "commit", "-m", f"vibe: normalize PRD '{spec_path.name}'"],
+                    check=False,
+                )
+
             # Update project state if this was a full normalization run
             if not input_file:
-                from vibe_tools.utils import load_project_state, save_project_state
+                from vibe_tools.utils import (
+                    load_project_state,
+                    save_project_state,
+                    switch_to_main,
+                )
+
                 state = load_project_state()
-            state["phases"]["normalize"]["status"] = "completed"
-            save_project_state(state)
-    else:
-        print(f"❌ Failed to normalize {spec_path.name}")
+                state["phases"]["normalize"]["status"] = "completed"
+                save_project_state(state)
+
+            # Switch back to main after each file normalization
+            switch_to_main()
+        else:
+            print(f"❌ Failed to normalize {spec_path.name}")
+            # Ensure we are back on main if it failed
+            switch_to_main()
