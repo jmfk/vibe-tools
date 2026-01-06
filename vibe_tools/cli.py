@@ -59,6 +59,7 @@ class OrderedGroup(click.Group):
 from vibe_tools.cost import finalize_cost_report, get_total_cost
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
+    VIBE_PROJECT_DIR,
     COSTS_DIR,
     PRD_DIR,
     STATE_FILE,
@@ -102,7 +103,6 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv() or ".env")
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
-PROMPTS_DIR = pathlib.Path("prompts")
 SPECS_DIR = pathlib.Path("specs")
 
 
@@ -188,8 +188,8 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
         click.echo(f"  Default Budget: ${default_budget:.2f} USD")
 
-        prompts_init = pathlib.Path("prompts").exists()
-        click.echo(f"  Initialized: {'Yes (prompts/ found)' if prompts_init else 'No'}")
+        project_init = VIBE_PROJECT_DIR.exists()
+        click.echo(f"  Initialized: {'Yes' if project_init else 'No'}")
 
         google_api_key = get_google_api_key()
         click.echo(f"  Google API Key: {'SET' if google_api_key else 'NOT SET'}")
@@ -222,7 +222,7 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
             f"  Specs Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to specs/)'}"
         )
 
-        if not prompts_init:
+        if not project_init:
             click.echo("\nRun 'vibe init' to set up templates.")
             click.echo("Run 'vibe-setup api' to configure LLM access.")
 
@@ -312,9 +312,6 @@ def _perform_basic_init():
 
     ensure_dir(VIBE_PROJECT_DIR)
     ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
-
-    prompts_dir = pathlib.Path("prompts")
-    ensure_dir(prompts_dir)
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
