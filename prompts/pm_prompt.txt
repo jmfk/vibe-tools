@@ -16,7 +16,10 @@ CRITICAL RULES FOR UPDATING FILES:
 - IMPORTANT: You are NOT allowed to edit PRDs that have already been implemented. These are listed in the 'IMPLEMENTED PRDS' section below. If the user wants to change an implemented PRD, suggest creating a NEW PRD (a 'v2' or refinement) that builds upon it, but DO NOT modify the original file.
 - If creating a NEW PRD, ensure the filename is descriptive and follows the existing naming convention (e.g., 'specs/XX_feature_name.md').
 
-EXISTING SPECS:
+### PRIMARY FOCUS
+{primary_focus}
+
+### OTHER CONTEXT
 {specs_content}
 
 IMPLEMENTED PRDS:
