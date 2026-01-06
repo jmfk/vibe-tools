@@ -1016,6 +1016,8 @@ def get_vibe_status_report():
                     sync_status = click.style(" (Out of Sync)", fg="yellow", dim=True)
             elif desired_file.exists():
                 sync_status = click.style(" (Needs Init)", fg="red", dim=True)
+            else:
+                sync_status = click.style(" (Missing YAML)", fg="red", dim=True)
 
         if status == "completed":
             status_display = click.style("✅ DONE", fg="green") + sync_status
@@ -1027,6 +1029,13 @@ def get_vibe_status_report():
             status_display = (
                 click.style("⚪ PENDING", fg="white", dim=True) + sync_status
             )
+            # Special hint for normalize phase if nothing is in specs/
+            if phase_id == "normalize":
+                if not SPECS_DIR.exists() or not list(SPECS_DIR.rglob("*.md")):
+                    status_display += (
+                        f" {click.style('(Run vibe pm)', fg='white', dim=True)}"
+                    )
+
             if not next_action:
                 next_action = f"vibe {phase_id}"
 
@@ -1035,18 +1044,20 @@ def get_vibe_status_report():
     # 3. Core Configuration
     report.append(click.style("\nCORE CONFIGURATION:", fg="yellow", bold=True))
     core_files = [
-        ("Architecture", ARCHITECTURE),
-        ("Project Overview", OVERVIEW),
-        ("Infrastructure", INFRA),
-        ("CI/CD", CICD),
-        ("Testing", TESTING_CONFIG),
+        ("Architecture", ARCHITECTURE, "vibe architect"),
+        ("Project Overview", OVERVIEW, None),
+        ("Infrastructure", INFRA, "vibe architect"),
+        ("CI/CD", CICD, "vibe architect"),
+        ("Testing", TESTING_CONFIG, "vibe architect"),
     ]
-    for label, path in core_files:
+    for label, path, fix_cmd in core_files:
         if path.exists():
             status = click.style("✅ Found", fg="green")
+            report.append(f"  - {label:<20} {status}")
         else:
             status = click.style("⚪ Missing", fg="white", dim=True)
-        report.append(f"  - {label:<20} {status}")
+            suggestion = f" (Run '{fix_cmd}' then 'vibe normalize')" if fix_cmd else ""
+            report.append(f"  - {label:<20} {status}{suggestion}")
 
     # 4. Planning & Implementation
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
@@ -1154,7 +1165,9 @@ def get_vibe_status_report():
     started_prds = state.get("started_prds", [])
 
     if not all_prds:
-        report.append("  No PRDs found in prds/")
+        report.append(
+            f"  {click.style('⚪ No machine PRDs found', fg='white', dim=True)} (Run 'vibe pm' then 'vibe normalize')"
+        )
     else:
         for prd in all_prds:
             name = prd.stem
