@@ -146,8 +146,23 @@ def generate_prd_plan() -> bool:
 
     state = load_project_state()
 
+    # Track lineage and find parent branch
+    last_completed_branch = get_main_branch()
+    completed_plans = [
+        p_id
+        for p_id, p_info in state["plans"].items()
+        if p_info.get("status") == "completed"
+    ]
+    if completed_plans:
+        # Sort by creation time if we had it, but for now we'll assume alphabetical order of PRDs if not specified
+        # or use the order in state["plans"] which is usually the implementation order.
+        last_plan_id = completed_plans[-1]
+        last_completed_branch = f"feature/{last_plan_id}"
+
     for prd_path in prds:
         prd_id = prd_path.stem
+        branch_name = f"feature/{prd_id}"
+
         # Ensure it's in state["plans"]
         if prd_id not in state["plans"]:
             state["plans"][prd_id] = {
@@ -156,11 +171,27 @@ def generate_prd_plan() -> bool:
                 "title": prd_id.replace("prd_", "").replace("_", " ").title(),
                 "file": str(prd_path),
                 "is_direct_prd": True,
+                "branch": branch_name,
+                "parent_branch": last_completed_branch,
             }
+            state["branch_lineage"][branch_name] = last_completed_branch
         else:
-            # Update file path if needed
+            # Update file path and ensure branch/parent_branch exist
             state["plans"][prd_id]["file"] = str(prd_path)
             state["plans"][prd_id]["is_direct_prd"] = True
+            if "branch" not in state["plans"][prd_id]:
+                state["plans"][prd_id]["branch"] = branch_name
+            if "parent_branch" not in state["plans"][prd_id]:
+                # If it's already in state but missing parent_branch, try to find it
+                # or default to main
+                state["plans"][prd_id]["parent_branch"] = state["branch_lineage"].get(
+                    branch_name, get_main_branch()
+                )
+
+        # Update last_completed_branch for the next one in the loop if we want strict linear
+        # (Though we might want to only update it if the previous one was just added or is completed)
+        # For initialization, we'll assume linear based on the collected PRD order.
+        last_completed_branch = branch_name
 
     save_project_state(state)
 
@@ -316,6 +347,10 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         )
         description = plan_yaml_path.read_text()
 
+        # Determine branch and parent
+        branch_name = plan_info.get("branch", f"feature/{plan_id}")
+        parent_branch = plan_info.get("parent_branch", get_main_branch())
+
         # Extract success criteria
         capabilities = plan_data.get("CAPABILITIES", {})
         success_criteria = []
@@ -338,8 +373,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
         logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
         log_start("implement", f"Plan: {title} ({plan_id})")
-        branch_name = f"feature/{plan_id}"
-        _switch_to_branch(branch_name, agent, plan_id, stream=stream)
+        _switch_to_branch(
+            branch_name, agent, plan_id, parent_branch=parent_branch, stream=stream
+        )
 
         success = False
         for i in range(1, max_impl_iterations + 1):
@@ -484,8 +520,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     return True
 
 
-def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream=False):
+def _switch_to_branch(
+    branch_name, agent, project_name, parent_branch=None, caffeinate=False, stream=False
+):
     """Robustly switches to a feature branch, using AI rescue if needed."""
+    if parent_branch is None:
+        parent_branch = get_main_branch()
+
     # Check if we are already on this branch
     stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
     if stdout.strip() == branch_name:
@@ -500,7 +541,11 @@ def _switch_to_branch(branch_name, agent, project_name, caffeinate=False, stream
         logger.info(f"Branch '{branch_name}' already exists. Switching...")
         output, code = run_command(["git", "checkout", branch_name], check=False)
     else:
-        logger.info(f"Creating and switching to branch: {branch_name}")
+        logger.info(
+            f"Creating and switching to branch: {branch_name} from {parent_branch}"
+        )
+        # Ensure parent branch exists locally or pull it
+        run_command(["git", "checkout", parent_branch], check=False)
         output, code = run_command(["git", "checkout", "-b", branch_name], check=False)
 
     if code != 0:
