@@ -23,7 +23,6 @@ class OrderedGroup(click.Group):
             "cicd",
             "deploy",
             # Supporting tools
-            "prd",
             "history",
             "status",
             "cost",
@@ -39,6 +38,7 @@ class OrderedGroup(click.Group):
             "init",
             # Deprecated
             "ralph",
+            "prd",
             "review-prd",
             "write-prd",
         ]
@@ -535,7 +535,11 @@ def _run_agent_review(
 )
 @click.pass_context
 def prd(ctx, title, type):
-    """Interactive PRD writer with slash commands."""
+    """[DEPRECATED] Use 'vibe pm' instead. Interactive PRD writer with slash commands."""
+    click.echo(
+        click.style("\n!!! DEPRECATED: 'prd' is deprecated !!!", fg="yellow", bold=True)
+    )
+    click.echo("Please use 'vibe pm' for the newer interactive experience.\n")
     from vibe_tools.prd_writer import InteractivePRD
 
     initial_prompt = title or click.prompt(
