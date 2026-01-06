@@ -34,8 +34,6 @@ ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
 ARCHITECTURE_SPEC = pathlib.Path("specs/architecture.md")
 OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
-PROJECT_PLAN = VIBE_PROJECT_DIR / "project-plan.yaml"
-PROJECT_PLAN_CURRENT = VIBE_PROJECT_DIR / "project-plan-current.yaml"
 INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
 INFRA_SPEC = pathlib.Path("specs/infrastructure.md")
@@ -118,8 +116,6 @@ def migrate_to_project_dir():
         pathlib.Path("architecture.yaml"): ARCHITECTURE,
         pathlib.Path("architecture-current.yaml"): ARCHITECTURE_CURRENT,
         pathlib.Path("project_overview.yaml"): OVERVIEW,
-        pathlib.Path("project-plan.yaml"): PROJECT_PLAN,
-        pathlib.Path("project-plan-current.yaml"): PROJECT_PLAN_CURRENT,
         pathlib.Path("infrastructure.yaml"): INFRA,
         pathlib.Path("infrastructure-current.yaml"): INFRA_CURRENT,
         pathlib.Path("cicd.yaml"): CICD,
@@ -1006,6 +1002,21 @@ def get_vibe_status_report():
         phase = phases.get(phase_id, {})
         status = phase.get("status", "pending")
 
+        # Dynamic status calculation for implementation phase
+        if phase_id == "implement":
+            all_plans = state.get("plans", {})
+            if all_plans:
+                completed_count = sum(
+                    1 for p in all_plans.values() if p.get("status") == "completed"
+                )
+                total_count = len(all_plans)
+                if completed_count == total_count:
+                    status = "completed"
+                elif completed_count > 0:
+                    status = "in_progress"
+                else:
+                    status = "pending"
+
         sync_status = ""
         if phase_id in phase_files:
             desired_file, current_file = phase_files[phase_id]
@@ -1061,71 +1072,26 @@ def get_vibe_status_report():
 
     # 4. Planning & Implementation
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
-    if PROJECT_PLAN.exists():
-        plan_status = click.style("✅ Found", fg="green")
-        report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
+    # Granular plans from project-state.json (Source of Truth)
+    state_plans = state.get("plans", {})
+    if state_plans:
+        # Sort plans by ID if possible, or just iterate
+        for plan_id, plan_info in state_plans.items():
+            status = plan_info.get("status", "pending")
+            if status == "completed":
+                status_display = click.style("✅ DONE", fg="green")
+            elif status == "in_progress":
+                status_display = click.style("⏳ IN_PROGRESS", fg="blue")
+            else:
+                status_display = click.style("⚪ PENDING", fg="white", dim=True)
 
-        # Granular plans from project-state.json (Source of Truth)
-        state_plans = state.get("plans", {})
-        if state_plans:
-            # Sort plans by ID if possible, or just iterate
-            for plan_id, plan_info in state_plans.items():
-                status = plan_info.get("status", "pending")
-                if status == "completed":
-                    status_display = click.style("✅ DONE", fg="green")
-                elif status == "in_progress":
-                    status_display = click.style("⏳ IN_PROGRESS", fg="blue")
-                else:
-                    status_display = click.style("⚪ PENDING", fg="white", dim=True)
-
-                deps = plan_info.get("depends_on", [])
-                dep_str = f" (Needs: {', '.join(deps)})" if deps else ""
-                report.append(f"    - {plan_id:<30} {status_display}{dep_str}")
-        else:
-            # Fallback to parsing the index file if state["plans"] is empty
-            try:
-                plan_data = yaml.safe_load(PROJECT_PLAN.read_text())
-                phases = plan_data.get("phases", {})
-
-                for phase_name in ["setup", "implement", "infra", "cicd"]:
-                    if phase_name not in phases:
-                        continue
-
-                    phase_data = phases[phase_name]
-                    report.append(
-                        f"    {click.style(phase_name.upper(), underline=True)}:"
-                    )
-
-                    if phase_name == "implement":
-                        prds = phase_data.get("prds", [])
-                        for prd in prds:
-                            report.append(f"      PRD: {prd.get('id')}")
-                            for p in prd.get("plans", []):
-                                p_status = p.get("status", "pending")
-                                if p_status == "completed":
-                                    p_status_display = click.style("✅", fg="green")
-                                else:
-                                    p_status_display = click.style(
-                                        "⚪", fg="white", dim=True
-                                    )
-                                report.append(
-                                    f"        - {p_status_display} {p.get('id')}"
-                                )
-                    else:
-                        for p in phase_data.get("plans", []):
-                            p_status = p.get("status", "pending")
-                            if p_status == "completed":
-                                p_status_display = click.style("✅", fg="green")
-                            else:
-                                p_status_display = click.style(
-                                    "⚪", fg="white", dim=True
-                                )
-                            report.append(f"      - {p_status_display} {p.get('id')}")
-            except Exception as e:
-                report.append(f"  Error parsing {PROJECT_PLAN.name}: {e}")
+            deps = plan_info.get("depends_on", [])
+            dep_str = f" (Needs: {', '.join(deps)})" if deps else ""
+            report.append(f"    - {plan_id:<30} {status_display}{dep_str}")
     else:
-        plan_status = click.style("⚪ Missing", fg="white", dim=True)
-        report.append(f"  - {PROJECT_PLAN.name:<20} {plan_status}")
+        report.append(
+            f"  {click.style('⚪ No plans found', fg='white', dim=True)} (Run 'vibe setup' to generate plans from PRDs)"
+        )
 
     # 5. Instructions & Prompts
     report.append(click.style("\nINSTRUCTIONS & PROMPTS:", fg="yellow", bold=True))
