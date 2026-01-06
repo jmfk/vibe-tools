@@ -1236,6 +1236,59 @@ def implemented():
     click.echo("Done.")
 
 
+@cli.group(name="branch")
+@click.pass_context
+def branch_group(ctx):
+    """Manage feature branches and their lineage."""
+    pass
+
+
+@branch_group.command(name="base")
+@click.argument("branch_name", required=False)
+@click.argument("new_base", required=False)
+@click.pass_context
+def branch_base(ctx, branch_name, new_base):
+    """Get or set the base branch for a feature branch."""
+    from vibe_tools.branches import set_branch_base
+    from vibe_tools.utils import load_project_state, run_command, get_main_branch
+
+    if not branch_name:
+        # Show current branch and its base
+        branch_name, _ = run_command(["git", "branch", "--show-current"], check=False)
+        branch_name = branch_name.strip()
+
+    state = load_project_state()
+    lineage = state.get("branch_lineage", {})
+
+    if new_base:
+        set_branch_base(branch_name, new_base)
+    else:
+        current_base = lineage.get(branch_name, get_main_branch())
+        click.echo(
+            f"Branch {click.style(branch_name, fg='cyan')} is based on {click.style(current_base, fg='blue')}"
+        )
+
+
+@branch_group.command(name="merge")
+@click.argument("src")
+@click.argument("dst")
+@click.pass_context
+def branch_merge(ctx, src, dst):
+    """Merge src into dst and update lineage."""
+    from vibe_tools.branches import merge_branches
+
+    merge_branches(src, dst)
+
+
+@branch_group.command(name="investigate")
+@click.pass_context
+def branch_investigate(ctx):
+    """Reconstruct branch lineage from git history."""
+    from vibe_tools.branches import investigate_git_lineage
+
+    investigate_git_lineage()
+
+
 @cli.command()
 @click.pass_context
 def branches(ctx):
