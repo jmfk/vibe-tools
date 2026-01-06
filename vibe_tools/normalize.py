@@ -9,6 +9,7 @@ import yaml
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     COMPILED_PLANS_DIR,
+    PLANS_DIR,
     PRD_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
@@ -166,11 +167,13 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
 
     migrate_to_project_dir()
 
-    state = load_project_state()
-    all_plans = state.get("plans", {})
+    if not PLANS_DIR.exists():
+        logger.warning(f"No plans directory found at {PLANS_DIR}")
+        return True
 
+    all_plans = list(PLANS_DIR.glob("*.md"))
     if not all_plans:
-        logger.warning("No plans found in state.json.")
+        logger.warning("No markdown plans found in project/plans/.")
         return True
 
     try:
@@ -181,19 +184,7 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
 
     COMPILED_PLANS_DIR.mkdir(exist_ok=True)
 
-    for plan_id, plan_info in all_plans.items():
-        file_path = plan_info.get("file")
-        if not file_path:
-            continue
-
-        plan_file = pathlib.Path(file_path)
-        if not plan_file.exists():
-            # If it's a direct PRD, it's already normalized
-            if plan_info.get("is_direct_prd"):
-                continue
-            logger.error(f"Plan file {plan_file} not found.")
-            continue
-
+    for plan_file in all_plans:
         # Target is in COMPILED_PLANS_DIR
         yaml_path = COMPILED_PLANS_DIR / (plan_file.stem + ".yaml")
 
@@ -231,7 +222,6 @@ def normalize_plans(agent: str, stream: bool = False) -> bool:
                         "depends_on": plan_data.get("dependencies", []),
                         "title": plan_data.get("title", plan_id),
                         "file": str(plan_file),
-                        "is_direct_prd": False
                     }
                     save_project_state(state)
             except Exception as e:

@@ -837,7 +837,7 @@ def pm(ctx, query):
 @cli.command()
 @click.pass_context
 def implement(ctx):
-    """Phase 5: Implement. Iterates through the project-plan.yaml."""
+    """Phase 5: Implement. Iterates through implementation plans defined in state.json."""
     state = load_project_state()
     missing = check_dependencies("implement", state)
     if missing:

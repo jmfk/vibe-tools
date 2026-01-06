@@ -144,32 +144,6 @@ TASK:
    - Dependencies: IDs of other plans that MUST be completed first.
    - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
    - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-6. Create a 'project-plan.yaml' in the 'project/' directory that acts as an index of all plans, organized by phase and PRD.
-
-SCHEMA for project/project-plan.yaml:
-phases:
-  setup:
-    plans:
-      - id: "01_init_repo"
-        file: "project/plans/01_init_repo.md"
-        status: "pending"
-  infra:
-    plans:
-      - id: "02_db_setup"
-        file: "project/plans/02_db_setup.md"
-        status: "pending"
-  implement:
-    prds:
-      - id: "prd_01_minimal_htmx"
-        plans:
-          - id: "03_htmx_base"
-            file: "project/plans/03_htmx_base.md"
-            status: "pending"
-  cicd:
-    plans:
-      - id: "04_github_actions"
-        file: "project/plans/04_github_actions.md"
-        status: "pending"
 
 Include <promise>DONE</promise> when all files are saved.
 """,
