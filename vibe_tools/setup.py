@@ -16,6 +16,7 @@ from vibe_tools.utils import (
     ensure_dir,
     ensure_gitignore,
     get_google_api_key,
+    get_main_branch,
     get_project_name,
     load_config,
     load_project_state,
@@ -574,6 +575,17 @@ def install_deps():
     """Logic to install required Python and Frontend dependencies."""
     # Ensure basic infrastructure is present
     ensure_infrastructure()
+
+    # If we are on main branch, switch to a dependencies branch
+    current_branch, _ = run_command(["git", "branch", "--show-current"], check=False)
+    main_branch = get_main_branch()
+
+    if current_branch.strip() == main_branch:
+        from vibe_tools.ralph import _switch_to_branch
+
+        _switch_to_branch(
+            "vibe/dependencies", agent="internal", project_name="dependencies"
+        )
 
     click.echo("\n--- Installing Dependencies ---")
 
