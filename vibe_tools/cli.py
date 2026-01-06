@@ -17,6 +17,7 @@ class OrderedGroup(click.Group):
             "pm",
             "normalize",
             "setup",
+            "deps",
             "implement",
             "testing",
             "infra",
@@ -56,7 +57,7 @@ class OrderedGroup(click.Group):
 from dotenv import find_dotenv, load_dotenv
 
 from vibe_tools.cost import finalize_cost_report, get_total_cost
-from vibe_tools.setup import SERVICE_DEFINITIONS, maybe_init_git
+from vibe_tools.setup import SERVICE_DEFINITIONS, install_deps, maybe_init_git
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
     ARCHITECTURE,
@@ -789,10 +790,17 @@ def setup(ctx, import_code):
         generate_prd_plan()
 
         click.echo("\nNext Steps:")
-        click.echo("1. Run 'vibe-setup deps' to install any new testing dependencies.")
+        click.echo("1. Run 'vibe deps' to install any new testing dependencies.")
         click.echo("2. Start Building (vibe implement)")
     else:
         click.echo("❌ Architecture setup failed.")
+
+
+@cli.command()
+def deps():
+    """Install required Python and Frontend dependencies."""
+    install_deps()
+    click.echo("✅ Dependencies installed.")
 
 
 @cli.command()

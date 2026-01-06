@@ -570,9 +570,8 @@ def ensure_infrastructure():
         ensure_gitignore(str(VIBE_DATA_DIR) + "/*")
 
 
-@setup_cli.command()
-def deps():
-    """Install required Python and Frontend dependencies."""
+def install_deps():
+    """Logic to install required Python and Frontend dependencies."""
     # Ensure basic infrastructure is present
     ensure_infrastructure()
 
@@ -607,6 +606,11 @@ def deps():
     state["phases"]["deps"]["status"] = "completed"
     save_project_state(state)
 
+
+@setup_cli.command()
+def deps():
+    """Install required Python and Frontend dependencies."""
+    install_deps()
     click.echo("✅ Dependencies installed.")
 
 
@@ -696,7 +700,7 @@ def env(python_version):
     click.echo("\nInstalling dependencies...")
     # Call the deps command directly
     try:
-        deps.callback()
+        install_deps()
     except Exception as e:
         click.echo(f"⚠️ Warning: Failed to install dependencies: {e}")
 
