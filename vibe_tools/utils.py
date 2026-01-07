@@ -9,6 +9,7 @@ import pathlib
 import signal
 import subprocess
 import sys
+import shutil
 import time
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
@@ -469,6 +470,49 @@ def is_merged(branch_name):
         ["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False
     )
     return code == 0
+
+
+def run_llm(prompt: str, model: str = "gemini-3-flash", json_mode: bool = False) -> str:
+    """Runs a direct LLM call using dspy CLI."""
+    if shutil.which("dspy") is None:
+        # Fallback to python module if CLI not in path
+        cmd = [sys.executable, "-m", "dspy.cli"]
+    else:
+        cmd = ["dspy"]
+
+    cmd.extend(["--model", model])
+    if json_mode:
+        cmd.append("--json")
+
+    api_key = get_google_api_key()
+    env = os.environ.copy()
+    if api_key:
+        env["GOOGLE_API_KEY"] = api_key
+
+    payload = {"prompt": prompt}
+
+    # Use subprocess.run directly for simple synchronous call
+    result = subprocess.run(
+        cmd, input=json.dumps(payload), capture_output=True, text=True, env=env
+    )
+
+    if result.returncode != 0:
+        logger.error(f"LLM call failed: {result.stderr}")
+        raise RuntimeError(f"LLM call failed: {result.stderr}")
+
+    output = result.stdout.strip()
+    if json_mode:
+        try:
+            # Extract JSON from output
+            import re
+
+            match = re.search(r"(\{.*\})", output, re.DOTALL)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+
+    return output
 
 
 def run_command(cmd, check=True, caffeinate=False):
