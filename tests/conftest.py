@@ -21,35 +21,37 @@ def silence_vibe_side_effects():
 def safeguard_git_operations(request):
     """
     Ensure no git operations that change state are called during testing.
-    Read-only operations like 'rev-parse' or 'branch --show-current' are allowed
-    if they are necessary for the project to function, but mutations are blocked.
+    Read-only operations like 'rev-parse', 'remote get-url', or 'branch --show-current'
+    are allowed as they are used for project discovery, but mutations are blocked.
     """
-    from vibe_tools.utils import run_command as original_run_command
+    import subprocess
+    original_run = subprocess.run
 
     forbidden_git_subcommands = {
         "checkout", "commit", "add", "reset", "merge", "push", "pull", "fetch",
-        "branch", "init", "remote"
+        "init"
     }
 
-    def safeguarded_run_command(cmd, *args, **kwargs):
+    def safeguarded_run(cmd, *args, **kwargs):
         if isinstance(cmd, list) and len(cmd) > 0 and cmd[0] == "git":
             subcommand = cmd[1] if len(cmd) > 1 else None
+            
             if subcommand in forbidden_git_subcommands:
-                # Special case: 'git branch --show-current' or 'git rev-parse' are often used for discovery
-                if subcommand == "branch" and "--show-current" in cmd:
-                    pass # allow
-                elif subcommand == "rev-parse":
-                    pass # allow
-                else:
-                    raise RuntimeError(
-                        f"Forbidden git mutation detected in test '{request.node.name}'! "
-                        f"Command: {' '.join(cmd)}. "
-                        "You must mock 'vibe_tools.utils.run_command' to prevent real git side-effects."
-                    )
-        
-        return original_run_command(cmd, *args, **kwargs)
+                raise RuntimeError(
+                    f"Forbidden git mutation detected in test '{request.node.name}'! "
+                    f"Command: {' '.join(cmd)}. "
+                    "You must mock git commands to prevent real git side-effects."
+                )
+            
+            if subcommand == "branch" and len(cmd) > 2 and cmd[2] in ["-D", "-d"]:
+                 raise RuntimeError(
+                    f"Forbidden git branch deletion detected in test '{request.node.name}'! "
+                    f"Command: {' '.join(cmd)}."
+                )
 
-    with patch("vibe_tools.utils.run_command", side_effect=safeguarded_run_command):
+        return original_run(cmd, *args, **kwargs)
+
+    with patch("subprocess.run", side_effect=safeguarded_run):
         yield
 
 

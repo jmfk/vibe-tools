@@ -28,7 +28,6 @@ DEFAULT_SPECS_DIR = pathlib.Path("specs")
 def normalize_prd(
     agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False
 ):
-    # ... existing code ...
     from vibe_tools.cli import load_config
 
     config = load_config()
@@ -179,14 +178,26 @@ def normalize_prd(
         )
 
         if code == 0:
+            if not output.strip():
+                logger.error(f"❌ Agent returned empty output for {spec_path.name}")
+                print(
+                    f"❌ Failed to normalize {spec_path.name}: Empty output from agent"
+                )
+                switch_to_main()
+                continue
+
             # Strip markdown code fences if present
             clean_output = output.strip()
-            if clean_output.startswith("```"):
-                # Remove first line
+
+            # Robust extraction: find the first yaml or ``` block
+            yaml_match = re.search(r"```(?:yaml)?\n([\s\S]*?)\n```", clean_output)
+            if yaml_match:
+                clean_output = yaml_match.group(1).strip()
+            elif clean_output.startswith("```"):
+                # Fallback for simple fence if regex didn't catch it
                 lines = clean_output.splitlines()
                 if lines[0].startswith("```"):
                     lines = lines[1:]
-                # Remove last line if it's a closing fence
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 clean_output = "\n".join(lines).strip()
@@ -194,8 +205,10 @@ def normalize_prd(
             try:
                 # Validate and re-dump to ensure valid YAML formatting and proper quoting
                 data = yaml.safe_load(clean_output)
-                if data is None:
-                    data = {}
+                if data is None or not isinstance(data, dict):
+                    # If it's not a dict, it might have failed to extract correctly
+                    raise yaml.YAMLError("Output is not a valid YAML dictionary")
+
                 clean_output = yaml.safe_dump(
                     data, sort_keys=False, allow_unicode=True, width=1000
                 )
@@ -242,6 +255,7 @@ Ensure all string values with special characters are properly quoted.
                     )
 
             output_path.write_text(clean_output)
+            logger.info(f"✅ Saved normalized PRD to: {output_path}")
             print(f"✅ Saved: {output_path}")
 
             # Commit changes if dirty
@@ -264,6 +278,10 @@ Ensure all string values with special characters are properly quoted.
             # Switch back to main after each file normalization
             switch_to_main()
         else:
+            logger.error(
+                f"❌ Failed to normalize {spec_path.name}. Agent exit code: {code}"
+            )
+            logger.error(f"Agent output:\n{output}")
             print(f"❌ Failed to normalize {spec_path.name}")
             # Ensure we are back on main if it failed
             switch_to_main()

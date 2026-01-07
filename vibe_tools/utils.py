@@ -853,6 +853,8 @@ def get_changed_files(base_branch=None):
 
     if base_branch is None:
         base_branch = get_main_branch()
+
+    stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
     if code != 0:
         merge_base = base_branch
     else:
