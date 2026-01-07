@@ -251,6 +251,11 @@ def load_project_state() -> Dict[str, Any]:
                 for phase_id, phase_data in stored_state["phases"].items():
                     if phase_id in state["phases"]:
                         state["phases"][phase_id].update(phase_data)
+                # Migrate dependencies: infra should depend on implement, testing on infra
+                if "infra" in state["phases"]:
+                    state["phases"]["infra"]["depends_on"] = ["implement"]
+                if "testing" in state["phases"]:
+                    state["phases"]["testing"]["depends_on"] = ["infra"]
             if "plans" in stored_state:
                 state["plans"] = stored_state["plans"]
             if "branch_lineage" in stored_state:
