@@ -216,8 +216,11 @@ def generate_prd_plan() -> bool:
             # Update file path and ensure branch/parent_branch exist
             state["plans"][prd_id]["file"] = str(prd_path)
             state["plans"][prd_id]["is_direct_prd"] = True
-            if "branch" not in state["plans"][prd_id]:
+
+            # Always update branch if auto_merge is true, or if branch is missing
+            if auto_merge or "branch" not in state["plans"][prd_id]:
                 state["plans"][prd_id]["branch"] = branch_name
+
             if "parent_branch" not in state["plans"][prd_id]:
                 # If it's already in state but missing parent_branch, try to find it
                 # or default to main
@@ -459,7 +462,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         description = plan_yaml_path.read_text()
 
         # Determine branch and parent
-        branch_name = plan_info.get("branch", f"feature/{plan_id}")
+        auto_merge = config.get("ralph", {}).get("auto_merge", False)
+        if auto_merge:
+            branch_name = get_automerge_branch(config)
+        else:
+            branch_name = plan_info.get("branch", f"feature/{plan_id}")
+
         parent_branch = plan_info.get("parent_branch", get_main_branch())
 
         # Extract success criteria

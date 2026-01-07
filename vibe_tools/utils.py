@@ -991,10 +991,14 @@ def reset_prd_state(project_name: str) -> List[str]:
         save_project_state(state)
 
     # 4. Handle git branch
-    branch_name = f"feature/{project_name}"
+    config = load_config()
+    auto_merge = config.get("ralph", {}).get("auto_merge", False)
+    if auto_merge:
+        branch_name = get_automerge_branch(config)
+    else:
+        branch_name = f"feature/{project_name}"
 
     # Do not delete the automerge branch
-    config = load_config()
     automerge_branch = get_automerge_branch(config)
     if branch_name == automerge_branch:
         messages.append(f"Skipping deletion of automerge branch {branch_name}.")
