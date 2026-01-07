@@ -423,6 +423,60 @@ def test():
 
 
 @setup_cli.command()
+@click.pass_context
+def dspy(ctx):
+    """Verify DSPy integration and LLM connectivity."""
+    click.echo("\n--- DSPy Integration Test ---")
+
+    api_key = get_google_api_key()
+    if not api_key:
+        click.echo("❌ Google API Key is missing.")
+        if click.confirm("Would you like to configure it now?", default=True):
+            ctx.invoke(api)
+            # Reload environment after saving key
+            from dotenv import load_dotenv, find_dotenv
+
+            load_dotenv(find_dotenv() or ".env", override=True)
+            api_key = get_google_api_key()
+        else:
+            click.echo("Aborted.")
+            return
+
+    if not api_key:
+        click.echo("❌ Still no API key found. Cannot proceed with test.")
+        return
+
+    click.echo("⏳ Making test call to LLM via DSPy library...")
+    try:
+        from vibe_tools.utils import run_llm
+
+        test_prompt = "Hello, this is a connectivity test. Please respond with the word 'READY' and nothing else."
+        response = run_llm(test_prompt)
+
+        click.echo(f"🤖 Agent Response: {response}")
+        if "READY" in response.upper():
+            click.echo("✅ DSPy Integration: SUCCESS")
+        else:
+            click.echo(
+                "⚠️  DSPy Integration: PARTIAL (Response received but didn't match expectation)"
+            )
+
+    except Exception as e:
+        click.echo(f"❌ DSPy Integration: FAILED")
+        click.echo(f"\nError Details:\n{str(e)}")
+
+        # Check for common issues
+        if "quota" in str(e).lower():
+            click.echo("\n💡 Hint: Your Google AI Studio quota might be exceeded.")
+        elif "api_key" in str(e).lower() or "unauthorized" in str(e).lower():
+            click.echo(
+                "\n💡 Hint: Your API key might be invalid. Run 'vibe-setup api' to reset it."
+            )
+        elif "module" in str(e).lower():
+            click.echo("\n💡 Hint: Ensure 'dspy-ai' is installed in your environment.")
+
+
+@setup_cli.command()
 def api():
     """Configure API keys for LLM access."""
     click.echo("\n--- API Key Configuration ---")

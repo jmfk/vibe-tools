@@ -473,46 +473,37 @@ def is_merged(branch_name):
 
 
 def run_llm(prompt: str, model: str = "gemini-3-flash", json_mode: bool = False) -> str:
-    """Runs a direct LLM call using dspy CLI."""
-    if shutil.which("dspy") is None:
-        # Fallback to python module if CLI not in path
-        cmd = [sys.executable, "-m", "dspy.cli"]
-    else:
-        cmd = ["dspy"]
-
-    cmd.extend(["--model", model])
-    if json_mode:
-        cmd.append("--json")
+    """Runs a direct LLM call using the dspy library."""
+    import dspy
 
     api_key = get_google_api_key()
-    env = os.environ.copy()
-    if api_key:
-        env["GOOGLE_API_KEY"] = api_key
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe-setup api`.")
 
-    payload = {"prompt": prompt}
+    # Configure dspy with Gemini
+    # dspy v3 uses litellm style prefixes
+    # map common aliases to actual model names
+    model_map = {
+        "gemini-3-flash": "gemini/gemini-2.0-flash-exp",
+        "gemini-3-flash-preview": "gemini/gemini-2.0-flash-exp",
+        "gemini-1.5-flash": "gemini/gemini-1.5-flash",
+        "gemini-2.0-flash": "gemini/gemini-2.0-flash-exp",
+    }
+    gemini_model = model_map.get(model, f"gemini/{model}")
+    lm = dspy.LM(gemini_model, api_key=api_key)
 
-    # Use subprocess.run directly for simple synchronous call
-    result = subprocess.run(
-        cmd, input=json.dumps(payload), capture_output=True, text=True, env=env
-    )
+    with dspy.context(lm=lm):
 
-    if result.returncode != 0:
-        logger.error(f"LLM call failed: {result.stderr}")
-        raise RuntimeError(f"LLM call failed: {result.stderr}")
+        class SimpleTask(dspy.Signature):
+            """Execute the given task and return the result."""
 
-    output = result.stdout.strip()
-    if json_mode:
-        try:
-            # Extract JSON from output
-            import re
+            instruction = dspy.InputField(desc="The instruction or prompt to follow")
+            answer = dspy.OutputField(desc="The result of the task")
 
-            match = re.search(r"(\{.*\})", output, re.DOTALL)
-            if match:
-                return match.group(1)
-        except Exception:
-            pass
+        predictor = dspy.ChainOfThought(SimpleTask)
+        response = predictor(instruction=prompt)
 
-    return output
+        return response.answer
 
 
 def run_command(cmd, check=True, caffeinate=False):
