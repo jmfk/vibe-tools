@@ -75,21 +75,22 @@ def normalize_prd(
             return
 
     # Check for existing normalized files
-    existing_prds = list(PRD_DIR.rglob("prd_*.yaml"))
-
+    # Only prompt for global overwrite when normalizing all files (not specific files)
     overwrite_mode = "yes" if auto_overwrite else "ask"
-    if existing_prds and not auto_overwrite:
-        choice = click.prompt(
-            f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
-            type=click.Choice(["y", "n", "a"], case_sensitive=False),
-            default="a",
-        )
-        if choice.lower() == "y":
-            overwrite_mode = "yes"
-        elif choice.lower() == "n":
-            overwrite_mode = "no"
-        else:
-            overwrite_mode = "ask"
+    if not input_file:  # Only when normalizing all files
+        existing_prds = list(PRD_DIR.rglob("prd_*.yaml"))
+        if existing_prds and not auto_overwrite:
+            choice = click.prompt(
+                f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
+                type=click.Choice(["y", "n", "a"], case_sensitive=False),
+                default="a",
+            )
+            if choice.lower() == "y":
+                overwrite_mode = "yes"
+            elif choice.lower() == "n":
+                overwrite_mode = "no"
+            else:
+                overwrite_mode = "ask"
 
     for spec_path in files_to_process:
         stem = spec_path.stem
