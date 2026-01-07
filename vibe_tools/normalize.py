@@ -73,13 +73,19 @@ def normalize_prd(
     # Check for existing normalized files
     existing_prds = list(PRD_DIR.rglob("prd_*.yaml"))
 
-    overwrite_all = auto_overwrite
+    overwrite_mode = "yes" if auto_overwrite else "ask"
     if existing_prds and not auto_overwrite:
-        if click.confirm(
-            f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite all?",
-            default=False,
-        ):
-            overwrite_all = True
+        choice = click.prompt(
+            f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
+            type=click.Choice(["y", "n", "a"], case_sensitive=False),
+            default="a",
+        )
+        if choice.lower() == "y":
+            overwrite_mode = "yes"
+        elif choice.lower() == "n":
+            overwrite_mode = "no"
+        else:
+            overwrite_mode = "ask"
 
     for spec_path in files_to_process:
         stem = spec_path.stem
@@ -132,15 +138,20 @@ def normalize_prd(
 
         # Optimization: Skip if YAML is newer than the source MD
         if output_path.exists():
-            md_mtime = spec_path.stat().st_mtime
-            yaml_mtime = output_path.stat().st_mtime
-            if yaml_mtime > md_mtime and not overwrite_all:
-                print(
-                    f"⏩ Skipping {spec_path.name} (already up-to-date at {output_path.name})"
-                )
+            if overwrite_mode == "no":
+                print(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
                 continue
 
-        if output_path.exists() and not overwrite_all:
+            if overwrite_mode != "yes":
+                md_mtime = spec_path.stat().st_mtime
+                yaml_mtime = output_path.stat().st_mtime
+                if yaml_mtime > md_mtime:
+                    print(
+                        f"⏩ Skipping {spec_path.name} (already up-to-date at {output_path.name})"
+                    )
+                    continue
+
+        if output_path.exists() and overwrite_mode == "ask":
             if not click.confirm(
                 f"Overwrite existing {output_path.name}?", default=False
             ):
@@ -189,10 +200,46 @@ def normalize_prd(
                     data, sort_keys=False, allow_unicode=True, width=1000
                 )
             except yaml.YAMLError as e:
-                logger.error(f"❌ Invalid YAML generated for {spec_path.name}: {e}")
-                print(
-                    f"⚠️ Warning: Generated YAML for {spec_path.name} is invalid. Saving as-is for manual fix."
-                )
+                logger.warning(f"⚠️ Invalid YAML generated for {spec_path.name}: {e}")
+                print(f"🔄 Attempting to fix YAML for {spec_path.name} using Gemini...")
+
+                fix_prompt = f"""The following YAML is invalid:
+---
+{clean_output}
+---
+Error: {e}
+
+Please fix the YAML formatting issues and return ONLY the valid YAML content.
+Ensure all string values with special characters are properly quoted.
+"""
+                try:
+                    from vibe_tools.utils import run_llm
+
+                    fixed_output = run_llm(fix_prompt, model="gemini-3-flash")
+
+                    # Strip markdown code fences if present in fixed output
+                    fixed_output = fixed_output.strip()
+                    if fixed_output.startswith("```"):
+                        lines = fixed_output.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].startswith("```"):
+                            lines = lines[:-1]
+                        fixed_output = "\n".join(lines).strip()
+
+                    # Try to validate again
+                    data = yaml.safe_load(fixed_output)
+                    if data is None:
+                        data = {}
+                    clean_output = yaml.safe_dump(
+                        data, sort_keys=False, allow_unicode=True, width=1000
+                    )
+                    print(f"✅ Successfully fixed YAML for {spec_path.name}")
+                except Exception as fix_err:
+                    logger.error(f"❌ Failed to fix YAML: {fix_err}")
+                    print(
+                        f"⚠️ Warning: Generated YAML for {spec_path.name} is still invalid. Saving as-is for manual fix."
+                    )
 
             output_path.write_text(clean_output)
             print(f"✅ Saved: {output_path}")

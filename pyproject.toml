@@ -21,6 +21,7 @@ dependencies = [
     "pytest-asyncio",
     "ruff",
     "mypy",
+    "dspy-ai",
 ]
 
 [tool.setuptools]
