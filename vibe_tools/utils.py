@@ -981,6 +981,71 @@ def collect_prd_files():
     return sorted(list(PRD_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
 
 
+def collect_all_prd_info() -> List[Dict[str, Any]]:
+    """
+    Collects information about all PRDs from both specs/ and project/prds/.
+    Returns a list of dicts with: name, has_md, has_yaml, md_path, yaml_path
+    """
+    import re
+
+    prd_info = {}
+
+    # 1. Scan specs/ for .md files
+    if SPECS_DIR.exists():
+        for md_file in SPECS_DIR.rglob("*.md"):
+            # Exclude special global truth files if they are not meant to be listed as PRDs
+            # But the requirement says "if the prd has a .yaml or a .md"
+            stem = md_file.stem
+            clean_name = stem.lower()
+            while True:
+                new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
+                if new_name == clean_name:
+                    break
+                clean_name = new_name
+            clean_name = re.sub(r"[- ]", "_", clean_name)
+
+            if clean_name not in prd_info:
+                prd_info[clean_name] = {
+                    "name": clean_name,
+                    "has_md": True,
+                    "has_yaml": False,
+                    "md_path": md_file,
+                    "yaml_path": None,
+                }
+            else:
+                prd_info[clean_name]["has_md"] = True
+                prd_info[clean_name]["md_path"] = md_file
+
+    # 2. Scan project/prds/ for .yaml files
+    if PRD_DIR.exists():
+        for yaml_file in PRD_DIR.glob("*.yaml"):
+            stem = yaml_file.stem
+            clean_name = stem.lower()
+            # If it's a prd_*.yaml, clean the prefix
+            if clean_name.startswith("prd_"):
+                while True:
+                    new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
+                    if new_name == clean_name:
+                        break
+                    clean_name = new_name
+            clean_name = re.sub(r"[- ]", "_", clean_name)
+
+            if clean_name not in prd_info:
+                prd_info[clean_name] = {
+                    "name": clean_name,
+                    "has_md": False,
+                    "has_yaml": True,
+                    "md_path": None,
+                    "yaml_path": yaml_file,
+                }
+            else:
+                prd_info[clean_name]["has_yaml"] = True
+                prd_info[clean_name]["yaml_path"] = yaml_file
+
+    # Sort by name
+    return sorted(prd_info.values(), key=lambda x: x["name"])
+
+
 def reset_prd_state(project_name: str) -> List[str]:
     """
     Resets the state of a PRD and deletes its branch.
