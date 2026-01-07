@@ -361,6 +361,22 @@ def save_google_api_key(key):
     ensure_gitignore(".env")
 
 
+def get_cursor_api_key():
+    """Retrieves the Cursor API Key from .env or environment variables."""
+    load_dotenv(find_dotenv() or ".env")
+    return os.environ.get("CURSOR_API_KEY")
+
+
+def save_cursor_api_key(key):
+    """Saves the Cursor API Key to the .env file."""
+    env_file = find_dotenv() or ".env"
+    if not os.path.exists(env_file):
+        with open(env_file, "w") as f:
+            f.write("")
+    set_key(env_file, "CURSOR_API_KEY", key)
+    ensure_gitignore(".env")
+
+
 # Setup logger
 logger = logging.getLogger("vibe")
 logger.setLevel(logging.DEBUG)
