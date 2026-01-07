@@ -619,39 +619,44 @@ def write_prd(ctx, title, type):
 @cli.command()
 def history():
     """List the status of all PRDs."""
-    if not PRD_DIR.exists():
-        click.echo(f"PRD directory {PRD_DIR} not found.")
-        return
+    from vibe_tools.utils import collect_all_prd_info, load_project_state
 
-    from vibe_tools.utils import collect_prd_files
-
-    prds = collect_prd_files()
+    prds = collect_all_prd_info()
     if not prds:
         click.echo("No PRD files found.")
         return
 
-    click.echo(f"{'PRD':<40} {'Status':<15}")
-    click.echo("-" * 56)
+    click.echo(f"{'PRD':<40} {'MD':<5} {'YAML':<5} {'Status':<15}")
+    click.echo("-" * 70)
 
     state = load_project_state()
     completed_prds = state.get("completed_prds", [])
     started_prds = state.get("started_prds", [])
 
-    for prd_file in prds:
-        # Show relative path for infra/cicd
-        try:
-            project_name = prd_file.relative_to(PRD_DIR).with_suffix("").as_posix()
-        except ValueError:
-            project_name = prd_file.stem
+    for info in prds:
+        project_name = info["name"]
 
-        if prd_file.stem in completed_prds:
+        # We need the actual stem used in state.json (which is usually prd_name or the yaml stem)
+        # The project state stores names like '01_pm_prd_focus' or 'prd_01_pm_prd_focus'
+        # Let's check both the clean name and the prd_ prefixed name
+        prd_stem = project_name
+        if info["has_yaml"] and info["yaml_path"]:
+            prd_stem = info["yaml_path"].stem
+        elif info["has_md"] and info["md_path"]:
+            # If only MD exists, it's definitely pending/started by its stem or clean name
+            prd_stem = info["md_path"].stem
+
+        md_status = "✅" if info["has_md"] else "❌"
+        yaml_status = "✅" if info["has_yaml"] else "❌"
+
+        if prd_stem in completed_prds or project_name in completed_prds:
             status = click.style("✅ DONE", fg="green")
-        elif prd_file.stem in started_prds:
+        elif prd_stem in started_prds or project_name in started_prds:
             status = click.style("⏳ IN_PROGRESS", fg="blue")
         else:
             status = click.style("⚪️ PENDING", fg="white", dim=True)
 
-        click.echo(f"{project_name:<40} {status:<15}")
+        click.echo(f"{project_name:<40} {md_status:<5} {yaml_status:<5} {status:<15}")
 
 
 @cli.command()
@@ -1432,9 +1437,13 @@ def kill(yes):
 
 
 @cli.command()
-@click.option("--api", is_flag=True, help="Fetch data from Cursor API instead of local files.")
+@click.option(
+    "--api", is_flag=True, help="Fetch data from Cursor API instead of local files."
+)
 @click.option("--billing-groups", is_flag=True, help="Show billing groups report.")
-@click.option("--days", type=int, default=7, help="Number of days to fetch from API (default: 7).")
+@click.option(
+    "--days", type=int, default=7, help="Number of days to fetch from API (default: 7)."
+)
 @click.option("--start-date", help="Start date for API query (YYYY-MM-DD).")
 @click.option("--end-date", help="End date for API query (YYYY-MM-DD).")
 @click.pass_context
@@ -1451,33 +1460,38 @@ def stats(ctx, api, billing_groups, days, start_date, end_date):
         get_billing_group,
     )
     from vibe_tools.utils import get_cursor_api_key
-    
+
     reports_dir = pathlib.Path("reports")
-    
+
     if billing_groups or api:
         api_key = get_cursor_api_key()
         if not api_key:
-            click.echo("❌ CURSOR_API_KEY not found. Set it in .env file or environment.")
-            click.echo("   You can get your API key from: https://cursor.com/settings/api-keys")
+            click.echo(
+                "❌ CURSOR_API_KEY not found. Set it in .env file or environment."
+            )
+            click.echo(
+                "   You can get your API key from: https://cursor.com/settings/api-keys"
+            )
             return
-        
+
         if billing_groups:
             try:
                 click.echo("📊 Fetching billing groups...")
                 groups_data = list_billing_groups(api_key)
                 markdown = generate_billing_groups_report(groups_data)
-                
+
                 reports_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 report_path = reports_dir / f"report_billing_groups_{timestamp}.md"
-                report_path.write_text(markdown, encoding='utf-8')
+                report_path.write_text(markdown, encoding="utf-8")
                 click.echo(f"✅ Billing groups report generated: {report_path}")
             except Exception as e:
                 click.echo(f"❌ Error fetching billing groups: {e}")
                 import traceback
+
                 traceback.print_exc()
             return
-        
+
         # API data fetching
         try:
             if start_date and end_date:
@@ -1486,58 +1500,68 @@ def stats(ctx, api, billing_groups, days, start_date, end_date):
             else:
                 end = datetime.datetime.now()
                 start = end - datetime.timedelta(days=days)
-            
-            click.echo(f"📊 Fetching usage events from {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}...")
-            
+
+            click.echo(
+                f"📊 Fetching usage events from {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}..."
+            )
+
             all_events = []
             page = 1
             while True:
-                api_data = fetch_usage_events(api_key, start, end, page=page, page_size=100)
+                api_data = fetch_usage_events(
+                    api_key, start, end, page=page, page_size=100
+                )
                 events = api_data.get("usageEvents", [])
                 if not events:
                     break
                 all_events.extend(events)
-                
+
                 pagination = api_data.get("pagination", {})
                 if not pagination.get("hasNextPage", False):
                     break
                 page += 1
-            
+
             if not all_events:
                 click.echo("No usage events found for the specified period.")
                 return
-            
+
             api_data["usageEvents"] = all_events
-            report_path = generate_report(None, reports_dir, api_data, source="Cursor API")
+            report_path = generate_report(
+                None, reports_dir, api_data, source="Cursor API"
+            )
             click.echo(f"✅ Report generated: {report_path}")
         except Exception as e:
             click.echo(f"❌ Error fetching API data: {e}")
             import traceback
+
             traceback.print_exc()
         return
-    
+
     # Local file processing
     stats_dir = pathlib.Path("stats")
-    
+
     if not stats_dir.exists():
         click.echo(f"❌ Stats directory '{stats_dir}' not found.")
         return
-    
+
     files = list_usage_files(stats_dir)
     if not files:
         click.echo(f"No CSV files found in '{stats_dir}'.")
         return
-    
+
     click.echo("Available usage files (latest first):")
     for idx, file_path in enumerate(files, start=1):
         import re
-        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', file_path.name)
+
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path.name)
         if date_match:
             date_str = date_match.group(1)
         else:
-            date_str = datetime.datetime.fromtimestamp(file_path.stat().st_mtime).strftime("%Y-%m-%d")
+            date_str = datetime.datetime.fromtimestamp(
+                file_path.stat().st_mtime
+            ).strftime("%Y-%m-%d")
         click.echo(f"  {idx}. {file_path.name} ({date_str})")
-    
+
     while True:
         try:
             selection = click.prompt(
@@ -1552,15 +1576,16 @@ def stats(ctx, api, billing_groups, days, start_date, end_date):
         except (ValueError, KeyboardInterrupt):
             click.echo("Aborted.")
             return
-    
+
     click.echo(f"\n📊 Analyzing {selected_file.name}...")
-    
+
     try:
         report_path = generate_report(selected_file, reports_dir)
         click.echo(f"✅ Report generated: {report_path}")
     except Exception as e:
         click.echo(f"❌ Error generating report: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -1578,25 +1603,26 @@ def billing_groups_list(ctx, billing_cycle):
     """List all billing groups."""
     from vibe_tools.stats import list_billing_groups, generate_billing_groups_report
     from vibe_tools.utils import get_cursor_api_key
-    
+
     api_key = get_cursor_api_key()
     if not api_key:
         click.echo("❌ CURSOR_API_KEY not found. Set it in .env file or environment.")
         return
-    
+
     try:
         groups_data = list_billing_groups(api_key, billing_cycle)
         reports_dir = pathlib.Path("reports")
         reports_dir.mkdir(parents=True, exist_ok=True)
-        
+
         markdown = generate_billing_groups_report(groups_data)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = reports_dir / f"report_billing_groups_{timestamp}.md"
-        report_path.write_text(markdown, encoding='utf-8')
+        report_path.write_text(markdown, encoding="utf-8")
         click.echo(f"✅ Billing groups report generated: {report_path}")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -1607,16 +1633,18 @@ def billing_groups_create(ctx, name):
     """Create a new billing group."""
     from vibe_tools.stats import create_billing_group
     from vibe_tools.utils import get_cursor_api_key
-    
+
     api_key = get_cursor_api_key()
     if not api_key:
         click.echo("❌ CURSOR_API_KEY not found.")
         return
-    
+
     try:
         result = create_billing_group(api_key, name)
         group = result.get("group", {})
-        click.echo(f"✅ Created billing group: {group.get('name')} (ID: {group.get('id')})")
+        click.echo(
+            f"✅ Created billing group: {group.get('name')} (ID: {group.get('id')})"
+        )
     except Exception as e:
         click.echo(f"❌ Error: {e}")
 
@@ -1629,24 +1657,24 @@ def billing_groups_get(ctx, group_id, billing_cycle):
     """Get details of a specific billing group."""
     from vibe_tools.stats import get_billing_group, generate_billing_groups_report
     from vibe_tools.utils import get_cursor_api_key
-    
+
     api_key = get_cursor_api_key()
     if not api_key:
         click.echo("❌ CURSOR_API_KEY not found.")
         return
-    
+
     try:
         result = get_billing_group(api_key, group_id, billing_cycle)
         groups_data = {"groups": [], "billingCycle": result.get("billingCycle", {})}
         if "group" in result:
             groups_data["groups"] = [result["group"]]
-        
+
         reports_dir = pathlib.Path("reports")
         reports_dir.mkdir(parents=True, exist_ok=True)
         markdown = generate_billing_groups_report(groups_data)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = reports_dir / f"report_billing_group_{group_id}_{timestamp}.md"
-        report_path.write_text(markdown, encoding='utf-8')
+        report_path.write_text(markdown, encoding="utf-8")
         click.echo(f"✅ Report generated: {report_path}")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
@@ -1660,12 +1688,12 @@ def billing_groups_add_members(ctx, group_id, user_ids):
     """Add members to a billing group."""
     from vibe_tools.stats import add_members_to_group
     from vibe_tools.utils import get_cursor_api_key
-    
+
     api_key = get_cursor_api_key()
     if not api_key:
         click.echo("❌ CURSOR_API_KEY not found.")
         return
-    
+
     try:
         result = add_members_to_group(api_key, group_id, list(user_ids))
         group = result.get("group", {})
@@ -1682,16 +1710,18 @@ def billing_groups_remove_members(ctx, group_id, user_ids):
     """Remove members from a billing group."""
     from vibe_tools.stats import remove_members_from_group
     from vibe_tools.utils import get_cursor_api_key
-    
+
     api_key = get_cursor_api_key()
     if not api_key:
         click.echo("❌ CURSOR_API_KEY not found.")
         return
-    
+
     try:
         result = remove_members_from_group(api_key, group_id, list(user_ids))
         group = result.get("group", {})
-        click.echo(f"✅ Removed {len(user_ids)} member(s) from group: {group.get('name')}")
+        click.echo(
+            f"✅ Removed {len(user_ids)} member(s) from group: {group.get('name')}"
+        )
     except Exception as e:
         click.echo(f"❌ Error: {e}")
 
