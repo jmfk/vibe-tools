@@ -581,10 +581,12 @@ def install_deps():
     current_branch, _ = run_command(["git", "branch", "--show-current"], check=False)
     main_branch = get_main_branch()
 
-    if current_branch.strip() == main_branch:
+    config = load_config()
+    deps_branch_enabled = config.get("setup", {}).get("deps_branch_enabled", True)
+
+    if current_branch.strip() == main_branch and deps_branch_enabled:
         from vibe_tools.ralph import _switch_to_branch
 
-        config = load_config()
         if config.get("ralph", {}).get("auto_merge", False):
             target_branch = get_automerge_branch(config)
         else:
