@@ -18,6 +18,7 @@ from vibe_tools.utils import (
     run_agent,
     run_command,
     save_project_state,
+    switch_to_main,
 )
 from vibe_tools.ralph import _switch_to_branch
 
@@ -195,12 +196,6 @@ def normalize_prd(
 
             # Update project state if this was a full normalization run
             if not input_file:
-                from vibe_tools.utils import (
-                    load_project_state,
-                    save_project_state,
-                    switch_to_main,
-                )
-
                 state = load_project_state()
                 state["phases"]["normalize"]["status"] = "completed"
                 save_project_state(state)
