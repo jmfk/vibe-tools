@@ -224,9 +224,9 @@ def load_project_state() -> Dict[str, Any]:
             "setup": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
             "deps": {"status": "pending", "hash": None, "depends_on": ["setup"]},
             "implement": {"status": "pending", "hash": None, "depends_on": ["deps"]},
-            "testing": {"status": "pending", "hash": None, "depends_on": ["implement"]},
-            "infra": {"status": "pending", "hash": None, "depends_on": ["testing"]},
-            "cicd": {"status": "pending", "hash": None, "depends_on": ["infra"]},
+            "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
+            "testing": {"status": "pending", "hash": None, "depends_on": ["infra"]},
+            "cicd": {"status": "pending", "hash": None, "depends_on": ["testing"]},
             "deploy": {
                 "status": "pending",
                 "hash": None,
@@ -1233,8 +1233,8 @@ def get_vibe_status_report():
         "setup",
         "deps",
         "implement",
-        "testing",
         "infra",
+        "testing",
         "cicd",
         "deploy",
     ]
