@@ -55,6 +55,7 @@ class PRDWriter:
 
         # Load configurable iterations
         from vibe_tools.utils import load_config
+
         config = load_config()
         self.max_interview_rounds = config.get("iterations", {}).get(
             "prd_interview", self.MAX_INTERVIEW_ROUNDS
@@ -219,49 +220,59 @@ class PRDWriter:
         return "\n".join(lines)
 
     def _ensure_dspy_available(self) -> None:
-        if shutil.which("dspy") is None:
-            raise click.ClickException("`dspy` is required but was not found in PATH.")
+        """Check if dspy library is installed."""
+        try:
+            import dspy
+        except ImportError:
+            raise click.ClickException(
+                "The `dspy-ai` library is required but not found. Please install it."
+            )
 
     def _execute_dspy(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        import dspy
+
         api_key = get_google_api_key()
 
-        env = os.environ.copy()
-        if api_key:
-            env["GOOGLE_API_KEY"] = api_key
-        elif "GOOGLE_API_KEY" not in env:
+        if not api_key:
             raise click.ClickException(
                 "Google API Key is missing. Please run `vibe-setup api` first."
             )
 
-        command = ["dspy", "--model", "gemini-3-flash", "--json"]
-        try:
-            result = subprocess.run(
-                command,
-                input=json.dumps(payload),
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-        except FileNotFoundError as exc:
-            raise click.ClickException("Failed to run dspy.") from exc
+        lm = dspy.LM("gemini/gemini-2.0-flash-exp", api_key=api_key)
 
-        if result.returncode != 0:
-            stderr = result.stderr.strip()
-            raise click.ClickException(
-                f"dspy failed (exit {result.returncode}): {stderr or 'see logs'}"
-            )
+        with dspy.context(lm=lm):
 
-        raw_output = result.stdout.strip()
-        if not raw_output:
-            raise click.ClickException("dspy returned empty output.")
+            class PRDQuestionSignature(dspy.Signature):
+                """Analyzes project context and generates follow-up questions or signals completion."""
 
-        try:
-            start = raw_output.index("{")
-            end = raw_output.rindex("}") + 1
-            payload_text = raw_output[start:end]
-            return json.loads(payload_text)
-        except (ValueError, json.JSONDecodeError) as exc:
-            raise click.ClickException("Unable to parse dspy output.") from exc
+                context = dspy.InputField(
+                    desc="JSON string containing project context and requirements"
+                )
+                questions = dspy.OutputField(
+                    desc="List of follow-up questions to clarify requirements"
+                )
+                satisfied = dspy.OutputField(
+                    desc="Boolean: True if enough information is present to generate PRD",
+                    type=bool,
+                )
+
+            # Use TypedPredictor for better structured output handling
+            predictor = dspy.TypedPredictor(PRDQuestionSignature)
+            try:
+                result = predictor(context=json.dumps(payload))
+                return {
+                    "questions": (
+                        result.questions
+                        if isinstance(result.questions, list)
+                        else [result.questions]
+                    ),
+                    "satisfied": bool(result.satisfied),
+                }
+            except Exception as e:
+                logger.error(f"DSPy execution failed: {e}")
+                raise click.ClickException(
+                    f"Failed to process requirements with DSPy: {e}"
+                )
 
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
