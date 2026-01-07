@@ -472,13 +472,22 @@ def is_merged(branch_name):
     return code == 0
 
 
-def run_llm(prompt: str, model: str = "gemini-3-flash", json_mode: bool = False) -> str:
+def run_llm(
+    prompt: str,
+    model: str = "gemini-3-flash",
+    json_mode: bool = False,
+    debug: bool = False,
+) -> str:
     """Runs a direct LLM call using the dspy library."""
     import dspy
 
     api_key = get_google_api_key()
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe-setup api`.")
+
+    if debug:
+        print(f"\n--- DEBUG: LLM CALL (Model: {model}) ---")
+        print(f"PROMPT:\n{prompt}")
 
     # Configure dspy with Gemini
     # dspy v3 uses litellm style prefixes
@@ -503,7 +512,12 @@ def run_llm(prompt: str, model: str = "gemini-3-flash", json_mode: bool = False)
         predictor = dspy.ChainOfThought(SimpleTask)
         response = predictor(instruction=prompt)
 
-        return response.answer
+        result = response.answer
+        if debug:
+            print(f"RESPONSE:\n{result}")
+            print("--- END DEBUG ---\n")
+
+        return result
 
 
 def run_command(cmd, check=True, caffeinate=False):

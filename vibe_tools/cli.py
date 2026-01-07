@@ -405,8 +405,11 @@ def coverage(ctx):
 @click.option(
     "--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs."
 )
+@click.option(
+    "--debug", is_flag=True, help="Output all prompts and results for debugging."
+)
 @click.pass_context
-def normalize(ctx, input_file, yes):
+def normalize(ctx, input_file, yes, debug):
     """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     state = load_project_state()
@@ -426,6 +429,7 @@ def normalize(ctx, input_file, yes):
         auto_overwrite=yes,
         caffeinate=ctx.obj.get("caffeinate", False),
         stream=ctx.obj.get("stream", False),
+        debug=debug,
     )
 
     click.echo("\nNext Steps:")
