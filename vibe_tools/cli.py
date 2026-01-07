@@ -44,6 +44,7 @@ class OrderedGroup(click.Group):
             "branches",
             "branch-resolve",
             "billing-groups",
+            "demo-data",
             "init",
             # Deprecated
             "ralph",
@@ -98,6 +99,7 @@ from vibe_tools.utils import (
     get_prompt,
     load_config,
     load_project_state,
+    logger,
     reset_prd_state,
     run_agent,
     run_command,
@@ -904,15 +906,162 @@ def infra(ctx):
         )
         return
 
+    # Handle missing infrastructure files
     if not INFRA.exists():
         if INFRA_SPEC.exists():
-            click.echo(f"❌ {INFRA} not found, but {INFRA_SPEC} exists.")
-            click.echo("   Run 'vibe normalize' to generate the required YAML file.")
-        else:
-            click.echo(
-                f"❌ {INFRA} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+            # infrastructure.md exists but not normalized - auto-normalize it
+            click.echo(f"📝 {INFRA_SPEC} found but not normalized. Normalizing...")
+            from vibe_tools.normalize import normalize_prd
+
+            normalize_prd(
+                agent=ctx.obj.get("agent", "cursor-agent"),
+                input_file=str(INFRA_SPEC),
+                auto_overwrite=True,
+                caffeinate=ctx.obj.get("caffeinate", False),
+                stream=ctx.obj.get("stream", False),
             )
-        return
+            if not INFRA.exists():
+                click.echo(
+                    "❌ Normalization failed. Please review and fix infrastructure.md, then run 'vibe normalize' manually."
+                )
+                return
+            click.echo("✅ Infrastructure normalized successfully.")
+        else:
+            # Neither exists - generate from PRDs
+            click.echo(
+                "📋 Infrastructure specification not found. Generating from PRDs..."
+            )
+            from vibe_tools.utils import collect_all_prd_info
+
+            prd_info = collect_all_prd_info()
+            if not prd_info:
+                click.echo(
+                    "❌ No PRDs found. Please create PRDs first using 'vibe pm' or 'vibe architect'."
+                )
+                return
+
+            # Generate infrastructure.md from PRDs
+            agent = ctx.obj.get("agent", "cursor-agent")
+            stream = ctx.obj.get("stream", False)
+
+            # Collect PRD content
+            prd_content = []
+            for prd in prd_info:
+                content_parts = []
+                if prd.get("has_md") and prd["md_path"]:
+                    content_parts.append(
+                        f"## {prd['name']} (from {prd['md_path'].name})\n\n{prd['md_path'].read_text()}\n"
+                    )
+                if prd.get("has_yaml") and prd["yaml_path"]:
+                    content_parts.append(
+                        f"## {prd['name']} (from {prd['yaml_path'].name})\n\n```yaml\n{prd['yaml_path'].read_text()}\n```\n"
+                    )
+                if content_parts:
+                    prd_content.append("\n".join(content_parts))
+
+            if not prd_content:
+                click.echo("❌ No PRD content found. Please ensure PRDs have content.")
+                return
+
+            # Generate infrastructure.md using agent
+            prompt = f"""You are generating an infrastructure specification based on the following PRDs.
+
+Analyze all the PRDs and create a comprehensive infrastructure.md file that specifies:
+- Databases and data storage needs
+- Caching requirements (Redis, etc.)
+- Message queues if needed
+- Object storage (S3-compatible)
+- External service integrations
+- Environment configuration
+- Local development setup requirements
+
+IMPORTANT: The infrastructure must be compatible with vibe-staging, which supports these services:
+- postgres (PostgreSQL database)
+- redis (Redis cache)
+- rabbitmq (RabbitMQ message queue)
+- elasticsearch (Elasticsearch search)
+- s3-linode or s3-aws (MinIO S3-compatible storage)
+- mailhog (Email testing)
+- imgproxy (Image processing)
+
+Services are configured via 'vibe-setup <service>' and stored in .vibe_config.json. The staging environment uses these service configurations to start Docker containers.
+
+Focus on what infrastructure components are needed to support all the features described in the PRDs, and ensure they can be run locally via Docker for staging.
+
+PRDs:
+{chr(10).join(prd_content)}
+
+Generate a complete infrastructure.md file following this structure:
+
+# Infrastructure Specification (Desired)
+
+## 1. Overview
+[High-level overview of infrastructure needs, emphasizing local development and staging compatibility]
+
+## 2. Primary Services
+[Detailed service requirements for each service needed. For each service, specify:
+- What it's used for
+- Local development setup (Docker-based)
+- Configuration requirements
+- How it integrates with vibe-staging]
+
+## 3. External Integrations
+[External APIs and services that are not managed locally]
+
+## 4. Environment Management
+[Configuration and secrets management, including .env files and vibe-setup usage]
+
+## 5. Deployment & Local Orchestration
+[Local development setup requirements, Docker containers, and how vibe-staging orchestrates services]
+
+Output ONLY the markdown content for infrastructure.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+"""
+
+            cmd = get_agent_command(agent, prompt)
+            output, code = run_agent(cmd, stream=stream)
+
+            if code != 0 or not output.strip():
+                click.echo(
+                    "❌ Failed to generate infrastructure.md. Please create it manually using 'vibe architect'."
+                )
+                return
+
+            # Clean output (remove code fences if present)
+            clean_output = output.strip()
+            if clean_output.startswith("```"):
+                lines = clean_output.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_output = "\n".join(lines).strip()
+
+            # Write infrastructure.md
+            ensure_dir(INFRA_SPEC.parent)
+            INFRA_SPEC.write_text(clean_output)
+            click.echo(f"✅ Generated {INFRA_SPEC}")
+            click.echo(
+                "📝 Please review the generated infrastructure.md, then it will be normalized automatically."
+            )
+
+            # Auto-normalize
+            click.echo("🔄 Normalizing infrastructure.md...")
+            from vibe_tools.normalize import normalize_prd
+
+            normalize_prd(
+                agent=agent,
+                input_file=str(INFRA_SPEC),
+                auto_overwrite=True,
+                caffeinate=ctx.obj.get("caffeinate", False),
+                stream=stream,
+            )
+
+            if not INFRA.exists():
+                click.echo(
+                    "❌ Normalization failed. Please review and fix infrastructure.md, then run 'vibe normalize' manually."
+                )
+                return
+            click.echo("✅ Infrastructure normalized successfully.")
 
     from vibe_tools.ralph import RalphLoop
 
@@ -938,8 +1087,67 @@ def infra(ctx):
         state["phases"]["infra"]["status"] = "completed"
         save_project_state(state)
         click.echo("✅ Infrastructure reconciliation and verification complete.")
+
+        # Setup staging servers
+        click.echo("\n🔧 Setting up staging servers...")
+        from vibe_tools.staging import get_required_services
+        from vibe_tools.servers import get_server_configs, get_container_status
+
+        services = get_required_services()
+        server_configs = get_server_configs()
+
+        # Ensure required services are running
+        for service_key, service_config in services.items():
+            server_key = None
+            for sk in [
+                "postgres",
+                "redis",
+                "rabbitmq",
+                "elasticsearch",
+                "minio-linode",
+                "minio-aws",
+                "mailhog",
+                "imgproxy",
+            ]:
+                if (
+                    service_key == sk
+                    or (service_key == "s3-linode" and sk == "minio-linode")
+                    or (service_key == "s3-aws" and sk == "minio-aws")
+                ):
+                    server_key = sk
+                    break
+
+            if server_key and server_key in server_configs:
+                container_name = server_configs[server_key].get("container_name")
+                if container_name:
+                    status = get_container_status(container_name)
+                    if status != "running":
+                        click.echo(f"  Starting {service_key}...")
+                        stdout, code = run_command(
+                            ["docker", "start", container_name], check=False
+                        )
+                        if code == 0:
+                            click.echo(f"  ✅ {service_key} started")
+                        else:
+                            click.echo(
+                                f"  ⚠️  {service_key} not running (may need: vibe-servers install {server_key})"
+                            )
+
+        # Start staging environment
+        click.echo("\n🚀 Starting staging environment...")
+        from vibe_tools.staging import staging_cli
+
+        try:
+            ctx_staging = click.Context(staging_cli)
+            ctx_staging.invoke(
+                staging_cli.get_command(ctx_staging, "up"), isolated=False
+            )
+        except Exception as e:
+            click.echo(f"  ⚠️  Staging setup warning: {e}")
+
         click.echo("\nNext Steps:")
         click.echo("[ ] Setup CI/CD (vibe cicd)")
+        click.echo("[ ] Setup demo data (vibe demo-data setup)")
     else:
         click.echo("❌ Infrastructure reconciliation failed.")
 
@@ -1728,6 +1936,137 @@ def billing_groups_remove_members(ctx, group_id, user_ids):
         )
     except Exception as e:
         click.echo(f"❌ Error: {e}")
+
+
+@click.group()
+def demo_data_cli():
+    """Manage demo data for staging environment."""
+    pass
+
+
+@demo_data_cli.command()
+@click.pass_context
+def design(ctx):
+    """Design demo data PRD in specs/demodata.md using PM system."""
+    from vibe_tools.pm import InteractivePM
+
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+    verbose = ctx.obj.get("verbose", False)
+
+    pm = InteractivePM(agent=agent, stream=stream, verbose=verbose)
+
+    # Focus on demodata.md
+    demodata_path = SPECS_DIR / "demodata.md"
+    if not demodata_path.exists():
+        ensure_dir(SPECS_DIR)
+        template = """# Demo Data
+
+## Summary
+Define the demo data needed for the staging environment.
+
+## Requirements
+
+### Data Requirements
+- What entities need demo data?
+- What relationships should be established?
+- What realistic scenarios should be represented?
+
+### Data Setup
+- How should the data be loaded?
+- What scripts or tools are needed?
+- What cleanup is required for a clean demo?
+
+## Implementation
+"""
+        demodata_path.write_text(template)
+        click.echo(f"✅ Created {demodata_path}")
+
+    pm.focused_prd = "demodata.md"
+    click.echo(f"📝 Opening PM session focused on demodata.md")
+    click.echo(
+        "Use /mode agent to enable file editing, then describe your demo data requirements."
+    )
+    pm.run()
+
+
+@demo_data_cli.command()
+@click.option(
+    "--clean", is_flag=True, help="Clean existing data before setting up demo data"
+)
+@click.pass_context
+def setup(ctx, clean):
+    """Setup demo data according to specs/demodata.md."""
+    from vibe_tools.staging import (
+        get_required_services,
+        check_service_health,
+        detect_environment,
+    )
+
+    demodata_path = SPECS_DIR / "demodata.md"
+    if not demodata_path.exists():
+        click.echo("❌ specs/demodata.md not found. Run 'vibe demo-data design' first.")
+        return
+
+    # Check staging is running
+    env_type = detect_environment()
+    services = get_required_services()
+    all_healthy = True
+    for service_key, service_config in services.items():
+        service_name = service_key.replace("s3-", "minio-").replace("-", "_")
+        is_healthy, _ = check_service_health(service_name, service_config, env_type)
+        if not is_healthy:
+            all_healthy = False
+            break
+
+    if not all_healthy:
+        click.echo("⚠️  Some staging services are not healthy. Starting staging...")
+        from vibe_tools.staging import staging_cli
+
+        try:
+            ctx_staging = click.Context(staging_cli)
+            ctx_staging.invoke(
+                staging_cli.get_command(ctx_staging, "up"), isolated=False
+            )
+        except Exception as e:
+            click.echo(f"  ⚠️  Staging setup warning: {e}")
+
+    # Read demo data spec
+    spec_content = demodata_path.read_text()
+
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    # Build prompt for data setup
+    prompt = f"""You are setting up demo data for a staging environment.
+
+The demo data specification is in specs/demodata.md:
+
+{spec_content}
+
+TASK:
+{"1. Clean/reset all existing data in the database and services (if --clean flag is set)" if clean else "1. Preserve existing data"}
+2. Create and load demo data according to the specification
+3. Verify the data was loaded correctly
+
+You have access to the staging environment services. Use appropriate tools (SQL scripts, API calls, etc.) to set up the data.
+
+{"IMPORTANT: Clean all existing data first before loading new demo data." if clean else ""}
+
+Provide step-by-step instructions or execute the data setup directly.
+"""
+
+    cmd = get_agent_command(agent, prompt)
+    output, code = run_agent(cmd, stream=stream)
+
+    if code == 0:
+        click.echo("✅ Demo data setup complete.")
+    else:
+        click.echo("❌ Demo data setup failed.")
+        logger.error(f"Agent output: {output}")
+
+
+cli.add_command(demo_data_cli, name="demo-data")
 
 
 if __name__ == "__main__":
