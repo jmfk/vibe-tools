@@ -341,6 +341,7 @@ def load_global_servers() -> Dict[str, Any]:
 
 def save_global_servers(servers: Dict[str, Any]):
     """Saves server definitions to the global servers file."""
+    GLOBAL_SERVERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     GLOBAL_SERVERS_FILE.write_text(json.dumps(servers, indent=2))
 
 
