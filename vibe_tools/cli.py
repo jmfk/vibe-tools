@@ -6,6 +6,7 @@ import pathlib
 from typing import List
 
 import click
+import yaml
 
 
 class OrderedGroup(click.Group):
@@ -21,8 +22,8 @@ class OrderedGroup(click.Group):
             "setup",
             "deps",
             "implement",
-            "testing",
             "infra",
+            "testing",
             "cicd",
             "deploy",
             # Supporting tools
@@ -1076,8 +1077,12 @@ Output ONLY the markdown content for infrastructure.md, starting with the title 
         stream=stream,
     )
 
-    # Custom instruction for infra verification
+    # Custom instruction for infra verification and generation
     loop.instructions = [
+        "Generate Kubernetes manifests for local staging deployment.",
+        "Create infrastructure deployment configurations for target platforms (Linode, AWS, Hetzner, DigitalOcean, bare-metal).",
+        "Set up Docker build system with Dockerfiles and build scripts.",
+        "Ensure all build commands are configured in the Makefile.",
         "Specifically verify that all configured services (databases, queues, etc.) are reachable from the application environment.",
         "Test connectivity using appropriate tools (e.g., pg_isready, redis-cli, curl).",
         "Set up or update environment variables as needed.",
@@ -1086,7 +1091,111 @@ Output ONLY the markdown content for infrastructure.md, starting with the title 
     if loop.run():
         state["phases"]["infra"]["status"] = "completed"
         save_project_state(state)
-        click.echo("✅ Infrastructure reconciliation and verification complete.")
+        click.echo("✅ Infrastructure reconciliation complete.")
+
+        # Generate infrastructure deployment configs
+        click.echo("\n📦 Generating infrastructure deployment configurations...")
+        from vibe_tools.infrastructure import generate_all_infrastructure
+
+        try:
+            infra_results = generate_all_infrastructure(
+                platforms=["linode", "aws", "hetzner", "digitalocean", "bare-metal"],
+                build_system=True,
+            )
+
+            click.echo("✅ Generated infrastructure configs:")
+            for platform, config in infra_results.get("platforms", {}).items():
+                if "error" not in config:
+                    click.echo(
+                        f"  ✅ {platform}: {config.get('terraform_file', 'config generated')}"
+                    )
+                else:
+                    click.echo(f"  ⚠️  {platform}: {config.get('error')}")
+
+            if infra_results.get("build_system"):
+                build_cfg = infra_results["build_system"]
+                if "error" not in build_cfg:
+                    click.echo(
+                        f"  ✅ Build system: {build_cfg.get('dockerfile', 'configured')}"
+                    )
+        except Exception as e:
+            click.echo(f"  ⚠️  Infrastructure generation warning: {e}")
+
+        # Generate k8s manifests for local staging
+        click.echo("\n☸️  Generating Kubernetes manifests for local staging...")
+        from vibe_tools.staging import get_required_services, generate_k8s_manifests
+        from vibe_tools.utils import load_config
+
+        try:
+            config = load_config()
+            services = get_required_services()
+            app_services = config.get("staging", {}).get("app_services", [])
+
+            if services or app_services:
+                from vibe_tools.staging import K8S_MANIFESTS_DIR
+
+                K8S_MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
+
+                manifests = generate_k8s_manifests(
+                    services, app_services, "staging", isolated=False
+                )
+
+                for i, manifest in enumerate(manifests):
+                    kind = manifest.get("kind", "unknown").lower()
+                    name = manifest.get("metadata", {}).get("name", f"resource{i}")
+                    filename = f"{kind}-{name}.yaml"
+                    filepath = K8S_MANIFESTS_DIR / filename
+                    filepath.write_text(yaml.dump(manifest, default_flow_style=False))
+
+                click.echo(
+                    f"  ✅ Generated {len(manifests)} Kubernetes manifests in {K8S_MANIFESTS_DIR}"
+                )
+        except Exception as e:
+            click.echo(f"  ⚠️  K8s manifest generation warning: {e}")
+
+        # Setup and run build system
+        click.echo("\n🔨 Setting up build system and building...")
+        from vibe_tools.infrastructure import BUILD_DIR, DEPLOYMENT_DIR
+
+        try:
+            # Check if build script exists
+            build_script = BUILD_DIR / "build.sh"
+            if build_script.exists():
+                click.echo("  Running build script...")
+                stdout, code = run_command(
+                    ["bash", str(build_script)],
+                    check=False,
+                    cwd=Path.cwd(),
+                )
+                if code == 0:
+                    click.echo("  ✅ Build complete")
+                else:
+                    click.echo(f"  ⚠️  Build script returned code {code}")
+            else:
+                # Fallback: try docker build directly
+                dockerfile = DEPLOYMENT_DIR / "Dockerfile"
+                if dockerfile.exists():
+                    click.echo("  Building Docker image...")
+                    stdout, code = run_command(
+                        [
+                            "docker",
+                            "build",
+                            "-t",
+                            "vibe-app:latest",
+                            "-f",
+                            str(dockerfile),
+                            ".",
+                        ],
+                        check=False,
+                    )
+                    if code == 0:
+                        click.echo("  ✅ Docker image built")
+                    else:
+                        click.echo(f"  ⚠️  Docker build failed: {stdout[:200]}")
+                else:
+                    click.echo("  ⚠️  No build script or Dockerfile found")
+        except Exception as e:
+            click.echo(f"  ⚠️  Build system warning: {e}")
 
         # Setup staging servers
         click.echo("\n🔧 Setting up staging servers...")
@@ -1145,8 +1254,10 @@ Output ONLY the markdown content for infrastructure.md, starting with the title 
         except Exception as e:
             click.echo(f"  ⚠️  Staging setup warning: {e}")
 
+        click.echo("\n✅ Infrastructure setup complete!")
         click.echo("\nNext Steps:")
         click.echo("[ ] Run Tests & Reconciliation (vibe testing)")
+        click.echo("[ ] Review deployment configs in deployment/ directory")
         click.echo("[ ] Setup demo data (vibe demo-data setup)")
     else:
         click.echo("❌ Infrastructure reconciliation failed.")
