@@ -30,3 +30,5 @@ node_modules/
 vibe_data/*
 
 project/
+
+project/data/*

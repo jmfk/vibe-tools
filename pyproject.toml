@@ -29,6 +29,7 @@ packages = ["vibe_tools"]
 vibe = "vibe_tools.cli:cli"
 vibe-setup = "vibe_tools.setup:setup_cli"
 vibe-servers = "vibe_tools.servers:servers_cli"
+vibe-staging = "vibe_tools.staging:staging_cli"
 
 [tool.ruff]
 line-length = 120
