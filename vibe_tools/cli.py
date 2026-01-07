@@ -897,7 +897,7 @@ def implement(ctx):
 @cli.command()
 @click.pass_context
 def infra(ctx):
-    """Phase 7: Infrastructure reconciliation. Ensures services are reachable."""
+    """Phase 6: Infrastructure reconciliation. Ensures services are reachable."""
     state = load_project_state()
     missing = check_dependencies("infra", state)
     if missing:
@@ -1146,7 +1146,7 @@ Output ONLY the markdown content for infrastructure.md, starting with the title 
             click.echo(f"  ⚠️  Staging setup warning: {e}")
 
         click.echo("\nNext Steps:")
-        click.echo("[ ] Setup CI/CD (vibe cicd)")
+        click.echo("[ ] Run Tests & Reconciliation (vibe testing)")
         click.echo("[ ] Setup demo data (vibe demo-data setup)")
     else:
         click.echo("❌ Infrastructure reconciliation failed.")
@@ -1205,7 +1205,7 @@ def cicd(ctx):
 @cli.command()
 @click.pass_context
 def testing(ctx):
-    """Phase 6: Testing reconciliation. Ensures integration and regression tests pass."""
+    """Phase 7: Testing reconciliation. Ensures integration and regression tests pass."""
     state = load_project_state()
     missing = check_dependencies("testing", state)
     if missing:
@@ -1248,7 +1248,7 @@ def testing(ctx):
         save_project_state(state)
         click.echo("✅ Testing reconciliation complete.")
         click.echo("\nNext Steps:")
-        click.echo("[ ] Setup Infrastructure (vibe infra)")
+        click.echo("[ ] Setup CI/CD (vibe cicd)")
     else:
         click.echo("❌ Testing reconciliation failed.")
 
