@@ -21,6 +21,10 @@ dependencies = [
     "pytest-asyncio",
     "ruff",
     "mypy",
+    "pgvector",
+    "django-pgvector",
+    "stripe",
+    "dj-stripe",
 ]
 
 [tool.setuptools]
