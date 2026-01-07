@@ -26,7 +26,12 @@ DEFAULT_SPECS_DIR = pathlib.Path("specs")
 
 
 def normalize_prd(
-    agent, input_file=None, auto_overwrite=False, caffeinate=False, stream=False
+    agent,
+    input_file=None,
+    auto_overwrite=False,
+    caffeinate=False,
+    stream=False,
+    debug=False,
 ):
     from vibe_tools.cli import load_config
 
@@ -163,8 +168,18 @@ def normalize_prd(
         human_prd = spec_path.read_text()
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)
 
+        if debug:
+            print("\n--- DEBUG: NORMALIZATION PROMPT ---")
+            print(prompt)
+            print("--- END DEBUG ---\n")
+
         cmd = get_agent_command(agent, prompt)
         output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+
+        if debug:
+            print("\n--- DEBUG: AGENT OUTPUT ---")
+            print(output)
+            print("--- END DEBUG ---\n")
 
         cost_logger.log_run(
             agent=agent,
@@ -225,14 +240,38 @@ Error: {e}
 Please fix the YAML formatting issues and return ONLY the valid YAML content.
 Ensure all string values with special characters are properly quoted.
 """
+                if debug:
+                    print("\n--- DEBUG: YAML FIX PROMPT ---")
+                    print(fix_prompt)
+                    print("--- END DEBUG ---\n")
+
                 try:
                     from vibe_tools.utils import run_llm
 
-                    fixed_output = run_llm(fix_prompt, model="gemini-3-flash")
+                    fixed_output = run_llm(
+                        fix_prompt, model="gemini-3-flash", debug=debug
+                    )
+
+                    if not fixed_output:
+                        if debug:
+                            print("DEBUG: Fixed output from LLM is empty.")
+                        raise ValueError("Fixed output from LLM is empty.")
+
+                    if debug:
+                        print("\n--- DEBUG: FIXED OUTPUT (RAW) ---")
+                        print(fixed_output)
+                        print("--- END DEBUG ---\n")
 
                     # Strip markdown code fences if present in fixed output
                     fixed_output = fixed_output.strip()
-                    if fixed_output.startswith("```"):
+
+                    # Robust extraction: find the first yaml or ``` block
+                    yaml_match_fixed = re.search(
+                        r"```(?:yaml)?\n([\s\S]*?)\n```", fixed_output
+                    )
+                    if yaml_match_fixed:
+                        fixed_output = yaml_match_fixed.group(1).strip()
+                    elif fixed_output.startswith("```"):
                         lines = fixed_output.splitlines()
                         if lines[0].startswith("```"):
                             lines = lines[1:]
@@ -243,7 +282,15 @@ Ensure all string values with special characters are properly quoted.
                     # Try to validate again
                     data = yaml.safe_load(fixed_output)
                     if data is None:
+                        if debug:
+                            print("DEBUG: Fixed output parsed as None")
                         data = {}
+
+                    if debug:
+                        print("\n--- DEBUG: PARSED YAML DATA ---")
+                        print(data)
+                        print("--- END DEBUG ---\n")
+
                     clean_output = yaml.safe_dump(
                         data, sort_keys=False, allow_unicode=True, width=1000
                     )
