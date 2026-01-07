@@ -180,6 +180,20 @@ def normalize_prd(
                     lines = lines[:-1]
                 clean_output = "\n".join(lines).strip()
 
+            try:
+                # Validate and re-dump to ensure valid YAML formatting and proper quoting
+                data = yaml.safe_load(clean_output)
+                if data is None:
+                    data = {}
+                clean_output = yaml.safe_dump(
+                    data, sort_keys=False, allow_unicode=True, width=1000
+                )
+            except yaml.YAMLError as e:
+                logger.error(f"❌ Invalid YAML generated for {spec_path.name}: {e}")
+                print(
+                    f"⚠️ Warning: Generated YAML for {spec_path.name} is invalid. Saving as-is for manual fix."
+                )
+
             output_path.write_text(clean_output)
             print(f"✅ Saved: {output_path}")
 
