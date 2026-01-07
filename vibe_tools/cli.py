@@ -404,7 +404,7 @@ def coverage(ctx):
 
 
 @cli.command()
-@click.argument("input_file", required=False)
+@click.argument("input_files", nargs=-1, required=False)
 @click.option(
     "--yes", "-y", is_flag=True, help="Automatically overwrite existing PRDs."
 )
@@ -412,7 +412,7 @@ def coverage(ctx):
     "--debug", is_flag=True, help="Output all prompts and results for debugging."
 )
 @click.pass_context
-def normalize(ctx, input_file, yes, debug):
+def normalize(ctx, input_files, yes, debug):
     """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     state = load_project_state()
@@ -435,24 +435,41 @@ def normalize(ctx, input_file, yes, debug):
         "project_overview": pathlib.Path("specs/project-overview.md"),
     }
 
-    # If input_file is provided, check if it's a special file name
-    if input_file:
-        # Remove .md extension if present for matching
-        file_key = input_file.replace(".md", "").lower()
+    # Process input files: map special names and resolve paths
+    if input_files:
+        files_to_normalize = []
+        for input_file in input_files:
+            # Remove .md extension if present for matching
+            file_key = input_file.replace(".md", "").lower()
 
-        if file_key in special_files:
-            # Use the mapped spec file path
-            input_file = str(special_files[file_key])
+            if file_key in special_files:
+                # Use the mapped spec file path
+                files_to_normalize.append(str(special_files[file_key]))
+            else:
+                # Use as-is (normalize_prd will check if it exists)
+                files_to_normalize.append(input_file)
 
-    click.echo("🔄 Normalizing specs...")
-    normalize_prd(
-        agent=ctx.obj["agent"],
-        input_file=input_file,
-        auto_overwrite=yes,
-        caffeinate=ctx.obj.get("caffeinate", False),
-        stream=ctx.obj.get("stream", False),
-        debug=debug,
-    )
+        click.echo("🔄 Normalizing specs...")
+        for file_to_normalize in files_to_normalize:
+            normalize_prd(
+                agent=ctx.obj["agent"],
+                input_file=file_to_normalize,
+                auto_overwrite=yes,
+                caffeinate=ctx.obj.get("caffeinate", False),
+                stream=ctx.obj.get("stream", False),
+                debug=debug,
+            )
+    else:
+        # No files specified, normalize all files in specs/
+        click.echo("🔄 Normalizing specs...")
+        normalize_prd(
+            agent=ctx.obj["agent"],
+            input_file=None,
+            auto_overwrite=yes,
+            caffeinate=ctx.obj.get("caffeinate", False),
+            stream=ctx.obj.get("stream", False),
+            debug=debug,
+        )
 
     click.echo("\nNext Steps:")
     click.echo("[ ] Review/Edit generated YAMLs in project/prds/")
