@@ -425,6 +425,25 @@ def normalize(ctx, input_file, yes, debug):
 
     from vibe_tools.normalize import normalize_prd
 
+    # Map special file names to their spec paths
+    special_files = {
+        "infrastructure": INFRA_SPEC,
+        "architecture": ARCHITECTURE_SPEC,
+        "cicd": CICD_SPEC,
+        "testing": TESTING_SPEC,
+        "project-overview": pathlib.Path("specs/project-overview.md"),
+        "project_overview": pathlib.Path("specs/project-overview.md"),
+    }
+
+    # If input_file is provided, check if it's a special file name
+    if input_file:
+        # Remove .md extension if present for matching
+        file_key = input_file.replace(".md", "").lower()
+
+        if file_key in special_files:
+            # Use the mapped spec file path
+            input_file = str(special_files[file_key])
+
     click.echo("🔄 Normalizing specs...")
     normalize_prd(
         agent=ctx.obj["agent"],
