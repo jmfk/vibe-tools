@@ -96,7 +96,13 @@ def normalize_prd(
         clean_stem = re.sub(r"[- ]", "_", clean_stem)
 
         # Switch to normalization branch for this PRD
-        branch_name = f"vibe/normalize/{clean_stem}"
+        if config.get("ralph", {}).get("auto_merge", False):
+            from vibe_tools.utils import get_automerge_branch
+
+            branch_name = get_automerge_branch(config)
+        else:
+            branch_name = f"vibe/normalize/{clean_stem}"
+
         _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
 
         # Determine target PRD directory (preserving subdirectories)
