@@ -32,3 +32,5 @@ vibe_data/*
 project/
 
 project/data/*
+stats/*
+reports/*
