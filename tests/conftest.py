@@ -18,6 +18,42 @@ def silence_vibe_side_effects():
 
 
 @pytest.fixture(autouse=True)
+def safeguard_git_operations(request):
+    """
+    Ensure no git operations that change state are called during testing.
+    Read-only operations like 'rev-parse' or 'branch --show-current' are allowed
+    if they are necessary for the project to function, but mutations are blocked.
+    """
+    from vibe_tools.utils import run_command as original_run_command
+
+    forbidden_git_subcommands = {
+        "checkout", "commit", "add", "reset", "merge", "push", "pull", "fetch",
+        "branch", "init", "remote"
+    }
+
+    def safeguarded_run_command(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and len(cmd) > 0 and cmd[0] == "git":
+            subcommand = cmd[1] if len(cmd) > 1 else None
+            if subcommand in forbidden_git_subcommands:
+                # Special case: 'git branch --show-current' or 'git rev-parse' are often used for discovery
+                if subcommand == "branch" and "--show-current" in cmd:
+                    pass # allow
+                elif subcommand == "rev-parse":
+                    pass # allow
+                else:
+                    raise RuntimeError(
+                        f"Forbidden git mutation detected in test '{request.node.name}'! "
+                        f"Command: {' '.join(cmd)}. "
+                        "You must mock 'vibe_tools.utils.run_command' to prevent real git side-effects."
+                    )
+        
+        return original_run_command(cmd, *args, **kwargs)
+
+    with patch("vibe_tools.utils.run_command", side_effect=safeguarded_run_command):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def safeguard_llm_calls(request):
     """
     Ensure all LLM calls are mocked during testing.
