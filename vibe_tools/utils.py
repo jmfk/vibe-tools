@@ -1,6 +1,7 @@
 import atexit
 import datetime
 import hashlib
+import importlib.util
 import json
 import logging
 import os
@@ -650,14 +651,19 @@ def check_env_health() -> bool:
     config = load_config()
     env_config = config.get("env")
 
-    # 1. Check if backend is importable
-    try:
-        import backend
+    # 1. Check if backend or project package is importable
+    project_name = get_project_name()
+    package_found = False
 
-        logger.debug("✅ 'backend' package is importable.")
-    except ImportError:
+    for pkg in ["backend", project_name]:
+        if importlib.util.find_spec(pkg):
+            logger.debug(f"✅ '{pkg}' package is importable.")
+            package_found = True
+            break
+
+    if not package_found:
         logger.warning(
-            "❌ 'backend' package is NOT importable. Project structure may be broken."
+            f"❌ Neither 'backend' nor '{project_name}' package is importable. Project structure may be broken."
         )
         return False
 
@@ -682,12 +688,11 @@ def check_env_health() -> bool:
         return False
 
     # 3. Check for package structure
-    if (
-        pathlib.Path("backend").exists()
-        and not (pathlib.Path("backend") / "__init__.py").exists()
-    ):
-        logger.warning("❌ Missing 'backend/__init__.py'.")
-        return False
+    for pkg_dir in ["backend", project_name]:
+        path = pathlib.Path(pkg_dir)
+        if path.exists() and not (path / "__init__.py").exists():
+            logger.warning(f"❌ Missing '{pkg_dir}/__init__.py'.")
+            return False
 
     if not VIBE_DATA_DIR.exists():
         logger.warning(f"❌ Missing local data directory '{VIBE_DATA_DIR}/'.")
