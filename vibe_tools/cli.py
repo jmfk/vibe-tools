@@ -1033,6 +1033,8 @@ IMPORTANT REQUIREMENTS:
    - Include Helm charts for deployment
    - Document how to use `skaffold dev` for local development
    - Document Helm chart structure and values
+   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
+   - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
 
 3. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
 
@@ -1175,6 +1177,8 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Extract and document all services/components that need to run in development mode with their startup commands.",
         "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
         "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
+        "If skaffold is configured, ensure skaffold.yaml has 'defaultRepo: \"\"' under the 'build:' section to prevent push access errors.",
+        "If using a frontend Dockerfile (e.g., deployment/Dockerfile.frontend or frontend/Dockerfile), ensure it uses node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+).",
         "If skaffold is configured, test that 'skaffold dev' can start without configuration errors.",
         "Ensure Makefile dev-start target actually starts services (runs commands like uvicorn, npm run dev, etc.), not just echo messages.",
         "If dev-start only echoes or calls other targets, extract the actual service commands and update dev-start to run them directly or in background.",
