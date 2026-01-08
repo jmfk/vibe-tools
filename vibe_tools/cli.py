@@ -945,8 +945,14 @@ def implement(ctx):
 
 
 @cli.command()
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Force build even if build.yaml and build-current.yaml are identical.",
+)
 @click.pass_context
-def build(ctx):
+def build(ctx, force):
     """Build system reconciliation. Ensures the build system builds all parts and they can start."""
     state = load_project_state()
     missing = check_dependencies("implement", state)
@@ -1126,6 +1132,13 @@ Output ONLY the markdown content for build.md, starting with the title and endin
                 )
                 return
             click.echo("✅ Build specification normalized successfully.")
+
+    # Check if build.yaml and build-current.yaml are identical (skip if so, unless forced)
+    if not force and BUILD.exists() and BUILD_CURRENT.exists():
+        if get_file_hash(BUILD) == get_file_hash(BUILD_CURRENT):
+            click.echo("✅ Build files are identical. Skipping build.")
+            click.echo("   Use --force to rebuild anyway.")
+            return
 
     # Check for and install required build tools
     _check_and_install_build_tools()
