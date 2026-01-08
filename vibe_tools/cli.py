@@ -1093,7 +1093,31 @@ Output ONLY the markdown content for build.md, starting with the title and endin
 
     if success:
         click.echo("\nNext Steps:")
-        click.echo("[ ] Run the application (vibe run start)")
+        
+        # Check what services are available and provide appropriate instructions
+        services = _get_services()
+        has_skaffold = any(
+            s.get("name") == "skaffold-dev" or "skaffold" in s.get("start_command", "").lower()
+            for s in services
+        )
+        has_make_dev = any(
+            "make dev" in s.get("start_command", "") or "make dev-start" in s.get("start_command", "")
+            for s in services
+        )
+        
+        if has_skaffold:
+            click.echo("[ ] Start development with Skaffold:")
+            click.echo("     skaffold dev")
+            click.echo("     (This will build and deploy to your local Kubernetes cluster)")
+        elif has_make_dev:
+            make_cmd = next(
+                (s.get("start_command") for s in services if "make dev" in s.get("start_command", "")),
+                "make dev-start"
+            )
+            click.echo(f"[ ] Start development services:")
+            click.echo(f"     {make_cmd}")
+        else:
+            click.echo("[ ] Start development services using the commands from your Makefile")
     else:
         click.echo("❌ Build system reconciliation failed.")
 
