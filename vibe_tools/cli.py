@@ -1278,6 +1278,31 @@ def _extract_services_from_build_md():
     return services
 
 
+def _get_pid_file():
+    """Get path to PID tracking file."""
+    return VIBE_PROJECT_DIR / "run-pids.json"
+
+
+def _load_pids():
+    """Load tracked PIDs from file."""
+    pid_file = _get_pid_file()
+    if pid_file.exists():
+        try:
+            import json
+            return json.loads(pid_file.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_pids(pids):
+    """Save tracked PIDs to file."""
+    pid_file = _get_pid_file()
+    ensure_dir(pid_file.parent)
+    import json
+    pid_file.write_text(json.dumps(pids, indent=2))
+
+
 def _get_services():
     """Get services from build.yaml, build.md, or Makefile."""
     services = []
@@ -1356,14 +1381,82 @@ def start(ctx):
 
             # Run in background
             try:
-                process = subprocess.Popen(
-                    cmd_parts,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    cwd=service.get("working_directory", "."),
-                )
-                click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
-                started_count += 1
+                # For make commands, we need to let them run and check for child processes
+                if cmd_parts[0] == "make" and len(cmd_parts) > 1:
+                    # Run make in background, but don't wait for it
+                    process = subprocess.Popen(
+                        cmd_parts,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        cwd=service.get("working_directory", "."),
+                    )
+                    # Give it a moment to start child processes
+                    import time
+                    time.sleep(0.5)
+                    # Try to find child processes
+                    try:
+                        # Look for processes started by this make command
+                        result = run_command(
+                            ["pgrep", "-P", str(process.pid)], check=False
+                        )
+                        child_pids = result[0].strip().split() if result[0].strip() else []
+                        # Also check if make is still running or if it spawned processes
+                        if process.poll() is None or child_pids:
+                            # Store the make PID and any child PIDs
+                            pids = _load_pids()
+                            pids[service_name] = {
+                                "main_pid": process.pid,
+                                "child_pids": child_pids,
+                                "command": start_cmd,
+                            }
+                            _save_pids(pids)
+                            click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                            started_count += 1
+                        else:
+                            # Make completed quickly, check what it might have started
+                            # Look for common dev server processes
+                            target = cmd_parts[1] if len(cmd_parts) > 1 else ""
+                            # Check Makefile to see what the target runs
+                            makefile_path = pathlib.Path("Makefile")
+                            if makefile_path.exists():
+                                makefile_content = makefile_path.read_text()
+                                # Look for the target definition
+                                import re
+                                target_pattern = rf"^{target}:.*"
+                                match = re.search(target_pattern, makefile_content, re.MULTILINE)
+                                if match:
+                                    # Try to extract what command it runs
+                                    target_content = makefile_content[match.end():]
+                                    # Look for common commands in the target
+                                    for proc_name in ["uvicorn", "python", "node", "npm", "yarn", "next", "vite"]:
+                                        if proc_name in target_content.lower():
+                                            # Store with process name to check later
+                                            pids = _load_pids()
+                                            pids[service_name] = {
+                                                "main_pid": None,
+                                                "process_name": proc_name,
+                                                "command": start_cmd,
+                                            }
+                                            _save_pids(pids)
+                                            click.echo(f"  ✅ {service_name} started (checking for {proc_name} processes)")
+                                            started_count += 1
+                                            break
+                else:
+                    # Direct command - track the PID
+                    process = subprocess.Popen(
+                        cmd_parts,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        cwd=service.get("working_directory", "."),
+                    )
+                    pids = _load_pids()
+                    pids[service_name] = {
+                        "main_pid": process.pid,
+                        "command": start_cmd,
+                    }
+                    _save_pids(pids)
+                    click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                    started_count += 1
             except FileNotFoundError as e:
                 click.echo(
                     f"  ❌ {service_name} failed to start: Command not found. Is '{cmd_parts[0] if cmd_parts else 'unknown'}' installed?"
@@ -1384,6 +1477,7 @@ def start(ctx):
 def stop(ctx):
     """Stop all development services."""
     services = _get_services()
+    tracked_pids = _load_pids()
 
     if not services:
         # Try make dev-stop as fallback
@@ -1391,6 +1485,8 @@ def stop(ctx):
         if makefile_path.exists() and "dev-stop:" in makefile_path.read_text():
             click.echo("🛑 Stopping development services...")
             run_command(["make", "dev-stop"], check=False)
+            # Clear tracked PIDs
+            _save_pids({})
             click.echo("✅ Development environment stopped.")
             return
 
@@ -1403,6 +1499,30 @@ def stop(ctx):
     for service in services:
         service_name = service.get("name", "unknown")
         stop_cmd = service.get("stop_command")
+        pid_info = tracked_pids.get(service_name, {})
+
+        # First try to kill tracked PIDs
+        if pid_info:
+            main_pid = pid_info.get("main_pid")
+            child_pids = pid_info.get("child_pids", [])
+            process_name = pid_info.get("process_name")
+
+            # Kill main PID and children
+            if main_pid:
+                try:
+                    run_command(["kill", str(main_pid)], check=False)
+                except Exception:
+                    pass
+            for child_pid in child_pids:
+                try:
+                    run_command(["kill", str(child_pid)], check=False)
+                except Exception:
+                    pass
+
+            # Kill by process name if we have it
+            if process_name:
+                run_command(["pkill", "-f", process_name], check=False)
+
         if stop_cmd:
             if isinstance(stop_cmd, str):
                 import shlex
@@ -1433,6 +1553,8 @@ def stop(ctx):
                     run_command(["pkill", "-f", proc_name], check=False)
                     click.echo(f"  ✅ {service_name} stopped (via pkill)")
 
+    # Clear tracked PIDs
+    _save_pids({})
     click.echo("✅ Development environment stopped.")
 
 
@@ -1461,6 +1583,9 @@ def status(ctx):
     running_count = 0
     stopped_count = 0
 
+    # Load tracked PIDs
+    tracked_pids = _load_pids()
+
     for service in services:
         service_name = service.get("name", "unknown")
         start_cmd = service.get("start_command", "")
@@ -1468,28 +1593,76 @@ def status(ctx):
         # Try to determine if service is running
         is_running = False
         pid = None
+        pid_info = tracked_pids.get(service_name, {})
 
-        if start_cmd:
-            # Extract command name for process checking
+        # First check tracked PIDs
+        if pid_info:
+            main_pid = pid_info.get("main_pid")
+            child_pids = pid_info.get("child_pids", [])
+            process_name = pid_info.get("process_name")
+
+            # Check main PID if it exists
+            if main_pid:
+                # Check if process is still running (kill -0 just checks, doesn't kill)
+                _, code = run_command(["kill", "-0", str(main_pid)], check=False)
+                if code == 0:
+                    is_running = True
+                    pid = str(main_pid)
+                else:
+                    # Check child PIDs
+                    for child_pid in child_pids:
+                        _, code = run_command(["kill", "-0", str(child_pid)], check=False)
+                        if code == 0:
+                            is_running = True
+                            pid = str(child_pid)
+                            break
+
+            # If we have a process name, check for it
+            if not is_running and process_name:
+                try:
+                    result = run_command(
+                        ["pgrep", "-f", process_name], check=False
+                    )
+                    if result[0].strip():
+                        is_running = True
+                        pids = result[0].strip().split()
+                        pid = pids[0] if pids else None
+                except Exception:
+                    pass
+
+        # Fallback: try to detect by command
+        if not is_running and start_cmd:
             import shlex
 
             cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
 
             if cmd_parts:
-                # For make commands, check if the process is running
+                # For make commands, check what the make target actually runs
                 if cmd_parts[0] == "make" and len(cmd_parts) > 1:
-                    # Check for processes that might be started by make
                     target = cmd_parts[1]
-                    # Try to find related processes
-                    try:
-                        result = run_command(
-                            ["pgrep", "-f", target], check=False
-                        )
-                        if result[0].strip():
-                            is_running = True
-                            pid = result[0].strip().split()[0] if result[0].strip() else None
-                    except Exception:
-                        pass
+                    # Check Makefile to see what processes the target starts
+                    makefile_path = pathlib.Path("Makefile")
+                    if makefile_path.exists():
+                        makefile_content = makefile_path.read_text()
+                        import re
+                        # Find the target and what it runs
+                        target_pattern = rf"^{target}:.*?^[a-zA-Z]"
+                        match = re.search(target_pattern, makefile_content, re.MULTILINE | re.DOTALL)
+                        if match:
+                            target_content = match.group(0)
+                            # Look for common dev server processes
+                            for proc_name in ["uvicorn", "python.*manage\.py", "node", "npm.*dev", "yarn.*dev", "next", "vite"]:
+                                try:
+                                    result = run_command(
+                                        ["pgrep", "-f", proc_name], check=False
+                                    )
+                                    if result[0].strip():
+                                        is_running = True
+                                        pids = result[0].strip().split()
+                                        pid = pids[0] if pids else None
+                                        break
+                                except Exception:
+                                    pass
                 else:
                     # For direct commands, check if process is running
                     proc_name = cmd_parts[0]
