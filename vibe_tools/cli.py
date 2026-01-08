@@ -1244,6 +1244,92 @@ def _extract_services_from_makefile():
     return services
 
 
+def _extract_urls_from_build():
+    """Extract URLs from build.yaml, build.md, or Makefile."""
+    urls = {}
+
+    # Try build.yaml first
+    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    if build_file.exists():
+        try:
+            import yaml
+
+            build_config = yaml.safe_load(build_file.read_text())
+            if build_config:
+                # Look for URLs in config
+                if "urls" in build_config:
+                    urls.update(build_config["urls"])
+                # Look for services with URLs
+                services = build_config.get("services", [])
+                for service in services:
+                    if "url" in service:
+                        urls[service.get("name", "unknown")] = service["url"]
+        except Exception:
+            pass
+
+    # Try build.md
+    if BUILD_SPEC.exists():
+        build_md = BUILD_SPEC.read_text()
+        import re
+
+        # Look for URL patterns
+        url_patterns = [
+            (r"http://localhost:(\d+)", "backend"),
+            (r"http://localhost:(\d+)", "frontend"),
+            (r"backend.*?(\d{4,5})", "backend"),
+            (r"frontend.*?(\d{4,5})", "frontend"),
+            (r":(\d{4,5})", "service"),
+        ]
+
+        # Common port patterns
+        port_patterns = {
+            r"8000": "backend",
+            r"3000": "frontend",
+            r"5173": "frontend",  # Vite
+            r"8080": "backend",
+            r"5000": "backend",
+        }
+
+        for pattern, service_type in port_patterns.items():
+            matches = re.findall(rf"localhost:{pattern}|port\s+{pattern}|:{pattern}", build_md, re.IGNORECASE)
+            if matches:
+                port = pattern
+                if service_type not in urls:
+                    urls[service_type] = f"http://localhost:{port}"
+
+        # Look for explicit URL mentions
+        explicit_urls = re.findall(r"(https?://[^\s\)]+)", build_md)
+        for url in explicit_urls:
+            if "localhost" in url or "127.0.0.1" in url:
+                if "backend" in url.lower() or "api" in url.lower() or ":8000" in url:
+                    urls["backend"] = url
+                elif "frontend" in url.lower() or ":3000" in url or ":5173" in url:
+                    urls["frontend"] = url
+
+    # Try Makefile for port information
+    makefile_path = pathlib.Path("Makefile")
+    if makefile_path.exists():
+        makefile_content = makefile_path.read_text()
+        import re
+
+        # Look for port assignments
+        port_matches = re.findall(r"(?:PORT|port)\s*[=:]\s*(\d{4,5})", makefile_content, re.IGNORECASE)
+        for port in port_matches:
+            if port == "8000" and "backend" not in urls:
+                urls["backend"] = f"http://localhost:{port}"
+            elif port in ["3000", "5173"] and "frontend" not in urls:
+                urls["frontend"] = f"http://localhost:{port}"
+
+        # Look for uvicorn or runserver commands with ports
+        uvicorn_match = re.search(r"uvicorn.*?--port\s+(\d+)", makefile_content, re.IGNORECASE)
+        if uvicorn_match:
+            port = uvicorn_match.group(1)
+            urls["backend"] = f"http://localhost:{port}"
+            urls["api_docs"] = f"http://localhost:{port}/docs"
+
+    return urls
+
+
 def _extract_services_from_build_md():
     """Extract services from build.md by parsing startup commands."""
     if not BUILD_SPEC.exists():
@@ -1772,6 +1858,25 @@ def status(ctx):
 
     click.echo("-" * 60)
     click.echo(f"Total: {len(services)} service(s) - {running_count} running, {stopped_count} stopped")
+
+    # Show URLs if services are running
+    if running_count > 0:
+        urls = _extract_urls_from_build()
+        if urls:
+            click.echo("\n🌐 Application URLs:")
+            for service_type, url in urls.items():
+                if service_type == "backend":
+                    click.echo(f"  Backend API:     {url}")
+                    # Add API docs URL if it's a common backend port
+                    if ":8000" in url or ":8080" in url:
+                        base_url = url.rstrip("/")
+                        click.echo(f"  API Docs:       {base_url}/docs")
+                elif service_type == "frontend":
+                    click.echo(f"  Frontend:        {url}")
+                elif service_type == "api_docs":
+                    click.echo(f"  API Docs:        {url}")
+                else:
+                    click.echo(f"  {service_type.capitalize()}: {url}")
 
     if stopped_count > 0:
         click.echo("\n💡 Run 'vibe start' or 'vibe run start' to start stopped services.")
