@@ -8,6 +8,8 @@ from typing import List
 
 import yaml
 
+from typing import Callable, Optional
+
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     ARCHITECTURE,
@@ -34,6 +36,7 @@ from vibe_tools.utils import (
     logger,
     run_agent,
     run_command,
+    run_llm,
     save_project_state,
     switch_to_main,
 )
@@ -163,6 +166,128 @@ class RalphLoop:
             log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
             logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
             return False
+
+
+class QuickFixLoop:
+    """
+    Generic quick-fix loop that uses direct LLM calls (no agent wrapper).
+    Takes a success function to determine when the fix is complete.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        success_fn: Callable[[], bool],
+        prompt_builder: Callable[[int], str],
+        max_iterations: int = 5,
+        model: str = "gemini-3-flash",
+        debug: bool = False,
+    ):
+        """
+        Initialize QuickFixLoop.
+
+        Args:
+            name: Name of the fix operation (for logging)
+            success_fn: Function that returns True if fix succeeded, False otherwise
+            prompt_builder: Function that takes iteration number and returns prompt string
+            max_iterations: Maximum number of fix attempts
+            model: LLM model to use (default: gemini-3-flash)
+            debug: Enable debug logging
+        """
+        self.name = name
+        self.success_fn = success_fn
+        self.prompt_builder = prompt_builder
+        self.max_iterations = max_iterations
+        self.model = model
+        self.debug = debug
+
+    def run(self) -> bool:
+        """
+        Execute the quick-fix loop.
+
+        Returns:
+            True if fix succeeded within max_iterations, False otherwise
+        """
+        log_start(self.name, f"Quick fix loop (max {self.max_iterations} iterations)")
+        logger.info(f"🔄 Starting {self.name} Quick Fix Loop...")
+
+        # Check if already successful
+        if self.success_fn():
+            log_success(self.name, "Already successful, no fix needed")
+            logger.info(f"✅ {self.name} is already successful.")
+            return True
+
+        for iteration in range(1, self.max_iterations + 1):
+            logger.info(
+                f"🔧 [{self.name}] Fix attempt {iteration}/{self.max_iterations}..."
+            )
+
+            # Build prompt for this iteration
+            try:
+                prompt = self.prompt_builder(iteration)
+            except Exception as e:
+                logger.error(f"Error building prompt: {e}")
+                log_issue(self.name, iteration, self.max_iterations, f"Prompt build error: {e}")
+                return False
+
+            # Call LLM directly (no agent wrapper)
+            try:
+                llm_output = run_llm(prompt, model=self.model, debug=self.debug)
+                logger.debug(f"LLM output (iteration {iteration}): {llm_output[:500]}...")
+            except Exception as e:
+                logger.error(f"LLM call failed: {e}")
+                log_issue(
+                    self.name,
+                    iteration,
+                    self.max_iterations,
+                    f"LLM call error: {e}",
+                )
+                if iteration < self.max_iterations:
+                    continue
+                else:
+                    return False
+
+            # Check if fix succeeded
+            try:
+                if self.success_fn():
+                    log_success(
+                        self.name,
+                        f"Fix succeeded after {iteration} iteration(s)",
+                    )
+                    logger.info(
+                        f"✅ {self.name} fix succeeded after {iteration} iteration(s)."
+                    )
+                    return True
+            except Exception as e:
+                logger.warning(f"Error checking success: {e}")
+                log_issue(
+                    self.name,
+                    iteration,
+                    self.max_iterations,
+                    f"Success check error: {e}",
+                )
+
+            # Not successful yet
+            if iteration < self.max_iterations:
+                log_issue(
+                    self.name,
+                    iteration,
+                    self.max_iterations,
+                    "Fix attempt did not succeed, retrying...",
+                )
+                logger.info(f"⚠️  Fix attempt {iteration} did not succeed, retrying...")
+            else:
+                log_issue(
+                    self.name,
+                    iteration,
+                    self.max_iterations,
+                    "Fix failed after all iterations",
+                )
+                logger.error(
+                    f"❌ {self.name} fix failed after {self.max_iterations} iterations."
+                )
+
+        return False
 
 
 def generate_prd_plan() -> bool:
