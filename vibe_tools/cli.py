@@ -1939,6 +1939,43 @@ def start(ctx):
                                     if debug:
                                         click.echo(f"  🔍 DEBUG: Target content: {target_content[:200]}...")
                                     
+                                    # Check if target content is a direct command (like "skaffold dev")
+                                    # Extract first non-empty, non-comment line
+                                    target_lines = [line.strip() for line in target_content.splitlines() if line.strip() and not line.strip().startswith("#")]
+                                    direct_cmd = target_lines[0] if target_lines else None
+                                    
+                                    # If it's a direct command (not calling other make targets), run it
+                                    if direct_cmd and not direct_cmd.startswith("make ") and not direct_cmd.startswith("$(MAKE)"):
+                                        if debug:
+                                            click.echo(f"  🔍 DEBUG: Found direct command in target: {direct_cmd}")
+                                        
+                                        # Check if command exists
+                                        cmd_parts_direct = direct_cmd.split()
+                                        if cmd_parts_direct and not _command_exists(cmd_parts_direct[0]):
+                                            click.echo(f"  ❌ {service_name}: Command '{cmd_parts_direct[0]}' not found.")
+                                            if cmd_parts_direct[0] == "skaffold":
+                                                click.echo(f"  💡 Install skaffold with: brew install skaffold")
+                                            continue
+                                        
+                                        # Run the direct command
+                                        import shlex
+                                        direct_parts = shlex.split(direct_cmd)
+                                        direct_process = subprocess.Popen(
+                                            direct_parts,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE,
+                                            cwd=service.get("working_directory", "."),
+                                        )
+                                        pids = _load_pids()
+                                        pids[service_name] = {
+                                            "main_pid": direct_process.pid,
+                                            "command": direct_cmd,
+                                        }
+                                        _save_pids(pids)
+                                        click.echo(f"  ✅ {service_name} started (PID: {direct_process.pid}, Command: {direct_cmd})")
+                                        started_count += 1
+                                        continue
+                                    
                                     # Extract port from Makefile target if not already found
                                     detected_proc_name = None
                                     if not actual_port:
