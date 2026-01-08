@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import pathlib
+import shutil
 import subprocess
 from typing import List
 
@@ -54,6 +55,7 @@ class OrderedGroup(click.Group):
             "billing-groups",
             "demo-data",
             "init",
+            "devbug",
             # Deprecated
             "ralph",
             "prd",
@@ -1164,9 +1166,272 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         click.echo("❌ Build system reconciliation failed.")
 
 
+@cli.command()
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path for diagnostic data (default: project/devbug-report.json)",
+)
+@click.pass_context
+def devbug(ctx, output):
+    """Collect comprehensive diagnostic data for debugging build and run issues."""
+    import socket
+    import datetime
+
+    output_path = pathlib.Path(output) if output else (VIBE_PROJECT_DIR / "devbug-report.json")
+    ensure_dir(output_path.parent)
+
+    click.echo("🔍 Collecting diagnostic data...")
+
+    diagnostics = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "project_root": str(pathlib.Path.cwd()),
+        "services": {"detected": [], "count": 0},
+        "processes": {"tracked_pids": {}, "tracked_count": 0, "running": {}, "details": {}},
+        "ports": {"urls": {}},
+        "files": {},
+        "commands": {},
+        "errors": [],
+    }
+
+    # 1. Service Detection
+    try:
+        services = _get_services()
+        diagnostics["services"]["detected"] = services
+        diagnostics["services"]["count"] = len(services)
+        for i, service in enumerate(services, 1):
+            diagnostics["services"][f"service_{i}"] = {
+                "name": service.get("name", "unknown"),
+                "start_command": service.get("start_command", "N/A"),
+                "working_directory": service.get("working_directory", "."),
+                "port": service.get("port"),
+                "url": service.get("url"),
+            }
+    except Exception as e:
+        diagnostics["errors"].append(f"Service detection failed: {e}")
+
+    # 2. PID Tracking
+    try:
+        pids = _load_pids()
+        diagnostics["processes"]["tracked_pids"] = pids
+        diagnostics["processes"]["tracked_count"] = len(pids)
+
+        # Check if tracked PIDs are actually running
+        for service_name, pid_info in pids.items():
+            main_pid = pid_info.get("main_pid")
+            child_pids = pid_info.get("child_pids", [])
+            process_name = pid_info.get("process_name")
+            command = pid_info.get("command", "")
+
+            pid_status = {}
+            if main_pid:
+                try:
+                    os.kill(main_pid, 0)
+                    pid_status["main_pid"] = {"pid": main_pid, "running": True}
+                except OSError:
+                    pid_status["main_pid"] = {"pid": main_pid, "running": False}
+
+            for child_pid in child_pids:
+                try:
+                    os.kill(int(child_pid), 0)
+                    pid_status.setdefault("child_pids", []).append({"pid": child_pid, "running": True})
+                except (OSError, ValueError):
+                    pid_status.setdefault("child_pids", []).append({"pid": child_pid, "running": False})
+
+            # Check for process by name
+            if process_name:
+                try:
+                    result = run_command(["pgrep", "-f", process_name], check=False)
+                    found_pids = result[0].strip().split() if result[0].strip() else []
+                    pid_status["process_name_search"] = {
+                        "name": process_name,
+                        "found_pids": found_pids,
+                        "running": len(found_pids) > 0,
+                    }
+                except Exception as e:
+                    pid_status["process_name_search"] = {"name": process_name, "error": str(e)}
+
+            diagnostics["processes"][service_name] = {
+                "tracked_info": pid_info,
+                "status": pid_status,
+            }
+    except Exception as e:
+        diagnostics["errors"].append(f"PID tracking check failed: {e}")
+
+    # 3. Actual Running Processes
+    try:
+        # Check for common dev server processes
+        common_processes = ["uvicorn", "python.*manage\\.py", "node", "npm.*dev", "yarn.*dev", "next", "vite", "skaffold"]
+        for proc_pattern in common_processes:
+            try:
+                result = run_command(["pgrep", "-f", proc_pattern], check=False)
+                if result[0].strip():
+                    pids = result[0].strip().split()
+                    diagnostics["processes"]["running"][proc_pattern] = pids
+                    # Get process details
+                    for pid in pids:
+                        try:
+                            ps_result = run_command(["ps", "-p", pid, "-o", "pid,command,etime"], check=False)
+                            diagnostics["processes"]["details"][pid] = ps_result[0].strip()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+    except Exception as e:
+        diagnostics["errors"].append(f"Process detection failed: {e}")
+
+    # 4. Port Usage
+    try:
+        common_ports = [8000, 5173, 3000, 8080, 5000]
+        for port in common_ports:
+            is_available = _is_port_available(port)
+            diagnostics["ports"][str(port)] = {
+                "available": is_available,
+                "in_use": not is_available,
+            }
+            if not is_available:
+                # Try to find what's using it
+                try:
+                    result = run_command(["lsof", "-i", f":{port}"], check=False)
+                    diagnostics["ports"][str(port)]["lsof"] = result[0].strip() if result[0].strip() else "No output"
+                except Exception:
+                    pass
+    except Exception as e:
+        diagnostics["errors"].append(f"Port check failed: {e}")
+
+    # 5. File Contents
+    files_to_check = {
+        "Makefile": pathlib.Path("Makefile"),
+        "build.yaml": BUILD,
+        "build-current.yaml": BUILD_CURRENT,
+        "build.md": BUILD_SPEC,
+        "skaffold.yaml": pathlib.Path("skaffold.yaml"),
+        "project/run-pids.json": _get_pid_file(),
+    }
+
+    for file_key, file_path in files_to_check.items():
+        if file_path.exists():
+            try:
+                content = file_path.read_text()
+                diagnostics["files"][file_key] = {
+                    "exists": True,
+                    "path": str(file_path),
+                    "size": len(content),
+                    "content": content[:10000],  # Limit to first 10KB
+                }
+            except Exception as e:
+                diagnostics["files"][file_key] = {"exists": True, "path": str(file_path), "error": str(e)}
+        else:
+            diagnostics["files"][file_key] = {"exists": False, "path": str(file_path)}
+
+    # 6. URL Accessibility
+    try:
+        urls = _extract_urls_from_build()
+        for url_key, url in urls.items():
+            is_responding = _check_url_responds(url)
+            diagnostics["ports"]["urls"][url_key] = {
+                "url": url,
+                "responding": is_responding,
+            }
+    except Exception as e:
+        diagnostics["errors"].append(f"URL check failed: {e}")
+
+    # 7. Command Execution Tests
+    test_commands = {
+        "make_dev_start": ["make", "dev-start"],
+        "skaffold_dev": ["skaffold", "dev"],
+        "skaffold_schema": ["skaffold", "schema"],
+    }
+
+    for cmd_name, cmd_parts in test_commands.items():
+        if not shutil.which(cmd_parts[0]):
+            diagnostics["commands"][cmd_name] = {"available": False, "error": f"Command '{cmd_parts[0]}' not found in PATH"}
+            continue
+
+        try:
+            # Just check if command exists, don't actually run it
+            diagnostics["commands"][cmd_name] = {
+                "available": True,
+                "command": " ".join(cmd_parts),
+            }
+        except Exception as e:
+            diagnostics["commands"][cmd_name] = {"available": False, "error": str(e)}
+
+    # 8. Makefile Target Analysis
+    makefile_path = pathlib.Path("Makefile")
+    if makefile_path.exists():
+        try:
+            makefile_content = makefile_path.read_text()
+            diagnostics["files"]["Makefile_analysis"] = {}
+
+            # Parse dev-start target
+            import re
+            dev_start_match = re.search(r"^dev-start:.*", makefile_content, re.MULTILINE)
+            if dev_start_match:
+                target_content = makefile_content[dev_start_match.end():]
+                next_target = re.search(r"^\w+:", target_content, re.MULTILINE)
+                if next_target:
+                    target_content = target_content[: next_target.start()]
+
+                diagnostics["files"]["Makefile_analysis"]["dev-start"] = {
+                    "content": target_content.strip(),
+                    "is_echo_only": all(
+                        line.strip().startswith("@echo") or line.strip().startswith("echo") or line.strip().startswith("#")
+                        for line in target_content.splitlines()
+                        if line.strip()
+                    ),
+                }
+
+            # Check for other common targets
+            for target in ["run", "backend-run", "frontend-run", "frontend-dev"]:
+                target_match = re.search(rf"^{target}:.*", makefile_content, re.MULTILINE)
+                if target_match:
+                    target_content = makefile_content[target_match.end():]
+                    next_target = re.search(r"^\w+:", target_content, re.MULTILINE)
+                    if next_target:
+                        target_content = target_content[: next_target.start()]
+
+                    diagnostics["files"]["Makefile_analysis"][target] = {
+                        "exists": True,
+                        "content": target_content.strip()[:500],  # Limit content
+                    }
+        except Exception as e:
+            diagnostics["errors"].append(f"Makefile analysis failed: {e}")
+
+    # 9. Skaffold.yaml Analysis
+    skaffold_path = pathlib.Path("skaffold.yaml")
+    if skaffold_path.exists():
+        try:
+            skaffold_content = skaffold_path.read_text()
+            has_artifact_overrides = "artifactOverrides" in skaffold_content
+            has_set_value_templates = "setValueTemplates" in skaffold_content
+            diagnostics["files"]["skaffold_analysis"] = {
+                "has_artifact_overrides": has_artifact_overrides,
+                "has_set_value_templates": has_set_value_templates,
+                "needs_fix": has_artifact_overrides and not has_set_value_templates,
+            }
+        except Exception as e:
+            diagnostics["errors"].append(f"Skaffold analysis failed: {e}")
+
+    # Write output
+    try:
+        output_path.write_text(json.dumps(diagnostics, indent=2))
+        click.echo(f"✅ Diagnostic data saved to: {output_path}")
+        click.echo(f"   Errors: {len(diagnostics['errors'])}")
+        click.echo(f"   Services detected: {diagnostics['services'].get('count', 0)}")
+        click.echo(f"   Tracked PIDs: {diagnostics['processes'].get('tracked_count', 0)}")
+    except Exception as e:
+        click.echo(f"❌ Failed to write diagnostic data: {e}")
+        click.echo(json.dumps(diagnostics, indent=2))
+
+
 @cli.group()
 @click.option(
-    "--debug", "-d", is_flag=True, help="Enable debug output showing process detection details."
+    "--debug",
+    "-d",
+    is_flag=True,
+    help="Enable debug output showing process detection details.",
 )
 @click.pass_context
 def run(ctx, debug):
@@ -1178,16 +1443,18 @@ def run(ctx, debug):
 def _command_exists(cmd):
     """Check if a command exists in PATH."""
     import shutil
+
     return shutil.which(cmd) is not None
 
 
 def _is_port_available(port):
     """Check if a port is available."""
     import socket
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1)
-            result = s.connect_ex(('localhost', port))
+            result = s.connect_ex(("localhost", port))
             return result != 0  # Port is available if connection fails
     except Exception:
         return False
@@ -1205,6 +1472,7 @@ def _find_available_port(start_port, max_attempts=10):
 def _extract_port_from_command(cmd):
     """Extract port number from a command string."""
     import re
+
     # Look for --port, -p, PORT=, or :port patterns
     patterns = [
         r"--port\s+(\d+)",
@@ -1223,12 +1491,19 @@ def _extract_port_from_command(cmd):
 def _replace_port_in_command(cmd, old_port, new_port):
     """Replace port in a command string."""
     import re
+
     # Replace various port patterns
-    cmd = re.sub(rf"--port\s+{old_port}", f"--port {new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(
+        rf"--port\s+{old_port}", f"--port {new_port}", cmd, flags=re.IGNORECASE
+    )
     cmd = re.sub(rf"-p\s+{old_port}", f"-p {new_port}", cmd, flags=re.IGNORECASE)
-    cmd = re.sub(rf"PORT[=:]\s*{old_port}", f"PORT={new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(
+        rf"PORT[=:]\s*{old_port}", f"PORT={new_port}", cmd, flags=re.IGNORECASE
+    )
     cmd = re.sub(rf":{old_port}", f":{new_port}", cmd)
-    cmd = re.sub(rf"port\s*=\s*{old_port}", f"port={new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(
+        rf"port\s*=\s*{old_port}", f"port={new_port}", cmd, flags=re.IGNORECASE
+    )
     return cmd
 
 
@@ -1243,55 +1518,57 @@ def _extract_services_from_build_config(build_config):
 def _parse_makefile_target(target_name, makefile_content, visited=None):
     """Parse a Makefile target to extract the commands it runs."""
     import re
-    
+
     if visited is None:
         visited = set()
-    
+
     # Prevent infinite recursion
     if target_name in visited:
         return []
     visited.add(target_name)
-    
+
     # Find the target definition - match until next target or end of file
     target_pattern = rf"^{target_name}:\s*(.*?)(?=^[a-zA-Z_][a-zA-Z0-9_-]*:|^$)"
     match = re.search(target_pattern, makefile_content, re.MULTILINE | re.DOTALL)
     if not match:
         return []
-    
+
     target_content = match.group(1)
     commands = []
-    
+
     # Extract commands (lines starting with tab)
     for line in target_content.splitlines():
         # Check if line starts with tab (actual command) or @ (silent command)
         if not (line.startswith("\t") or line.startswith("\t@")):
             continue
-        
+
         # Remove leading tab and @
         line = line.lstrip("\t@").strip()
-        
+
         # Skip empty lines and comments
         if not line or line.startswith("#"):
             continue
-        
+
         # Skip echo commands (but keep them for debugging)
         if line.startswith("echo"):
             continue
-        
+
         # Handle make calls to other targets - recursively parse
         if line.startswith("make ") or line.startswith("$(MAKE)"):
             parts = line.split()
             if len(parts) > 1:
                 called_target = parts[1]
                 # Recursively get commands from called target
-                sub_commands = _parse_makefile_target(called_target, makefile_content, visited.copy())
+                sub_commands = _parse_makefile_target(
+                    called_target, makefile_content, visited.copy()
+                )
                 commands.extend(sub_commands)
             continue
-        
+
         # This is an actual command to run
         if line:
             commands.append(line)
-    
+
     return commands
 
 
@@ -1318,37 +1595,61 @@ def _extract_services_from_makefile():
         if f"{target}:" in makefile_content or f".PHONY: {target}" in makefile_content:
             # Parse the target to see what it actually does
             target_commands = _parse_makefile_target(target, makefile_content)
-            
+
             # If target just calls other targets or is just echo, try to extract real services
-            if not target_commands or all(c.startswith("@echo") or c.startswith("echo") for c in target_commands):
+            if not target_commands or all(
+                c.startswith("@echo") or c.startswith("echo") for c in target_commands
+            ):
                 # Try to find backend and frontend targets
-                backend_commands = _parse_makefile_target("backend-run", makefile_content) or _parse_makefile_target("run", makefile_content)
-                frontend_commands = _parse_makefile_target("frontend-run", makefile_content) or _parse_makefile_target("frontend-dev", makefile_content)
-                
+                backend_commands = _parse_makefile_target(
+                    "backend-run", makefile_content
+                ) or _parse_makefile_target("run", makefile_content)
+                frontend_commands = _parse_makefile_target(
+                    "frontend-run", makefile_content
+                ) or _parse_makefile_target("frontend-dev", makefile_content)
+
                 if backend_commands:
-                    services.append({
-                        "name": "backend",
-                        "start_command": backend_commands[0] if backend_commands else None,
-                        "make_target": "backend-run" if "backend-run:" in makefile_content else "run",
-                    })
+                    services.append(
+                        {
+                            "name": "backend",
+                            "start_command": (
+                                backend_commands[0] if backend_commands else None
+                            ),
+                            "make_target": (
+                                "backend-run"
+                                if "backend-run:" in makefile_content
+                                else "run"
+                            ),
+                        }
+                    )
                 if frontend_commands:
-                    services.append({
-                        "name": "frontend",
-                        "start_command": frontend_commands[0] if frontend_commands else None,
-                        "make_target": "frontend-run" if "frontend-run:" in makefile_content else "frontend-dev",
-                    })
-                
+                    services.append(
+                        {
+                            "name": "frontend",
+                            "start_command": (
+                                frontend_commands[0] if frontend_commands else None
+                            ),
+                            "make_target": (
+                                "frontend-run"
+                                if "frontend-run:" in makefile_content
+                                else "frontend-dev"
+                            ),
+                        }
+                    )
+
                 # If we found individual services, use those instead
                 if backend_commands or frontend_commands:
                     found_main_target = True
                     break
-            
+
             # If target has actual commands, use it as-is
             services.append(
                 {
                     "name": service_name,
                     "start_command": cmd,
-                    "stop_command": "make dev-stop" if "dev-stop:" in makefile_content else None,
+                    "stop_command": (
+                        "make dev-stop" if "dev-stop:" in makefile_content else None
+                    ),
                 }
             )
             found_main_target = True
@@ -1367,7 +1668,11 @@ def _extract_services_from_makefile():
     # Check for backend and frontend separately (only if main target not found)
     if not found_main_target:
         if "frontend-run:" in makefile_content or "frontend-dev:" in makefile_content:
-            cmd = "make frontend-run" if "frontend-run:" in makefile_content else "make frontend-dev"
+            cmd = (
+                "make frontend-run"
+                if "frontend-run:" in makefile_content
+                else "make frontend-dev"
+            )
             services.append(
                 {
                     "name": "frontend",
@@ -1375,7 +1680,9 @@ def _extract_services_from_makefile():
                 }
             )
         if "run:" in makefile_content or "backend-run:" in makefile_content:
-            cmd = "make backend-run" if "backend-run:" in makefile_content else "make run"
+            cmd = (
+                "make backend-run" if "backend-run:" in makefile_content else "make run"
+            )
             services.append(
                 {
                     "name": "backend",
@@ -1391,7 +1698,7 @@ def _check_url_responds(url):
     try:
         import socket
         from urllib.parse import urlparse
-        
+
         parsed = urlparse(url)
         host = parsed.hostname or "localhost"
         port = parsed.port
@@ -1401,7 +1708,7 @@ def _check_url_responds(url):
                 port = int(parsed.netloc.split(":")[-1])
             else:
                 return False
-        
+
         # Quick socket check
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
@@ -1458,14 +1765,20 @@ def _extract_urls_from_build():
         }
 
         for pattern, service_type in port_patterns.items():
-            matches = re.findall(rf"localhost:{pattern}|port\s+{pattern}|:{pattern}", build_md, re.IGNORECASE)
+            matches = re.findall(
+                rf"localhost:{pattern}|port\s+{pattern}|:{pattern}",
+                build_md,
+                re.IGNORECASE,
+            )
             if matches:
                 port = pattern
                 if service_type not in urls:
                     urls[service_type] = f"http://localhost:{port}"
 
         # Look for explicit URL mentions (clean markdown links)
-        explicit_urls = re.findall(r"\[([^\]]+)\]\(([^\)]+)\)|(https?://[^\s\)\]]+)", build_md)
+        explicit_urls = re.findall(
+            r"\[([^\]]+)\]\(([^\)]+)\)|(https?://[^\s\)\]]+)", build_md
+        )
         for match in explicit_urls:
             # Handle markdown link format [text](url) or plain url
             if match[2]:  # Plain URL
@@ -1474,7 +1787,7 @@ def _extract_urls_from_build():
                 url = match[1]
             else:
                 continue
-                
+
             if "localhost" in url or "127.0.0.1" in url:
                 # Clean URL
                 url = url.split("](")[0] if "](" in url else url
@@ -1491,7 +1804,9 @@ def _extract_urls_from_build():
         import re
 
         # Look for port assignments
-        port_matches = re.findall(r"(?:PORT|port)\s*[=:]\s*(\d{4,5})", makefile_content, re.IGNORECASE)
+        port_matches = re.findall(
+            r"(?:PORT|port)\s*[=:]\s*(\d{4,5})", makefile_content, re.IGNORECASE
+        )
         for port in port_matches:
             if port == "8000" and "backend" not in urls:
                 urls["backend"] = f"http://localhost:{port}"
@@ -1499,7 +1814,9 @@ def _extract_urls_from_build():
                 urls["frontend"] = f"http://localhost:{port}"
 
         # Look for uvicorn or runserver commands with ports
-        uvicorn_match = re.search(r"uvicorn.*?--port\s+(\d+)", makefile_content, re.IGNORECASE)
+        uvicorn_match = re.search(
+            r"uvicorn.*?--port\s+(\d+)", makefile_content, re.IGNORECASE
+        )
         if uvicorn_match:
             port = uvicorn_match.group(1)
             urls["backend"] = f"http://localhost:{port}"
@@ -1557,6 +1874,7 @@ def _load_pids():
     if pid_file.exists():
         try:
             import json
+
             return json.loads(pid_file.read_text())
         except Exception:
             return {}
@@ -1568,6 +1886,7 @@ def _save_pids(pids):
     pid_file = _get_pid_file()
     ensure_dir(pid_file.parent)
     import json
+
     pid_file.write_text(json.dumps(pids, indent=2))
 
 
@@ -1624,12 +1943,16 @@ def start(ctx):
         click.echo("🔍 DEBUG: Service detection:")
         click.echo(f"  Found {len(services)} service(s)")
         for i, service in enumerate(services, 1):
-            click.echo(f"  {i}. {service.get('name', 'unknown')}: {service.get('start_command', 'N/A')}")
+            click.echo(
+                f"  {i}. {service.get('name', 'unknown')}: {service.get('start_command', 'N/A')}"
+            )
         click.echo("")
 
     if not services:
         click.echo("⚠️  Could not determine services to start.")
-        click.echo("   Ensure build.yaml, build.md, or Makefile exists with dev startup commands.")
+        click.echo(
+            "   Ensure build.yaml, build.md, or Makefile exists with dev startup commands."
+        )
         click.echo("   Or run 'vibe build' to set up the build system.")
         return
 
@@ -1652,7 +1975,11 @@ def start(ctx):
                 cmd_parts = start_cmd
 
             # Check if command exists (for non-make commands)
-            if cmd_parts and cmd_parts[0] != "make" and not _command_exists(cmd_parts[0]):
+            if (
+                cmd_parts
+                and cmd_parts[0] != "make"
+                and not _command_exists(cmd_parts[0])
+            ):
                 click.echo(
                     f"  ⚠️  {service_name}: Command '{cmd_parts[0]}' not found. Skipping."
                 )
@@ -1668,14 +1995,18 @@ def start(ctx):
                     )
                     new_port = _find_available_port(original_port)
                     if new_port:
-                        click.echo(
-                            f"  🔄 Retrying with port {new_port}..."
+                        click.echo(f"  🔄 Retrying with port {new_port}...")
+                        start_cmd = _replace_port_in_command(
+                            start_cmd, original_port, new_port
                         )
-                        start_cmd = _replace_port_in_command(start_cmd, original_port, new_port)
                         actual_port = new_port
                         # Update cmd_parts if it's not a make command
                         if cmd_parts[0] != "make":
-                            cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+                            cmd_parts = (
+                                shlex.split(start_cmd)
+                                if isinstance(start_cmd, str)
+                                else start_cmd
+                            )
                     else:
                         click.echo(
                             f"  ❌ {service_name}: Could not find available port near {original_port}. Skipping."
@@ -1690,7 +2021,7 @@ def start(ctx):
                 # For make commands, check if we should extract and run individual services
                 if cmd_parts[0] == "make" and len(cmd_parts) > 1:
                     target = cmd_parts[1] if len(cmd_parts) > 1 else ""
-                    
+
                     # Check if service has a make_target (means we parsed it from a composite target)
                     make_target = service.get("make_target")
                     if make_target:
@@ -1698,112 +2029,189 @@ def start(ctx):
                         actual_cmd = service.get("start_command")
                         if actual_cmd:
                             if debug:
-                                click.echo(f"  🔍 DEBUG: Using extracted command from Makefile: {actual_cmd}")
+                                click.echo(
+                                    f"  🔍 DEBUG: Using extracted command from Makefile: {actual_cmd}"
+                                )
                             # Update cmd_parts to use the actual command
                             import shlex
-                            cmd_parts = shlex.split(actual_cmd) if isinstance(actual_cmd, str) else actual_cmd
+
+                            cmd_parts = (
+                                shlex.split(actual_cmd)
+                                if isinstance(actual_cmd, str)
+                                else actual_cmd
+                            )
                             # Fall through to direct command execution below
                         else:
                             # Fall back to make target
                             cmd_parts = ["make", make_target]
-                    
+
                     # Check if this is a composite target that just calls other targets
                     makefile_path = pathlib.Path("Makefile")
                     if makefile_path.exists() and not make_target:
                         makefile_content = makefile_path.read_text()
-                        target_commands = _parse_makefile_target(target, makefile_content)
-                        
+                        target_commands = _parse_makefile_target(
+                            target, makefile_content
+                        )
+
                         # If target is just echo or calls other make targets, extract and run them
                         is_composite = target_commands and all(
-                            c.startswith("@echo") or c.startswith("echo") or c.startswith("make ") 
+                            c.startswith("@echo")
+                            or c.startswith("echo")
+                            or c.startswith("make ")
                             for c in target_commands
                         )
-                        
+
                         # Also check if target has no real commands (just echo)
                         if is_composite or not target_commands:
                             if debug:
-                                click.echo(f"  🔍 DEBUG: Target '{target}' is composite or empty, extracting individual services...")
-                                click.echo(f"  🔍 DEBUG: Target commands: {target_commands}")
-                            
+                                click.echo(
+                                    f"  🔍 DEBUG: Target '{target}' is composite or empty, extracting individual services..."
+                                )
+                                click.echo(
+                                    f"  🔍 DEBUG: Target commands: {target_commands}"
+                                )
+
                             # Try to find and start backend and frontend separately
                             backend_cmd = None
                             frontend_cmd = None
-                            
+
                             # Look for backend-run or run target
-                            for check_target in ["backend-run", "run", "backend", "start-backend"]:
+                            for check_target in [
+                                "backend-run",
+                                "run",
+                                "backend",
+                                "start-backend",
+                            ]:
                                 if f"{check_target}:" in makefile_content:
-                                    backend_commands = _parse_makefile_target(check_target, makefile_content)
+                                    backend_commands = _parse_makefile_target(
+                                        check_target, makefile_content
+                                    )
                                     if debug:
-                                        click.echo(f"  🔍 DEBUG: Found {check_target} target with commands: {backend_commands}")
+                                        click.echo(
+                                            f"  🔍 DEBUG: Found {check_target} target with commands: {backend_commands}"
+                                        )
                                     if backend_commands:
                                         # Find first non-echo command
                                         for cmd in backend_commands:
-                                            if not (cmd.startswith("echo") or cmd.startswith("@echo")):
+                                            if not (
+                                                cmd.startswith("echo")
+                                                or cmd.startswith("@echo")
+                                            ):
                                                 backend_cmd = cmd
                                                 break
                                         if backend_cmd:
                                             break
-                            
+
                             # Look for frontend-run or frontend-dev target
-                            for check_target in ["frontend-run", "frontend-dev", "frontend", "start-frontend"]:
+                            for check_target in [
+                                "frontend-run",
+                                "frontend-dev",
+                                "frontend",
+                                "start-frontend",
+                            ]:
                                 if f"{check_target}:" in makefile_content:
-                                    frontend_commands = _parse_makefile_target(check_target, makefile_content)
+                                    frontend_commands = _parse_makefile_target(
+                                        check_target, makefile_content
+                                    )
                                     if debug:
-                                        click.echo(f"  🔍 DEBUG: Found {check_target} target with commands: {frontend_commands}")
+                                        click.echo(
+                                            f"  🔍 DEBUG: Found {check_target} target with commands: {frontend_commands}"
+                                        )
                                     if frontend_commands:
                                         # Find first non-echo command
                                         for cmd in frontend_commands:
-                                            if not (cmd.startswith("echo") or cmd.startswith("@echo")):
+                                            if not (
+                                                cmd.startswith("echo")
+                                                or cmd.startswith("@echo")
+                                            ):
                                                 frontend_cmd = cmd
                                                 break
                                         if frontend_cmd:
                                             break
-                            
+
                             # Also check if dev-start mentions specific ports and infer commands
                             if not backend_cmd and not frontend_cmd:
                                 # Look for port mentions in the target content to infer what should run
-                                if "8000" in target_content or "backend" in target_content.lower():
+                                if (
+                                    "8000" in target_content
+                                    or "backend" in target_content.lower()
+                                ):
                                     # Try common backend commands
-                                    for cmd_pattern in ["uvicorn", "python.*manage.py", "python.*runserver", "flask run"]:
+                                    for cmd_pattern in [
+                                        "uvicorn",
+                                        "python.*manage.py",
+                                        "python.*runserver",
+                                        "flask run",
+                                    ]:
                                         if cmd_pattern in makefile_content.lower():
                                             # Try to find the actual command
                                             import re
-                                            cmd_match = re.search(rf"({cmd_pattern}[^\n]*)", makefile_content, re.IGNORECASE)
+
+                                            cmd_match = re.search(
+                                                rf"({cmd_pattern}[^\n]*)",
+                                                makefile_content,
+                                                re.IGNORECASE,
+                                            )
                                             if cmd_match:
                                                 backend_cmd = cmd_match.group(1).strip()
                                                 break
-                                
-                                if "5173" in target_content or "3000" in target_content or "frontend" in target_content.lower():
+
+                                if (
+                                    "5173" in target_content
+                                    or "3000" in target_content
+                                    or "frontend" in target_content.lower()
+                                ):
                                     # Try common frontend commands
-                                    for cmd_pattern in ["npm.*dev", "yarn.*dev", "vite", "next dev"]:
+                                    for cmd_pattern in [
+                                        "npm.*dev",
+                                        "yarn.*dev",
+                                        "vite",
+                                        "next dev",
+                                    ]:
                                         if cmd_pattern in makefile_content.lower():
                                             import re
-                                            cmd_match = re.search(rf"({cmd_pattern}[^\n]*)", makefile_content, re.IGNORECASE)
+
+                                            cmd_match = re.search(
+                                                rf"({cmd_pattern}[^\n]*)",
+                                                makefile_content,
+                                                re.IGNORECASE,
+                                            )
                                             if cmd_match:
-                                                frontend_cmd = cmd_match.group(1).strip()
+                                                frontend_cmd = cmd_match.group(
+                                                    1
+                                                ).strip()
                                                 break
-                            
+
                             # Start backend and frontend separately
                             if backend_cmd:
                                 if debug:
-                                    click.echo(f"  🔍 DEBUG: Starting backend with: {backend_cmd}")
+                                    click.echo(
+                                        f"  🔍 DEBUG: Starting backend with: {backend_cmd}"
+                                    )
                                 import shlex
+
                                 backend_parts = shlex.split(backend_cmd)
                                 # Check port for backend
-                                backend_port = _extract_port_from_command(backend_cmd) or 8000
+                                backend_port = (
+                                    _extract_port_from_command(backend_cmd) or 8000
+                                )
                                 if not _is_port_available(backend_port):
                                     new_port = _find_available_port(backend_port)
                                     if new_port:
-                                        click.echo(f"  ⚠️  Backend port {backend_port} in use, using {new_port}")
-                                        backend_cmd = _replace_port_in_command(backend_cmd, backend_port, new_port)
+                                        click.echo(
+                                            f"  ⚠️  Backend port {backend_port} in use, using {new_port}"
+                                        )
+                                        backend_cmd = _replace_port_in_command(
+                                            backend_cmd, backend_port, new_port
+                                        )
                                         backend_port = new_port
                                         backend_parts = shlex.split(backend_cmd)
-                                
+
                                 env = os.environ.copy()
                                 if backend_port != 8000:
                                     env["PORT"] = str(backend_port)
                                     env["BACKEND_PORT"] = str(backend_port)
-                                
+
                                 backend_process = subprocess.Popen(
                                     backend_parts,
                                     stdout=subprocess.PIPE,
@@ -1818,30 +2226,43 @@ def start(ctx):
                                 }
                                 _save_pids(pids)
                                 used_ports["backend"] = backend_port
-                                service_urls["backend"] = f"http://localhost:{backend_port}"
-                                click.echo(f"  ✅ backend started (PID: {backend_process.pid}, Port: {backend_port})")
+                                service_urls["backend"] = (
+                                    f"http://localhost:{backend_port}"
+                                )
+                                click.echo(
+                                    f"  ✅ backend started (PID: {backend_process.pid}, Port: {backend_port})"
+                                )
                                 started_count += 1
-                            
+
                             if frontend_cmd:
                                 if debug:
-                                    click.echo(f"  🔍 DEBUG: Starting frontend with: {frontend_cmd}")
+                                    click.echo(
+                                        f"  🔍 DEBUG: Starting frontend with: {frontend_cmd}"
+                                    )
                                 import shlex
+
                                 frontend_parts = shlex.split(frontend_cmd)
                                 # Check port for frontend
-                                frontend_port = _extract_port_from_command(frontend_cmd) or 5173
+                                frontend_port = (
+                                    _extract_port_from_command(frontend_cmd) or 5173
+                                )
                                 if not _is_port_available(frontend_port):
                                     new_port = _find_available_port(frontend_port)
                                     if new_port:
-                                        click.echo(f"  ⚠️  Frontend port {frontend_port} in use, using {new_port}")
-                                        frontend_cmd = _replace_port_in_command(frontend_cmd, frontend_port, new_port)
+                                        click.echo(
+                                            f"  ⚠️  Frontend port {frontend_port} in use, using {new_port}"
+                                        )
+                                        frontend_cmd = _replace_port_in_command(
+                                            frontend_cmd, frontend_port, new_port
+                                        )
                                         frontend_port = new_port
                                         frontend_parts = shlex.split(frontend_cmd)
-                                
+
                                 env = os.environ.copy()
                                 if frontend_port != 5173:
                                     env["PORT"] = str(frontend_port)
                                     env["FRONTEND_PORT"] = str(frontend_port)
-                                
+
                                 frontend_process = subprocess.Popen(
                                     frontend_parts,
                                     stdout=subprocess.PIPE,
@@ -1856,17 +2277,23 @@ def start(ctx):
                                 }
                                 _save_pids(pids)
                                 used_ports["frontend"] = frontend_port
-                                service_urls["frontend"] = f"http://localhost:{frontend_port}"
-                                click.echo(f"  ✅ frontend started (PID: {frontend_process.pid}, Port: {frontend_port})")
+                                service_urls["frontend"] = (
+                                    f"http://localhost:{frontend_port}"
+                                )
+                                click.echo(
+                                    f"  ✅ frontend started (PID: {frontend_process.pid}, Port: {frontend_port})"
+                                )
                                 started_count += 1
-                            
+
                             # Skip the composite make command if we started individual services
                             if backend_cmd or frontend_cmd:
                                 continue
-                    
+
                     # Regular make command execution
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Running make command: {' '.join(cmd_parts)}")
+                        click.echo(
+                            f"  🔍 DEBUG: Running make command: {' '.join(cmd_parts)}"
+                        )
                     # Run make in background, but don't wait for it
                     # Set port environment variable if we found a port conflict
                     env = os.environ.copy()
@@ -1874,11 +2301,14 @@ def start(ctx):
                         # Set PORT env var for make to use
                         env["PORT"] = str(actual_port)
                         # Also set common port env vars
-                        if "backend" in service_name.lower() or "api" in service_name.lower():
+                        if (
+                            "backend" in service_name.lower()
+                            or "api" in service_name.lower()
+                        ):
                             env["BACKEND_PORT"] = str(actual_port)
                         elif "frontend" in service_name.lower():
                             env["FRONTEND_PORT"] = str(actual_port)
-                    
+
                     process = subprocess.Popen(
                         cmd_parts,
                         stdout=subprocess.PIPE,
@@ -1887,9 +2317,12 @@ def start(ctx):
                         env=env,
                     )
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Make process started with PID: {process.pid}")
+                        click.echo(
+                            f"  🔍 DEBUG: Make process started with PID: {process.pid}"
+                        )
                     # Give it a moment to start child processes
                     import time
+
                     time.sleep(0.5)
                     # Try to find child processes
                     child_pids = []
@@ -1898,13 +2331,17 @@ def start(ctx):
                         result = run_command(
                             ["pgrep", "-P", str(process.pid)], check=False
                         )
-                        child_pids = result[0].strip().split() if result[0].strip() else []
+                        child_pids = (
+                            result[0].strip().split() if result[0].strip() else []
+                        )
                     except Exception:
                         pass
-                    
+
                     if debug:
                         click.echo(f"  🔍 DEBUG: Child PIDs found: {child_pids}")
-                        click.echo(f"  🔍 DEBUG: Make process still running: {process.poll() is None}")
+                        click.echo(
+                            f"  🔍 DEBUG: Make process still running: {process.poll() is None}"
+                        )
                     # Also check if make is still running or if it spawned processes
                     if process.poll() is None or child_pids:
                         # Store the make PID and any child PIDs
@@ -1916,177 +2353,299 @@ def start(ctx):
                         }
                         _save_pids(pids)
                         if debug:
-                            click.echo(f"  🔍 DEBUG: Saved PIDs to tracking file: {pids[service_name]}")
+                            click.echo(
+                                f"  🔍 DEBUG: Saved PIDs to tracking file: {pids[service_name]}"
+                            )
                         click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
                         if actual_port:
                             used_ports[service_name] = actual_port
                             # Determine service type for URL
-                            if "backend" in service_name.lower() or "api" in service_name.lower():
-                                service_urls[service_name] = f"http://localhost:{actual_port}"
+                            if (
+                                "backend" in service_name.lower()
+                                or "api" in service_name.lower()
+                            ):
+                                service_urls[service_name] = (
+                                    f"http://localhost:{actual_port}"
+                                )
                             elif "frontend" in service_name.lower():
-                                service_urls[service_name] = f"http://localhost:{actual_port}"
+                                service_urls[service_name] = (
+                                    f"http://localhost:{actual_port}"
+                                )
                         started_count += 1
                     else:
-                            # Make completed quickly, check what it might have started
-                            # Look for common dev server processes
-                            target = cmd_parts[1] if len(cmd_parts) > 1 else ""
-                            if debug:
-                                click.echo(f"  🔍 DEBUG: Make completed quickly, checking Makefile for target: {target}")
-                            # Check Makefile to see what the target runs
-                            makefile_path = pathlib.Path("Makefile")
-                            if makefile_path.exists():
-                                makefile_content = makefile_path.read_text()
-                                # Look for the target definition
-                                import re
-                                target_pattern = rf"^{target}:.*"
-                                match = re.search(target_pattern, makefile_content, re.MULTILINE)
-                                if match:
-                                    # Try to extract what command it runs
-                                    target_content = makefile_content[match.end():]
+                        # Make completed quickly, check what it might have started
+                        # Look for common dev server processes
+                        target = cmd_parts[1] if len(cmd_parts) > 1 else ""
+                        if debug:
+                            click.echo(
+                                f"  🔍 DEBUG: Make completed quickly, checking Makefile for target: {target}"
+                            )
+                        # Check Makefile to see what the target runs
+                        makefile_path = pathlib.Path("Makefile")
+                        if makefile_path.exists():
+                            makefile_content = makefile_path.read_text()
+                            # Look for the target definition
+                            import re
+
+                            target_pattern = rf"^{target}:.*"
+                            match = re.search(
+                                target_pattern, makefile_content, re.MULTILINE
+                            )
+                            if match:
+                                # Try to extract what command it runs
+                                target_content = makefile_content[match.end() :]
+                                if debug:
+                                    click.echo(
+                                        f"  🔍 DEBUG: Target content: {target_content[:200]}..."
+                                    )
+
+                                # Check if target content is a direct command (like "skaffold dev")
+                                # Extract first non-empty, non-comment line
+                                target_lines = [
+                                    line.strip()
+                                    for line in target_content.splitlines()
+                                    if line.strip() and not line.strip().startswith("#")
+                                ]
+                                direct_cmd = target_lines[0] if target_lines else None
+
+                                # If it's a direct command (not calling other make targets), run it
+                                if (
+                                    direct_cmd
+                                    and not direct_cmd.startswith("make ")
+                                    and not direct_cmd.startswith("$(MAKE)")
+                                ):
                                     if debug:
-                                        click.echo(f"  🔍 DEBUG: Target content: {target_content[:200]}...")
-                                    
-                                    # Check if target content is a direct command (like "skaffold dev")
-                                    # Extract first non-empty, non-comment line
-                                    target_lines = [line.strip() for line in target_content.splitlines() if line.strip() and not line.strip().startswith("#")]
-                                    direct_cmd = target_lines[0] if target_lines else None
-                                    
-                                    # If it's a direct command (not calling other make targets), run it
-                                    if direct_cmd and not direct_cmd.startswith("make ") and not direct_cmd.startswith("$(MAKE)"):
-                                        if debug:
-                                            click.echo(f"  🔍 DEBUG: Found direct command in target: {direct_cmd}")
-                                        
-                                        # Check if command exists
-                                        cmd_parts_direct = direct_cmd.split()
-                                        if cmd_parts_direct and not _command_exists(cmd_parts_direct[0]):
-                                            click.echo(f"  ❌ {service_name}: Command '{cmd_parts_direct[0]}' not found.")
-                                            if cmd_parts_direct[0] == "skaffold":
-                                                click.echo(f"  💡 Install skaffold with: brew install skaffold")
-                                            continue
-                                        
-                                        # Run the direct command
-                                        import shlex
-                                        direct_parts = shlex.split(direct_cmd)
-                                        direct_process = subprocess.Popen(
-                                            direct_parts,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            cwd=service.get("working_directory", "."),
+                                        click.echo(
+                                            f"  🔍 DEBUG: Found direct command in target: {direct_cmd}"
                                         )
+
+                                    # Check if command exists
+                                    cmd_parts_direct = direct_cmd.split()
+                                    if cmd_parts_direct and not _command_exists(
+                                        cmd_parts_direct[0]
+                                    ):
+                                        click.echo(
+                                            f"  ❌ {service_name}: Command '{cmd_parts_direct[0]}' not found."
+                                        )
+                                        if cmd_parts_direct[0] == "skaffold":
+                                            click.echo(
+                                                f"  💡 Install skaffold with: brew install skaffold"
+                                            )
+                                        continue
+
+                                    # Run the direct command
+                                    import shlex
+
+                                    direct_parts = shlex.split(direct_cmd)
+                                    direct_process = subprocess.Popen(
+                                        direct_parts,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        cwd=service.get("working_directory", "."),
+                                    )
+                                    pids = _load_pids()
+                                    pids[service_name] = {
+                                        "main_pid": direct_process.pid,
+                                        "command": direct_cmd,
+                                    }
+                                    _save_pids(pids)
+                                    click.echo(
+                                        f"  ✅ {service_name} started (PID: {direct_process.pid}, Command: {direct_cmd})"
+                                    )
+                                    started_count += 1
+                                    continue
+
+                                # Extract port from Makefile target if not already found
+                                detected_proc_name = None
+                                if not actual_port:
+                                    makefile_port = _extract_port_from_command(
+                                        target_content
+                                    )
+                                    if makefile_port:
+                                        if not _is_port_available(makefile_port):
+                                            new_port = _find_available_port(
+                                                makefile_port
+                                            )
+                                            if new_port:
+                                                click.echo(
+                                                    f"  ⚠️  Port {makefile_port} in Makefile is in use, using {new_port} instead"
+                                                )
+                                                actual_port = new_port
+                                            else:
+                                                click.echo(
+                                                    f"  ⚠️  Port {makefile_port} in use and no alternative found, using original"
+                                                )
+                                                actual_port = makefile_port
+                                        else:
+                                            actual_port = makefile_port
+
+                                # Look for common commands in the target to detect process type
+                                for proc_name in [
+                                    "uvicorn",
+                                    "python",
+                                    "node",
+                                    "npm",
+                                    "yarn",
+                                    "next",
+                                    "vite",
+                                    "skaffold",
+                                ]:
+                                    if proc_name in target_content.lower():
+                                        detected_proc_name = proc_name
+
+                                        # Check if command exists (especially for skaffold)
+                                        if proc_name == "skaffold":
+                                            if not _command_exists("skaffold"):
+                                                click.echo(
+                                                    f"  ⚠️  {service_name}: 'skaffold' command not found. Install it with: brew install skaffold"
+                                                )
+                                                click.echo(
+                                                    f"  ⚠️  Skipping {service_name} - skaffold is required but not installed."
+                                                )
+                                                break
+
+                                        # Try to infer port if not found
+                                        if not actual_port:
+                                            if proc_name in ["uvicorn", "python"]:
+                                                default_port = 8000
+                                                if _is_port_available(default_port):
+                                                    actual_port = default_port
+                                                else:
+                                                    actual_port = (
+                                                        _find_available_port(
+                                                            default_port
+                                                        )
+                                                        or default_port
+                                                    )
+                                                    if actual_port != default_port:
+                                                        click.echo(
+                                                            f"  ⚠️  Default backend port {default_port} in use, using {actual_port} instead"
+                                                        )
+                                            elif proc_name in [
+                                                "node",
+                                                "npm",
+                                                "next",
+                                                "vite",
+                                            ]:
+                                                default_port = (
+                                                    3000
+                                                    if proc_name != "vite"
+                                                    else 5173
+                                                )
+                                                if _is_port_available(default_port):
+                                                    actual_port = default_port
+                                                else:
+                                                    actual_port = (
+                                                        _find_available_port(
+                                                            default_port
+                                                        )
+                                                        or default_port
+                                                    )
+                                                    if actual_port != default_port:
+                                                        click.echo(
+                                                            f"  ⚠️  Default frontend port {default_port} in use, using {actual_port} instead"
+                                                        )
+
+                                        # Store with process name to check later
                                         pids = _load_pids()
                                         pids[service_name] = {
-                                            "main_pid": direct_process.pid,
-                                            "command": direct_cmd,
+                                            "main_pid": None,
+                                            "process_name": proc_name,
+                                            "command": start_cmd,
                                         }
                                         _save_pids(pids)
-                                        click.echo(f"  ✅ {service_name} started (PID: {direct_process.pid}, Command: {direct_cmd})")
-                                        started_count += 1
-                                        continue
-                                    
-                                    # Extract port from Makefile target if not already found
-                                    detected_proc_name = None
-                                    if not actual_port:
-                                        makefile_port = _extract_port_from_command(target_content)
-                                        if makefile_port:
-                                            if not _is_port_available(makefile_port):
-                                                new_port = _find_available_port(makefile_port)
-                                                if new_port:
-                                                    click.echo(f"  ⚠️  Port {makefile_port} in Makefile is in use, using {new_port} instead")
-                                                    actual_port = new_port
-                                                else:
-                                                    click.echo(f"  ⚠️  Port {makefile_port} in use and no alternative found, using original")
-                                                    actual_port = makefile_port
-                                            else:
-                                                actual_port = makefile_port
-                                    
-                                    # Look for common commands in the target to detect process type
-                                    for proc_name in ["uvicorn", "python", "node", "npm", "yarn", "next", "vite", "skaffold"]:
-                                        if proc_name in target_content.lower():
-                                            detected_proc_name = proc_name
-                                            
-                                            # Check if command exists (especially for skaffold)
-                                            if proc_name == "skaffold":
-                                                if not _command_exists("skaffold"):
-                                                    click.echo(f"  ⚠️  {service_name}: 'skaffold' command not found. Install it with: brew install skaffold")
-                                                    click.echo(f"  ⚠️  Skipping {service_name} - skaffold is required but not installed.")
-                                                    break
-                                            
-                                            # Try to infer port if not found
-                                            if not actual_port:
-                                                if proc_name in ["uvicorn", "python"]:
-                                                    default_port = 8000
-                                                    if _is_port_available(default_port):
-                                                        actual_port = default_port
-                                                    else:
-                                                        actual_port = _find_available_port(default_port) or default_port
-                                                        if actual_port != default_port:
-                                                            click.echo(f"  ⚠️  Default backend port {default_port} in use, using {actual_port} instead")
-                                                elif proc_name in ["node", "npm", "next", "vite"]:
-                                                    default_port = 3000 if proc_name != "vite" else 5173
-                                                    if _is_port_available(default_port):
-                                                        actual_port = default_port
-                                                    else:
-                                                        actual_port = _find_available_port(default_port) or default_port
-                                                        if actual_port != default_port:
-                                                            click.echo(f"  ⚠️  Default frontend port {default_port} in use, using {actual_port} instead")
-                                            
-                                            # Store with process name to check later
-                                            pids = _load_pids()
-                                            pids[service_name] = {
-                                                "main_pid": None,
-                                                "process_name": proc_name,
-                                                "command": start_cmd,
-                                            }
-                                            _save_pids(pids)
+                                        if debug:
+                                            click.echo(
+                                                f"  🔍 DEBUG: Detected process name: {proc_name}"
+                                            )
+                                            click.echo(
+                                                f"  🔍 DEBUG: Saved to tracking file: {pids[service_name]}"
+                                            )
+
+                                        # For skaffold, we need to actually run it
+                                        if proc_name == "skaffold":
+                                            # Extract the actual skaffold command
+                                            import re
+
+                                            skaffold_match = re.search(
+                                                r"skaffold\s+(\w+)",
+                                                target_content,
+                                                re.IGNORECASE,
+                                            )
+                                            skaffold_cmd = (
+                                                "skaffold dev"
+                                                if not skaffold_match
+                                                else f"skaffold {skaffold_match.group(1)}"
+                                            )
+
                                             if debug:
-                                                click.echo(f"  🔍 DEBUG: Detected process name: {proc_name}")
-                                                click.echo(f"  🔍 DEBUG: Saved to tracking file: {pids[service_name]}")
-                                            
-                                            # For skaffold, we need to actually run it
-                                            if proc_name == "skaffold":
-                                                # Extract the actual skaffold command
-                                                import re
-                                                skaffold_match = re.search(r"skaffold\s+(\w+)", target_content, re.IGNORECASE)
-                                                skaffold_cmd = "skaffold dev" if not skaffold_match else f"skaffold {skaffold_match.group(1)}"
-                                                
-                                                if debug:
-                                                    click.echo(f"  🔍 DEBUG: Running skaffold command: {skaffold_cmd}")
-                                                
-                                                import shlex
-                                                skaffold_parts = shlex.split(skaffold_cmd)
-                                                skaffold_process = subprocess.Popen(
-                                                    skaffold_parts,
-                                                    stdout=subprocess.PIPE,
-                                                    stderr=subprocess.PIPE,
-                                                    cwd=service.get("working_directory", "."),
+                                                click.echo(
+                                                    f"  🔍 DEBUG: Running skaffold command: {skaffold_cmd}"
                                                 )
-                                                pids[service_name]["main_pid"] = skaffold_process.pid
-                                                _save_pids(pids)
-                                                click.echo(f"  ✅ {service_name} started (PID: {skaffold_process.pid}, Command: {skaffold_cmd})")
-                                                started_count += 1
-                                            else:
-                                                click.echo(f"  ✅ {service_name} started (checking for {proc_name} processes)")
-                                                # Store port and URL
-                                                if actual_port:
-                                                    used_ports[service_name] = actual_port
-                                                    if "backend" in service_name.lower() or "api" in service_name.lower() or proc_name in ["uvicorn", "python"]:
-                                                        service_urls[service_name] = f"http://localhost:{actual_port}"
-                                                    elif "frontend" in service_name.lower() or proc_name in ["node", "npm", "next", "vite"]:
-                                                        service_urls[service_name] = f"http://localhost:{actual_port}"
-                                                started_count += 1
-                                            break
-                                    if debug and started_count == 0:
-                                        click.echo(f"  🔍 DEBUG: No common process names found in target")
-                                else:
-                                    if debug:
-                                        click.echo(f"  🔍 DEBUG: Target '{target}' not found in Makefile")
+
+                                            import shlex
+
+                                            skaffold_parts = shlex.split(skaffold_cmd)
+                                            skaffold_process = subprocess.Popen(
+                                                skaffold_parts,
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.PIPE,
+                                                cwd=service.get(
+                                                    "working_directory", "."
+                                                ),
+                                            )
+                                            pids[service_name][
+                                                "main_pid"
+                                            ] = skaffold_process.pid
+                                            _save_pids(pids)
+                                            click.echo(
+                                                f"  ✅ {service_name} started (PID: {skaffold_process.pid}, Command: {skaffold_cmd})"
+                                            )
+                                            started_count += 1
+                                        else:
+                                            click.echo(
+                                                f"  ✅ {service_name} started (checking for {proc_name} processes)"
+                                            )
+                                            # Store port and URL
+                                            if actual_port:
+                                                used_ports[service_name] = actual_port
+                                                if (
+                                                    "backend" in service_name.lower()
+                                                    or "api" in service_name.lower()
+                                                    or proc_name
+                                                    in ["uvicorn", "python"]
+                                                ):
+                                                    service_urls[service_name] = (
+                                                        f"http://localhost:{actual_port}"
+                                                    )
+                                                elif (
+                                                    "frontend" in service_name.lower()
+                                                    or proc_name
+                                                    in ["node", "npm", "next", "vite"]
+                                                ):
+                                                    service_urls[service_name] = (
+                                                        f"http://localhost:{actual_port}"
+                                                    )
+                                            started_count += 1
+                                        break
+                                if debug and started_count == 0:
+                                    click.echo(
+                                        f"  🔍 DEBUG: No common process names found in target"
+                                    )
                             else:
                                 if debug:
-                                    click.echo(f"  🔍 DEBUG: Makefile not found")
+                                    click.echo(
+                                        f"  🔍 DEBUG: Target '{target}' not found in Makefile"
+                                    )
+                        else:
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Makefile not found")
                 else:
                     # Direct command - track the PID
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Running direct command: {' '.join(cmd_parts)}")
+                        click.echo(
+                            f"  🔍 DEBUG: Running direct command: {' '.join(cmd_parts)}"
+                        )
                     process = subprocess.Popen(
                         cmd_parts,
                         stdout=subprocess.PIPE,
@@ -2100,15 +2659,24 @@ def start(ctx):
                     }
                     _save_pids(pids)
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Saved PID {process.pid} to tracking file")
+                        click.echo(
+                            f"  🔍 DEBUG: Saved PID {process.pid} to tracking file"
+                        )
                     click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
                     if actual_port:
                         used_ports[service_name] = actual_port
                         # Determine service type for URL
-                        if "backend" in service_name.lower() or "api" in service_name.lower():
-                            service_urls[service_name] = f"http://localhost:{actual_port}"
+                        if (
+                            "backend" in service_name.lower()
+                            or "api" in service_name.lower()
+                        ):
+                            service_urls[service_name] = (
+                                f"http://localhost:{actual_port}"
+                            )
                         elif "frontend" in service_name.lower():
-                            service_urls[service_name] = f"http://localhost:{actual_port}"
+                            service_urls[service_name] = (
+                                f"http://localhost:{actual_port}"
+                            )
                     started_count += 1
             except FileNotFoundError as e:
                 click.echo(
@@ -2121,22 +2689,27 @@ def start(ctx):
 
     if started_count > 0:
         click.echo(f"✅ Started {started_count} service(s).")
-        
+
         # Show ports and URLs
         if used_ports or service_urls:
             click.echo("\n🌐 Service Ports and URLs:")
             click.echo("-" * 60)
-            
+
             # Show ports
             if used_ports:
                 for service_name, port in used_ports.items():
                     click.echo(f"  {service_name:<20} Port: {port}")
-            
+
             # Show URLs
             if service_urls:
                 click.echo("\n  URLs:")
                 for service_name, url in service_urls.items():
-                    service_type = "Backend" if "backend" in service_name.lower() or "api" in service_name.lower() else "Frontend"
+                    service_type = (
+                        "Backend"
+                        if "backend" in service_name.lower()
+                        or "api" in service_name.lower()
+                        else "Frontend"
+                    )
                     click.echo(f"    {service_type:<10} {url}")
                     # Add API docs for backend on common ports
                     if service_type == "Backend" and (":8000" in url or ":8080" in url):
@@ -2219,7 +2792,9 @@ def stop(ctx):
                         makefile_content = makefile_path.read_text()
                         if "dev-stop:" in makefile_content:
                             run_command(["make", "dev-stop"], check=False)
-                            click.echo(f"  ✅ {service_name} stopped (via make dev-stop)")
+                            click.echo(
+                                f"  ✅ {service_name} stopped (via make dev-stop)"
+                            )
                             continue
                 # Try pkill for other commands
                 proc_name = cmd_parts[0] if cmd_parts else ""
@@ -2249,14 +2824,18 @@ def status(ctx):
 
     if not services:
         click.echo("⚠️  Could not determine services to check.")
-        click.echo("   Ensure build.yaml, build.md, or Makefile exists with dev startup commands.")
+        click.echo(
+            "   Ensure build.yaml, build.md, or Makefile exists with dev startup commands."
+        )
         return
 
     if debug:
         click.echo("🔍 DEBUG: Service detection:")
         click.echo(f"  Found {len(services)} service(s)")
         for i, service in enumerate(services, 1):
-            click.echo(f"  {i}. {service.get('name', 'unknown')}: {service.get('start_command', 'N/A')}")
+            click.echo(
+                f"  {i}. {service.get('name', 'unknown')}: {service.get('start_command', 'N/A')}"
+            )
         click.echo("")
 
     click.echo("📊 Development environment status:")
@@ -2299,15 +2878,21 @@ def status(ctx):
                         click.echo(f"  🔍 DEBUG: Main PID {main_pid} is running")
                 else:
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Main PID {main_pid} is not running, checking child PIDs")
+                        click.echo(
+                            f"  🔍 DEBUG: Main PID {main_pid} is not running, checking child PIDs"
+                        )
                     # Check child PIDs
                     for child_pid in child_pids:
-                        _, code = run_command(["kill", "-0", str(child_pid)], check=False)
+                        _, code = run_command(
+                            ["kill", "-0", str(child_pid)], check=False
+                        )
                         if code == 0:
                             is_running = True
                             pid = str(child_pid)
                             if debug:
-                                click.echo(f"  🔍 DEBUG: Child PID {child_pid} is running")
+                                click.echo(
+                                    f"  🔍 DEBUG: Child PID {child_pid} is running"
+                                )
                             break
 
             # If we have a process name, check for it
@@ -2315,9 +2900,7 @@ def status(ctx):
                 if debug:
                     click.echo(f"  🔍 DEBUG: Checking for process name: {process_name}")
                 try:
-                    result = run_command(
-                        ["pgrep", "-f", process_name], check=False
-                    )
+                    result = run_command(["pgrep", "-f", process_name], check=False)
                     if result[0].strip():
                         is_running = True
                         pids = result[0].strip().split()
@@ -2334,7 +2917,9 @@ def status(ctx):
                 click.echo(f"  🔍 DEBUG: Fallback detection for command: {start_cmd}")
             import shlex
 
-            cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+            cmd_parts = (
+                shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+            )
 
             if cmd_parts:
                 # For make commands, check what the make target actually runs
@@ -2347,17 +2932,32 @@ def status(ctx):
                     if makefile_path.exists():
                         makefile_content = makefile_path.read_text()
                         import re
+
                         # Find the target and what it runs
                         target_pattern = rf"^{target}:.*?^[a-zA-Z]"
-                        match = re.search(target_pattern, makefile_content, re.MULTILINE | re.DOTALL)
+                        match = re.search(
+                            target_pattern, makefile_content, re.MULTILINE | re.DOTALL
+                        )
                         if match:
                             target_content = match.group(0)
                             if debug:
-                                click.echo(f"  🔍 DEBUG: Target content: {target_content[:200]}...")
+                                click.echo(
+                                    f"  🔍 DEBUG: Target content: {target_content[:200]}..."
+                                )
                             # Look for common dev server processes
-                            for proc_name in ["uvicorn", "python.*manage\.py", "node", "npm.*dev", "yarn.*dev", "next", "vite"]:
+                            for proc_name in [
+                                "uvicorn",
+                                "python.*manage\.py",
+                                "node",
+                                "npm.*dev",
+                                "yarn.*dev",
+                                "next",
+                                "vite",
+                            ]:
                                 if debug:
-                                    click.echo(f"  🔍 DEBUG: Checking for process: {proc_name}")
+                                    click.echo(
+                                        f"  🔍 DEBUG: Checking for process: {proc_name}"
+                                    )
                                 try:
                                     result = run_command(
                                         ["pgrep", "-f", proc_name], check=False
@@ -2367,20 +2967,24 @@ def status(ctx):
                                         pids = result[0].strip().split()
                                         pid = pids[0] if pids else None
                                         if debug:
-                                            click.echo(f"  🔍 DEBUG: Found process(es): {pids}")
+                                            click.echo(
+                                                f"  🔍 DEBUG: Found process(es): {pids}"
+                                            )
                                         break
                                 except Exception as e:
                                     if debug:
-                                        click.echo(f"  🔍 DEBUG: Error checking {proc_name}: {e}")
+                                        click.echo(
+                                            f"  🔍 DEBUG: Error checking {proc_name}: {e}"
+                                        )
                 else:
                     # For direct commands, check if process is running
                     proc_name = cmd_parts[0]
                     if debug:
-                        click.echo(f"  🔍 DEBUG: Checking for direct command process: {proc_name}")
-                    try:
-                        result = run_command(
-                            ["pgrep", "-f", proc_name], check=False
+                        click.echo(
+                            f"  🔍 DEBUG: Checking for direct command process: {proc_name}"
                         )
+                    try:
+                        result = run_command(["pgrep", "-f", proc_name], check=False)
                         if result[0].strip():
                             is_running = True
                             pids = result[0].strip().split()
@@ -2401,7 +3005,9 @@ def status(ctx):
             stopped_count += 1
 
     click.echo("-" * 60)
-    click.echo(f"Total: {len(services)} service(s) - {running_count} running, {stopped_count} stopped")
+    click.echo(
+        f"Total: {len(services)} service(s) - {running_count} running, {stopped_count} stopped"
+    )
 
     # Show URLs if services are running - only show URLs that actually respond
     if running_count > 0:
@@ -2413,13 +3019,15 @@ def status(ctx):
                 # Clean URL (remove any markdown link artifacts)
                 clean_url = url.split("](")[0] if "](" in url else url
                 clean_url = clean_url.strip("[]()").strip()
-                
+
                 # Check if URL actually responds
                 if not _check_url_responds(clean_url):
                     if debug:
-                        click.echo(f"  🔍 DEBUG: URL {clean_url} is not responding, skipping")
+                        click.echo(
+                            f"  🔍 DEBUG: URL {clean_url} is not responding, skipping"
+                        )
                     continue
-                
+
                 if service_type == "backend":
                     click.echo(f"  Backend API:     {clean_url}")
                     shown_urls.append(clean_url)
@@ -2441,12 +3049,16 @@ def status(ctx):
                     if _check_url_responds(clean_url):
                         click.echo(f"  {service_type.capitalize()}: {clean_url}")
                         shown_urls.append(clean_url)
-            
+
             if not shown_urls:
-                click.echo("  (No responding URLs found - services may still be starting)")
+                click.echo(
+                    "  (No responding URLs found - services may still be starting)"
+                )
 
     if stopped_count > 0:
-        click.echo("\n💡 Run 'vibe start' or 'vibe run start' to start stopped services.")
+        click.echo(
+            "\n💡 Run 'vibe start' or 'vibe run start' to start stopped services."
+        )
 
 
 @run.command()
@@ -2487,7 +3099,9 @@ def logs(ctx):
                     found = True
                     break
             if not found:
-                click.echo(f"\n{service_name}: No log file found (check logs/ directory)")
+                click.echo(
+                    f"\n{service_name}: No log file found (check logs/ directory)"
+                )
 
 
 @cli.command()
@@ -2515,11 +3129,11 @@ def run_status(ctx):
 @click.pass_context
 def infra(ctx):
     """Phase 6: Infrastructure reconciliation for production and live-staging environments.
-    
+
     Sets up infrastructure for production and live-staging systems (Kubernetes, cloud platforms, etc.).
     This step is optional depending on the distribution needs of the project - not all projects
     require a production environment.
-    
+
     Note: For development environment management, use 'vibe build' and 'vibe run' instead.
     """
     state = load_project_state()
@@ -2788,7 +3402,7 @@ Output ONLY the markdown content for infrastructure.md, starting with the title 
                 stdout, code = run_command(
                     ["bash", str(build_script)],
                     check=False,
-                    cwd=Path.cwd(),
+                    cwd=pathlib.Path.cwd(),
                 )
                 if code == 0:
                     click.echo("  ✅ Build complete")
