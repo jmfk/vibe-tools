@@ -56,11 +56,6 @@ class OrderedGroup(click.Group):
             "demo-data",
             "init",
             "devbug",
-            # Deprecated
-            "ralph",
-            "prd",
-            "review-prd",
-            "write-prd",
         ]
 
         # Get the actual commands available
@@ -370,27 +365,6 @@ def _perform_basic_init():
 
 
 @cli.command()
-def ralph():
-    """[DEPRECATED] legacy Ralph loop. Use vibe setup/plan/implement instead."""
-    click.echo(click.style("\n" + "!" * 60, fg="red", bold=True))
-    click.echo(
-        click.style(
-            "!!! DEPRECATED: 'vibe ralph' is legacy and has been removed !!!",
-            fg="red",
-            bold=True,
-        )
-    )
-    click.echo(click.style("!" * 60 + "\n", fg="red", bold=True))
-    click.echo("Please use the new modular commands:")
-    click.echo("  vibe architect      - Phase 1: Architecture")
-    click.echo("  vibe pm             - Phase 1: PRDs")
-    click.echo("  vibe normalize      - Phase 2: Standardize Specs")
-    click.echo("  vibe setup          - Phase 3: Architecture Setup")
-    click.echo("  vibe implement      - Phase 5: Building")
-    click.echo("")
-
-
-@cli.command()
 @click.option(
     "--fast/--no-fast",
     is_flag=True,
@@ -518,47 +492,6 @@ def monitor(ctx, interval):
     )
 
 
-@cli.command(name="review-prd")
-@click.option(
-    "--review/--no-review",
-    type=bool,
-    default=True,
-    help="Run the agentic review prompt after showing the PRD.",
-)
-@click.pass_context
-def review_prd(ctx, review):
-    """[DEPRECATED] List specs PRDs, display one, and optionally run review."""
-    click.echo(
-        click.style(
-            "\n!!! DEPRECATED: 'review-prd' is deprecated !!!", fg="yellow", bold=True
-        )
-    )
-    click.echo("'vibe prd' now includes a /review command during creation.\n")
-    ensure_dir(SPECS_DIR)
-
-    prd_files = _list_spec_files()
-    if not prd_files:
-        click.echo("No PRDs found in specs/.")
-        return
-
-    click.echo("Available specs:")
-    for idx, prd_path in enumerate(prd_files, start=1):
-        rel_path = prd_path.relative_to(SPECS_DIR)
-        click.echo(f"  {idx}. {rel_path}")
-
-    selected = _prompt_for_prd(prd_files)
-    click.echo(f"\n--- {selected.name} ---")
-    click.echo(selected.read_text())
-
-    if review:
-        _run_agent_review(
-            agent_type=ctx.obj.get("agent", "cursor-agent"),
-            prd_path=selected,
-            caffeinate=ctx.obj.get("caffeinate", False),
-            stream=ctx.obj.get("stream", False),
-        )
-
-
 def _list_spec_files() -> List[pathlib.Path]:
     if not SPECS_DIR.exists():
         return []
@@ -598,86 +531,6 @@ def _run_agent_review(
 
     click.echo("\n--- Agentic Review Output ---")
     click.echo(output)
-
-
-@cli.command()
-@click.option(
-    "--title",
-    "-t",
-    help="Short description of the PRD or feature you want to explore.",
-)
-@click.option(
-    "--type",
-    "-T",
-    type=click.Choice(["feature", "infra", "cicd", "architecture"]),
-    default="feature",
-    help="Type of PRD to write (default: feature).",
-)
-@click.pass_context
-def prd(ctx, title, type):
-    """[DEPRECATED] Use 'vibe pm' instead. Interactive PRD writer with slash commands."""
-    click.echo(
-        click.style("\n!!! DEPRECATED: 'prd' is deprecated !!!", fg="yellow", bold=True)
-    )
-    click.echo("Please use 'vibe pm' for the newer interactive experience.\n")
-    from vibe_tools.prd_writer import InteractivePRD
-
-    initial_prompt = title or click.prompt(
-        f"Describe the {type} PRD you'd like to write"
-    )
-
-    # Base specs dir
-    specs_base = pathlib.Path("specs")
-    ensure_dir(specs_base)
-
-    writer = InteractivePRD(
-        agent_type=ctx.obj.get("agent", "cursor-agent"),
-        specs_dir=specs_base,
-        prd_type=type,
-        stream=ctx.obj.get("stream", False),
-    )
-    writer.run_loop(initial_prompt)
-
-
-@cli.command(name="write-prd")
-@click.option(
-    "--title",
-    "-t",
-    help="Short description of the PRD or feature you want to explore.",
-)
-@click.option(
-    "--type",
-    "-T",
-    type=click.Choice(["feature", "infra", "cicd", "architecture"]),
-    default="feature",
-    help="Type of PRD to write (default: feature).",
-)
-@click.pass_context
-def write_prd(ctx, title, type):
-    """[DEPRECATED] Use 'vibe prd' instead."""
-    click.echo(
-        click.style(
-            "\n!!! DEPRECATED: 'write-prd' is deprecated !!!", fg="yellow", bold=True
-        )
-    )
-    click.echo("Please use 'vibe prd' for the new interactive experience.\n")
-    from vibe_tools.prd_writer import PRDWriter
-
-    initial_prompt = title or click.prompt(
-        f"Describe the {type} PRD you'd like to write"
-    )
-
-    # Base specs dir
-    specs_base = pathlib.Path("specs")
-    ensure_dir(specs_base)
-
-    writer = PRDWriter(
-        agent_type=ctx.obj.get("agent", "cursor-agent"),
-        specs_dir=specs_base,
-        prd_type=type,
-        stream=ctx.obj.get("stream", False),
-    )
-    writer.create_prd(initial_prompt)
 
 
 @cli.command()
