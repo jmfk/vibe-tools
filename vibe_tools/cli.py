@@ -1130,7 +1130,7 @@ Output ONLY the markdown content for build.md, starting with the title and endin
     # Check for and install required build tools
     _check_and_install_build_tools()
 
-    from vibe_tools.ralph import RalphLoop
+    from vibe_tools.ralph import MAX_ITERATIONS, RalphLoop
 
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", False)
@@ -1154,8 +1154,6 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Extract and document all services/components that need to run in development mode with their startup commands.",
         "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
         "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
-        "If skaffold is configured, ensure the 'skaffold' command is installed. If not installed, provide clear installation instructions or install it automatically (e.g., 'brew install skaffold' on macOS).",
-        "If helm charts are present, ensure the 'helm' command is installed. If not installed, provide clear installation instructions or install it automatically (e.g., 'brew install helm' on macOS).",
         "If skaffold is configured, test that 'skaffold dev' can start without configuration errors.",
         "Ensure Makefile dev-start target actually starts services (runs commands like uvicorn, npm run dev, etc.), not just echo messages.",
         "If dev-start only echoes or calls other targets, extract the actual service commands and update dev-start to run them directly or in background.",
@@ -1163,8 +1161,46 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "After fixing configurations, verify services can start: run the startup commands and confirm processes are running and ports are listening.",
     ]
 
-    if loop.run():
-        click.echo("✅ Build system reconciliation complete.")
+    # Get max iterations from config
+    config = load_config()
+    iterations_config = config.get("iterations", {})
+    max_build_iterations = iterations_config.get("build", MAX_ITERATIONS)
+
+    click.echo(f"🔄 Build loop will iterate up to {max_build_iterations} times until services work correctly.")
+
+    success = False
+    for iteration in range(1, max_build_iterations + 1):
+        click.echo(f"\n📦 Build iteration {iteration}/{max_build_iterations}...")
+        
+        # Run reconciliation
+        reconciliation_success = loop.run()
+        
+        if not reconciliation_success:
+            log_issue("build", iteration, max_build_iterations, "Reconciliation failed")
+            if iteration < max_build_iterations:
+                click.echo("  ⚠️  Reconciliation failed, will retry...")
+                continue
+            else:
+                click.echo("❌ Build system reconciliation failed after all iterations.")
+                break
+        
+        # Test that services actually work
+        click.echo("  🧪 Testing that services can start...")
+        test_success = _test_build_services(debug=ctx.obj.get("debug", False))
+        
+        if test_success:
+            log_success("build", f"Services verified working after {iteration} iteration(s)")
+            click.echo("✅ Build system reconciliation complete and services verified working.")
+            success = True
+            break
+        else:
+            log_issue("build", iteration, max_build_iterations, "Services failed to start or respond")
+            if iteration < max_build_iterations:
+                click.echo("  ⚠️  Services test failed, will retry reconciliation...")
+            else:
+                click.echo("❌ Services failed to start after all iterations.")
+    
+    if success:
         click.echo("\nNext Steps:")
         click.echo("[ ] Run the application (vibe run start)")
     else:
@@ -1504,7 +1540,17 @@ def _check_and_install_build_tools():
         required_tools["skaffold"] = {
             "check_cmd": ["skaffold", "version"],
             "install_cmd_brew": ["brew", "install", "skaffold"],
-            "install_cmd_linux": ["curl", "-Lo", "skaffold", "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64", "&&", "sudo", "install", "skaffold", "/usr/local/bin/"],
+            "install_cmd_linux": [
+                "curl",
+                "-Lo",
+                "skaffold",
+                "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64",
+                "&&",
+                "sudo",
+                "install",
+                "skaffold",
+                "/usr/local/bin/",
+            ],
             "description": "Skaffold (Kubernetes development tool)",
         }
 
@@ -1520,7 +1566,12 @@ def _check_and_install_build_tools():
         required_tools["helm"] = {
             "check_cmd": ["helm", "version"],
             "install_cmd_brew": ["brew", "install", "helm"],
-            "install_cmd_linux": ["curl", "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3", "|", "bash"],
+            "install_cmd_linux": [
+                "curl",
+                "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+                "|",
+                "bash",
+            ],
             "description": "Helm (Kubernetes package manager)",
         }
 
@@ -1567,10 +1618,14 @@ def _check_and_install_build_tools():
             # Linux - provide manual instructions
             click.echo(f"  💡 Install {tool_name} manually:")
             if tool_name == "skaffold":
-                click.echo("     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64")
+                click.echo(
+                    "     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64"
+                )
                 click.echo("     sudo install skaffold /usr/local/bin/")
             elif tool_name == "helm":
-                click.echo("     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+                click.echo(
+                    "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+                )
 
         # Verify installation
         click.echo(f"  🔍 Verifying {tool_name} installation...")
@@ -1580,9 +1635,183 @@ def _check_and_install_build_tools():
                 click.echo(f"  ✅ {tool_name} is now available")
             else:
                 click.echo(f"  ⚠️  {tool_name} installation verification failed")
-                click.echo(f"     Please install it manually and run 'vibe build' again")
+                click.echo(
+                    f"     Please install it manually and run 'vibe build' again"
+                )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
+
+
+def _test_build_services(debug=False):
+    """Test that services defined in build config can actually start and respond."""
+    import time
+    
+    services = _get_services()
+    if not services:
+        if debug:
+            click.echo("  🔍 DEBUG: No services found to test")
+        return False
+    
+    # Stop any existing services first
+    try:
+        # Call stop logic directly
+        services_to_stop = _get_services()
+        for service in services_to_stop:
+            service_name = service.get("name", "unknown")
+            pids = _load_pids()
+            pid_info = pids.get(service_name, {})
+            
+            # Kill background services
+            background_services = pid_info.get("background_services", {})
+            for service_type, bg_pid in background_services.items():
+                try:
+                    run_command(["kill", str(bg_pid)], check=False)
+                except Exception:
+                    pass
+            
+            # Kill main PID
+            main_pid = pid_info.get("main_pid")
+            if main_pid:
+                try:
+                    run_command(["kill", str(main_pid)], check=False)
+                except Exception:
+                    pass
+            
+            # Kill child PIDs
+            child_pids = pid_info.get("child_pids", [])
+            for child_pid in child_pids:
+                try:
+                    run_command(["kill", str(child_pid)], check=False)
+                except Exception:
+                    pass
+        
+        _save_pids({})
+        time.sleep(1)  # Give services time to stop
+    except Exception as e:
+        if debug:
+            click.echo(f"  🔍 DEBUG: Error stopping existing services: {e}")
+    
+    # Try to start services - call start logic directly
+    try:
+        # Use the same logic as the start command but simplified
+        for service in services:
+            service_name = service.get("name", "unknown")
+            start_cmd = service.get("start_command")
+            if not start_cmd:
+                continue
+            
+            import shlex
+            cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+            
+            if not cmd_parts or cmd_parts[0] == "make":
+                # For make commands, just run them
+                process = subprocess.Popen(
+                    cmd_parts,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=service.get("working_directory", "."),
+                )
+                if debug:
+                    click.echo(f"  🔍 DEBUG: Started {service_name} with PID: {process.pid}")
+                time.sleep(0.5)  # Give it a moment
+            else:
+                # Direct command
+                if _command_exists(cmd_parts[0]):
+                    process = subprocess.Popen(
+                        cmd_parts,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        cwd=service.get("working_directory", "."),
+                    )
+                    if debug:
+                        click.echo(f"  🔍 DEBUG: Started {service_name} with PID: {process.pid}")
+                    time.sleep(0.5)
+        
+        # Wait for services to start
+        time.sleep(3)
+        
+        # Check if services are actually running
+        tracked_pids = _load_pids()
+        running_count = 0
+        
+        for service in services:
+            service_name = service.get("name", "unknown")
+            pid_info = tracked_pids.get(service_name, {})
+            
+            # Check background services first
+            background_services = pid_info.get("background_services", {})
+            is_running = False
+            
+            for service_type, bg_pid in background_services.items():
+                try:
+                    _, code = run_command(["kill", "-0", str(bg_pid)], check=False)
+                    if code == 0:
+                        is_running = True
+                        running_count += 1
+                        if debug:
+                            click.echo(f"  🔍 DEBUG: Service {service_name} ({service_type}) is running (PID: {bg_pid})")
+                        break
+                except Exception:
+                    pass
+            
+            # Check main PID if no background services
+            if not is_running:
+                main_pid = pid_info.get("main_pid")
+                if main_pid:
+                    try:
+                        _, code = run_command(["kill", "-0", str(main_pid)], check=False)
+                        if code == 0:
+                            is_running = True
+                            running_count += 1
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Service {service_name} is running (PID: {main_pid})")
+                    except Exception:
+                        pass
+            
+            # Check by process name if still not found
+            if not is_running:
+                process_name = pid_info.get("process_name")
+                if process_name:
+                    try:
+                        result = run_command(["pgrep", "-f", process_name], check=False)
+                        if result[0].strip():
+                            is_running = True
+                            running_count += 1
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Service {service_name} found by process name: {process_name}")
+                    except Exception:
+                        pass
+        
+        # Check if URLs are responding
+        urls = _extract_urls_from_build()
+        responding_urls = 0
+        for url_key, url in urls.items():
+            if _check_url_responds(url):
+                responding_urls += 1
+                if debug:
+                    click.echo(f"  🔍 DEBUG: URL {url} is responding")
+        
+        # Consider success if at least one service is running or one URL is responding
+        success = running_count > 0 or responding_urls > 0
+        
+        if debug:
+            click.echo(f"  🔍 DEBUG: Test results - Running services: {running_count}/{len(services)}, Responding URLs: {responding_urls}/{len(urls)}")
+        
+        # Stop services after test
+        try:
+            from vibe_tools.cli import stop as run_stop
+            ctx = click.Context(click.Command("stop"))
+            ctx.obj = {"debug": debug}
+            run_stop(ctx)
+        except Exception:
+            pass
+        
+        return success
+        
+    except Exception as e:
+        if debug:
+            click.echo(f"  🔍 DEBUG: Error testing services: {e}")
+        return False
 
 
 def _command_exists(cmd):
