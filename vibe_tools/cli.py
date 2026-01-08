@@ -2444,7 +2444,7 @@ def start(ctx):
                                     click.echo(
                                         f"  🔍 DEBUG: Target content: {target_content[:200]}..."
                                     )
-                                
+
                                 # Check if target uses background processes (contains & or subshell)
                                 uses_background = "&" in target_content or target_content.strip().startswith("(")
                                 if uses_background:
@@ -2455,11 +2455,11 @@ def start(ctx):
                                     # Wait longer for background processes to start
                                     import time
                                     time.sleep(2.0)
-                                    
+
                                     # Search for actual service processes that should be running
                                     # Based on the Makefile, look for run-backend and run-frontend targets
                                     service_pids = {}
-                                    
+
                                     # Check for backend process (uvicorn)
                                     if "run-backend" in target_content or "8000" in target_content:
                                         try:
@@ -2472,7 +2472,7 @@ def start(ctx):
                                                         click.echo(f"  🔍 DEBUG: Found uvicorn process: {uvicorn_pids[0]}")
                                         except Exception:
                                             pass
-                                    
+
                                     # Check for frontend process (vite/npm)
                                     if "run-frontend" in target_content or "5173" in target_content or "frontend" in target_content.lower():
                                         try:
@@ -2495,14 +2495,14 @@ def start(ctx):
                                                             click.echo(f"  🔍 DEBUG: Found npm dev process: {npm_pids[0]}")
                                         except Exception:
                                             pass
-                                    
+
                                     # If we found service processes, track them
                                     if service_pids:
                                         pids = _load_pids()
                                         tracked_pids = []
                                         for service_type, pid in service_pids.items():
                                             tracked_pids.append(pid)
-                                        
+
                                         pids[service_name] = {
                                             "main_pid": None,  # make process already exited
                                             "child_pids": tracked_pids,
@@ -2980,10 +2980,27 @@ def status(ctx):
         if pid_info:
             main_pid = pid_info.get("main_pid")
             child_pids = pid_info.get("child_pids", [])
+            background_services = pid_info.get("background_services", {})
             process_name = pid_info.get("process_name")
 
-            # Check main PID if it exists
-            if main_pid:
+            # Check background services first (these are the actual service processes)
+            if background_services:
+                if debug:
+                    click.echo(f"  🔍 DEBUG: Checking background services: {background_services}")
+                for service_type, bg_pid in background_services.items():
+                    try:
+                        _, code = run_command(["kill", "-0", str(bg_pid)], check=False)
+                        if code == 0:
+                            is_running = True
+                            pid = str(bg_pid)
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Background service {service_type} (PID {bg_pid}) is running")
+                            break
+                    except Exception:
+                        pass
+
+            # Check main PID if it exists and we haven't found a running process yet
+            if not is_running and main_pid:
                 if debug:
                     click.echo(f"  🔍 DEBUG: Checking main PID {main_pid}")
                 # Check if process is still running (kill -0 just checks, doesn't kill)
