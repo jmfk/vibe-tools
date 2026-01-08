@@ -1940,6 +1940,7 @@ def start(ctx):
                                         click.echo(f"  🔍 DEBUG: Target content: {target_content[:200]}...")
                                     
                                     # Extract port from Makefile target if not already found
+                                    detected_proc_name = None
                                     if not actual_port:
                                         makefile_port = _extract_port_from_command(target_content)
                                         if makefile_port:
@@ -1953,28 +1954,38 @@ def start(ctx):
                                                     actual_port = makefile_port
                                             else:
                                                 actual_port = makefile_port
-                                        else:
-                                            # Try to infer port from service type
-                                            if proc_name in ["uvicorn", "python"]:
-                                                default_port = 8000
-                                                if _is_port_available(default_port):
-                                                    actual_port = default_port
-                                                else:
-                                                    actual_port = _find_available_port(default_port) or default_port
-                                                    if actual_port != default_port:
-                                                        click.echo(f"  ⚠️  Default backend port {default_port} in use, using {actual_port} instead")
-                                            elif proc_name in ["node", "npm", "next", "vite"]:
-                                                default_port = 3000 if proc_name != "vite" else 5173
-                                                if _is_port_available(default_port):
-                                                    actual_port = default_port
-                                                else:
-                                                    actual_port = _find_available_port(default_port) or default_port
-                                                    if actual_port != default_port:
-                                                        click.echo(f"  ⚠️  Default frontend port {default_port} in use, using {actual_port} instead")
                                     
-                                    # Look for common commands in the target
-                                    for proc_name in ["uvicorn", "python", "node", "npm", "yarn", "next", "vite"]:
+                                    # Look for common commands in the target to detect process type
+                                    for proc_name in ["uvicorn", "python", "node", "npm", "yarn", "next", "vite", "skaffold"]:
                                         if proc_name in target_content.lower():
+                                            detected_proc_name = proc_name
+                                            
+                                            # Check if command exists (especially for skaffold)
+                                            if proc_name == "skaffold":
+                                                if not _command_exists("skaffold"):
+                                                    click.echo(f"  ⚠️  {service_name}: 'skaffold' command not found. Install it with: brew install skaffold")
+                                                    click.echo(f"  ⚠️  Skipping {service_name} - skaffold is required but not installed.")
+                                                    break
+                                            
+                                            # Try to infer port if not found
+                                            if not actual_port:
+                                                if proc_name in ["uvicorn", "python"]:
+                                                    default_port = 8000
+                                                    if _is_port_available(default_port):
+                                                        actual_port = default_port
+                                                    else:
+                                                        actual_port = _find_available_port(default_port) or default_port
+                                                        if actual_port != default_port:
+                                                            click.echo(f"  ⚠️  Default backend port {default_port} in use, using {actual_port} instead")
+                                                elif proc_name in ["node", "npm", "next", "vite"]:
+                                                    default_port = 3000 if proc_name != "vite" else 5173
+                                                    if _is_port_available(default_port):
+                                                        actual_port = default_port
+                                                    else:
+                                                        actual_port = _find_available_port(default_port) or default_port
+                                                        if actual_port != default_port:
+                                                            click.echo(f"  ⚠️  Default frontend port {default_port} in use, using {actual_port} instead")
+                                            
                                             # Store with process name to check later
                                             pids = _load_pids()
                                             pids[service_name] = {
@@ -1986,15 +1997,39 @@ def start(ctx):
                                             if debug:
                                                 click.echo(f"  🔍 DEBUG: Detected process name: {proc_name}")
                                                 click.echo(f"  🔍 DEBUG: Saved to tracking file: {pids[service_name]}")
-                                            click.echo(f"  ✅ {service_name} started (checking for {proc_name} processes)")
-                                            # Store port and URL
-                                            if actual_port:
-                                                used_ports[service_name] = actual_port
-                                                if "backend" in service_name.lower() or "api" in service_name.lower() or proc_name in ["uvicorn", "python"]:
-                                                    service_urls[service_name] = f"http://localhost:{actual_port}"
-                                                elif "frontend" in service_name.lower() or proc_name in ["node", "npm", "next", "vite"]:
-                                                    service_urls[service_name] = f"http://localhost:{actual_port}"
-                                            started_count += 1
+                                            
+                                            # For skaffold, we need to actually run it
+                                            if proc_name == "skaffold":
+                                                # Extract the actual skaffold command
+                                                import re
+                                                skaffold_match = re.search(r"skaffold\s+(\w+)", target_content, re.IGNORECASE)
+                                                skaffold_cmd = "skaffold dev" if not skaffold_match else f"skaffold {skaffold_match.group(1)}"
+                                                
+                                                if debug:
+                                                    click.echo(f"  🔍 DEBUG: Running skaffold command: {skaffold_cmd}")
+                                                
+                                                import shlex
+                                                skaffold_parts = shlex.split(skaffold_cmd)
+                                                skaffold_process = subprocess.Popen(
+                                                    skaffold_parts,
+                                                    stdout=subprocess.PIPE,
+                                                    stderr=subprocess.PIPE,
+                                                    cwd=service.get("working_directory", "."),
+                                                )
+                                                pids[service_name]["main_pid"] = skaffold_process.pid
+                                                _save_pids(pids)
+                                                click.echo(f"  ✅ {service_name} started (PID: {skaffold_process.pid}, Command: {skaffold_cmd})")
+                                                started_count += 1
+                                            else:
+                                                click.echo(f"  ✅ {service_name} started (checking for {proc_name} processes)")
+                                                # Store port and URL
+                                                if actual_port:
+                                                    used_ports[service_name] = actual_port
+                                                    if "backend" in service_name.lower() or "api" in service_name.lower() or proc_name in ["uvicorn", "python"]:
+                                                        service_urls[service_name] = f"http://localhost:{actual_port}"
+                                                    elif "frontend" in service_name.lower() or proc_name in ["node", "npm", "next", "vite"]:
+                                                        service_urls[service_name] = f"http://localhost:{actual_port}"
+                                                started_count += 1
                                             break
                                     if debug and started_count == 0:
                                         click.echo(f"  🔍 DEBUG: No common process names found in target")
