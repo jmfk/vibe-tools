@@ -1296,6 +1296,32 @@ def _extract_services_from_makefile():
     return services
 
 
+def _check_url_responds(url):
+    """Check if a URL actually responds."""
+    try:
+        import socket
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port
+        if not port:
+            # Try to extract from netloc
+            if ":" in parsed.netloc:
+                port = int(parsed.netloc.split(":")[-1])
+            else:
+                return False
+        
+        # Quick socket check
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
 def _extract_urls_from_build():
     """Extract URLs from build.yaml, build.md, or Makefile."""
     urls = {}
@@ -1310,12 +1336,20 @@ def _extract_urls_from_build():
             if build_config:
                 # Look for URLs in config
                 if "urls" in build_config:
-                    urls.update(build_config["urls"])
+                    for key, url in build_config["urls"].items():
+                        # Clean URL (remove markdown links)
+                        clean_url = url.split("](")[0] if "](" in url else url
+                        clean_url = clean_url.strip("[]()")
+                        urls[key] = clean_url
                 # Look for services with URLs
                 services = build_config.get("services", [])
                 for service in services:
                     if "url" in service:
-                        urls[service.get("name", "unknown")] = service["url"]
+                        url = service["url"]
+                        # Clean URL (remove markdown links)
+                        clean_url = url.split("](")[0] if "](" in url else url
+                        clean_url = clean_url.strip("[]()")
+                        urls[service.get("name", "unknown")] = clean_url
         except Exception:
             pass
 
@@ -1323,15 +1357,6 @@ def _extract_urls_from_build():
     if BUILD_SPEC.exists():
         build_md = BUILD_SPEC.read_text()
         import re
-
-        # Look for URL patterns
-        url_patterns = [
-            (r"http://localhost:(\d+)", "backend"),
-            (r"http://localhost:(\d+)", "frontend"),
-            (r"backend.*?(\d{4,5})", "backend"),
-            (r"frontend.*?(\d{4,5})", "frontend"),
-            (r":(\d{4,5})", "service"),
-        ]
 
         # Common port patterns
         port_patterns = {
@@ -1349,10 +1374,21 @@ def _extract_urls_from_build():
                 if service_type not in urls:
                     urls[service_type] = f"http://localhost:{port}"
 
-        # Look for explicit URL mentions
-        explicit_urls = re.findall(r"(https?://[^\s\)]+)", build_md)
-        for url in explicit_urls:
+        # Look for explicit URL mentions (clean markdown links)
+        explicit_urls = re.findall(r"\[([^\]]+)\]\(([^\)]+)\)|(https?://[^\s\)\]]+)", build_md)
+        for match in explicit_urls:
+            # Handle markdown link format [text](url) or plain url
+            if match[2]:  # Plain URL
+                url = match[2]
+            elif match[1]:  # URL from markdown link
+                url = match[1]
+            else:
+                continue
+                
             if "localhost" in url or "127.0.0.1" in url:
+                # Clean URL
+                url = url.split("](")[0] if "](" in url else url
+                url = url.strip("[]()")
                 if "backend" in url.lower() or "api" in url.lower() or ":8000" in url:
                     urls["backend"] = url
                 elif "frontend" in url.lower() or ":3000" in url or ":5173" in url:
@@ -2029,24 +2065,47 @@ def status(ctx):
     click.echo("-" * 60)
     click.echo(f"Total: {len(services)} service(s) - {running_count} running, {stopped_count} stopped")
 
-    # Show URLs if services are running
+    # Show URLs if services are running - only show URLs that actually respond
     if running_count > 0:
         urls = _extract_urls_from_build()
         if urls:
             click.echo("\n🌐 Application URLs:")
+            shown_urls = []
             for service_type, url in urls.items():
+                # Clean URL (remove any markdown link artifacts)
+                clean_url = url.split("](")[0] if "](" in url else url
+                clean_url = clean_url.strip("[]()").strip()
+                
+                # Check if URL actually responds
+                if not _check_url_responds(clean_url):
+                    if debug:
+                        click.echo(f"  🔍 DEBUG: URL {clean_url} is not responding, skipping")
+                    continue
+                
                 if service_type == "backend":
-                    click.echo(f"  Backend API:     {url}")
+                    click.echo(f"  Backend API:     {clean_url}")
+                    shown_urls.append(clean_url)
                     # Add API docs URL if it's a common backend port
-                    if ":8000" in url or ":8080" in url:
-                        base_url = url.rstrip("/")
-                        click.echo(f"  API Docs:       {base_url}/docs")
+                    if ":8000" in clean_url or ":8080" in clean_url:
+                        base_url = clean_url.rstrip("/")
+                        docs_url = f"{base_url}/docs"
+                        if _check_url_responds(docs_url):
+                            click.echo(f"  API Docs:       {docs_url}")
+                            shown_urls.append(docs_url)
                 elif service_type == "frontend":
-                    click.echo(f"  Frontend:        {url}")
+                    click.echo(f"  Frontend:        {clean_url}")
+                    shown_urls.append(clean_url)
                 elif service_type == "api_docs":
-                    click.echo(f"  API Docs:        {url}")
+                    if _check_url_responds(clean_url):
+                        click.echo(f"  API Docs:        {clean_url}")
+                        shown_urls.append(clean_url)
                 else:
-                    click.echo(f"  {service_type.capitalize()}: {url}")
+                    if _check_url_responds(clean_url):
+                        click.echo(f"  {service_type.capitalize()}: {clean_url}")
+                        shown_urls.append(clean_url)
+            
+            if not shown_urls:
+                click.echo("  (No responding URLs found - services may still be starting)")
 
     if stopped_count > 0:
         click.echo("\n💡 Run 'vibe start' or 'vibe run start' to start stopped services.")
