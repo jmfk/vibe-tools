@@ -259,6 +259,12 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
         click.echo("\nRun 'vibe --help' for full options.")
 
 
+# Register all commands from the commands module
+from vibe_tools.commands import register_all_commands
+
+register_all_commands(cli)
+
+
 @cli.command()
 @click.pass_context
 def init(ctx):
@@ -1665,14 +1671,22 @@ def _test_build_services(debug=False):
 
     services = _get_services()
     if not services:
-        if debug:
-            click.echo("  🔍 DEBUG: No services found to test")
+        logger.debug("No services found to test")
+        logger.info("  ⚠️  No services configured to test")
         return False
 
+    logger.info(f"  📋 Found {len(services)} service(s) to test")
+    for service in services:
+        service_name = service.get("name", "unknown")
+        start_cmd = service.get("start_command", "N/A")
+        logger.debug(f"Service: {service_name}, Start command: {start_cmd}")
+
     # Stop any existing services first
+    logger.debug("Stopping any existing services before testing")
     try:
         # Call stop logic directly
         services_to_stop = _get_services()
+        stopped_count = 0
         for service in services_to_stop:
             service_name = service.get("name", "unknown")
             pids = _load_pids()
@@ -1683,38 +1697,56 @@ def _test_build_services(debug=False):
             for service_type, bg_pid in background_services.items():
                 try:
                     run_command(["kill", str(bg_pid)], check=False)
-                except Exception:
-                    pass
+                    logger.debug(
+                        f"Stopped background service {service_name} ({service_type}) PID: {bg_pid}"
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping background service {service_name} ({service_type}) PID {bg_pid}: {e}"
+                    )
 
             # Kill main PID
             main_pid = pid_info.get("main_pid")
             if main_pid:
                 try:
                     run_command(["kill", str(main_pid)], check=False)
-                except Exception:
-                    pass
+                    logger.debug(f"Stopped main service {service_name} PID: {main_pid}")
+                    stopped_count += 1
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping main service {service_name} PID {main_pid}: {e}"
+                    )
 
             # Kill child PIDs
             child_pids = pid_info.get("child_pids", [])
             for child_pid in child_pids:
                 try:
                     run_command(["kill", str(child_pid)], check=False)
-                except Exception:
-                    pass
+                    logger.debug(
+                        f"Stopped child process {service_name} PID: {child_pid}"
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping child process {service_name} PID {child_pid}: {e}"
+                    )
 
         _save_pids({})
+        if stopped_count > 0:
+            logger.debug(f"Stopped {stopped_count} existing service(s)")
         time.sleep(1)  # Give services time to stop
     except Exception as e:
-        if debug:
-            click.echo(f"  🔍 DEBUG: Error stopping existing services: {e}")
+        logger.debug(f"Error stopping existing services: {e}", exc_info=True)
 
     # Try to start services - call start logic directly
+    logger.info("  🚀 Starting services for testing...")
+    started_processes = []
     try:
         # Use the same logic as the start command but simplified
         for service in services:
             service_name = service.get("name", "unknown")
             start_cmd = service.get("start_command")
             if not start_cmd:
+                logger.debug(f"Service {service_name} has no start_command, skipping")
                 continue
 
             import shlex
@@ -1723,48 +1755,103 @@ def _test_build_services(debug=False):
                 shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
             )
 
-            if not cmd_parts or cmd_parts[0] == "make":
+            if not cmd_parts:
+                logger.debug(f"Service {service_name}: Empty command parts")
+                continue
+
+            logger.debug(
+                f"Service {service_name}: Attempting to start with command: {start_cmd}"
+            )
+
+            if cmd_parts[0] == "make":
                 # For make commands, just run them
-                process = subprocess.Popen(
-                    cmd_parts,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    cwd=service.get("working_directory", "."),
-                )
-                if debug:
-                    click.echo(
-                        f"  🔍 DEBUG: Started {service_name} with PID: {process.pid}"
-                    )
-                time.sleep(0.5)  # Give it a moment
-            else:
-                # Direct command
-                if _command_exists(cmd_parts[0]):
+                try:
                     process = subprocess.Popen(
                         cmd_parts,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         cwd=service.get("working_directory", "."),
                     )
-                    if debug:
-                        click.echo(
-                            f"  🔍 DEBUG: Started {service_name} with PID: {process.pid}"
+                    started_processes.append((service_name, process))
+                    logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                    logger.debug(
+                        f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
+                    )
+                    time.sleep(0.5)  # Give it a moment
+                except Exception as e:
+                    logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                    logger.debug(
+                        f"Service {service_name} startup error: {e}", exc_info=True
+                    )
+            else:
+                # Direct command
+                if _command_exists(cmd_parts[0]):
+                    try:
+                        process = subprocess.Popen(
+                            cmd_parts,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=service.get("working_directory", "."),
                         )
-                    time.sleep(0.5)
+                        started_processes.append((service_name, process))
+                        logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                        logger.debug(
+                            f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
+                        )
+                        time.sleep(0.5)
+                    except Exception as e:
+                        logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                        logger.debug(
+                            f"Service {service_name} startup error: {e}", exc_info=True
+                        )
+                else:
+                    logger.warning(
+                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}"
+                    )
+                    logger.debug(
+                        f"Service {service_name}: Command '{cmd_parts[0]}' does not exist in PATH"
+                    )
 
         # Wait for services to start
+        logger.debug("Waiting 3 seconds for services to start...")
         time.sleep(3)
 
+        # Check for immediate failures in started processes
+        for service_name, process in started_processes:
+            if process.poll() is not None:
+                # Process has already terminated
+                stdout, stderr = process.communicate()
+                exit_code = process.returncode
+                logger.warning(
+                    f"  ✗ Service {service_name} exited immediately with code {exit_code}"
+                )
+                if stderr:
+                    logger.debug(
+                        f"Service {service_name} stderr: {stderr.decode('utf-8', errors='ignore')}"
+                    )
+                if stdout:
+                    logger.debug(
+                        f"Service {service_name} stdout: {stdout.decode('utf-8', errors='ignore')}"
+                    )
+
         # Check if services are actually running
+        logger.info("  🔍 Checking service status...")
         tracked_pids = _load_pids()
         running_count = 0
+        failed_services = []
 
         for service in services:
             service_name = service.get("name", "unknown")
             pid_info = tracked_pids.get(service_name, {})
+            is_running = False
+            running_reason = None
 
             # Check background services first
             background_services = pid_info.get("background_services", {})
-            is_running = False
+            if background_services:
+                logger.debug(
+                    f"Service {service_name}: Checking {len(background_services)} background service(s)"
+                )
 
             for service_type, bg_pid in background_services.items():
                 try:
@@ -1772,13 +1859,22 @@ def _test_build_services(debug=False):
                     if code == 0:
                         is_running = True
                         running_count += 1
-                        if debug:
-                            click.echo(
-                                f"  🔍 DEBUG: Service {service_name} ({service_type}) is running (PID: {bg_pid})"
-                            )
+                        running_reason = (
+                            f"background service ({service_type}, PID: {bg_pid})"
+                        )
+                        logger.info(f"  ✓ {service_name} is running - {running_reason}")
+                        logger.debug(
+                            f"Service {service_name} verified running via background service {service_type} (PID: {bg_pid})"
+                        )
                         break
-                except Exception:
-                    pass
+                    else:
+                        logger.debug(
+                            f"Service {service_name} background service {service_type} (PID: {bg_pid}) is not running (kill -0 returned {code})"
+                        )
+                except Exception as e:
+                    logger.debug(
+                        f"Service {service_name} error checking background service {service_type} (PID: {bg_pid}): {e}"
+                    )
 
             # Check main PID if no background services
             if not is_running:
@@ -1791,12 +1887,25 @@ def _test_build_services(debug=False):
                         if code == 0:
                             is_running = True
                             running_count += 1
-                            if debug:
-                                click.echo(
-                                    f"  🔍 DEBUG: Service {service_name} is running (PID: {main_pid})"
-                                )
-                    except Exception:
-                        pass
+                            running_reason = f"main process (PID: {main_pid})"
+                            logger.info(
+                                f"  ✓ {service_name} is running - {running_reason}"
+                            )
+                            logger.debug(
+                                f"Service {service_name} verified running via main PID {main_pid}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Service {service_name} main PID {main_pid} is not running (kill -0 returned {code})"
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            f"Service {service_name} error checking main PID {main_pid}: {e}"
+                        )
+                else:
+                    logger.debug(
+                        f"Service {service_name}: No main PID found in tracked_pids"
+                    )
 
             # Check by process name if still not found
             if not is_running:
@@ -1807,28 +1916,99 @@ def _test_build_services(debug=False):
                         if result[0].strip():
                             is_running = True
                             running_count += 1
-                            if debug:
-                                click.echo(
-                                    f"  🔍 DEBUG: Service {service_name} found by process name: {process_name}"
-                                )
-                    except Exception:
-                        pass
+                            running_reason = f"process name match: {process_name}"
+                            logger.info(
+                                f"  ✓ {service_name} is running - {running_reason}"
+                            )
+                            logger.debug(
+                                f"Service {service_name} found running by process name: {process_name}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Service {service_name}: No process found matching name '{process_name}'"
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            f"Service {service_name} error checking process name '{process_name}': {e}"
+                        )
+                else:
+                    logger.debug(f"Service {service_name}: No process_name configured")
+
+            if not is_running:
+                failed_services.append(service_name)
+                if not pid_info:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)"
+                    )
+                elif not background_services and not main_pid and not process_name:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - No PID tracking data available"
+                    )
+                else:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - Process not found"
+                    )
 
         # Check if URLs are responding
+        logger.info("  🌐 Checking URL endpoints...")
         urls = _extract_urls_from_build()
+        if not urls:
+            logger.debug("No URLs found in build configuration to check")
+        else:
+            logger.debug(f"Found {len(urls)} URL(s) to check: {list(urls.keys())}")
+
         responding_urls = 0
+        failed_urls = []
         for url_key, url in urls.items():
-            if _check_url_responds(url):
-                responding_urls += 1
-                if debug:
-                    click.echo(f"  🔍 DEBUG: URL {url} is responding")
+            logger.debug(f"Checking URL {url_key}: {url}")
+            try:
+                if _check_url_responds(url):
+                    responding_urls += 1
+                    logger.info(f"  ✓ {url_key} ({url}) is responding")
+                    logger.debug(f"URL {url_key} ({url}) responded successfully")
+                else:
+                    failed_urls.append((url_key, url))
+                    logger.warning(f"  ✗ {url_key} ({url}) is not responding")
+                    logger.debug(
+                        f"URL {url_key} ({url}) failed to respond (connection timeout or refused)"
+                    )
+            except Exception as e:
+                failed_urls.append((url_key, url))
+                logger.warning(f"  ✗ {url_key} ({url}) check failed: {e}")
+                logger.debug(f"URL {url_key} ({url}) check error: {e}", exc_info=True)
 
         # Consider success if at least one service is running or one URL is responding
         success = running_count > 0 or responding_urls > 0
 
-        if debug:
-            click.echo(
-                f"  🔍 DEBUG: Test results - Running services: {running_count}/{len(services)}, Responding URLs: {responding_urls}/{len(urls)}"
+        # Summary logging - always log
+        logger.info("  📊 Test Summary:")
+        logger.info(f"     Services: {running_count}/{len(services)} running")
+        if failed_services:
+            logger.info(f"     Failed services: {', '.join(failed_services)}")
+        logger.info(f"     URLs: {responding_urls}/{len(urls)} responding")
+        if failed_urls:
+            failed_url_list = [f"{key} ({url})" for key, url in failed_urls]
+            logger.info(f"     Failed URLs: {', '.join(failed_url_list)}")
+
+        if success:
+            logger.info(
+                "  ✅ Service test PASSED - At least one service or URL is responding"
+            )
+            logger.debug(
+                f"Service test passed: {running_count} service(s) running, {responding_urls} URL(s) responding"
+            )
+        else:
+            failure_reasons = []
+            if running_count == 0:
+                failure_reasons.append(f"no services running (0/{len(services)})")
+            if responding_urls == 0 and urls:
+                failure_reasons.append(f"no URLs responding (0/{len(urls)})")
+            elif not urls and running_count == 0:
+                failure_reasons.append("no services running and no URLs configured")
+            reason = "; ".join(failure_reasons) if failure_reasons else "unknown"
+            logger.warning(f"  ❌ Service test FAILED - {reason}")
+            logger.debug(
+                f"Service test failed: {running_count} service(s) running, {responding_urls} URL(s) responding"
             )
 
         # Stop services after test
@@ -1844,8 +2024,8 @@ def _test_build_services(debug=False):
         return success
 
     except Exception as e:
-        if debug:
-            click.echo(f"  🔍 DEBUG: Error testing services: {e}")
+        logger.error(f"  ❌ Error testing services: {e}")
+        logger.debug(f"Service test exception: {e}", exc_info=True)
         return False
 
 
@@ -3283,9 +3463,6 @@ Provide step-by-step instructions or execute the data setup directly.
     else:
         click.echo("❌ Demo data setup failed.")
         logger.error(f"Agent output: {output}")
-
-
-cli.add_command(demo_data_cli, name="demo-data")
 
 
 if __name__ == "__main__":
