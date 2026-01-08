@@ -74,7 +74,6 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 }
 ```
 
-- `ralph`: [DEPRECATED] Default quality gates for the legacy `vibe ralph` loop.
 - `caffeinate`: Prevent system sleep during long-running tasks.
 - `use_google_sheets`: Whether to log LLM costs to Google Sheets.
 - `google_sheet_id`: The ID of the Google Sheet to log to.
@@ -129,9 +128,6 @@ vibe --help
 - `vibe remember`: Alias for `vibe memory`.
 - `vibe history`: Check the status of all PRDs.
 - `vibe cost`: View total estimated cost of LLM usage.
-- `vibe ralph`: [DEPRECATED] Run the legacy PRD processing loop.
-- `vibe write-prd`: [DEPRECATED] Use `vibe prd` instead.
-- `vibe review-prd`: [DEPRECATED] List and view markdown specs with optional agentic review.
 - `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
 - `vibe-setup google`: Configure Google Sheets for cost logging.
 
@@ -185,7 +181,6 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ### Loop Scripts
 
-- `vibe ralph`: [DEPRECATED] Run the legacy Ralph loop for automated coding.
 - `vibe coverage`: Run the loop to improve test coverage.
 - `vibe test-fix`: Run the loop to fix failing tests.
 - `vibe normalize`: Normalize human-written specs into PRDs.
@@ -200,7 +195,6 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
    - `cicd.md` -> `prds/cicd.yaml`
 3. **Convert specs into Ralph-ready PRDs.** Ralph only reads `prds/prd_*.yaml` for implement tasks. Transform each spec into a YAML file using `vibe normalize`. Global truths are converted without the `prd_` prefix and are used purely for context.
 4. **Global Agent Instructions.** Use `vibe remember` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
-5. **Understand the Ralph loop.** [DEPRECATED] `vibe ralph` reads the `prds/` directory, loads the global truth context files, and sequentially processes `prd_*.yaml` files. It prompts the agent until it emits `<promise>DONE</promise>` before moving on to quality gates.
 
 ## Development
 

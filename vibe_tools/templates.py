@@ -185,7 +185,7 @@ Conversation History:
 
 Based on the above, please provide:
 1. A concise updated summary of the feature (if more information was gathered).
-2. A list of 1-3 specific, high-impact questions to further define the product. 
+2. A list of 1-3 specific, high-impact questions to further define the product.
    - Questions can be open-ended or multiple choice.
    - For multiple choice, format as: "Question? \n a) Option 1 \n b) Option 2"
 3. A flag "satisfied" (true/false) indicating if you have enough information to write a comprehensive PRD.
@@ -277,8 +277,8 @@ CURRENT GIT STATUS:
 {git_status}
 
 TASK:
-Please resolve this git issue so the automated pipeline can continue. 
-You may need to stash changes, commit them, reset the branch, or merge. 
+Please resolve this git issue so the automated pipeline can continue.
+You may need to stash changes, commit them, reset the branch, or merge.
 Ensure the end state is that we are on branch '{branch_name}' and ready to work.
 """,
     "git_resolve_prompt.txt": """You are a Git Expert. The user's branch stack or history has become tangled or has conflicts.
@@ -396,7 +396,7 @@ CONVERSATION HISTORY:
 {history}
 
 GOAL:
-Respond to the user's latest query or instruction. 
+Respond to the user's latest query or instruction.
 If they ask a question, answer it clearly based on the provided specifications.
 If they provide an instruction to modify one of the files, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header (ONLY in AGENT mode).
 
@@ -435,7 +435,7 @@ CONVERSATION HISTORY:
 {history}
 
 GOAL:
-Respond to the user's latest query or instruction. 
+Respond to the user's latest query or instruction.
 If they ask a question, answer it clearly based on the provided specifications.
 If they provide an instruction to modify or create a PRD, perform the logic and output the FULL updated content of that file using the FILE_UPDATE header (ONLY in AGENT mode).
 
@@ -517,7 +517,6 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 }
 ```
 
-- `ralph`: [DEPRECATED] Default quality gates for the legacy `vibe ralph` loop.
 - `caffeinate`: Prevent system sleep during long-running tasks.
 - `use_google_sheets`: Whether to log LLM costs to Google Sheets.
 - `google_sheet_id`: The ID of the Google Sheet to log to.
@@ -572,9 +571,6 @@ vibe --help
 - `vibe remember`: Alias for `vibe memory`.
 - `vibe history`: Check the status of all PRDs.
 - `vibe cost`: View total estimated cost of LLM usage.
-- `vibe ralph`: [DEPRECATED] Run the legacy PRD processing loop.
-- `vibe write-prd`: [DEPRECATED] Use `vibe prd` instead.
-- `vibe review-prd`: [DEPRECATED] List and view markdown specs with optional agentic review.
 - `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
 - `vibe-setup google`: Configure Google Sheets for cost logging.
 
@@ -628,7 +624,6 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ### Loop Scripts
 
-- `vibe ralph`: [DEPRECATED] Run the legacy Ralph loop for automated coding.
 - `vibe coverage`: Run the loop to improve test coverage.
 - `vibe test-fix`: Run the loop to fix failing tests.
 - `vibe normalize`: Normalize human-written specs into PRDs.
