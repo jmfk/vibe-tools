@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import pathlib
+import subprocess
 from typing import List
 
 import click
@@ -22,6 +23,8 @@ class OrderedGroup(click.Group):
             "setup",
             "deps",
             "implement",
+            "build",
+            "run",
             "infra",
             "testing",
             "cicd",
@@ -73,6 +76,9 @@ from vibe_tools.utils import (
     ARCHITECTURE,
     ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
+    BUILD,
+    BUILD_CURRENT,
+    BUILD_SPEC,
     CICD,
     CICD_CURRENT,
     CICD_SPEC,
@@ -431,6 +437,7 @@ def normalize(ctx, input_files, yes, debug):
         "architecture": ARCHITECTURE_SPEC,
         "cicd": CICD_SPEC,
         "testing": TESTING_SPEC,
+        "build": BUILD_SPEC,
         "project-overview": pathlib.Path("specs/project-overview.md"),
         "project_overview": pathlib.Path("specs/project-overview.md"),
     }
@@ -933,8 +940,251 @@ def implement(ctx):
 
 @cli.command()
 @click.pass_context
+def build(ctx):
+    """Build system reconciliation. Ensures the build system builds all parts and they can start."""
+    state = load_project_state()
+    missing = check_dependencies("implement", state)
+    if missing:
+        click.echo(
+            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+        )
+        return
+
+    # Handle missing build files
+    if not BUILD.exists():
+        if BUILD_SPEC.exists():
+            # build.md exists but not normalized - auto-normalize it
+            click.echo(f"📝 {BUILD_SPEC} found but not normalized. Normalizing...")
+            from vibe_tools.normalize import normalize_prd
+
+            normalize_prd(
+                agent=ctx.obj.get("agent", "cursor-agent"),
+                input_file=str(BUILD_SPEC),
+                auto_overwrite=True,
+                caffeinate=ctx.obj.get("caffeinate", False),
+                stream=ctx.obj.get("stream", False),
+            )
+            if not BUILD.exists():
+                click.echo(
+                    "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
+                )
+                return
+            click.echo("✅ Build specification normalized successfully.")
+        else:
+            click.echo(
+                f"❌ {BUILD_SPEC} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+            )
+            return
+
+    from vibe_tools.ralph import RalphLoop
+
+    agent = ctx.obj.get("agent", "cursor-agent")
+    stream = ctx.obj.get("stream", False)
+
+    loop = RalphLoop(
+        name="Build",
+        desired_file=BUILD,
+        current_file=BUILD_CURRENT,
+        agent=agent,
+        stream=stream,
+    )
+
+    loop.instructions = [
+        "Ensure the build system successfully builds all application parts.",
+        "Verify that the built software can be started in the development environment.",
+        "Check that all build dependencies are correctly configured.",
+        "Ensure build artifacts are generated correctly.",
+        "Test that the application starts successfully after building.",
+    ]
+
+    if loop.run():
+        click.echo("✅ Build system reconciliation complete.")
+        click.echo("\nNext Steps:")
+        click.echo("[ ] Run the application (vibe run start)")
+    else:
+        click.echo("❌ Build system reconciliation failed.")
+
+
+@cli.group()
+@click.pass_context
+def run(ctx):
+    """Manage development environment: start, stop, restart, and view logs."""
+    pass
+
+
+@run.command()
+@click.pass_context
+def start(ctx):
+    """Start all development services defined in build.yaml."""
+    if not BUILD.exists() and not BUILD_CURRENT.exists():
+        click.echo(
+            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
+        )
+        return
+
+    # Use BUILD_CURRENT if it exists (more up-to-date), otherwise use BUILD
+    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+
+    try:
+        import yaml
+
+        build_config = yaml.safe_load(build_file.read_text())
+        if not build_config:
+            build_config = {}
+
+        # Extract services from build config
+        services = build_config.get("services", [])
+        if not services:
+            click.echo("⚠️  No services defined in build configuration.")
+            click.echo("   Add a 'services' section to build.yaml to define what to start.")
+            return
+
+        click.echo(f"🚀 Starting {len(services)} development service(s)...")
+
+        # For now, we'll use a simple approach - run commands defined in build.yaml
+        # This can be extended to support different service types
+        for service in services:
+            service_name = service.get("name", "unknown")
+            start_cmd = service.get("start_command")
+            if start_cmd:
+                click.echo(f"  Starting {service_name}...")
+                if isinstance(start_cmd, str):
+                    import shlex
+
+                    cmd = shlex.split(start_cmd)
+                else:
+                    cmd = start_cmd
+
+                # Run in background
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=service.get("working_directory", "."),
+                )
+                click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+            else:
+                click.echo(f"  ⚠️  {service_name}: No start_command defined")
+
+        click.echo("✅ Development environment started.")
+    except Exception as e:
+        click.echo(f"❌ Failed to start services: {e}")
+        logger.error(f"Error starting services: {e}", exc_info=True)
+
+
+@run.command()
+@click.pass_context
+def stop(ctx):
+    """Stop all development services."""
+    if not BUILD.exists() and not BUILD_CURRENT.exists():
+        click.echo(
+            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
+        )
+        return
+
+    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+
+    try:
+        import yaml
+
+        build_config = yaml.safe_load(build_file.read_text())
+        if not build_config:
+            build_config = {}
+
+        services = build_config.get("services", [])
+        if not services:
+            click.echo("⚠️  No services defined in build configuration.")
+            return
+
+        click.echo(f"🛑 Stopping development services...")
+
+        # Stop services - this is a simplified version
+        # In a full implementation, we'd track PIDs and kill them
+        for service in services:
+            service_name = service.get("name", "unknown")
+            stop_cmd = service.get("stop_command")
+            if stop_cmd:
+                if isinstance(stop_cmd, str):
+                    import shlex
+
+                    cmd = shlex.split(stop_cmd)
+                else:
+                    cmd = stop_cmd
+                run_command(cmd, check=False)
+                click.echo(f"  ✅ {service_name} stopped")
+            else:
+                click.echo(f"  ⚠️  {service_name}: No stop_command defined")
+
+        click.echo("✅ Development environment stopped.")
+    except Exception as e:
+        click.echo(f"❌ Failed to stop services: {e}")
+        logger.error(f"Error stopping services: {e}", exc_info=True)
+
+
+@run.command()
+@click.pass_context
+def restart(ctx):
+    """Restart all development services."""
+    ctx.invoke(stop)
+    ctx.invoke(start)
+
+
+@run.command()
+@click.pass_context
+def logs(ctx):
+    """Show logs for development services."""
+    if not BUILD.exists() and not BUILD_CURRENT.exists():
+        click.echo(
+            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
+        )
+        return
+
+    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+
+    try:
+        import yaml
+
+        build_config = yaml.safe_load(build_file.read_text())
+        if not build_config:
+            build_config = {}
+
+        services = build_config.get("services", [])
+        if not services:
+            click.echo("⚠️  No services defined in build configuration.")
+            return
+
+        click.echo("📋 Development service logs:")
+        click.echo("-" * 60)
+
+        for service in services:
+            service_name = service.get("name", "unknown")
+            log_file = service.get("log_file")
+            if log_file:
+                log_path = pathlib.Path(log_file)
+                if log_path.exists():
+                    click.echo(f"\n{service_name} ({log_file}):")
+                    click.echo(log_path.read_text()[-2000:])  # Last 2000 chars
+                else:
+                    click.echo(f"\n{service_name}: Log file not found: {log_file}")
+            else:
+                click.echo(f"\n{service_name}: No log_file defined")
+
+    except Exception as e:
+        click.echo(f"❌ Failed to read logs: {e}")
+        logger.error(f"Error reading logs: {e}", exc_info=True)
+
+
+@cli.command()
+@click.pass_context
 def infra(ctx):
-    """Phase 6: Infrastructure reconciliation. Ensures services are reachable."""
+    """Phase 6: Infrastructure reconciliation for production and live-staging environments.
+    
+    Sets up infrastructure for production and live-staging systems (Kubernetes, cloud platforms, etc.).
+    This step is optional depending on the distribution needs of the project - not all projects
+    require a production environment.
+    
+    Note: For development environment management, use 'vibe build' and 'vibe run' instead.
+    """
     state = load_project_state()
     missing = check_dependencies("infra", state)
     if missing:

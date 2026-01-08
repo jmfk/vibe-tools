@@ -130,11 +130,16 @@ def normalize_prd(
             "infrastructure",
             "cicd",
             "testing",
+            "build",
         ]
         if clean_stem in global_truths:
             output_filename = f"{clean_stem}.yaml"
-            # Global truths now go to the PRD directory (prds/)
-            output_path = PRD_DIR / output_filename
+            # Build goes to project root, others go to PRD directory
+            if clean_stem == "build":
+                output_path = VIBE_PROJECT_DIR / output_filename
+            else:
+                # Global truths now go to the PRD directory (prds/)
+                output_path = PRD_DIR / output_filename
         else:
             # 2. Handle PRD prefixes and format
             # Ensure it starts with prd_
