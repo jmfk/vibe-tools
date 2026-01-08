@@ -2,6 +2,7 @@ import atexit
 import datetime
 import json
 import logging
+import os
 import pathlib
 import subprocess
 from typing import List
@@ -1565,11 +1566,23 @@ def start(ctx):
                     if debug:
                         click.echo(f"  🔍 DEBUG: Running make command: {' '.join(cmd_parts)}")
                     # Run make in background, but don't wait for it
+                    # Set port environment variable if we found a port conflict
+                    env = os.environ.copy()
+                    if actual_port and actual_port != original_port:
+                        # Set PORT env var for make to use
+                        env["PORT"] = str(actual_port)
+                        # Also set common port env vars
+                        if "backend" in service_name.lower() or "api" in service_name.lower():
+                            env["BACKEND_PORT"] = str(actual_port)
+                        elif "frontend" in service_name.lower():
+                            env["FRONTEND_PORT"] = str(actual_port)
+                    
                     process = subprocess.Popen(
                         cmd_parts,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         cwd=service.get("working_directory", "."),
+                        env=env,
                     )
                     if debug:
                         click.echo(f"  🔍 DEBUG: Make process started with PID: {process.pid}")
