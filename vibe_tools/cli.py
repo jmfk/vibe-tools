@@ -999,6 +999,23 @@ Analyze the architecture and create a comprehensive build.md file that specifies
 - Build artifacts and outputs
 - Services that need to be started for development
 
+IMPORTANT REQUIREMENTS:
+1. **Makefile Targets**: ALWAYS include a comprehensive set of Makefile targets for:
+   - Building: `make build`, `make build-backend`, `make build-frontend`
+   - Testing: `make test`, `make test-backend`, `make test-frontend`
+   - Development: `make dev`, `make dev-start`, `make dev-stop`, `make dev-restart`
+   - Linting: `make lint`, `make lint-backend`, `make lint-frontend`
+   - Coverage: `make coverage`, `make coverage-backend`, `make coverage-frontend`
+   - Cleanup: `make clean`, `make clean-backend`, `make clean-frontend`
+
+2. **Skaffold and Helm**: If the architecture uses Kubernetes or container orchestration:
+   - Include Skaffold configuration for local Kubernetes development
+   - Include Helm charts for deployment
+   - Document how to use `skaffold dev` for local development
+   - Document Helm chart structure and values
+
+3. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+
 The architecture specification is in specs/architecture.md:
 
 {arch_content}
@@ -1008,7 +1025,7 @@ Generate a complete build.md file following this structure:
 # Build Specification
 
 ## 1. Overview
-[High-level overview of the build system and how different parts are built]
+[High-level overview of the build system and how different parts are built. Mention if using Skaffold/Helm for Kubernetes-based development.]
 
 ## 2. Build Components
 [For each component (backend, frontend, etc.), specify:
@@ -1018,18 +1035,42 @@ Generate a complete build.md file following this structure:
 - How to verify the build succeeded]
 
 ## 3. Development Environment
-[How to set up and start the development environment:
-- Services that need to be running
-- Environment variables
-- Startup commands
-- How to verify everything is running]
+
+### 3.1 Services Required
+[List all services that must be running for development (PostgreSQL, Redis, etc.)]
+
+### 3.2 Environment Variables
+[Required environment variables and .env file setup]
+
+### 3.3 Startup Commands
+[Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
+
+### 3.4 Verification
+[How to verify the development environment is running correctly]
 
 ## 4. Build System
-[Build system configuration:
-- Makefile targets
-- Build scripts
-- Docker builds (if applicable)
-- CI/CD build steps]
+
+### 4.1 Makefile Targets
+[COMPREHENSIVE list of all Makefile targets. MUST include:
+- Build targets: build, build-backend, build-frontend
+- Test targets: test, test-backend, test-frontend, test-integration
+- Development targets: dev, dev-start, dev-stop, dev-restart
+- Lint targets: lint, lint-backend, lint-frontend
+- Coverage targets: coverage, coverage-backend, coverage-frontend
+- Clean targets: clean, clean-backend, clean-frontend
+- Install targets: install, install-backend, install-frontend]
+
+### 4.2 Container Orchestration
+[If using Kubernetes:
+- Skaffold configuration and usage (`skaffold dev`, `skaffold run`)
+- Helm chart structure and deployment
+- Local cluster setup (Minikube/Kind) instructions]
+
+### 4.3 Docker Builds
+[Docker build commands and Dockerfile locations if applicable]
+
+### 4.4 CI/CD Build Steps
+[CI/CD pipeline steps and automation]
 
 Output ONLY the markdown content for build.md, starting with the title and ending with the last section. Do not include code fences or explanations.
 """
@@ -1099,6 +1140,9 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Check that all build dependencies are correctly configured.",
         "Ensure build artifacts are generated correctly.",
         "Test that the application starts successfully after building.",
+        "Ensure the Makefile has comprehensive targets for: build, test, dev-start, dev-stop, dev-restart, lint, and coverage.",
+        "If using Kubernetes, ensure Skaffold and Helm configurations are properly set up.",
+        "Extract and document all services/components that need to run in development mode with their startup commands.",
     ]
 
     if loop.run():
@@ -1116,50 +1160,182 @@ def run(ctx):
     pass
 
 
+def _extract_services_from_build_config(build_config):
+    """Extract services from build.yaml config."""
+    services = build_config.get("services", [])
+    if services:
+        return services
+    return []
+
+
+def _extract_services_from_makefile():
+    """Extract services by checking Makefile for dev-related targets."""
+    makefile_path = pathlib.Path("Makefile")
+    if not makefile_path.exists():
+        return []
+
+    services = []
+    makefile_content = makefile_path.read_text()
+
+    # Check for common dev start targets
+    dev_targets = [
+        ("dev", "make dev"),
+        ("dev-start", "make dev-start"),
+        ("run", "make run"),
+        ("start", "make start"),
+        ("up", "make up"),
+    ]
+
+    for target, cmd in dev_targets:
+        if f"{target}:" in makefile_content or f".PHONY: {target}" in makefile_content:
+            services.append(
+                {
+                    "name": f"dev-{target}",
+                    "start_command": cmd,
+                    "stop_command": "make dev-stop" if "dev-stop:" in makefile_content else None,
+                }
+            )
+            break  # Use the first found
+
+    # Check for Skaffold
+    if "skaffold" in makefile_content.lower() or pathlib.Path("skaffold.yaml").exists():
+        services.append(
+            {
+                "name": "skaffold-dev",
+                "start_command": "skaffold dev",
+                "stop_command": "pkill -f skaffold",
+            }
+        )
+
+    # Check for backend and frontend separately
+    if "run:" in makefile_content or "dev:" in makefile_content:
+        # Try to find backend and frontend run commands
+        if "frontend-run:" in makefile_content or "frontend-dev:" in makefile_content:
+            services.append(
+                {
+                    "name": "frontend",
+                    "start_command": "make frontend-run" if "frontend-run:" in makefile_content else "make frontend-dev",
+                }
+            )
+        if "run:" in makefile_content and "uvicorn" in makefile_content.lower():
+            services.append(
+                {
+                    "name": "backend",
+                    "start_command": "make run",
+                }
+            )
+
+    return services
+
+
+def _extract_services_from_build_md():
+    """Extract services from build.md by parsing startup commands."""
+    if not BUILD_SPEC.exists():
+        return []
+
+    services = []
+    build_md = BUILD_SPEC.read_text()
+
+    # Look for startup commands section
+    import re
+
+    # Pattern to find commands like "make run", "make dev", "npm run dev", etc.
+    startup_patterns = [
+        r"`?make\s+(?:dev|run|start|up|dev-start)`?",
+        r"`?npm\s+run\s+dev`?",
+        r"`?python\s+manage\.py\s+runserver`?",
+        r"`?uvicorn\s+.*`?",
+        r"`?skaffold\s+dev`?",
+    ]
+
+    found_commands = set()
+    for pattern in startup_patterns:
+        matches = re.findall(pattern, build_md, re.IGNORECASE)
+        for match in matches:
+            cmd = match.strip("`").strip()
+            if cmd and cmd not in found_commands:
+                found_commands.add(cmd)
+                service_name = cmd.split()[-1] if len(cmd.split()) > 1 else "service"
+                services.append(
+                    {
+                        "name": service_name.replace("-", "_"),
+                        "start_command": cmd,
+                    }
+                )
+
+    return services
+
+
+def _get_services():
+    """Get services from build.yaml, build.md, or Makefile."""
+    services = []
+
+    # Try build.yaml first
+    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    if build_file.exists():
+        try:
+            import yaml
+
+            build_config = yaml.safe_load(build_file.read_text())
+            if build_config:
+                services = _extract_services_from_build_config(build_config)
+                if services:
+                    return services
+        except Exception:
+            pass
+
+    # Try Makefile
+    services = _extract_services_from_makefile()
+    if services:
+        return services
+
+    # Try build.md
+    services = _extract_services_from_build_md()
+    if services:
+        return services
+
+    # Fallback: try common commands
+    makefile_path = pathlib.Path("Makefile")
+    if makefile_path.exists():
+        # Just try make dev or make run
+        return [
+            {
+                "name": "development",
+                "start_command": "make dev",
+            }
+        ]
+
+    return []
+
+
 @run.command()
 @click.pass_context
 def start(ctx):
-    """Start all development services defined in build.yaml."""
-    if not BUILD.exists() and not BUILD_CURRENT.exists():
-        click.echo(
-            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
-        )
+    """Start all development services defined in build.yaml, build.md, or Makefile."""
+    services = _get_services()
+
+    if not services:
+        click.echo("⚠️  Could not determine services to start.")
+        click.echo("   Ensure build.yaml, build.md, or Makefile exists with dev startup commands.")
+        click.echo("   Or run 'vibe build' to set up the build system.")
         return
 
-    # Use BUILD_CURRENT if it exists (more up-to-date), otherwise use BUILD
-    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    click.echo(f"🚀 Starting {len(services)} development service(s)...")
 
-    try:
-        import yaml
+    for service in services:
+        service_name = service.get("name", "unknown")
+        start_cmd = service.get("start_command")
+        if start_cmd:
+            click.echo(f"  Starting {service_name}...")
+            if isinstance(start_cmd, str):
+                import shlex
 
-        build_config = yaml.safe_load(build_file.read_text())
-        if not build_config:
-            build_config = {}
+                cmd = shlex.split(start_cmd)
+            else:
+                cmd = start_cmd
 
-        # Extract services from build config
-        services = build_config.get("services", [])
-        if not services:
-            click.echo("⚠️  No services defined in build configuration.")
-            click.echo("   Add a 'services' section to build.yaml to define what to start.")
-            return
-
-        click.echo(f"🚀 Starting {len(services)} development service(s)...")
-
-        # For now, we'll use a simple approach - run commands defined in build.yaml
-        # This can be extended to support different service types
-        for service in services:
-            service_name = service.get("name", "unknown")
-            start_cmd = service.get("start_command")
-            if start_cmd:
-                click.echo(f"  Starting {service_name}...")
-                if isinstance(start_cmd, str):
-                    import shlex
-
-                    cmd = shlex.split(start_cmd)
-                else:
-                    cmd = start_cmd
-
-                # Run in background
+            # Run in background
+            try:
                 process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
@@ -1167,62 +1343,69 @@ def start(ctx):
                     cwd=service.get("working_directory", "."),
                 )
                 click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
-            else:
-                click.echo(f"  ⚠️  {service_name}: No start_command defined")
+            except Exception as e:
+                click.echo(f"  ❌ {service_name} failed to start: {e}")
+        else:
+            click.echo(f"  ⚠️  {service_name}: No start_command defined")
 
-        click.echo("✅ Development environment started.")
-    except Exception as e:
-        click.echo(f"❌ Failed to start services: {e}")
-        logger.error(f"Error starting services: {e}", exc_info=True)
+    click.echo("✅ Development environment started.")
 
 
 @run.command()
 @click.pass_context
 def stop(ctx):
     """Stop all development services."""
-    if not BUILD.exists() and not BUILD_CURRENT.exists():
-        click.echo(
-            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
-        )
-        return
+    services = _get_services()
 
-    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
-
-    try:
-        import yaml
-
-        build_config = yaml.safe_load(build_file.read_text())
-        if not build_config:
-            build_config = {}
-
-        services = build_config.get("services", [])
-        if not services:
-            click.echo("⚠️  No services defined in build configuration.")
+    if not services:
+        # Try make dev-stop as fallback
+        makefile_path = pathlib.Path("Makefile")
+        if makefile_path.exists() and "dev-stop:" in makefile_path.read_text():
+            click.echo("🛑 Stopping development services...")
+            run_command(["make", "dev-stop"], check=False)
+            click.echo("✅ Development environment stopped.")
             return
 
-        click.echo(f"🛑 Stopping development services...")
+        click.echo("⚠️  Could not determine services to stop.")
+        return
 
-        # Stop services - this is a simplified version
-        # In a full implementation, we'd track PIDs and kill them
-        for service in services:
-            service_name = service.get("name", "unknown")
-            stop_cmd = service.get("stop_command")
-            if stop_cmd:
-                if isinstance(stop_cmd, str):
-                    import shlex
+    click.echo(f"🛑 Stopping development services...")
 
-                    cmd = shlex.split(stop_cmd)
-                else:
-                    cmd = stop_cmd
-                run_command(cmd, check=False)
-                click.echo(f"  ✅ {service_name} stopped")
+    # Stop services
+    for service in services:
+        service_name = service.get("name", "unknown")
+        stop_cmd = service.get("stop_command")
+        if stop_cmd:
+            if isinstance(stop_cmd, str):
+                import shlex
+
+                cmd = shlex.split(stop_cmd)
             else:
-                click.echo(f"  ⚠️  {service_name}: No stop_command defined")
+                cmd = stop_cmd
+            run_command(cmd, check=False)
+            click.echo(f"  ✅ {service_name} stopped")
+        else:
+            # Try to kill processes by name
+            start_cmd = service.get("start_command", "")
+            if start_cmd:
+                # Extract command name (first word after 'make' or first word)
+                cmd_parts = start_cmd.split()
+                if len(cmd_parts) > 1 and cmd_parts[0] == "make":
+                    # For make commands, try make dev-stop
+                    makefile_path = pathlib.Path("Makefile")
+                    if makefile_path.exists():
+                        makefile_content = makefile_path.read_text()
+                        if "dev-stop:" in makefile_content:
+                            run_command(["make", "dev-stop"], check=False)
+                            click.echo(f"  ✅ {service_name} stopped (via make dev-stop)")
+                            continue
+                # Try pkill for other commands
+                proc_name = cmd_parts[0] if cmd_parts else ""
+                if proc_name:
+                    run_command(["pkill", "-f", proc_name], check=False)
+                    click.echo(f"  ✅ {service_name} stopped (via pkill)")
 
-        click.echo("✅ Development environment stopped.")
-    except Exception as e:
-        click.echo(f"❌ Failed to stop services: {e}")
-        logger.error(f"Error stopping services: {e}", exc_info=True)
+    click.echo("✅ Development environment stopped.")
 
 
 @run.command()
@@ -1237,45 +1420,41 @@ def restart(ctx):
 @click.pass_context
 def logs(ctx):
     """Show logs for development services."""
-    if not BUILD.exists() and not BUILD_CURRENT.exists():
-        click.echo(
-            f"❌ {BUILD} not found. Run 'vibe build' first to set up the build system."
-        )
+    services = _get_services()
+
+    if not services:
+        click.echo("⚠️  Could not determine services to show logs for.")
         return
 
-    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    click.echo("📋 Development service logs:")
+    click.echo("-" * 60)
 
-    try:
-        import yaml
-
-        build_config = yaml.safe_load(build_file.read_text())
-        if not build_config:
-            build_config = {}
-
-        services = build_config.get("services", [])
-        if not services:
-            click.echo("⚠️  No services defined in build configuration.")
-            return
-
-        click.echo("📋 Development service logs:")
-        click.echo("-" * 60)
-
-        for service in services:
-            service_name = service.get("name", "unknown")
-            log_file = service.get("log_file")
-            if log_file:
-                log_path = pathlib.Path(log_file)
-                if log_path.exists():
-                    click.echo(f"\n{service_name} ({log_file}):")
-                    click.echo(log_path.read_text()[-2000:])  # Last 2000 chars
-                else:
-                    click.echo(f"\n{service_name}: Log file not found: {log_file}")
+    for service in services:
+        service_name = service.get("name", "unknown")
+        log_file = service.get("log_file")
+        if log_file:
+            log_path = pathlib.Path(log_file)
+            if log_path.exists():
+                click.echo(f"\n{service_name} ({log_file}):")
+                click.echo(log_path.read_text()[-2000:])  # Last 2000 chars
             else:
-                click.echo(f"\n{service_name}: No log_file defined")
-
-    except Exception as e:
-        click.echo(f"❌ Failed to read logs: {e}")
-        logger.error(f"Error reading logs: {e}", exc_info=True)
+                click.echo(f"\n{service_name}: Log file not found: {log_file}")
+        else:
+            # Try to show logs from common locations
+            common_logs = [
+                pathlib.Path("logs") / f"{service_name}.log",
+                pathlib.Path(f"{service_name}.log"),
+                pathlib.Path(".logs") / f"{service_name}.log",
+            ]
+            found = False
+            for log_path in common_logs:
+                if log_path.exists():
+                    click.echo(f"\n{service_name} ({log_path}):")
+                    click.echo(log_path.read_text()[-2000:])
+                    found = True
+                    break
+            if not found:
+                click.echo(f"\n{service_name}: No log file found (check logs/ directory)")
 
 
 @cli.command()
