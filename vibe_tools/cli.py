@@ -1179,7 +1179,9 @@ def devbug(ctx, output):
     import socket
     import datetime
 
-    output_path = pathlib.Path(output) if output else (VIBE_PROJECT_DIR / "devbug-report.json")
+    output_path = (
+        pathlib.Path(output) if output else (VIBE_PROJECT_DIR / "devbug-report.json")
+    )
     ensure_dir(output_path.parent)
 
     click.echo("🔍 Collecting diagnostic data...")
@@ -1188,7 +1190,12 @@ def devbug(ctx, output):
         "timestamp": datetime.datetime.now().isoformat(),
         "project_root": str(pathlib.Path.cwd()),
         "services": {"detected": [], "count": 0},
-        "processes": {"tracked_pids": {}, "tracked_count": 0, "running": {}, "details": {}},
+        "processes": {
+            "tracked_pids": {},
+            "tracked_count": 0,
+            "running": {},
+            "details": {},
+        },
         "ports": {"urls": {}},
         "files": {},
         "commands": {},
@@ -1235,9 +1242,13 @@ def devbug(ctx, output):
             for child_pid in child_pids:
                 try:
                     os.kill(int(child_pid), 0)
-                    pid_status.setdefault("child_pids", []).append({"pid": child_pid, "running": True})
+                    pid_status.setdefault("child_pids", []).append(
+                        {"pid": child_pid, "running": True}
+                    )
                 except (OSError, ValueError):
-                    pid_status.setdefault("child_pids", []).append({"pid": child_pid, "running": False})
+                    pid_status.setdefault("child_pids", []).append(
+                        {"pid": child_pid, "running": False}
+                    )
 
             # Check for process by name
             if process_name:
@@ -1250,7 +1261,10 @@ def devbug(ctx, output):
                         "running": len(found_pids) > 0,
                     }
                 except Exception as e:
-                    pid_status["process_name_search"] = {"name": process_name, "error": str(e)}
+                    pid_status["process_name_search"] = {
+                        "name": process_name,
+                        "error": str(e),
+                    }
 
             diagnostics["processes"][service_name] = {
                 "tracked_info": pid_info,
@@ -1262,7 +1276,16 @@ def devbug(ctx, output):
     # 3. Actual Running Processes
     try:
         # Check for common dev server processes
-        common_processes = ["uvicorn", "python.*manage\\.py", "node", "npm.*dev", "yarn.*dev", "next", "vite", "skaffold"]
+        common_processes = [
+            "uvicorn",
+            "python.*manage\\.py",
+            "node",
+            "npm.*dev",
+            "yarn.*dev",
+            "next",
+            "vite",
+            "skaffold",
+        ]
         for proc_pattern in common_processes:
             try:
                 result = run_command(["pgrep", "-f", proc_pattern], check=False)
@@ -1272,8 +1295,13 @@ def devbug(ctx, output):
                     # Get process details
                     for pid in pids:
                         try:
-                            ps_result = run_command(["ps", "-p", pid, "-o", "pid,command,etime"], check=False)
-                            diagnostics["processes"]["details"][pid] = ps_result[0].strip()
+                            ps_result = run_command(
+                                ["ps", "-p", pid, "-o", "pid,command,etime"],
+                                check=False,
+                            )
+                            diagnostics["processes"]["details"][pid] = ps_result[
+                                0
+                            ].strip()
                         except Exception:
                             pass
             except Exception:
@@ -1294,7 +1322,9 @@ def devbug(ctx, output):
                 # Try to find what's using it
                 try:
                     result = run_command(["lsof", "-i", f":{port}"], check=False)
-                    diagnostics["ports"][str(port)]["lsof"] = result[0].strip() if result[0].strip() else "No output"
+                    diagnostics["ports"][str(port)]["lsof"] = (
+                        result[0].strip() if result[0].strip() else "No output"
+                    )
                 except Exception:
                     pass
     except Exception as e:
@@ -1321,7 +1351,11 @@ def devbug(ctx, output):
                     "content": content[:10000],  # Limit to first 10KB
                 }
             except Exception as e:
-                diagnostics["files"][file_key] = {"exists": True, "path": str(file_path), "error": str(e)}
+                diagnostics["files"][file_key] = {
+                    "exists": True,
+                    "path": str(file_path),
+                    "error": str(e),
+                }
         else:
             diagnostics["files"][file_key] = {"exists": False, "path": str(file_path)}
 
@@ -1346,7 +1380,10 @@ def devbug(ctx, output):
 
     for cmd_name, cmd_parts in test_commands.items():
         if not shutil.which(cmd_parts[0]):
-            diagnostics["commands"][cmd_name] = {"available": False, "error": f"Command '{cmd_parts[0]}' not found in PATH"}
+            diagnostics["commands"][cmd_name] = {
+                "available": False,
+                "error": f"Command '{cmd_parts[0]}' not found in PATH",
+            }
             continue
 
         try:
@@ -1367,9 +1404,12 @@ def devbug(ctx, output):
 
             # Parse dev-start target
             import re
-            dev_start_match = re.search(r"^dev-start:.*", makefile_content, re.MULTILINE)
+
+            dev_start_match = re.search(
+                r"^dev-start:.*", makefile_content, re.MULTILINE
+            )
             if dev_start_match:
-                target_content = makefile_content[dev_start_match.end():]
+                target_content = makefile_content[dev_start_match.end() :]
                 next_target = re.search(r"^\w+:", target_content, re.MULTILINE)
                 if next_target:
                     target_content = target_content[: next_target.start()]
@@ -1377,7 +1417,9 @@ def devbug(ctx, output):
                 diagnostics["files"]["Makefile_analysis"]["dev-start"] = {
                     "content": target_content.strip(),
                     "is_echo_only": all(
-                        line.strip().startswith("@echo") or line.strip().startswith("echo") or line.strip().startswith("#")
+                        line.strip().startswith("@echo")
+                        or line.strip().startswith("echo")
+                        or line.strip().startswith("#")
                         for line in target_content.splitlines()
                         if line.strip()
                     ),
@@ -1385,9 +1427,11 @@ def devbug(ctx, output):
 
             # Check for other common targets
             for target in ["run", "backend-run", "frontend-run", "frontend-dev"]:
-                target_match = re.search(rf"^{target}:.*", makefile_content, re.MULTILINE)
+                target_match = re.search(
+                    rf"^{target}:.*", makefile_content, re.MULTILINE
+                )
                 if target_match:
-                    target_content = makefile_content[target_match.end():]
+                    target_content = makefile_content[target_match.end() :]
                     next_target = re.search(r"^\w+:", target_content, re.MULTILINE)
                     if next_target:
                         target_content = target_content[: next_target.start()]
@@ -1420,7 +1464,9 @@ def devbug(ctx, output):
         click.echo(f"✅ Diagnostic data saved to: {output_path}")
         click.echo(f"   Errors: {len(diagnostics['errors'])}")
         click.echo(f"   Services detected: {diagnostics['services'].get('count', 0)}")
-        click.echo(f"   Tracked PIDs: {diagnostics['processes'].get('tracked_count', 0)}")
+        click.echo(
+            f"   Tracked PIDs: {diagnostics['processes'].get('tracked_count', 0)}"
+        )
     except Exception as e:
         click.echo(f"❌ Failed to write diagnostic data: {e}")
         click.echo(json.dumps(diagnostics, indent=2))
@@ -2398,6 +2444,77 @@ def start(ctx):
                                     click.echo(
                                         f"  🔍 DEBUG: Target content: {target_content[:200]}..."
                                     )
+                                
+                                # Check if target uses background processes (contains & or subshell)
+                                uses_background = "&" in target_content or target_content.strip().startswith("(")
+                                if uses_background:
+                                    if debug:
+                                        click.echo(
+                                            f"  🔍 DEBUG: Target uses background processes, waiting for services to start..."
+                                        )
+                                    # Wait longer for background processes to start
+                                    import time
+                                    time.sleep(2.0)
+                                    
+                                    # Search for actual service processes that should be running
+                                    # Based on the Makefile, look for run-backend and run-frontend targets
+                                    service_pids = {}
+                                    
+                                    # Check for backend process (uvicorn)
+                                    if "run-backend" in target_content or "8000" in target_content:
+                                        try:
+                                            result = run_command(["pgrep", "-f", "uvicorn.*8000"], check=False)
+                                            if result[0].strip():
+                                                uvicorn_pids = result[0].strip().split()
+                                                if uvicorn_pids:
+                                                    service_pids["backend"] = uvicorn_pids[0]
+                                                    if debug:
+                                                        click.echo(f"  🔍 DEBUG: Found uvicorn process: {uvicorn_pids[0]}")
+                                        except Exception:
+                                            pass
+                                    
+                                    # Check for frontend process (vite/npm)
+                                    if "run-frontend" in target_content or "5173" in target_content or "frontend" in target_content.lower():
+                                        try:
+                                            # Try vite first
+                                            result = run_command(["pgrep", "-f", "vite.*5173"], check=False)
+                                            if result[0].strip():
+                                                vite_pids = result[0].strip().split()
+                                                if vite_pids:
+                                                    service_pids["frontend"] = vite_pids[0]
+                                                    if debug:
+                                                        click.echo(f"  🔍 DEBUG: Found vite process: {vite_pids[0]}")
+                                            else:
+                                                # Try npm run dev
+                                                result = run_command(["pgrep", "-f", "npm.*dev.*5173"], check=False)
+                                                if result[0].strip():
+                                                    npm_pids = result[0].strip().split()
+                                                    if npm_pids:
+                                                        service_pids["frontend"] = npm_pids[0]
+                                                        if debug:
+                                                            click.echo(f"  🔍 DEBUG: Found npm dev process: {npm_pids[0]}")
+                                        except Exception:
+                                            pass
+                                    
+                                    # If we found service processes, track them
+                                    if service_pids:
+                                        pids = _load_pids()
+                                        tracked_pids = []
+                                        for service_type, pid in service_pids.items():
+                                            tracked_pids.append(pid)
+                                        
+                                        pids[service_name] = {
+                                            "main_pid": None,  # make process already exited
+                                            "child_pids": tracked_pids,
+                                            "command": start_cmd,
+                                            "background_services": service_pids,
+                                        }
+                                        _save_pids(pids)
+                                        if debug:
+                                            click.echo(f"  🔍 DEBUG: Tracked background service PIDs: {service_pids}")
+                                        click.echo(f"  ✅ {service_name} started (background services: {', '.join(service_pids.keys())})")
+                                        started_count += 1
+                                        continue
 
                                 # Check if target content is a direct command (like "skaffold dev")
                                 # Extract first non-empty, non-comment line
