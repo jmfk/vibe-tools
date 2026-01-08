@@ -25,6 +25,9 @@ class OrderedGroup(click.Group):
             "implement",
             "build",
             "run",
+            "start",
+            "stop",
+            "run-status",
             "infra",
             "testing",
             "cicd",
@@ -1443,6 +1446,82 @@ def restart(ctx):
 
 @run.command()
 @click.pass_context
+def status(ctx):
+    """Check status of development services."""
+    services = _get_services()
+
+    if not services:
+        click.echo("⚠️  Could not determine services to check.")
+        click.echo("   Ensure build.yaml, build.md, or Makefile exists with dev startup commands.")
+        return
+
+    click.echo("📊 Development environment status:")
+    click.echo("-" * 60)
+
+    running_count = 0
+    stopped_count = 0
+
+    for service in services:
+        service_name = service.get("name", "unknown")
+        start_cmd = service.get("start_command", "")
+
+        # Try to determine if service is running
+        is_running = False
+        pid = None
+
+        if start_cmd:
+            # Extract command name for process checking
+            import shlex
+
+            cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+
+            if cmd_parts:
+                # For make commands, check if the process is running
+                if cmd_parts[0] == "make" and len(cmd_parts) > 1:
+                    # Check for processes that might be started by make
+                    target = cmd_parts[1]
+                    # Try to find related processes
+                    try:
+                        result = run_command(
+                            ["pgrep", "-f", target], check=False
+                        )
+                        if result[0].strip():
+                            is_running = True
+                            pid = result[0].strip().split()[0] if result[0].strip() else None
+                    except Exception:
+                        pass
+                else:
+                    # For direct commands, check if process is running
+                    proc_name = cmd_parts[0]
+                    try:
+                        result = run_command(
+                            ["pgrep", "-f", proc_name], check=False
+                        )
+                        if result[0].strip():
+                            is_running = True
+                            pids = result[0].strip().split()
+                            pid = pids[0] if pids else None
+                    except Exception:
+                        pass
+
+        status_icon = "🟢" if is_running else "🔴"
+        status_text = f"Running (PID: {pid})" if is_running else "Stopped"
+        click.echo(f"{status_icon} {service_name:<20} {status_text}")
+
+        if is_running:
+            running_count += 1
+        else:
+            stopped_count += 1
+
+    click.echo("-" * 60)
+    click.echo(f"Total: {len(services)} service(s) - {running_count} running, {stopped_count} stopped")
+
+    if stopped_count > 0:
+        click.echo("\n💡 Run 'vibe start' or 'vibe run start' to start stopped services.")
+
+
+@run.command()
+@click.pass_context
 def logs(ctx):
     """Show logs for development services."""
     services = _get_services()
@@ -1480,6 +1559,27 @@ def logs(ctx):
                     break
             if not found:
                 click.echo(f"\n{service_name}: No log file found (check logs/ directory)")
+
+
+@cli.command()
+@click.pass_context
+def start(ctx):
+    """Shortcut for 'vibe run start' - Start all development services."""
+    ctx.invoke(run.get_command(ctx, "start"))
+
+
+@cli.command()
+@click.pass_context
+def stop(ctx):
+    """Shortcut for 'vibe run stop' - Stop all development services."""
+    ctx.invoke(run.get_command(ctx, "stop"))
+
+
+@cli.command(name="run-status")
+@click.pass_context
+def run_status(ctx):
+    """Shortcut for 'vibe run status' - Check status of development services."""
+    ctx.invoke(run.get_command(ctx, "status"))
 
 
 @cli.command()
