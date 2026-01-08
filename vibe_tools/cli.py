@@ -1233,6 +1233,61 @@ def _extract_services_from_build_config(build_config):
     return []
 
 
+def _parse_makefile_target(target_name, makefile_content, visited=None):
+    """Parse a Makefile target to extract the commands it runs."""
+    import re
+    
+    if visited is None:
+        visited = set()
+    
+    # Prevent infinite recursion
+    if target_name in visited:
+        return []
+    visited.add(target_name)
+    
+    # Find the target definition - match until next target or end of file
+    target_pattern = rf"^{target_name}:\s*(.*?)(?=^[a-zA-Z_][a-zA-Z0-9_-]*:|^$)"
+    match = re.search(target_pattern, makefile_content, re.MULTILINE | re.DOTALL)
+    if not match:
+        return []
+    
+    target_content = match.group(1)
+    commands = []
+    
+    # Extract commands (lines starting with tab)
+    for line in target_content.splitlines():
+        # Check if line starts with tab (actual command) or @ (silent command)
+        if not (line.startswith("\t") or line.startswith("\t@")):
+            continue
+        
+        # Remove leading tab and @
+        line = line.lstrip("\t@").strip()
+        
+        # Skip empty lines and comments
+        if not line or line.startswith("#"):
+            continue
+        
+        # Skip echo commands (but keep them for debugging)
+        if line.startswith("echo"):
+            continue
+        
+        # Handle make calls to other targets - recursively parse
+        if line.startswith("make ") or line.startswith("$(MAKE)"):
+            parts = line.split()
+            if len(parts) > 1:
+                called_target = parts[1]
+                # Recursively get commands from called target
+                sub_commands = _parse_makefile_target(called_target, makefile_content, visited.copy())
+                commands.extend(sub_commands)
+            continue
+        
+        # This is an actual command to run
+        if line:
+            commands.append(line)
+    
+    return commands
+
+
 def _extract_services_from_makefile():
     """Extract services by checking Makefile for dev-related targets."""
     makefile_path = pathlib.Path("Makefile")
@@ -1254,6 +1309,34 @@ def _extract_services_from_makefile():
     found_main_target = False
     for target, cmd, service_name in dev_targets:
         if f"{target}:" in makefile_content or f".PHONY: {target}" in makefile_content:
+            # Parse the target to see what it actually does
+            target_commands = _parse_makefile_target(target, makefile_content)
+            
+            # If target just calls other targets or is just echo, try to extract real services
+            if not target_commands or all(c.startswith("@echo") or c.startswith("echo") for c in target_commands):
+                # Try to find backend and frontend targets
+                backend_commands = _parse_makefile_target("backend-run", makefile_content) or _parse_makefile_target("run", makefile_content)
+                frontend_commands = _parse_makefile_target("frontend-run", makefile_content) or _parse_makefile_target("frontend-dev", makefile_content)
+                
+                if backend_commands:
+                    services.append({
+                        "name": "backend",
+                        "start_command": backend_commands[0] if backend_commands else None,
+                        "make_target": "backend-run" if "backend-run:" in makefile_content else "run",
+                    })
+                if frontend_commands:
+                    services.append({
+                        "name": "frontend",
+                        "start_command": frontend_commands[0] if frontend_commands else None,
+                        "make_target": "frontend-run" if "frontend-run:" in makefile_content else "frontend-dev",
+                    })
+                
+                # If we found individual services, use those instead
+                if backend_commands or frontend_commands:
+                    found_main_target = True
+                    break
+            
+            # If target has actual commands, use it as-is
             services.append(
                 {
                     "name": service_name,
@@ -1597,8 +1680,184 @@ def start(ctx):
 
             # Run in background
             try:
-                # For make commands, we need to let them run and check for child processes
+                # For make commands, check if we should extract and run individual services
                 if cmd_parts[0] == "make" and len(cmd_parts) > 1:
+                    target = cmd_parts[1] if len(cmd_parts) > 1 else ""
+                    
+                    # Check if service has a make_target (means we parsed it from a composite target)
+                    make_target = service.get("make_target")
+                    if make_target:
+                        # Use the extracted command directly instead of make
+                        actual_cmd = service.get("start_command")
+                        if actual_cmd:
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Using extracted command from Makefile: {actual_cmd}")
+                            # Update cmd_parts to use the actual command
+                            import shlex
+                            cmd_parts = shlex.split(actual_cmd) if isinstance(actual_cmd, str) else actual_cmd
+                            # Fall through to direct command execution below
+                        else:
+                            # Fall back to make target
+                            cmd_parts = ["make", make_target]
+                    
+                    # Check if this is a composite target that just calls other targets
+                    makefile_path = pathlib.Path("Makefile")
+                    if makefile_path.exists() and not make_target:
+                        makefile_content = makefile_path.read_text()
+                        target_commands = _parse_makefile_target(target, makefile_content)
+                        
+                        # If target is just echo or calls other make targets, extract and run them
+                        is_composite = target_commands and all(
+                            c.startswith("@echo") or c.startswith("echo") or c.startswith("make ") 
+                            for c in target_commands
+                        )
+                        
+                        # Also check if target has no real commands (just echo)
+                        if is_composite or not target_commands:
+                            if debug:
+                                click.echo(f"  🔍 DEBUG: Target '{target}' is composite or empty, extracting individual services...")
+                                click.echo(f"  🔍 DEBUG: Target commands: {target_commands}")
+                            
+                            # Try to find and start backend and frontend separately
+                            backend_cmd = None
+                            frontend_cmd = None
+                            
+                            # Look for backend-run or run target
+                            for check_target in ["backend-run", "run", "backend", "start-backend"]:
+                                if f"{check_target}:" in makefile_content:
+                                    backend_commands = _parse_makefile_target(check_target, makefile_content)
+                                    if debug:
+                                        click.echo(f"  🔍 DEBUG: Found {check_target} target with commands: {backend_commands}")
+                                    if backend_commands:
+                                        # Find first non-echo command
+                                        for cmd in backend_commands:
+                                            if not (cmd.startswith("echo") or cmd.startswith("@echo")):
+                                                backend_cmd = cmd
+                                                break
+                                        if backend_cmd:
+                                            break
+                            
+                            # Look for frontend-run or frontend-dev target
+                            for check_target in ["frontend-run", "frontend-dev", "frontend", "start-frontend"]:
+                                if f"{check_target}:" in makefile_content:
+                                    frontend_commands = _parse_makefile_target(check_target, makefile_content)
+                                    if debug:
+                                        click.echo(f"  🔍 DEBUG: Found {check_target} target with commands: {frontend_commands}")
+                                    if frontend_commands:
+                                        # Find first non-echo command
+                                        for cmd in frontend_commands:
+                                            if not (cmd.startswith("echo") or cmd.startswith("@echo")):
+                                                frontend_cmd = cmd
+                                                break
+                                        if frontend_cmd:
+                                            break
+                            
+                            # Also check if dev-start mentions specific ports and infer commands
+                            if not backend_cmd and not frontend_cmd:
+                                # Look for port mentions in the target content to infer what should run
+                                if "8000" in target_content or "backend" in target_content.lower():
+                                    # Try common backend commands
+                                    for cmd_pattern in ["uvicorn", "python.*manage.py", "python.*runserver", "flask run"]:
+                                        if cmd_pattern in makefile_content.lower():
+                                            # Try to find the actual command
+                                            import re
+                                            cmd_match = re.search(rf"({cmd_pattern}[^\n]*)", makefile_content, re.IGNORECASE)
+                                            if cmd_match:
+                                                backend_cmd = cmd_match.group(1).strip()
+                                                break
+                                
+                                if "5173" in target_content or "3000" in target_content or "frontend" in target_content.lower():
+                                    # Try common frontend commands
+                                    for cmd_pattern in ["npm.*dev", "yarn.*dev", "vite", "next dev"]:
+                                        if cmd_pattern in makefile_content.lower():
+                                            import re
+                                            cmd_match = re.search(rf"({cmd_pattern}[^\n]*)", makefile_content, re.IGNORECASE)
+                                            if cmd_match:
+                                                frontend_cmd = cmd_match.group(1).strip()
+                                                break
+                            
+                            # Start backend and frontend separately
+                            if backend_cmd:
+                                if debug:
+                                    click.echo(f"  🔍 DEBUG: Starting backend with: {backend_cmd}")
+                                import shlex
+                                backend_parts = shlex.split(backend_cmd)
+                                # Check port for backend
+                                backend_port = _extract_port_from_command(backend_cmd) or 8000
+                                if not _is_port_available(backend_port):
+                                    new_port = _find_available_port(backend_port)
+                                    if new_port:
+                                        click.echo(f"  ⚠️  Backend port {backend_port} in use, using {new_port}")
+                                        backend_cmd = _replace_port_in_command(backend_cmd, backend_port, new_port)
+                                        backend_port = new_port
+                                        backend_parts = shlex.split(backend_cmd)
+                                
+                                env = os.environ.copy()
+                                if backend_port != 8000:
+                                    env["PORT"] = str(backend_port)
+                                    env["BACKEND_PORT"] = str(backend_port)
+                                
+                                backend_process = subprocess.Popen(
+                                    backend_parts,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    cwd=service.get("working_directory", "."),
+                                    env=env,
+                                )
+                                pids = _load_pids()
+                                pids["backend"] = {
+                                    "main_pid": backend_process.pid,
+                                    "command": backend_cmd,
+                                }
+                                _save_pids(pids)
+                                used_ports["backend"] = backend_port
+                                service_urls["backend"] = f"http://localhost:{backend_port}"
+                                click.echo(f"  ✅ backend started (PID: {backend_process.pid}, Port: {backend_port})")
+                                started_count += 1
+                            
+                            if frontend_cmd:
+                                if debug:
+                                    click.echo(f"  🔍 DEBUG: Starting frontend with: {frontend_cmd}")
+                                import shlex
+                                frontend_parts = shlex.split(frontend_cmd)
+                                # Check port for frontend
+                                frontend_port = _extract_port_from_command(frontend_cmd) or 5173
+                                if not _is_port_available(frontend_port):
+                                    new_port = _find_available_port(frontend_port)
+                                    if new_port:
+                                        click.echo(f"  ⚠️  Frontend port {frontend_port} in use, using {new_port}")
+                                        frontend_cmd = _replace_port_in_command(frontend_cmd, frontend_port, new_port)
+                                        frontend_port = new_port
+                                        frontend_parts = shlex.split(frontend_cmd)
+                                
+                                env = os.environ.copy()
+                                if frontend_port != 5173:
+                                    env["PORT"] = str(frontend_port)
+                                    env["FRONTEND_PORT"] = str(frontend_port)
+                                
+                                frontend_process = subprocess.Popen(
+                                    frontend_parts,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    cwd=service.get("working_directory", "."),
+                                    env=env,
+                                )
+                                pids = _load_pids()
+                                pids["frontend"] = {
+                                    "main_pid": frontend_process.pid,
+                                    "command": frontend_cmd,
+                                }
+                                _save_pids(pids)
+                                used_ports["frontend"] = frontend_port
+                                service_urls["frontend"] = f"http://localhost:{frontend_port}"
+                                click.echo(f"  ✅ frontend started (PID: {frontend_process.pid}, Port: {frontend_port})")
+                                started_count += 1
+                            
+                            # Skip the composite make command if we started individual services
+                            if backend_cmd or frontend_cmd:
+                                continue
+                    
+                    # Regular make command execution
                     if debug:
                         click.echo(f"  🔍 DEBUG: Running make command: {' '.join(cmd_parts)}")
                     # Run make in background, but don't wait for it
