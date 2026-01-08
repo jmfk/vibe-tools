@@ -12,6 +12,8 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     ARCHITECTURE,
     ARCHITECTURE_SPEC,
+    BUILD,
+    BUILD_CURRENT,
     CICD_SPEC,
     INFRA_SPEC,
     PRD_DIR,
@@ -588,6 +590,32 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         iterations=max_debug_iterations,
                     ):
                         passed_gates = False
+
+            # Build step: verify build system works and software can start in dev environment
+            if passed_gates and BUILD.exists():
+                logger.info("🔨 Running Build Verification...")
+                build_loop = RalphLoop(
+                    name="Build",
+                    desired_file=BUILD,
+                    current_file=BUILD_CURRENT,
+                    agent=agent,
+                    stream=stream,
+                )
+                build_loop.instructions = [
+                    "Ensure the build system successfully builds all application parts.",
+                    "Verify that the built software can be started in the development environment.",
+                    "Check that all build dependencies are correctly configured.",
+                    "Ensure build artifacts are generated correctly.",
+                ]
+                if not build_loop.run():
+                    log_issue(
+                        "implement_build",
+                        i,
+                        max_impl_iterations,
+                        "Build verification failed",
+                    )
+                    logger.error("❌ Build verification failed.")
+                    passed_gates = False
 
             if passed_gates and review:
                 logger.info("🔎 Running Agentic Review...")
