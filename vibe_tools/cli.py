@@ -971,10 +971,114 @@ def build(ctx):
                 return
             click.echo("✅ Build specification normalized successfully.")
         else:
+            # Neither exists - generate from architecture.md
+            if not ARCHITECTURE_SPEC.exists():
+                click.echo(
+                    f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
+                )
+                return
+
             click.echo(
-                f"❌ {BUILD_SPEC} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
+                "📋 Build specification not found. Generating from architecture.md..."
             )
-            return
+            agent = ctx.obj.get("agent", "cursor-agent")
+            stream = ctx.obj.get("stream", False)
+
+            # Read architecture.md
+            arch_content = ARCHITECTURE_SPEC.read_text()
+
+            # Generate build.md using agent
+            prompt = f"""You are generating a build specification based on the architecture.
+
+Analyze the architecture and create a comprehensive build.md file that specifies:
+- How to build each application part (backend, frontend, etc.)
+- Build dependencies and requirements
+- Build commands and scripts
+- Development environment setup
+- How to start the application in development mode
+- Build artifacts and outputs
+- Services that need to be started for development
+
+The architecture specification is in specs/architecture.md:
+
+{arch_content}
+
+Generate a complete build.md file following this structure:
+
+# Build Specification
+
+## 1. Overview
+[High-level overview of the build system and how different parts are built]
+
+## 2. Build Components
+[For each component (backend, frontend, etc.), specify:
+- Build commands
+- Dependencies
+- Build outputs/artifacts
+- How to verify the build succeeded]
+
+## 3. Development Environment
+[How to set up and start the development environment:
+- Services that need to be running
+- Environment variables
+- Startup commands
+- How to verify everything is running]
+
+## 4. Build System
+[Build system configuration:
+- Makefile targets
+- Build scripts
+- Docker builds (if applicable)
+- CI/CD build steps]
+
+Output ONLY the markdown content for build.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+"""
+
+            cmd = get_agent_command(agent, prompt)
+            output, code = run_agent(cmd, stream=stream)
+
+            if code != 0 or not output.strip():
+                click.echo(
+                    "❌ Failed to generate build.md. Please create it manually using 'vibe architect'."
+                )
+                return
+
+            # Clean output (remove code fences if present)
+            clean_output = output.strip()
+            if clean_output.startswith("```"):
+                lines = clean_output.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_output = "\n".join(lines).strip()
+
+            # Write build.md
+            ensure_dir(BUILD_SPEC.parent)
+            BUILD_SPEC.write_text(clean_output)
+            click.echo(f"✅ Generated {BUILD_SPEC}")
+            click.echo(
+                "📝 Please review the generated build.md, then it will be normalized automatically."
+            )
+
+            # Auto-normalize
+            click.echo("🔄 Normalizing build.md...")
+            from vibe_tools.normalize import normalize_prd
+
+            normalize_prd(
+                agent=agent,
+                input_file=str(BUILD_SPEC),
+                auto_overwrite=True,
+                caffeinate=ctx.obj.get("caffeinate", False),
+                stream=stream,
+            )
+
+            if not BUILD.exists():
+                click.echo(
+                    "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
+                )
+                return
+            click.echo("✅ Build specification normalized successfully.")
 
     from vibe_tools.ralph import RalphLoop
 
