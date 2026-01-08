@@ -1625,8 +1625,8 @@ def _test_build_services(debug=False):
                 try:
                     process = subprocess.Popen(
                         cmd_parts,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
                         cwd=service.get("working_directory", "."),
                     )
                     started_processes.append((service_name, process))
@@ -1646,8 +1646,8 @@ def _test_build_services(debug=False):
                     try:
                         process = subprocess.Popen(
                             cmd_parts,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
                             cwd=service.get("working_directory", "."),
                         )
                         started_processes.append((service_name, process))
@@ -1669,27 +1669,31 @@ def _test_build_services(debug=False):
                         f"Service {service_name}: Command '{cmd_parts[0]}' does not exist in PATH"
                     )
 
+        # Save PIDs for tracking
+        if started_processes:
+            tracked_pids = _load_pids()
+            service_dict = {s.get("name", "unknown"): s for s in services}
+            for service_name, process in started_processes:
+                if process.poll() is None:  # Still running
+                    service_info = service_dict.get(service_name, {})
+                    tracked_pids[service_name] = {
+                        "main_pid": process.pid,
+                        "command": service_info.get("start_command", ""),
+                    }
+            _save_pids(tracked_pids)
+
         # Wait for services to start
         logger.debug("Waiting 3 seconds for services to start...")
         time.sleep(3)
 
-        # Check for immediate failures in started processes
+        # Check for immediate failures in started processes (non-blocking)
         for service_name, process in started_processes:
             if process.poll() is not None:
-                # Process has already terminated
-                stdout, stderr = process.communicate()
+                # Process has already terminated - skip communicate() to avoid blocking
                 exit_code = process.returncode
                 logger.warning(
                     f"  ✗ Service {service_name} exited immediately with code {exit_code}"
                 )
-                if stderr:
-                    logger.debug(
-                        f"Service {service_name} stderr: {stderr.decode('utf-8', errors='ignore')}"
-                    )
-                if stdout:
-                    logger.debug(
-                        f"Service {service_name} stdout: {stdout.decode('utf-8', errors='ignore')}"
-                    )
 
         # Check if services are actually running
         logger.info("  🔍 Checking service status...")
@@ -1697,8 +1701,23 @@ def _test_build_services(debug=False):
         running_count = 0
         failed_services = []
 
+        # First check the directly started processes
+        for service_name, process in started_processes:
+            if process.poll() is None:  # Still running
+                is_running = True
+                running_count += 1
+                logger.info(f"  ✓ {service_name} is running - started process (PID: {process.pid})")
+                logger.debug(
+                    f"Service {service_name} verified running via started process PID {process.pid}"
+                )
+
+        # Then check tracked PIDs for services not in started_processes
         for service in services:
             service_name = service.get("name", "unknown")
+            # Skip if we already found it running
+            if any(name == service_name for name, _ in started_processes):
+                continue
+                
             pid_info = tracked_pids.get(service_name, {})
             is_running = False
             running_reason = None
