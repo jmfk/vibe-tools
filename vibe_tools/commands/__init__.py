@@ -22,29 +22,23 @@ def register_all_commands(cli):
         monitor,
         normalize,
         pm,
-        prd,
         ps,
-        ralph,
+        quick_fix,
         remember,
         rerun,
-        review_prd,
         setup,
         stats,
         status,
         test_fix,
         testing,
-        write_prd,
     )
 
     init.register_init(cli)
-    ralph.register_ralph(cli)
     test_fix.register_test_fix(cli)
+    quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)
     normalize.register_normalize(cli)
     monitor.register_monitor(cli)
-    review_prd.register_review_prd(cli)
-    prd.register_prd(cli)
-    write_prd.register_write_prd(cli)
     history.register_history(cli)
     status.register_status(cli)
     docs.register_docs(cli)

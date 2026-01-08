@@ -1,0 +1,31 @@
+You are a code fixer. Your task is to fix the issues described below.
+
+CONTEXT:
+{context}
+
+ERRORS/ISSUES:
+{errors}
+
+FILES TO FIX:
+{files}
+
+INSTRUCTIONS:
+1. Analyze the errors and identify what needs to be fixed.
+2. Fix all the issues in the provided files.
+3. Return the complete fixed file contents in the following format:
+
+<file path="path/to/file1">
+[complete file content here]
+</file>
+
+<file path="path/to/file2">
+[complete file content here]
+</file>
+
+4. Ensure all fixes are correct and complete.
+5. Do not include any explanations or markdown formatting - only the file tags with content.
+
+IMPORTANT:
+- Return ONLY the file tags with content, nothing else.
+- Each file must be wrapped in <file path="...">...</file> tags.
+- Include the complete file content, not just the changed parts.
