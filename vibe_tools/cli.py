@@ -1147,6 +1147,13 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Ensure the Makefile has comprehensive targets for: build, test, dev-start, dev-stop, dev-restart, lint, and coverage.",
         "If using Kubernetes, ensure Skaffold and Helm configurations are properly set up.",
         "Extract and document all services/components that need to run in development mode with their startup commands.",
+        "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
+        "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
+        "If skaffold is configured, test that 'skaffold dev' can start without configuration errors.",
+        "Ensure Makefile dev-start target actually starts services (runs commands like uvicorn, npm run dev, etc.), not just echo messages.",
+        "If dev-start only echoes or calls other targets, extract the actual service commands and update dev-start to run them directly or in background.",
+        "Test that 'make dev-start' actually starts the development services and they remain running.",
+        "After fixing configurations, verify services can start: run the startup commands and confirm processes are running and ports are listening.",
     ]
 
     if loop.run():
