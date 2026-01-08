@@ -1160,6 +1160,12 @@ def run(ctx):
     pass
 
 
+def _command_exists(cmd):
+    """Check if a command exists in PATH."""
+    import shutil
+    return shutil.which(cmd) is not None
+
+
 def _extract_services_from_build_config(build_config):
     """Extract services from build.yaml config."""
     services = build_config.get("services", [])
@@ -1177,28 +1183,30 @@ def _extract_services_from_makefile():
     services = []
     makefile_content = makefile_path.read_text()
 
-    # Check for common dev start targets
+    # Check for common dev start targets (in priority order)
     dev_targets = [
-        ("dev", "make dev"),
-        ("dev-start", "make dev-start"),
-        ("run", "make run"),
-        ("start", "make start"),
-        ("up", "make up"),
+        ("dev-start", "make dev-start", "development"),
+        ("dev", "make dev", "development"),
+        ("run", "make run", "application"),
+        ("start", "make start", "application"),
+        ("up", "make up", "services"),
     ]
 
-    for target, cmd in dev_targets:
+    found_main_target = False
+    for target, cmd, service_name in dev_targets:
         if f"{target}:" in makefile_content or f".PHONY: {target}" in makefile_content:
             services.append(
                 {
-                    "name": f"dev-{target}",
+                    "name": service_name,
                     "start_command": cmd,
                     "stop_command": "make dev-stop" if "dev-stop:" in makefile_content else None,
                 }
             )
+            found_main_target = True
             break  # Use the first found
 
-    # Check for Skaffold
-    if "skaffold" in makefile_content.lower() or pathlib.Path("skaffold.yaml").exists():
+    # Check for Skaffold (only if skaffold is installed and config exists)
+    if pathlib.Path("skaffold.yaml").exists() and _command_exists("skaffold"):
         services.append(
             {
                 "name": "skaffold-dev",
@@ -1207,21 +1215,22 @@ def _extract_services_from_makefile():
             }
         )
 
-    # Check for backend and frontend separately
-    if "run:" in makefile_content or "dev:" in makefile_content:
-        # Try to find backend and frontend run commands
+    # Check for backend and frontend separately (only if main target not found)
+    if not found_main_target:
         if "frontend-run:" in makefile_content or "frontend-dev:" in makefile_content:
+            cmd = "make frontend-run" if "frontend-run:" in makefile_content else "make frontend-dev"
             services.append(
                 {
                     "name": "frontend",
-                    "start_command": "make frontend-run" if "frontend-run:" in makefile_content else "make frontend-dev",
+                    "start_command": cmd,
                 }
             )
-        if "run:" in makefile_content and "uvicorn" in makefile_content.lower():
+        if "run:" in makefile_content or "backend-run:" in makefile_content:
+            cmd = "make backend-run" if "backend-run:" in makefile_content else "make run"
             services.append(
                 {
                     "name": "backend",
-                    "start_command": "make run",
+                    "start_command": cmd,
                 }
             )
 
@@ -1322,6 +1331,7 @@ def start(ctx):
 
     click.echo(f"🚀 Starting {len(services)} development service(s)...")
 
+    started_count = 0
     for service in services:
         service_name = service.get("name", "unknown")
         start_cmd = service.get("start_command")
@@ -1330,25 +1340,40 @@ def start(ctx):
             if isinstance(start_cmd, str):
                 import shlex
 
-                cmd = shlex.split(start_cmd)
+                cmd_parts = shlex.split(start_cmd)
             else:
-                cmd = start_cmd
+                cmd_parts = start_cmd
+
+            # Check if command exists (for non-make commands)
+            if cmd_parts and cmd_parts[0] != "make" and not _command_exists(cmd_parts[0]):
+                click.echo(
+                    f"  ⚠️  {service_name}: Command '{cmd_parts[0]}' not found. Skipping."
+                )
+                continue
 
             # Run in background
             try:
                 process = subprocess.Popen(
-                    cmd,
+                    cmd_parts,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     cwd=service.get("working_directory", "."),
                 )
                 click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                started_count += 1
+            except FileNotFoundError as e:
+                click.echo(
+                    f"  ❌ {service_name} failed to start: Command not found. Is '{cmd_parts[0] if cmd_parts else 'unknown'}' installed?"
+                )
             except Exception as e:
                 click.echo(f"  ❌ {service_name} failed to start: {e}")
         else:
             click.echo(f"  ⚠️  {service_name}: No start_command defined")
 
-    click.echo("✅ Development environment started.")
+    if started_count > 0:
+        click.echo(f"✅ Started {started_count} service(s).")
+    else:
+        click.echo("⚠️  No services were started.")
 
 
 @run.command()
