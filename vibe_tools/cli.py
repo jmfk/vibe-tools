@@ -1093,31 +1093,41 @@ Output ONLY the markdown content for build.md, starting with the title and endin
 
     if success:
         click.echo("\nNext Steps:")
-        
+
         # Check what services are available and provide appropriate instructions
         services = _get_services()
         has_skaffold = any(
-            s.get("name") == "skaffold-dev" or "skaffold" in s.get("start_command", "").lower()
+            s.get("name") == "skaffold-dev"
+            or "skaffold" in s.get("start_command", "").lower()
             for s in services
         )
         has_make_dev = any(
-            "make dev" in s.get("start_command", "") or "make dev-start" in s.get("start_command", "")
+            "make dev" in s.get("start_command", "")
+            or "make dev-start" in s.get("start_command", "")
             for s in services
         )
-        
+
         if has_skaffold:
             click.echo("[ ] Start development with Skaffold:")
             click.echo("     skaffold dev")
-            click.echo("     (This will build and deploy to your local Kubernetes cluster)")
+            click.echo(
+                "     (This will build and deploy to your local Kubernetes cluster)"
+            )
         elif has_make_dev:
             make_cmd = next(
-                (s.get("start_command") for s in services if "make dev" in s.get("start_command", "")),
-                "make dev-start"
+                (
+                    s.get("start_command")
+                    for s in services
+                    if "make dev" in s.get("start_command", "")
+                ),
+                "make dev-start",
             )
             click.echo(f"[ ] Start development services:")
             click.echo(f"     {make_cmd}")
         else:
-            click.echo("[ ] Start development services using the commands from your Makefile")
+            click.echo(
+                "[ ] Start development services using the commands from your Makefile"
+            )
     else:
         click.echo("❌ Build system reconciliation failed.")
 
@@ -1730,7 +1740,9 @@ def _test_build_services(debug=False):
             if process.poll() is None:  # Still running
                 is_running = True
                 running_count += 1
-                logger.info(f"  ✓ {service_name} is running - started process (PID: {process.pid})")
+                logger.info(
+                    f"  ✓ {service_name} is running - started process (PID: {process.pid})"
+                )
                 logger.debug(
                     f"Service {service_name} verified running via started process PID {process.pid}"
                 )
@@ -1741,7 +1753,7 @@ def _test_build_services(debug=False):
             # Skip if we already found it running
             if any(name == service_name for name, _ in started_processes):
                 continue
-                
+
             pid_info = tracked_pids.get(service_name, {})
             is_running = False
             running_reason = None
