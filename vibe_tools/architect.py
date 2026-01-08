@@ -913,3 +913,74 @@ class InteractiveArchitect:
                 click.echo(line)
 
         click.echo("")
+
+
+def generate_infrastructure_spec(
+    agent: str = "cursor-agent",
+    caffeinate: bool = False,
+):
+    """Generate infrastructure.md from PRDs in the specs directory."""
+    from vibe_tools.utils import (
+        SPECS_DIR,
+        get_agent_command,
+    )
+
+    ensure_dir(INFRA_SPEC.parent)
+
+    # Collect all PRD files
+    prd_files = []
+    if SPECS_DIR.exists():
+        for prd_file in sorted(SPECS_DIR.glob("prd_*.md")):
+            prd_files.append(prd_file)
+
+    if not prd_files:
+        click.echo("❌ No PRD files found in specs/. Please create PRDs first.")
+        return
+
+    # Read PRD contents
+    prd_contents = []
+    for prd_file in prd_files:
+        try:
+            prd_contents.append(f"--- {prd_file.name} ---\n{prd_file.read_text()}\n")
+        except Exception as e:
+            logger.warning(f"Error reading {prd_file}: {e}")
+
+    prd_text = "\n".join(prd_contents)
+
+    # Build prompt
+    prompt = f"""Generate a comprehensive infrastructure specification (infrastructure.md) based on the following PRDs.
+
+The infrastructure specification should cover:
+- Overview of the infrastructure architecture
+- Primary services (databases, caches, message queues, storage, etc.)
+- Deployment environments (development, staging, production)
+- Networking and security considerations
+- Scaling and monitoring strategies
+- Integration with development tools
+
+PRDs:
+{prd_text}
+
+Generate the infrastructure.md content in markdown format. Output ONLY the markdown content, no explanations or code blocks."""
+
+    click.echo("⏳ Generating infrastructure specification...")
+    command = get_agent_command(agent, prompt)
+    output, exit_code = run_agent(command, caffeinate=caffeinate, stream=False)
+
+    if exit_code != 0:
+        click.echo("❌ Failed to generate infrastructure specification.")
+        return
+
+    # Extract markdown content (remove any code block markers if present)
+    content = output.strip()
+    if content.startswith("```"):
+        # Remove markdown code block wrapper
+        lines = content.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        content = "\n".join(lines).strip()
+
+    INFRA_SPEC.write_text(content)
+    click.echo(f"✅ Generated {INFRA_SPEC}")
