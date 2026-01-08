@@ -1154,6 +1154,8 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Extract and document all services/components that need to run in development mode with their startup commands.",
         "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
         "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
+        "If skaffold is configured, ensure the 'skaffold' command is installed. If not installed, provide clear installation instructions or install it automatically (e.g., 'brew install skaffold' on macOS).",
+        "If helm charts are present, ensure the 'helm' command is installed. If not installed, provide clear installation instructions or install it automatically (e.g., 'brew install helm' on macOS).",
         "If skaffold is configured, test that 'skaffold dev' can start without configuration errors.",
         "Ensure Makefile dev-start target actually starts services (runs commands like uvicorn, npm run dev, etc.), not just echo messages.",
         "If dev-start only echoes or calls other targets, extract the actual service commands and update dev-start to run them directly or in background.",
@@ -1495,7 +1497,7 @@ def _check_and_install_build_tools():
     import subprocess
 
     required_tools = {}
-    
+
     # Check if skaffold.yaml exists
     skaffold_yaml = pathlib.Path("skaffold.yaml")
     if skaffold_yaml.exists():
@@ -1505,7 +1507,7 @@ def _check_and_install_build_tools():
             "install_cmd_linux": ["curl", "-Lo", "skaffold", "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64", "&&", "sudo", "install", "skaffold", "/usr/local/bin/"],
             "description": "Skaffold (Kubernetes development tool)",
         }
-    
+
     # Check if helm charts exist
     helm_paths = [
         pathlib.Path("deployment/helm"),
@@ -1513,7 +1515,7 @@ def _check_and_install_build_tools():
         pathlib.Path("charts"),
     ]
     has_helm = any(p.exists() for p in helm_paths)
-    
+
     if has_helm:
         required_tools["helm"] = {
             "check_cmd": ["helm", "version"],
@@ -1521,12 +1523,12 @@ def _check_and_install_build_tools():
             "install_cmd_linux": ["curl", "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3", "|", "bash"],
             "description": "Helm (Kubernetes package manager)",
         }
-    
+
     if not required_tools:
         return
-    
+
     click.echo("🔍 Checking for required build tools...")
-    
+
     for tool_name, tool_info in required_tools.items():
         # Check if tool is installed
         try:
@@ -1536,14 +1538,14 @@ def _check_and_install_build_tools():
                 continue
         except Exception:
             pass
-        
+
         # Tool is not installed
         click.echo(f"  ⚠️  {tool_info['description']} is not installed")
-        
+
         # Determine OS and install method
         system = platform.system().lower()
         is_macos = system == "darwin"
-        
+
         if is_macos:
             # Try brew first
             if shutil.which("brew"):
@@ -1569,7 +1571,7 @@ def _check_and_install_build_tools():
                 click.echo("     sudo install skaffold /usr/local/bin/")
             elif tool_name == "helm":
                 click.echo("     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
-        
+
         # Verify installation
         click.echo(f"  🔍 Verifying {tool_name} installation...")
         try:
