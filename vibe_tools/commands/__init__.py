@@ -11,7 +11,6 @@ def register_all_commands(cli):
         demo_data,
         deps,
         deploy,
-        devbug,
         docs,
         history,
         implement,
