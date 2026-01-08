@@ -1173,6 +1173,57 @@ def _command_exists(cmd):
     return shutil.which(cmd) is not None
 
 
+def _is_port_available(port):
+    """Check if a port is available."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            result = s.connect_ex(('localhost', port))
+            return result != 0  # Port is available if connection fails
+    except Exception:
+        return False
+
+
+def _find_available_port(start_port, max_attempts=10):
+    """Find an available port starting from start_port."""
+    for i in range(max_attempts):
+        port = start_port + i
+        if _is_port_available(port):
+            return port
+    return None
+
+
+def _extract_port_from_command(cmd):
+    """Extract port number from a command string."""
+    import re
+    # Look for --port, -p, PORT=, or :port patterns
+    patterns = [
+        r"--port\s+(\d+)",
+        r"-p\s+(\d+)",
+        r"PORT[=:]\s*(\d+)",
+        r":(\d{4,5})",
+        r"port\s*=\s*(\d+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, cmd, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _replace_port_in_command(cmd, old_port, new_port):
+    """Replace port in a command string."""
+    import re
+    # Replace various port patterns
+    cmd = re.sub(rf"--port\s+{old_port}", f"--port {new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(rf"-p\s+{old_port}", f"-p {new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(rf"PORT[=:]\s*{old_port}", f"PORT={new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(rf":{old_port}", f":{new_port}", cmd)
+    cmd = re.sub(rf"port\s*=\s*{old_port}", f"port={new_port}", cmd, flags=re.IGNORECASE)
+    return cmd
+
+
 def _extract_services_from_build_config(build_config):
     """Extract services from build.yaml config."""
     services = build_config.get("services", [])
@@ -1458,6 +1509,9 @@ def start(ctx):
     click.echo(f"🚀 Starting {len(services)} development service(s)...")
 
     started_count = 0
+    used_ports = {}  # Track which ports are actually used
+    service_urls = {}  # Track URLs for each service
+
     for service in services:
         service_name = service.get("name", "unknown")
         start_cmd = service.get("start_command")
@@ -1476,6 +1530,33 @@ def start(ctx):
                     f"  ⚠️  {service_name}: Command '{cmd_parts[0]}' not found. Skipping."
                 )
                 continue
+
+            # Check and handle port conflicts
+            original_port = _extract_port_from_command(start_cmd)
+            actual_port = original_port
+            if original_port:
+                if not _is_port_available(original_port):
+                    click.echo(
+                        f"  ⚠️  {service_name}: Port {original_port} is already in use."
+                    )
+                    new_port = _find_available_port(original_port)
+                    if new_port:
+                        click.echo(
+                            f"  🔄 Retrying with port {new_port}..."
+                        )
+                        start_cmd = _replace_port_in_command(start_cmd, original_port, new_port)
+                        actual_port = new_port
+                        # Update cmd_parts if it's not a make command
+                        if cmd_parts[0] != "make":
+                            cmd_parts = shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+                    else:
+                        click.echo(
+                            f"  ❌ {service_name}: Could not find available port near {original_port}. Skipping."
+                        )
+                        continue
+                else:
+                    if debug:
+                        click.echo(f"  🔍 DEBUG: Port {original_port} is available")
 
             # Run in background
             try:
@@ -1522,6 +1603,13 @@ def start(ctx):
                         if debug:
                             click.echo(f"  🔍 DEBUG: Saved PIDs to tracking file: {pids[service_name]}")
                         click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                        if actual_port:
+                            used_ports[service_name] = actual_port
+                            # Determine service type for URL
+                            if "backend" in service_name.lower() or "api" in service_name.lower():
+                                service_urls[service_name] = f"http://localhost:{actual_port}"
+                            elif "frontend" in service_name.lower():
+                                service_urls[service_name] = f"http://localhost:{actual_port}"
                         started_count += 1
                     else:
                             # Make completed quickly, check what it might have started
@@ -1542,6 +1630,40 @@ def start(ctx):
                                     target_content = makefile_content[match.end():]
                                     if debug:
                                         click.echo(f"  🔍 DEBUG: Target content: {target_content[:200]}...")
+                                    
+                                    # Extract port from Makefile target if not already found
+                                    if not actual_port:
+                                        makefile_port = _extract_port_from_command(target_content)
+                                        if makefile_port:
+                                            if not _is_port_available(makefile_port):
+                                                new_port = _find_available_port(makefile_port)
+                                                if new_port:
+                                                    click.echo(f"  ⚠️  Port {makefile_port} in Makefile is in use, using {new_port} instead")
+                                                    actual_port = new_port
+                                                else:
+                                                    click.echo(f"  ⚠️  Port {makefile_port} in use and no alternative found, using original")
+                                                    actual_port = makefile_port
+                                            else:
+                                                actual_port = makefile_port
+                                        else:
+                                            # Try to infer port from service type
+                                            if proc_name in ["uvicorn", "python"]:
+                                                default_port = 8000
+                                                if _is_port_available(default_port):
+                                                    actual_port = default_port
+                                                else:
+                                                    actual_port = _find_available_port(default_port) or default_port
+                                                    if actual_port != default_port:
+                                                        click.echo(f"  ⚠️  Default backend port {default_port} in use, using {actual_port} instead")
+                                            elif proc_name in ["node", "npm", "next", "vite"]:
+                                                default_port = 3000 if proc_name != "vite" else 5173
+                                                if _is_port_available(default_port):
+                                                    actual_port = default_port
+                                                else:
+                                                    actual_port = _find_available_port(default_port) or default_port
+                                                    if actual_port != default_port:
+                                                        click.echo(f"  ⚠️  Default frontend port {default_port} in use, using {actual_port} instead")
+                                    
                                     # Look for common commands in the target
                                     for proc_name in ["uvicorn", "python", "node", "npm", "yarn", "next", "vite"]:
                                         if proc_name in target_content.lower():
@@ -1557,6 +1679,13 @@ def start(ctx):
                                                 click.echo(f"  🔍 DEBUG: Detected process name: {proc_name}")
                                                 click.echo(f"  🔍 DEBUG: Saved to tracking file: {pids[service_name]}")
                                             click.echo(f"  ✅ {service_name} started (checking for {proc_name} processes)")
+                                            # Store port and URL
+                                            if actual_port:
+                                                used_ports[service_name] = actual_port
+                                                if "backend" in service_name.lower() or "api" in service_name.lower() or proc_name in ["uvicorn", "python"]:
+                                                    service_urls[service_name] = f"http://localhost:{actual_port}"
+                                                elif "frontend" in service_name.lower() or proc_name in ["node", "npm", "next", "vite"]:
+                                                    service_urls[service_name] = f"http://localhost:{actual_port}"
                                             started_count += 1
                                             break
                                     if debug and started_count == 0:
@@ -1586,6 +1715,13 @@ def start(ctx):
                     if debug:
                         click.echo(f"  🔍 DEBUG: Saved PID {process.pid} to tracking file")
                     click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                    if actual_port:
+                        used_ports[service_name] = actual_port
+                        # Determine service type for URL
+                        if "backend" in service_name.lower() or "api" in service_name.lower():
+                            service_urls[service_name] = f"http://localhost:{actual_port}"
+                        elif "frontend" in service_name.lower():
+                            service_urls[service_name] = f"http://localhost:{actual_port}"
                     started_count += 1
             except FileNotFoundError as e:
                 click.echo(
@@ -1598,6 +1734,27 @@ def start(ctx):
 
     if started_count > 0:
         click.echo(f"✅ Started {started_count} service(s).")
+        
+        # Show ports and URLs
+        if used_ports or service_urls:
+            click.echo("\n🌐 Service Ports and URLs:")
+            click.echo("-" * 60)
+            
+            # Show ports
+            if used_ports:
+                for service_name, port in used_ports.items():
+                    click.echo(f"  {service_name:<20} Port: {port}")
+            
+            # Show URLs
+            if service_urls:
+                click.echo("\n  URLs:")
+                for service_name, url in service_urls.items():
+                    service_type = "Backend" if "backend" in service_name.lower() or "api" in service_name.lower() else "Frontend"
+                    click.echo(f"    {service_type:<10} {url}")
+                    # Add API docs for backend on common ports
+                    if service_type == "Backend" and (":8000" in url or ":8080" in url):
+                        base_url = url.rstrip("/")
+                        click.echo(f"    {'API Docs':<10} {base_url}/docs")
     else:
         click.echo("⚠️  No services were started.")
 
