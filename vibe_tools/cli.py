@@ -87,6 +87,7 @@ from vibe_tools.utils import (
     INFRA,
     INFRA_CURRENT,
     INFRA_SPEC,
+    LOGS_DIR,
     PRD_DIR,
     TESTING_CONFIG,
     TESTING_CURRENT,
@@ -805,7 +806,7 @@ def implement(ctx):
         click.echo("❌ Implementation failed.")
 
 
-@cli.command()
+@cli.group(invoke_without_command=True)
 @click.option(
     "--force",
     "-f",
@@ -814,6 +815,12 @@ def implement(ctx):
 )
 @click.pass_context
 def build(ctx, force):
+    """Build system reconciliation. Ensures the build system builds all parts and they can start."""
+    if ctx.invoked_subcommand is None:
+        _build_reconciliation(ctx, force)
+
+
+def _build_reconciliation(ctx, force):
     """Build system reconciliation. Ensures the build system builds all parts and they can start."""
     state = load_project_state()
     missing = check_dependencies("implement", state)
@@ -889,7 +896,23 @@ IMPORTANT REQUIREMENTS:
    - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
    - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
 
-3. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
+   - **Log Aggregation**: Set up a log aggregation service (e.g., Loki, ELK stack, or simpler file-based logging)
+   - **Log Storage**: Configure log storage location (local files, centralized service, or cloud logging)
+   - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
+   - **Log Management**: Add Makefile targets for log management:
+     * `make logs` - View all application logs
+     * `make logs-backend` - View backend logs
+     * `make logs-frontend` - View frontend logs
+     * `make logs-follow` - Follow logs in real-time
+     * `make logs-clean` - Clean old log files
+   - **Service Integration**: Ensure all services output logs in a structured format (JSON recommended)
+   - **Development Logging**: Configure development environment to output logs to both console and log files
+   - **Log Levels**: Document log level configuration (DEBUG, INFO, WARNING, ERROR)
+   - If using Docker/Kubernetes: Configure log drivers and log collection
+   - If using Skaffold: Include logging configuration in skaffold.yaml
+
+4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
 
 The architecture specification is in specs/architecture.md:
 
@@ -920,7 +943,16 @@ Generate a complete build.md file following this structure:
 ### 3.3 Startup Commands
 [Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
 
-### 3.4 Verification
+### 3.4 Logging
+[Comprehensive logging solution setup:
+- Log aggregation service and configuration
+- Log storage location and retention policies
+- How to view logs (commands and tools)
+- Log format and structure
+- Log level configuration
+- Integration with services]
+
+### 3.5 Verification
 [How to verify the development environment is running correctly]
 
 ## 4. Build System
@@ -933,7 +965,8 @@ Generate a complete build.md file following this structure:
 - Lint targets: lint, lint-backend, lint-frontend
 - Coverage targets: coverage, coverage-backend, coverage-frontend
 - Clean targets: clean, clean-backend, clean-frontend
-- Install targets: install, install-backend, install-frontend]
+- Install targets: install, install-backend, install-frontend
+- Log targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean]
 
 ### 4.2 Container Orchestration
 [If using Kubernetes:
@@ -1026,7 +1059,12 @@ Output ONLY the markdown content for build.md, starting with the title and endin
         "Ensure build artifacts are generated correctly.",
         "Test that the application starts successfully after building.",
         "Ensure the Makefile has comprehensive targets for: build, test, dev-start, dev-stop, dev-restart, lint, and coverage.",
+        "Ensure the Makefile includes logging targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean.",
+        "Set up a logging solution: configure log aggregation, storage, and viewing tools.",
+        "Ensure all services output structured logs (JSON format recommended) to both console and log files.",
+        "Configure log levels (DEBUG, INFO, WARNING, ERROR) appropriately for development environment.",
         "If using Kubernetes, ensure Skaffold and Helm configurations are properly set up.",
+        "If using Docker/Kubernetes, configure log drivers and log collection in the deployment configuration.",
         "Extract and document all services/components that need to run in development mode with their startup commands.",
         "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
         "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
@@ -1130,6 +1168,117 @@ Output ONLY the markdown content for build.md, starting with the title and endin
             )
     else:
         click.echo("❌ Build system reconciliation failed.")
+
+
+@build.command(name="debug")
+@click.pass_context
+def build_debug(ctx):
+    """Debug the build scaffolding process."""
+    click.echo("🔍 Debugging build scaffolding...")
+    
+    # Check build files
+    click.echo("\n📋 Build Files Status:")
+    click.echo(f"  BUILD_SPEC ({BUILD_SPEC}): {'✅ exists' if BUILD_SPEC.exists() else '❌ missing'}")
+    click.echo(f"  BUILD ({BUILD}): {'✅ exists' if BUILD.exists() else '❌ missing'}")
+    click.echo(f"  BUILD_CURRENT ({BUILD_CURRENT}): {'✅ exists' if BUILD_CURRENT.exists() else '❌ missing'}")
+    click.echo(f"  ARCHITECTURE_SPEC ({ARCHITECTURE_SPEC}): {'✅ exists' if ARCHITECTURE_SPEC.exists() else '❌ missing'}")
+    
+    # Check scaffolding-related files
+    click.echo("\n🏗️  Scaffolding Files:")
+    skaffold_yaml = pathlib.Path("skaffold.yaml")
+    click.echo(f"  skaffold.yaml: {'✅ exists' if skaffold_yaml.exists() else '❌ missing'}")
+    
+    makefile = pathlib.Path("Makefile")
+    click.echo(f"  Makefile: {'✅ exists' if makefile.exists() else '❌ missing'}")
+    
+    # Check logging setup
+    click.echo("\n📊 Logging Solution:")
+    logs_dir = LOGS_DIR
+    click.echo(f"  Logs directory ({logs_dir}): {'✅ exists' if logs_dir.exists() else '❌ missing'}")
+    
+    if makefile.exists():
+        try:
+            makefile_content = makefile.read_text()
+            has_logs_target = "logs:" in makefile_content or "logs-backend:" in makefile_content or "logs-frontend:" in makefile_content
+            click.echo(f"  Makefile log targets: {'✅ found' if has_logs_target else '❌ missing'}")
+            
+            # Check for specific log targets
+            log_targets = []
+            if "logs:" in makefile_content:
+                log_targets.append("logs")
+            if "logs-backend:" in makefile_content:
+                log_targets.append("logs-backend")
+            if "logs-frontend:" in makefile_content:
+                log_targets.append("logs-frontend")
+            if "logs-follow:" in makefile_content:
+                log_targets.append("logs-follow")
+            if "logs-clean:" in makefile_content:
+                log_targets.append("logs-clean")
+            
+            if log_targets:
+                click.echo(f"    Found targets: {', '.join(log_targets)}")
+        except Exception as e:
+            click.echo(f"  ⚠️  Error checking Makefile: {e}")
+    else:
+        click.echo("  ⚠️  Makefile not found, cannot check log targets")
+    
+    # Check for log aggregation services
+    if BUILD.exists() or BUILD_CURRENT.exists():
+        try:
+            build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+            build_config = yaml.safe_load(build_file.read_text())
+            if build_config:
+                services = build_config.get("services", [])
+                log_services = [s for s in services if "log" in s.get("name", "").lower() or "loki" in s.get("name", "").lower() or "elastic" in s.get("name", "").lower()]
+                if log_services:
+                    click.echo(f"  Log aggregation services: ✅ found {len(log_services)}")
+                    for svc in log_services:
+                        click.echo(f"    - {svc.get('name', 'unknown')}")
+                else:
+                    click.echo("  Log aggregation services: ⚠️  none detected")
+        except Exception as e:
+            click.echo(f"  ⚠️  Error checking build config: {e}")
+    
+    # Check build tools
+    click.echo("\n🔧 Build Tools:")
+    _check_and_install_build_tools()
+    
+    # Show services if build.yaml exists
+    if BUILD.exists() or BUILD_CURRENT.exists():
+        click.echo("\n📦 Detected Services:")
+        try:
+            services = _get_services()
+            if services:
+                for i, service in enumerate(services, 1):
+                    click.echo(f"  {i}. {service.get('name', 'unknown')}")
+                    click.echo(f"     Command: {service.get('start_command', 'N/A')}")
+                    if service.get('port'):
+                        click.echo(f"     Port: {service.get('port')}")
+                    if service.get('url'):
+                        click.echo(f"     URL: {service.get('url')}")
+            else:
+                click.echo("  No services detected")
+        except Exception as e:
+            click.echo(f"  ⚠️  Error detecting services: {e}")
+    
+    # Show build.md content if it exists
+    if BUILD_SPEC.exists():
+        click.echo("\n📄 Build Specification Preview (first 20 lines):")
+        try:
+            content = BUILD_SPEC.read_text()
+            lines = content.splitlines()[:20]
+            for line in lines:
+                click.echo(f"  {line}")
+            if len(content.splitlines()) > 20:
+                click.echo(f"  ... ({len(content.splitlines()) - 20} more lines)")
+            
+            # Check if logging section exists
+            if "logging" in content.lower() or "log" in content.lower():
+                click.echo("\n  ✅ Logging section found in build specification")
+            else:
+                click.echo("\n  ⚠️  No logging section found in build specification")
+        except Exception as e:
+            click.echo(f"  ⚠️  Error reading build.md: {e}")
 
 
 @cli.command()
