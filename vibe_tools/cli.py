@@ -1410,30 +1410,34 @@ def start(ctx):
                     import time
                     time.sleep(0.5)
                     # Try to find child processes
+                    child_pids = []
                     try:
                         # Look for processes started by this make command
                         result = run_command(
                             ["pgrep", "-P", str(process.pid)], check=False
                         )
                         child_pids = result[0].strip().split() if result[0].strip() else []
+                    except Exception:
+                        pass
+                    
+                    if debug:
+                        click.echo(f"  🔍 DEBUG: Child PIDs found: {child_pids}")
+                        click.echo(f"  🔍 DEBUG: Make process still running: {process.poll() is None}")
+                    # Also check if make is still running or if it spawned processes
+                    if process.poll() is None or child_pids:
+                        # Store the make PID and any child PIDs
+                        pids = _load_pids()
+                        pids[service_name] = {
+                            "main_pid": process.pid,
+                            "child_pids": child_pids,
+                            "command": start_cmd,
+                        }
+                        _save_pids(pids)
                         if debug:
-                            click.echo(f"  🔍 DEBUG: Child PIDs found: {child_pids}")
-                            click.echo(f"  🔍 DEBUG: Make process still running: {process.poll() is None}")
-                        # Also check if make is still running or if it spawned processes
-                        if process.poll() is None or child_pids:
-                            # Store the make PID and any child PIDs
-                            pids = _load_pids()
-                            pids[service_name] = {
-                                "main_pid": process.pid,
-                                "child_pids": child_pids,
-                                "command": start_cmd,
-                            }
-                            _save_pids(pids)
-                            if debug:
-                                click.echo(f"  🔍 DEBUG: Saved PIDs to tracking file: {pids[service_name]}")
-                            click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
-                            started_count += 1
-                        else:
+                            click.echo(f"  🔍 DEBUG: Saved PIDs to tracking file: {pids[service_name]}")
+                        click.echo(f"  ✅ {service_name} started (PID: {process.pid})")
+                        started_count += 1
+                    else:
                             # Make completed quickly, check what it might have started
                             # Look for common dev server processes
                             target = cmd_parts[1] if len(cmd_parts) > 1 else ""
