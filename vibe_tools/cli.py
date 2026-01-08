@@ -1127,6 +1127,9 @@ Output ONLY the markdown content for build.md, starting with the title and endin
                 return
             click.echo("✅ Build specification normalized successfully.")
 
+    # Check for and install required build tools
+    _check_and_install_build_tools()
+
     from vibe_tools.ralph import RalphLoop
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -1484,6 +1487,100 @@ def run(ctx, debug):
     """Manage development environment: start, stop, restart, and view logs."""
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
+
+
+def _check_and_install_build_tools():
+    """Check for required build tools (skaffold, helm) and install if missing."""
+    import platform
+    import subprocess
+
+    required_tools = {}
+    
+    # Check if skaffold.yaml exists
+    skaffold_yaml = pathlib.Path("skaffold.yaml")
+    if skaffold_yaml.exists():
+        required_tools["skaffold"] = {
+            "check_cmd": ["skaffold", "version"],
+            "install_cmd_brew": ["brew", "install", "skaffold"],
+            "install_cmd_linux": ["curl", "-Lo", "skaffold", "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64", "&&", "sudo", "install", "skaffold", "/usr/local/bin/"],
+            "description": "Skaffold (Kubernetes development tool)",
+        }
+    
+    # Check if helm charts exist
+    helm_paths = [
+        pathlib.Path("deployment/helm"),
+        pathlib.Path("helm"),
+        pathlib.Path("charts"),
+    ]
+    has_helm = any(p.exists() for p in helm_paths)
+    
+    if has_helm:
+        required_tools["helm"] = {
+            "check_cmd": ["helm", "version"],
+            "install_cmd_brew": ["brew", "install", "helm"],
+            "install_cmd_linux": ["curl", "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3", "|", "bash"],
+            "description": "Helm (Kubernetes package manager)",
+        }
+    
+    if not required_tools:
+        return
+    
+    click.echo("🔍 Checking for required build tools...")
+    
+    for tool_name, tool_info in required_tools.items():
+        # Check if tool is installed
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_info['description']} is installed")
+                continue
+        except Exception:
+            pass
+        
+        # Tool is not installed
+        click.echo(f"  ⚠️  {tool_info['description']} is not installed")
+        
+        # Determine OS and install method
+        system = platform.system().lower()
+        is_macos = system == "darwin"
+        
+        if is_macos:
+            # Try brew first
+            if shutil.which("brew"):
+                click.echo(f"  📦 Installing {tool_name} using Homebrew...")
+                try:
+                    install_cmd = tool_info["install_cmd_brew"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo(f"  ✅ {tool_name} installed successfully")
+                        continue
+                    else:
+                        click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+                except Exception as e:
+                    click.echo(f"  ⚠️  Installation error: {e}")
+            else:
+                click.echo(f"  💡 Install {tool_name} manually:")
+                click.echo(f"     brew install {tool_name}")
+        else:
+            # Linux - provide manual instructions
+            click.echo(f"  💡 Install {tool_name} manually:")
+            if tool_name == "skaffold":
+                click.echo("     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64")
+                click.echo("     sudo install skaffold /usr/local/bin/")
+            elif tool_name == "helm":
+                click.echo("     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+        
+        # Verify installation
+        click.echo(f"  🔍 Verifying {tool_name} installation...")
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_name} is now available")
+            else:
+                click.echo(f"  ⚠️  {tool_name} installation verification failed")
+                click.echo(f"     Please install it manually and run 'vibe build' again")
+        except Exception:
+            click.echo(f"  ⚠️  Could not verify {tool_name} installation")
 
 
 def _command_exists(cmd):
@@ -2446,7 +2543,10 @@ def start(ctx):
                                     )
 
                                 # Check if target uses background processes (contains & or subshell)
-                                uses_background = "&" in target_content or target_content.strip().startswith("(")
+                                uses_background = (
+                                    "&" in target_content
+                                    or target_content.strip().startswith("(")
+                                )
                                 if uses_background:
                                     if debug:
                                         click.echo(
@@ -2454,6 +2554,7 @@ def start(ctx):
                                         )
                                     # Wait longer for background processes to start
                                     import time
+
                                     time.sleep(2.0)
 
                                     # Search for actual service processes that should be running
@@ -2461,38 +2562,66 @@ def start(ctx):
                                     service_pids = {}
 
                                     # Check for backend process (uvicorn)
-                                    if "run-backend" in target_content or "8000" in target_content:
+                                    if (
+                                        "run-backend" in target_content
+                                        or "8000" in target_content
+                                    ):
                                         try:
-                                            result = run_command(["pgrep", "-f", "uvicorn.*8000"], check=False)
+                                            result = run_command(
+                                                ["pgrep", "-f", "uvicorn.*8000"],
+                                                check=False,
+                                            )
                                             if result[0].strip():
                                                 uvicorn_pids = result[0].strip().split()
                                                 if uvicorn_pids:
-                                                    service_pids["backend"] = uvicorn_pids[0]
+                                                    service_pids["backend"] = (
+                                                        uvicorn_pids[0]
+                                                    )
                                                     if debug:
-                                                        click.echo(f"  🔍 DEBUG: Found uvicorn process: {uvicorn_pids[0]}")
+                                                        click.echo(
+                                                            f"  🔍 DEBUG: Found uvicorn process: {uvicorn_pids[0]}"
+                                                        )
                                         except Exception:
                                             pass
 
                                     # Check for frontend process (vite/npm)
-                                    if "run-frontend" in target_content or "5173" in target_content or "frontend" in target_content.lower():
+                                    if (
+                                        "run-frontend" in target_content
+                                        or "5173" in target_content
+                                        or "frontend" in target_content.lower()
+                                    ):
                                         try:
                                             # Try vite first
-                                            result = run_command(["pgrep", "-f", "vite.*5173"], check=False)
+                                            result = run_command(
+                                                ["pgrep", "-f", "vite.*5173"],
+                                                check=False,
+                                            )
                                             if result[0].strip():
                                                 vite_pids = result[0].strip().split()
                                                 if vite_pids:
-                                                    service_pids["frontend"] = vite_pids[0]
+                                                    service_pids["frontend"] = (
+                                                        vite_pids[0]
+                                                    )
                                                     if debug:
-                                                        click.echo(f"  🔍 DEBUG: Found vite process: {vite_pids[0]}")
+                                                        click.echo(
+                                                            f"  🔍 DEBUG: Found vite process: {vite_pids[0]}"
+                                                        )
                                             else:
                                                 # Try npm run dev
-                                                result = run_command(["pgrep", "-f", "npm.*dev.*5173"], check=False)
+                                                result = run_command(
+                                                    ["pgrep", "-f", "npm.*dev.*5173"],
+                                                    check=False,
+                                                )
                                                 if result[0].strip():
                                                     npm_pids = result[0].strip().split()
                                                     if npm_pids:
-                                                        service_pids["frontend"] = npm_pids[0]
+                                                        service_pids["frontend"] = (
+                                                            npm_pids[0]
+                                                        )
                                                         if debug:
-                                                            click.echo(f"  🔍 DEBUG: Found npm dev process: {npm_pids[0]}")
+                                                            click.echo(
+                                                                f"  🔍 DEBUG: Found npm dev process: {npm_pids[0]}"
+                                                            )
                                         except Exception:
                                             pass
 
@@ -2511,8 +2640,12 @@ def start(ctx):
                                         }
                                         _save_pids(pids)
                                         if debug:
-                                            click.echo(f"  🔍 DEBUG: Tracked background service PIDs: {service_pids}")
-                                        click.echo(f"  ✅ {service_name} started (background services: {', '.join(service_pids.keys())})")
+                                            click.echo(
+                                                f"  🔍 DEBUG: Tracked background service PIDs: {service_pids}"
+                                            )
+                                        click.echo(
+                                            f"  ✅ {service_name} started (background services: {', '.join(service_pids.keys())})"
+                                        )
                                         started_count += 1
                                         continue
 
@@ -2980,27 +3113,10 @@ def status(ctx):
         if pid_info:
             main_pid = pid_info.get("main_pid")
             child_pids = pid_info.get("child_pids", [])
-            background_services = pid_info.get("background_services", {})
             process_name = pid_info.get("process_name")
 
-            # Check background services first (these are the actual service processes)
-            if background_services:
-                if debug:
-                    click.echo(f"  🔍 DEBUG: Checking background services: {background_services}")
-                for service_type, bg_pid in background_services.items():
-                    try:
-                        _, code = run_command(["kill", "-0", str(bg_pid)], check=False)
-                        if code == 0:
-                            is_running = True
-                            pid = str(bg_pid)
-                            if debug:
-                                click.echo(f"  🔍 DEBUG: Background service {service_type} (PID {bg_pid}) is running")
-                            break
-                    except Exception:
-                        pass
-
-            # Check main PID if it exists and we haven't found a running process yet
-            if not is_running and main_pid:
+            # Check main PID if it exists
+            if main_pid:
                 if debug:
                     click.echo(f"  🔍 DEBUG: Checking main PID {main_pid}")
                 # Check if process is still running (kill -0 just checks, doesn't kill)
