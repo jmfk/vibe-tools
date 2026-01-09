@@ -14,9 +14,11 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     ARCHITECTURE,
     ARCHITECTURE_SPEC,
+    BACKLOG_DIR,
     BUILD,
     BUILD_CURRENT,
     CICD_SPEC,
+    HISTORY_DIR,
     INFRA_SPEC,
     PRD_DIR,
     TESTING_SPEC,
@@ -809,6 +811,16 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             # Mark in completed_prds
             if plan_id not in state.get("completed_prds", []):
                 state["completed_prds"].append(plan_id)
+
+            # Move file to history if it's in backlog
+            if plan_file_path.parent == BACKLOG_DIR:
+                target_path = HISTORY_DIR / plan_file_path.name
+                if not target_path.exists():
+                    logger.info(f"📦 Moving {plan_file_path.name} to history.")
+                    import shutil
+                    shutil.move(str(plan_file_path), str(target_path))
+                    # Update the path in state if it was moved
+                    state["plans"][plan_id]["file"] = str(target_path)
 
             save_project_state(state)
 

@@ -25,6 +25,74 @@ class SyncInfo:
     sync_hash: str
 
 @dataclass
+class IssueBody:
+    summary: str = ""
+    reproduction_steps: str = ""
+    expected_behavior: str = ""
+    actual_behavior: str = ""
+    evidence: str = ""
+    acceptance_criteria: str = ""
+    investigation_notes: str = ""
+    solution_notes: str = ""
+
+    def to_markdown(self) -> str:
+        sections = []
+        if self.summary:
+            sections.append(f"## Summary\n{self.summary}")
+        if self.reproduction_steps:
+            sections.append(f"## Reproduction Steps\n{self.reproduction_steps}")
+        if self.expected_behavior:
+            sections.append(f"## Expected Behavior\n{self.expected_behavior}")
+        if self.actual_behavior:
+            sections.append(f"## Actual Behavior\n{self.actual_behavior}")
+        if self.evidence:
+            sections.append(f"## Evidence\n{self.evidence}")
+        if self.acceptance_criteria:
+            sections.append(f"## Acceptance Criteria\n{self.acceptance_criteria}")
+        if self.investigation_notes:
+            sections.append(f"## Investigation Notes\n{self.investigation_notes}")
+        if self.solution_notes:
+            sections.append(f"## Solution Notes\n{self.solution_notes}")
+        return "\n\n".join(sections)
+
+    @classmethod
+    def from_markdown(cls, text: str) -> "IssueBody":
+        sections = {
+            "Summary": "",
+            "Reproduction Steps": "",
+            "Expected Behavior": "",
+            "Actual Behavior": "",
+            "Evidence": "",
+            "Acceptance Criteria": "",
+            "Investigation Notes": "",
+            "Solution Notes": ""
+        }
+        
+        current_section = None
+        lines = text.splitlines()
+        
+        for line in lines:
+            if line.startswith("## "):
+                title = line[3:].strip()
+                if title in sections:
+                    current_section = title
+                    continue
+            
+            if current_section:
+                sections[current_section] = (sections[current_section] + "\n" + line).strip()
+        
+        return cls(
+            summary=sections["Summary"],
+            reproduction_steps=sections["Reproduction Steps"],
+            expected_behavior=sections["Expected Behavior"],
+            actual_behavior=sections["Actual Behavior"],
+            evidence=sections["Evidence"],
+            acceptance_criteria=sections["Acceptance Criteria"],
+            investigation_notes=sections["Investigation Notes"],
+            solution_notes=sections["Solution Notes"]
+        )
+
+@dataclass
 class Issue:
     id: str
     title: str
@@ -33,7 +101,7 @@ class Issue:
     service: str
     created_at: str
     updated_at: str
-    body: str
+    body: IssueBody
     github: Optional[GitHubInfo] = None
     sync: Optional[SyncInfo] = None
     comments: str = ""
@@ -56,9 +124,9 @@ class Issue:
 
     def to_markdown(self) -> str:
         frontmatter = self.to_dict()
-        # Ensure correct order of fields in YAML
         yaml_content = yaml.dump(frontmatter, sort_keys=False, default_flow_style=False)
-        content = f"---\n{yaml_content}---\n\n{self.body}"
+        body_text = self.body.to_markdown()
+        content = f"---\n{yaml_content}---\n\n{body_text}"
         if self.comments:
             content = content.rstrip() + f"\n\n## External Comments (GitHub)\n{self.comments}"
         return content
@@ -75,11 +143,11 @@ class Issue:
         frontmatter = yaml.safe_load(parts[1])
         rest = parts[2].strip()
         
-        body = rest
         comments = ""
+        body_text = rest
         if "## External Comments (GitHub)" in rest:
-            body, comments = rest.split("## External Comments (GitHub)", 1)
-            body = body.strip()
+            body_text, comments = rest.split("## External Comments (GitHub)", 1)
+            body_text = body_text.strip()
             comments = comments.strip()
         
         github_data = frontmatter.get("github")
@@ -96,7 +164,7 @@ class Issue:
             service=frontmatter["service"],
             created_at=frontmatter["created_at"],
             updated_at=frontmatter["updated_at"],
-            body=body,
+            body=IssueBody.from_markdown(body_text),
             comments=comments,
             github=github_info,
             sync=sync_info
@@ -109,7 +177,7 @@ def get_issue_hash(issue: Issue) -> str:
         "status": issue.status,
         "severity": issue.severity,
         "service": issue.service,
-        "body": issue.body
+        "body": asdict(issue.body)
     }
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
@@ -190,37 +258,21 @@ def generate_issue_id() -> str:
             
     return f"{prefix}{today_count + 1:03d}"
 
-def get_issue_body_template(
-    summary: str = "",
-    repro: str = "",
-    expected: str = "",
-    actual: str = "",
-    evidence: str = "",
-    acceptance: str = "",
-    investigation: str = "",
-    solution: str = ""
-) -> str:
-    return f"""## Summary
-{summary}
-
-## Reproduction Steps
-{repro}
-
-## Expected Behavior
-{expected}
-
-## Actual Behavior
-{actual}
-
-## Evidence
-{evidence}
-
-## Acceptance Criteria
-{acceptance}
-
-## Investigation Notes
-{investigation}
-
-## Solution Notes
-{solution}
-"""
+STATUS_MAPPING = {
+    "backlog": {
+        "github_state": "open",
+        "label": []
+    },
+    "in_progress": {
+        "github_state": "open",
+        "label": ["in-progress"]
+    },
+    "blocked": {
+        "github_state": "open",
+        "label": ["blocked"]
+    },
+    "done": {
+        "github_state": "closed",
+        "label": ["resolved"]
+    }
+}

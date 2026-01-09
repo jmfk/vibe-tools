@@ -17,7 +17,7 @@ def register_implement(cli):
             return
 
         if not collect_prd_files():
-            click.echo("❌ No machine-readable PRD YAMLs found in project/prds/.")
+            click.echo("❌ No machine-readable PRD YAMLs found in product/prds/backlog/.")
             click.echo(
                 "   Run 'vibe pm' to refine specs and 'vibe normalize' to generate them."
             )

@@ -18,8 +18,14 @@ import yaml
 from dotenv import find_dotenv, load_dotenv, set_key
 
 VIBE_PROJECT_DIR = pathlib.Path("project")
+PRODUCT_DIR = pathlib.Path("product")
 
-PRD_DIR = VIBE_PROJECT_DIR / "prds"
+PRD_DIR = PRODUCT_DIR / "prds"
+INBOX_DIR = PRD_DIR / "inbox"
+BACKLOG_DIR = PRD_DIR / "backlog"
+HISTORY_DIR = PRD_DIR / "history"
+TRASH_DIR = PRD_DIR / "trash"
+
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
 LOGS_DIR = VIBE_PROJECT_DIR / "logs"
@@ -53,6 +59,35 @@ PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
 PM_SESSION_FILE = VIBE_PROJECT_DIR / "pm-session.json"
 SPECS_DIR = pathlib.Path("specs")
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
+
+
+def open_in_editor(file_path: pathlib.Path):
+    """Opens a file in the configured editor (Cursor, Typora, VS Code, etc.)."""
+    config = load_config()
+    editor = config.get("editor", "cursor")  # Default to cursor
+
+    if editor == "cursor":
+        cmd = ["cursor", str(file_path)]
+    elif editor == "typora":
+        cmd = ["open", "-a", "Typora", str(file_path)]
+    elif editor == "code":
+        cmd = ["code", str(file_path)]
+    elif editor == "vim":
+        cmd = ["vim", str(file_path)]
+    else:
+        # Fallback to system open
+        if sys.platform == "darwin":
+            cmd = ["open", str(file_path)]
+        elif sys.platform == "win32":
+            cmd = ["start", str(file_path)]
+        else:
+            cmd = ["xdg-open", str(file_path)]
+
+    logger.info(f"Opening {file_path} in {editor}...")
+    try:
+        subprocess.Popen(cmd)
+    except Exception as e:
+        logger.error(f"Failed to open {file_path} in {editor}: {e}")
 
 
 def log_issue(loop_name: str, iteration: int, max_iterations: int, description: str):
@@ -97,7 +132,11 @@ def ensure_project_structure():
     VIBE_PROJECT_DIR.mkdir(exist_ok=True)
     LOGS_DIR.mkdir(exist_ok=True)
     COSTS_DIR.mkdir(exist_ok=True)
-    PRD_DIR.mkdir(exist_ok=True)
+    PRD_DIR.mkdir(exist_ok=True, parents=True)
+    INBOX_DIR.mkdir(exist_ok=True)
+    BACKLOG_DIR.mkdir(exist_ok=True)
+    HISTORY_DIR.mkdir(exist_ok=True)
+    TRASH_DIR.mkdir(exist_ok=True)
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
 
@@ -1200,8 +1239,8 @@ def sync_env_file():
 
 
 def collect_prd_files():
-    """Returns all PRD files in PRD_DIR starting with prd_."""
-    return sorted(list(PRD_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
+    """Returns all PRD files in BACKLOG_DIR starting with prd_."""
+    return sorted(list(BACKLOG_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
 
 
 def collect_all_prd_info() -> List[Dict[str, Any]]:
