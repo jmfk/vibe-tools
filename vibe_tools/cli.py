@@ -828,7 +828,9 @@ def _build_reconciliation(ctx, force):
     # Check if build.yaml exists - if not, scaffolding needs to be done first
     if not BUILD.exists():
         click.echo("❌ Build configuration not found.")
-        click.echo("   Please run 'vibe-setup scaffold' first to generate build scaffolding.")
+        click.echo(
+            "   Please run 'vibe-setup scaffold' first to generate build scaffolding."
+        )
         return
 
     # Check if build.yaml and build-current.yaml are identical (skip if so, unless forced)
@@ -839,10 +841,10 @@ def _build_reconciliation(ctx, force):
             return
 
     click.echo("\n--- Building Application ---")
-    
+
     # Run actual build commands from Makefile or build.yaml
     click.echo("Running build commands...")
-    
+
     # Try to run make build if Makefile exists
     makefile = pathlib.Path("Makefile")
     if makefile.exists():
@@ -875,12 +877,13 @@ def _build_reconciliation(ctx, force):
 
     if test_success:
         click.echo("✅ Build complete and application verified working.")
-        
+
         # Copy BUILD to BUILD_CURRENT to mark as successful
         if BUILD.exists():
             import shutil
+
             shutil.copy(BUILD, BUILD_CURRENT)
-        
+
         success = True
     else:
         click.echo("❌ Application failed to start after build.")
@@ -932,33 +935,49 @@ def _build_reconciliation(ctx, force):
 def build_debug(ctx):
     """Debug the build scaffolding process."""
     click.echo("🔍 Debugging build scaffolding...")
-    
+
     # Check build files
     click.echo("\n📋 Build Files Status:")
-    click.echo(f"  BUILD_SPEC ({BUILD_SPEC}): {'✅ exists' if BUILD_SPEC.exists() else '❌ missing'}")
+    click.echo(
+        f"  BUILD_SPEC ({BUILD_SPEC}): {'✅ exists' if BUILD_SPEC.exists() else '❌ missing'}"
+    )
     click.echo(f"  BUILD ({BUILD}): {'✅ exists' if BUILD.exists() else '❌ missing'}")
-    click.echo(f"  BUILD_CURRENT ({BUILD_CURRENT}): {'✅ exists' if BUILD_CURRENT.exists() else '❌ missing'}")
-    click.echo(f"  ARCHITECTURE_SPEC ({ARCHITECTURE_SPEC}): {'✅ exists' if ARCHITECTURE_SPEC.exists() else '❌ missing'}")
-    
+    click.echo(
+        f"  BUILD_CURRENT ({BUILD_CURRENT}): {'✅ exists' if BUILD_CURRENT.exists() else '❌ missing'}"
+    )
+    click.echo(
+        f"  ARCHITECTURE_SPEC ({ARCHITECTURE_SPEC}): {'✅ exists' if ARCHITECTURE_SPEC.exists() else '❌ missing'}"
+    )
+
     # Check scaffolding-related files
     click.echo("\n🏗️  Scaffolding Files:")
     skaffold_yaml = pathlib.Path("skaffold.yaml")
-    click.echo(f"  skaffold.yaml: {'✅ exists' if skaffold_yaml.exists() else '❌ missing'}")
-    
+    click.echo(
+        f"  skaffold.yaml: {'✅ exists' if skaffold_yaml.exists() else '❌ missing'}"
+    )
+
     makefile = pathlib.Path("Makefile")
     click.echo(f"  Makefile: {'✅ exists' if makefile.exists() else '❌ missing'}")
-    
+
     # Check logging setup
     click.echo("\n📊 Logging Solution:")
     logs_dir = LOGS_DIR
-    click.echo(f"  Logs directory ({logs_dir}): {'✅ exists' if logs_dir.exists() else '❌ missing'}")
-    
+    click.echo(
+        f"  Logs directory ({logs_dir}): {'✅ exists' if logs_dir.exists() else '❌ missing'}"
+    )
+
     if makefile.exists():
         try:
             makefile_content = makefile.read_text()
-            has_logs_target = "logs:" in makefile_content or "logs-backend:" in makefile_content or "logs-frontend:" in makefile_content
-            click.echo(f"  Makefile log targets: {'✅ found' if has_logs_target else '❌ missing'}")
-            
+            has_logs_target = (
+                "logs:" in makefile_content
+                or "logs-backend:" in makefile_content
+                or "logs-frontend:" in makefile_content
+            )
+            click.echo(
+                f"  Makefile log targets: {'✅ found' if has_logs_target else '❌ missing'}"
+            )
+
             # Check for specific log targets
             log_targets = []
             if "logs:" in makefile_content:
@@ -971,14 +990,14 @@ def build_debug(ctx):
                 log_targets.append("logs-follow")
             if "logs-clean:" in makefile_content:
                 log_targets.append("logs-clean")
-            
+
             if log_targets:
                 click.echo(f"    Found targets: {', '.join(log_targets)}")
         except Exception as e:
             click.echo(f"  ⚠️  Error checking Makefile: {e}")
     else:
         click.echo("  ⚠️  Makefile not found, cannot check log targets")
-    
+
     # Check for log aggregation services
     if BUILD.exists() or BUILD_CURRENT.exists():
         try:
@@ -986,20 +1005,28 @@ def build_debug(ctx):
             build_config = yaml.safe_load(build_file.read_text())
             if build_config:
                 services = build_config.get("services", [])
-                log_services = [s for s in services if "log" in s.get("name", "").lower() or "loki" in s.get("name", "").lower() or "elastic" in s.get("name", "").lower()]
+                log_services = [
+                    s
+                    for s in services
+                    if "log" in s.get("name", "").lower()
+                    or "loki" in s.get("name", "").lower()
+                    or "elastic" in s.get("name", "").lower()
+                ]
                 if log_services:
-                    click.echo(f"  Log aggregation services: ✅ found {len(log_services)}")
+                    click.echo(
+                        f"  Log aggregation services: ✅ found {len(log_services)}"
+                    )
                     for svc in log_services:
                         click.echo(f"    - {svc.get('name', 'unknown')}")
                 else:
                     click.echo("  Log aggregation services: ⚠️  none detected")
         except Exception as e:
             click.echo(f"  ⚠️  Error checking build config: {e}")
-    
+
     # Check build tools
     click.echo("\n🔧 Build Tools:")
     _check_and_install_build_tools()
-    
+
     # Show services if build.yaml exists
     if BUILD.exists() or BUILD_CURRENT.exists():
         click.echo("\n📦 Detected Services:")
@@ -1009,15 +1036,15 @@ def build_debug(ctx):
                 for i, service in enumerate(services, 1):
                     click.echo(f"  {i}. {service.get('name', 'unknown')}")
                     click.echo(f"     Command: {service.get('start_command', 'N/A')}")
-                    if service.get('port'):
+                    if service.get("port"):
                         click.echo(f"     Port: {service.get('port')}")
-                    if service.get('url'):
+                    if service.get("url"):
                         click.echo(f"     URL: {service.get('url')}")
             else:
                 click.echo("  No services detected")
         except Exception as e:
             click.echo(f"  ⚠️  Error detecting services: {e}")
-    
+
     # Show build.md content if it exists
     if BUILD_SPEC.exists():
         click.echo("\n📄 Build Specification Preview (first 20 lines):")
@@ -1028,7 +1055,7 @@ def build_debug(ctx):
                 click.echo(f"  {line}")
             if len(content.splitlines()) > 20:
                 click.echo(f"  ... ({len(content.splitlines()) - 20} more lines)")
-            
+
             # Check if logging section exists
             if "logging" in content.lower() or "log" in content.lower():
                 click.echo("\n  ✅ Logging section found in build specification")
@@ -1460,12 +1487,12 @@ def _check_and_install_build_tools():
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
-    
+
     # If skaffold is detected, check and fix kubeconfig API version
     if "skaffold" in required_tools:
         click.echo("🔍 Checking kubeconfig for deprecated API versions...")
         from vibe_tools.utils import fix_kubeconfig_api_version
-        
+
         if fix_kubeconfig_api_version():
             click.echo("  ✅ Updated kubeconfig to use v1beta1 API version")
         else:
@@ -1486,7 +1513,7 @@ def _test_build_services(debug=False):
     if _uses_skaffold(services):
         logger.info("  🔍 Detected skaffold usage, checking kubeconfig...")
         from vibe_tools.utils import fix_kubeconfig_api_version
-        
+
         if fix_kubeconfig_api_version():
             logger.info("  ✅ Updated kubeconfig to use v1beta1 API version")
         else:
