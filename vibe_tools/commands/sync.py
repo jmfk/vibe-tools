@@ -1,7 +1,7 @@
 import click
 import datetime
 import json
-import subprocess
+import os
 from typing import List, Optional
 from vibe_tools.issues import (
     Issue, GitHubInfo, SyncInfo, load_index, save_issue, 
@@ -32,12 +32,36 @@ def get_github_repo():
         
     if "github.com" not in url:
         return None
+    
     # Handle both ssh and https
     if url.startswith("git@github.com:"):
         repo = url.replace("git@github.com:", "").replace(".git", "")
-    else:
+    elif url.startswith("https://github.com/"):
         repo = url.replace("https://github.com/", "").replace(".git", "")
+    else:
+        # Fallback for other formats
+        parts = url.split("github.com/")
+        if len(parts) > 1:
+            repo = parts[1].replace(".git", "")
+        else:
+            return None
     return repo
+
+def fetch_gh_issue_comments(gh_number: int, repo: str) -> str:
+    comments_stdout, _ = run_command(["gh", "issue", "view", str(gh_number), "--repo", repo, "--json", "comments"], check=False)
+    comments_body = ""
+    if comments_stdout:
+        try:
+            comments_data = json.loads(comments_stdout)
+            if comments_data.get("comments"):
+                for comment in comments_data["comments"]:
+                    author = comment["author"]["login"]
+                    body = comment["body"]
+                    created = comment["createdAt"]
+                    comments_body += f"\n### {author} at {created}\n{body}\n"
+        except json.JSONDecodeError:
+            pass
+    return comments_body
 
 def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] = None):
     cmd = ["gh", "issue", "list", "--repo", repo, "--json", "number,title,body,state,labels,updatedAt,url"]
@@ -64,7 +88,6 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
         gh_updated_at = gh_issue["updatedAt"]
         
         if gh_number in gh_to_local:
-            # Update existing local issue
             local_id = gh_to_local[gh_number]
             issue = load_issue_by_id(local_id)
             if not issue:
@@ -79,37 +102,22 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
             if is_local_changed and is_remote_changed:
                 logger.warning(f"Conflict detected for {local_id} (GH#{gh_number}). Marking as blocked.")
                 issue.status = "blocked"
-                issue.body += f"\n\n## CONFLICT\nRemote changes detected on GitHub at {gh_updated_at}. Local changes also exist. Please resolve manually."
+                if "## CONFLICT" not in issue.body:
+                    issue.body += f"\n\n## CONFLICT\nRemote changes detected on GitHub at {gh_updated_at}. Local changes also exist. Please resolve manually."
                 save_issue(issue)
                 continue
 
             if is_remote_changed and not is_local_changed:
                 # Local hasn't changed, safe to update from GH
                 issue.title = gh_issue["title"]
-                
-                # Fetch comments
-                comments_stdout, _ = run_command(["gh", "issue", "view", str(gh_number), "--repo", repo, "--json", "comments"], check=False)
-                comments_body = ""
-                if comments_stdout:
-                    try:
-                        comments_data = json.loads(comments_stdout)
-                        if comments_data.get("comments"):
-                            for comment in comments_data["comments"]:
-                                author = comment["author"]["login"]
-                                body = comment["body"]
-                                created = comment["createdAt"]
-                                comments_body += f"\n### {author} at {created}\n{body}\n"
-                    except json.JSONDecodeError:
-                        pass
-
-                issue.comments = comments_body
+                issue.comments = fetch_gh_issue_comments(gh_number, repo)
                 issue.body = gh_issue["body"]
                 issue.updated_at = gh_updated_at
+                
                 # Map status
                 if gh_issue["state"] == "CLOSED":
                     issue.status = "done"
                 else:
-                    # Try to map labels
                     labels = [l["name"] for l in gh_issue["labels"]]
                     if "in-progress" in labels:
                         issue.status = "in_progress"
@@ -129,7 +137,6 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
             local_id = generate_issue_id()
             status = GITHUB_TO_LOCAL_STATUS.get(gh_issue["state"], "backlog")
             
-            # Better status mapping from labels
             labels = [l["name"] for l in gh_issue["labels"]]
             if status == "backlog":
                 if "in-progress" in labels:
@@ -141,9 +148,9 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 id=local_id,
                 title=gh_issue["title"],
                 status=status,
-                severity="medium", # Default
-                service="unknown", # Default
-                created_at=gh_issue["updatedAt"], # Close enough for new pulls
+                severity="medium",
+                service="unknown",
+                created_at=gh_issue["updatedAt"],
                 updated_at=gh_issue["updatedAt"],
                 body=gh_issue["body"],
                 github=GitHubInfo(
@@ -153,15 +160,15 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 ),
                 sync=SyncInfo(
                     last_synced_at=gh_issue["updatedAt"],
-                    sync_hash="" # Will be set on save
+                    sync_hash=""
                 )
             )
+            issue.comments = fetch_gh_issue_comments(gh_number, repo)
             issue.sync.sync_hash = get_issue_hash(issue)
             save_issue(issue)
             logger.info(f"Pulled new issue {gh_number} as {local_id}")
 
 def push_local_issues(repo: str):
-    # Scan backlog and history for issues that need pushing
     index = load_index()
     for local_id in index:
         issue = load_issue_by_id(local_id)
@@ -170,11 +177,10 @@ def push_local_issues(repo: str):
         
         current_hash = get_issue_hash(issue)
         if issue.sync and issue.sync.sync_hash == current_hash:
-            # Nothing changed locally since last sync
             continue
         
         if issue.status == "blocked":
-            # Don't push blocked issues (potential conflicts)
+            logger.info(f"Skipping blocked issue {local_id}")
             continue
 
         if not issue.github:
@@ -185,14 +191,12 @@ def push_local_issues(repo: str):
                 "--title", issue.title,
                 "--body", issue.body
             ]
-            # Add labels
             mapping = STATUS_MAPPING.get(issue.status, STATUS_MAPPING["backlog"])
             for label in mapping["labels"]:
                 cmd.extend(["--label", label])
             
             stdout, code = run_command(cmd, check=False)
             if code == 0:
-                # gh issue create returns the URL
                 url = stdout.strip()
                 try:
                     number = int(url.split("/")[-1])
@@ -217,8 +221,9 @@ def push_local_issues(repo: str):
                 "--body", issue.body
             ]
             
-            # Update state and labels
             mapping = STATUS_MAPPING.get(issue.status, STATUS_MAPPING["backlog"])
+            # Remove all possible status labels first (GitHub CLI doesn't have an easy way to clear labels,
+            # so we'd have to know what labels were there. Simplified for now: just add the correct one)
             for label in mapping["labels"]:
                 cmd.extend(["--add-label", label])
             
@@ -257,11 +262,12 @@ def register_sync(cli):
 
         click.echo(f"Syncing issues with {repo}...")
         
-        # 1. Pull from GitHub
-        pull_github_issues(repo, open_only=open_only, since=since)
+        # If --full is specified, we pull everything since ever and don't limit to open only
+        if full:
+            pull_github_issues(repo, open_only=False, since=None)
+        else:
+            pull_github_issues(repo, open_only=open_only, since=since)
         
-        # 2. Push local changes
         push_local_issues(repo)
-        
         click.echo("Sync complete.")
     cli.add_command(sync_command)
