@@ -660,7 +660,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
         cmd = ["caffeinate", "-dimsu"] + cmd
 
     # Check if the command exists before trying to run it
-    command_name = cmd[0] if not caffeinate else cmd[1]
+    command_name = cmd[0] if not caffeinate else cmd[2]
     if not shutil.which(command_name):
         error_msg = (
             f"Command '{command_name}' not found in PATH.\n"
