@@ -4,7 +4,7 @@ import socket
 import subprocess
 import tempfile
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import click
 import yaml
@@ -1766,6 +1766,366 @@ def _validate_logging_setup() -> bool:
     return True
 
 
+def _check_cluster_tool_installed(tool: str) -> bool:
+    """Check if a cluster tool (kind/k3d/minikube) is installed. Returns True if available."""
+    from vibe_tools.utils import run_command
+
+    check_commands = {
+        "kind": ["kind", "--version"],
+        "k3d": ["k3d", "--version"],
+        "minikube": ["minikube", "version"],
+    }
+
+    if tool not in check_commands:
+        return False
+
+    try:
+        result = run_command(check_commands[tool], check=False)
+        return result[1] == 0
+    except Exception:
+        return False
+
+
+def _get_available_cluster_tools() -> List[str]:
+    """Return list of installed cluster tools."""
+    tools = []
+    for tool in ["kind", "k3d", "minikube"]:
+        if _check_cluster_tool_installed(tool):
+            tools.append(tool)
+    return tools
+
+
+def _ensure_kubectl_installed() -> bool:
+    """Ensure kubectl is installed. Returns True if available."""
+    import platform
+    import shutil
+
+    from vibe_tools.staging import has_kubectl
+    from vibe_tools.utils import run_command
+
+    if has_kubectl():
+        return True
+
+    click.echo("  📦 kubectl is not installed. Installing...")
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            try:
+                result = run_command(["brew", "install", "kubectl"], check=False)
+                if result[1] == 0:
+                    click.echo("  ✅ kubectl installed successfully")
+                    return True
+                else:
+                    click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+            except Exception as e:
+                click.echo(f"  ⚠️  Installation error: {e}")
+        else:
+            click.echo("  💡 Install kubectl manually: brew install kubectl")
+            return False
+    else:
+        click.echo("  💡 Install kubectl manually:")
+        click.echo("     curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl")
+        click.echo("     sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl")
+        return False
+
+    # Verify installation
+    if has_kubectl():
+        click.echo("  ✅ kubectl is now available")
+        return True
+    else:
+        click.echo("  ⚠️  kubectl installation verification failed")
+        return False
+
+
+def _install_kind() -> bool:
+    """Install Kind. Returns True if successful."""
+    import platform
+    import shutil
+
+    from vibe_tools.utils import run_command
+
+    if _check_cluster_tool_installed("kind"):
+        click.echo("  ✅ Kind is already installed")
+        return True
+
+    click.echo("  📦 Installing Kind...")
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            try:
+                result = run_command(["brew", "install", "kind"], check=False)
+                if result[1] == 0:
+                    click.echo("  ✅ Kind installed successfully")
+                    return True
+                else:
+                    click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+            except Exception as e:
+                click.echo(f"  ⚠️  Installation error: {e}")
+        else:
+            click.echo("  💡 Install Kind manually: brew install kind")
+            return False
+    else:
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                binary_path = pathlib.Path(tmpdir) / "kind"
+                download_cmd = [
+                    "curl",
+                    "-Lo",
+                    str(binary_path),
+                    "https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64",
+                ]
+                result = run_command(download_cmd, check=False)
+                if result[1] == 0:
+                    binary_path.chmod(0o755)
+                    install_cmd = ["sudo", "mv", str(binary_path), "/usr/local/bin/kind"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo("  ✅ Kind installed successfully")
+                        return True
+                    else:
+                        click.echo(f"  ⚠️  Installation failed: {result[0]}")
+                else:
+                    click.echo(f"  ⚠️  Download failed: {result[0]}")
+        except Exception as e:
+            click.echo(f"  ⚠️  Installation error: {e}")
+
+    # Verify installation
+    if _check_cluster_tool_installed("kind"):
+        click.echo("  ✅ Kind is now available")
+        return True
+    else:
+        click.echo("  ⚠️  Kind installation verification failed")
+        return False
+
+
+def _install_k3d() -> bool:
+    """Install k3d. Returns True if successful."""
+    import platform
+    import shutil
+
+    from vibe_tools.utils import run_command
+
+    if _check_cluster_tool_installed("k3d"):
+        click.echo("  ✅ k3d is already installed")
+        return True
+
+    click.echo("  📦 Installing k3d...")
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            try:
+                result = run_command(["brew", "install", "k3d"], check=False)
+                if result[1] == 0:
+                    click.echo("  ✅ k3d installed successfully")
+                    return True
+                else:
+                    click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+            except Exception as e:
+                click.echo(f"  ⚠️  Installation error: {e}")
+        else:
+            click.echo("  💡 Install k3d manually: brew install k3d")
+            return False
+    else:
+        try:
+            # Use subprocess directly for shell command with pipe
+            import subprocess
+            result = subprocess.run(
+                "curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                click.echo("  ✅ k3d installed successfully")
+                return True
+            else:
+                click.echo(f"  ⚠️  Installation failed: {result.stderr}")
+        except Exception as e:
+            click.echo(f"  ⚠️  Installation error: {e}")
+
+    # Verify installation
+    if _check_cluster_tool_installed("k3d"):
+        click.echo("  ✅ k3d is now available")
+        return True
+    else:
+        click.echo("  ⚠️  k3d installation verification failed")
+        return False
+
+
+def _install_minikube() -> bool:
+    """Install Minikube. Returns True if successful."""
+    import platform
+    import shutil
+
+    from vibe_tools.utils import run_command
+
+    if _check_cluster_tool_installed("minikube"):
+        click.echo("  ✅ Minikube is already installed")
+        return True
+
+    click.echo("  📦 Installing Minikube...")
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            try:
+                result = run_command(["brew", "install", "minikube"], check=False)
+                if result[1] == 0:
+                    click.echo("  ✅ Minikube installed successfully")
+                    return True
+                else:
+                    click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+            except Exception as e:
+                click.echo(f"  ⚠️  Installation error: {e}")
+        else:
+            click.echo("  💡 Install Minikube manually: brew install minikube")
+            return False
+    else:
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                binary_path = pathlib.Path(tmpdir) / "minikube"
+                download_cmd = [
+                    "curl",
+                    "-Lo",
+                    str(binary_path),
+                    "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64",
+                ]
+                result = run_command(download_cmd, check=False)
+                if result[1] == 0:
+                    binary_path.chmod(0o755)
+                    install_cmd = ["sudo", "install", str(binary_path), "/usr/local/bin/minikube"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo("  ✅ Minikube installed successfully")
+                        return True
+                    else:
+                        click.echo(f"  ⚠️  Installation failed: {result[0]}")
+                else:
+                    click.echo(f"  ⚠️  Download failed: {result[0]}")
+        except Exception as e:
+            click.echo(f"  ⚠️  Installation error: {e}")
+
+    # Verify installation
+    if _check_cluster_tool_installed("minikube"):
+        click.echo("  ✅ Minikube is now available")
+        return True
+    else:
+        click.echo("  ⚠️  Minikube installation verification failed")
+        return False
+
+
+def _create_kind_cluster(name: str = "vibe-dev") -> bool:
+    """Create a Kind cluster. Returns True if successful."""
+    from vibe_tools.staging import has_k8s_cluster
+    from vibe_tools.utils import run_command
+
+    # Check if cluster already exists
+    result = run_command(["kind", "get", "clusters"], check=False)
+    if result[1] == 0 and name in result[0]:
+        click.echo(f"  ℹ️  Kind cluster '{name}' already exists")
+        # Check if it's accessible
+        if has_k8s_cluster():
+            click.echo(f"  ✅ Using existing cluster '{name}'")
+            return True
+        else:
+            click.echo(f"  ⚠️  Cluster '{name}' exists but is not accessible")
+
+    click.echo(f"  📦 Creating Kind cluster '{name}'...")
+    result = run_command(["kind", "create", "cluster", "--name", name], check=False)
+    if result[1] != 0:
+        click.echo(f"  ⚠️  Failed to create Kind cluster: {result[0]}")
+        return False
+
+    # Verify cluster is accessible
+    click.echo("  🔍 Verifying cluster...")
+    for _ in range(10):
+        if has_k8s_cluster():
+            result = run_command(["kubectl", "get", "nodes"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ Kind cluster created and verified")
+                return True
+        time.sleep(2)
+
+    click.echo("  ⚠️  Cluster created but verification failed")
+    return False
+
+
+def _create_k3d_cluster(name: str = "vibe-dev") -> bool:
+    """Create a k3d cluster. Returns True if successful."""
+    from vibe_tools.staging import has_k8s_cluster
+    from vibe_tools.utils import run_command
+
+    # Check if cluster already exists
+    result = run_command(["k3d", "cluster", "list"], check=False)
+    if result[1] == 0 and name in result[0]:
+        click.echo(f"  ℹ️  k3d cluster '{name}' already exists")
+        # Check if it's accessible
+        if has_k8s_cluster():
+            click.echo(f"  ✅ Using existing cluster '{name}'")
+            return True
+        else:
+            click.echo(f"  ⚠️  Cluster '{name}' exists but is not accessible")
+
+    click.echo(f"  📦 Creating k3d cluster '{name}'...")
+    result = run_command(["k3d", "cluster", "create", name], check=False)
+    if result[1] != 0:
+        click.echo(f"  ⚠️  Failed to create k3d cluster: {result[0]}")
+        return False
+
+    # Verify cluster is accessible
+    click.echo("  🔍 Verifying cluster...")
+    for _ in range(10):
+        if has_k8s_cluster():
+            result = run_command(["kubectl", "get", "nodes"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ k3d cluster created and verified")
+                return True
+        time.sleep(2)
+
+    click.echo("  ⚠️  Cluster created but verification failed")
+    return False
+
+
+def _create_minikube_cluster() -> bool:
+    """Start Minikube cluster. Returns True if successful."""
+    from vibe_tools.staging import has_k8s_cluster
+    from vibe_tools.utils import run_command
+
+    # Check if minikube is already running
+    result = run_command(["minikube", "status"], check=False)
+    if result[1] == 0 and "Running" in result[0]:
+        click.echo("  ℹ️  Minikube cluster is already running")
+        if has_k8s_cluster():
+            click.echo("  ✅ Using existing Minikube cluster")
+            return True
+
+    click.echo("  📦 Starting Minikube cluster...")
+    result = run_command(["minikube", "start"], check=False)
+    if result[1] != 0:
+        click.echo(f"  ⚠️  Failed to start Minikube: {result[0]}")
+        return False
+
+    # Verify cluster is accessible
+    click.echo("  🔍 Verifying cluster...")
+    for _ in range(10):
+        if has_k8s_cluster():
+            result = run_command(["kubectl", "get", "nodes"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ Minikube cluster started and verified")
+                return True
+        time.sleep(2)
+
+    click.echo("  ⚠️  Cluster started but verification failed")
+    return False
+
+
 def _setup_logging_infrastructure():
     """Set up logging infrastructure: Stern, Loki, Promtail, Grafana."""
     from vibe_tools.staging import has_k8s_cluster
@@ -1774,9 +2134,85 @@ def _setup_logging_infrastructure():
 
     # Check if Kubernetes cluster is available
     if not has_k8s_cluster():
-        click.echo("  ⚠️  Kubernetes cluster not available. Skipping logging setup.")
+        click.echo("  ⚠️  Kubernetes cluster not available.")
         click.echo("     Logging infrastructure requires a local Kubernetes cluster (kind/k3d/minikube).")
-        return
+        
+        # Check if kubectl is installed
+        if not _ensure_kubectl_installed():
+            click.echo("  ❌ kubectl is required but could not be installed.")
+            click.echo("     Please install kubectl manually and re-run scaffold.")
+            return
+
+        # Check which cluster tools are available
+        available_tools = _get_available_cluster_tools()
+        
+        # Prompt user to choose a cluster tool
+        click.echo("\n  Set Up Local Kubernetes Cluster")
+        click.echo("  What type of Kubernetes cluster would you like to install?")
+        click.echo("")
+        click.echo("  Option 1: Kind (recommended for local dev)")
+        click.echo("           - Fast, easy to reset")
+        click.echo("           - Works well with Skaffold")
+        click.echo("")
+        click.echo("  Option 2: k3d (lightweight)")
+        click.echo("           - Lightweight Kubernetes distribution")
+        click.echo("           - Good for resource-constrained environments")
+        click.echo("")
+        click.echo("  Option 3: Minikube")
+        click.echo("           - Full-featured local Kubernetes")
+        click.echo("           - Supports multiple drivers")
+        
+        if available_tools:
+            click.echo(f"\n  Note: {', '.join(available_tools)} already installed")
+            if "kind" in available_tools:
+                default_choice = "1"
+            elif "k3d" in available_tools:
+                default_choice = "2"
+            elif "minikube" in available_tools:
+                default_choice = "3"
+            else:
+                default_choice = "1"
+        else:
+            default_choice = "1"
+            click.echo("\n  No cluster tools found. Kind will be installed (recommended).")
+
+        choice = click.prompt(
+            "\n  Which Kubernetes cluster type should we install?",
+            default=default_choice,
+            type=click.Choice(["1", "2", "3"]),
+        )
+
+        tool_map = {"1": "kind", "2": "k3d", "3": "minikube"}
+        selected_tool = tool_map[choice]
+
+        # Install the tool if needed
+        if not _check_cluster_tool_installed(selected_tool):
+            install_funcs = {
+                "kind": _install_kind,
+                "k3d": _install_k3d,
+                "minikube": _install_minikube,
+            }
+            if not install_funcs[selected_tool]():
+                click.echo(f"  ❌ Failed to install {selected_tool}. Please install it manually and re-run scaffold.")
+                return
+
+        # Create the cluster
+        click.echo(f"\n  📦 Setting up {selected_tool} cluster...")
+        create_funcs = {
+            "kind": lambda: _create_kind_cluster("vibe-dev"),
+            "k3d": lambda: _create_k3d_cluster("vibe-dev"),
+            "minikube": _create_minikube_cluster,
+        }
+        if not create_funcs[selected_tool]():
+            click.echo(f"  ❌ Failed to create {selected_tool} cluster. Please check the error messages above.")
+            return
+
+        # Verify cluster is now accessible
+        if not has_k8s_cluster():
+            click.echo("  ❌ Cluster was created but is not accessible. Please check your setup.")
+            return
+
+        click.echo("  ✅ Kubernetes cluster is ready!")
 
     # Install Stern
     click.echo("\n📦 Installing Stern for log streaming...")
