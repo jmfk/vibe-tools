@@ -15,12 +15,14 @@ from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_dir,
     ensure_gitignore,
+    get_agent_command,
     get_automerge_branch,
     get_google_api_key,
     get_main_branch,
     get_project_name,
     load_config,
     load_project_state,
+    run_agent,
     run_command,
     save_config,
     save_google_api_key,
@@ -885,6 +887,357 @@ def eject_prompts():
     click.echo(
         "Files in 'prompts/' will override the system defaults in 'templates.py'."
     )
+
+
+@setup_cli.command()
+@click.pass_context
+def scaffold(ctx):
+    """Generate build scaffolding (build.md, build.yaml, Makefile, Dockerfiles, etc.)."""
+    from vibe_tools.utils import (
+        ARCHITECTURE_SPEC,
+        BUILD,
+        BUILD_SPEC,
+        ensure_dir,
+        get_agent_command,
+        run_agent,
+    )
+    from vibe_tools.normalize import normalize_prd
+
+    click.echo("\n--- Build Scaffolding Setup ---")
+
+    # Ensure project structure
+    ensure_infrastructure()
+
+    # Get agent settings (defaults if not in context)
+    agent = getattr(ctx.obj, "agent", "cursor-agent") if ctx.obj else "cursor-agent"
+    stream = getattr(ctx.obj, "stream", False) if ctx.obj else False
+    caffeinate = getattr(ctx.obj, "caffeinate", False) if ctx.obj else False
+
+    # Check if build.md already exists
+    if BUILD_SPEC.exists():
+        click.echo(f"✅ {BUILD_SPEC} already exists.")
+        if not click.confirm("Regenerate build.md?", default=False):
+            click.echo("Skipping build.md generation.")
+        else:
+            # Regenerate
+            _generate_build_spec(agent, stream)
+    else:
+        # Generate build.md from architecture
+        if not ARCHITECTURE_SPEC.exists():
+            click.echo(
+                f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
+            )
+            return
+
+        _generate_build_spec(agent, stream)
+
+    # Normalize build.md to build.yaml if needed
+    if BUILD_SPEC.exists() and not BUILD.exists():
+        click.echo("🔄 Normalizing build.md to build.yaml...")
+
+        normalize_prd(
+            agent=agent,
+            input_file=str(BUILD_SPEC),
+            auto_overwrite=True,
+            caffeinate=caffeinate,
+            stream=stream,
+        )
+
+        if BUILD.exists():
+            click.echo("✅ Build specification normalized successfully.")
+        else:
+            click.echo(
+                "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
+            )
+            return
+
+    # Check and install build tools
+    _check_and_install_build_tools()
+
+    click.echo("\n✅ Build scaffolding complete.")
+    click.echo("Next steps:")
+    click.echo("  - Review specs/build.md and project/build.yaml")
+    click.echo("  - Run 'vibe build' to build and test the application")
+
+
+def _generate_build_spec(agent, stream):
+    """Generate build.md from architecture.md."""
+    from vibe_tools.utils import (
+        ARCHITECTURE_SPEC,
+        BUILD_SPEC,
+        ensure_dir,
+        get_agent_command,
+        run_agent,
+    )
+
+    if not ARCHITECTURE_SPEC.exists():
+        click.echo(
+            f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
+        )
+        return
+
+    click.echo("📋 Generating build.md from architecture.md...")
+
+    # Read architecture.md
+    arch_content = ARCHITECTURE_SPEC.read_text()
+
+    # Generate build.md using agent
+    prompt = f"""You are generating a build specification based on the architecture.
+
+Analyze the architecture and create a comprehensive build.md file that specifies:
+- How to build each application part (backend, frontend, etc.)
+- Build dependencies and requirements
+- Build commands and scripts
+- Development environment setup
+- How to start the application in development mode
+- Build artifacts and outputs
+- Services that need to be started for development
+
+IMPORTANT REQUIREMENTS:
+1. **Makefile Targets**: ALWAYS include a comprehensive set of Makefile targets for:
+   - Building: `make build`, `make build-backend`, `make build-frontend`
+   - Testing: `make test`, `make test-backend`, `make test-frontend`
+   - Development: `make dev`, `make dev-start`, `make dev-stop`, `make dev-restart`
+   - Linting: `make lint`, `make lint-backend`, `make lint-frontend`
+   - Coverage: `make coverage`, `make coverage-backend`, `make coverage-frontend`
+   - Cleanup: `make clean`, `make clean-backend`, `make clean-frontend`
+
+2. **Skaffold and Helm**: If the architecture uses Kubernetes or container orchestration:
+   - Include Skaffold configuration for local Kubernetes development
+   - Include Helm charts for deployment
+   - Document how to use `skaffold dev` for local development
+   - Document Helm chart structure and values
+   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
+   - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
+
+3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
+   - **Log Aggregation**: Set up a log aggregation service (e.g., Loki, ELK stack, or simpler file-based logging)
+   - **Log Storage**: Configure log storage location (local files, centralized service, or cloud logging)
+   - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
+   - **Log Management**: Add Makefile targets for log management:
+     * `make logs` - View all application logs
+     * `make logs-backend` - View backend logs
+     * `make logs-frontend` - View frontend logs
+     * `make logs-follow` - Follow logs in real-time
+     * `make logs-clean` - Clean old log files
+   - **Service Integration**: Ensure all services output logs in a structured format (JSON recommended)
+   - **Development Logging**: Configure development environment to output logs to both console and log files
+   - **Log Levels**: Document log level configuration (DEBUG, INFO, WARNING, ERROR)
+   - If using Docker/Kubernetes: Configure log drivers and log collection
+   - If using Skaffold: Include logging configuration in skaffold.yaml
+
+4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+
+The architecture specification is in specs/architecture.md:
+
+{arch_content}
+
+Generate a complete build.md file following this structure:
+
+# Build Specification
+
+## 1. Overview
+[High-level overview of the build system and how different parts are built. Mention if using Skaffold/Helm for Kubernetes-based development.]
+
+## 2. Build Components
+[For each component (backend, frontend, etc.), specify:
+- Build commands
+- Dependencies
+- Build outputs/artifacts
+- How to verify the build succeeded]
+
+## 3. Development Environment
+
+### 3.1 Services Required
+[List all services that must be running for development (PostgreSQL, Redis, etc.)]
+
+### 3.2 Environment Variables
+[Required environment variables and .env file setup]
+
+### 3.3 Startup Commands
+[Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
+
+### 3.4 Logging
+[Comprehensive logging solution setup:
+- Log aggregation service and configuration
+- Log storage location and retention policies
+- How to view logs (commands and tools)
+- Log format and structure
+- Log level configuration
+- Integration with services]
+
+### 3.5 Verification
+[How to verify the development environment is running correctly]
+
+## 4. Build System
+
+### 4.1 Makefile Targets
+[COMPREHENSIVE list of all Makefile targets. MUST include:
+- Build targets: build, build-backend, build-frontend
+- Test targets: test, test-backend, test-frontend, test-integration
+- Development targets: dev, dev-start, dev-stop, dev-restart
+- Lint targets: lint, lint-backend, lint-frontend
+- Coverage targets: coverage, coverage-backend, coverage-frontend
+- Clean targets: clean, clean-backend, clean-frontend
+- Install targets: install, install-backend, install-frontend
+- Log targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean]
+
+### 4.2 Container Orchestration
+[If using Kubernetes:
+- Skaffold configuration and usage (`skaffold dev`, `skaffold run`)
+- Helm chart structure and deployment
+- Local cluster setup (Minikube/Kind) instructions]
+
+### 4.3 Docker Builds
+[Docker build commands and Dockerfile locations if applicable]
+
+### 4.4 CI/CD Build Steps
+[CI/CD pipeline steps and automation]
+
+Output ONLY the markdown content for build.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+"""
+
+    cmd = get_agent_command(agent, prompt)
+    output, code = run_agent(cmd, stream=stream)
+
+    if code != 0 or not output.strip():
+        click.echo(
+            "❌ Failed to generate build.md. Please create it manually using 'vibe architect'."
+        )
+        return
+
+    # Clean output (remove code fences if present)
+    clean_output = output.strip()
+    if clean_output.startswith("```"):
+        lines = clean_output.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        clean_output = "\n".join(lines).strip()
+
+    # Write build.md
+    ensure_dir(BUILD_SPEC.parent)
+    BUILD_SPEC.write_text(clean_output)
+    click.echo(f"✅ Generated {BUILD_SPEC}")
+
+
+def _check_and_install_build_tools():
+    """Check for required build tools (skaffold, helm) and install if missing."""
+    import platform
+    import shutil
+    import subprocess
+
+    from vibe_tools.utils import run_command
+
+    required_tools = {}
+
+    # Check if skaffold.yaml exists
+    skaffold_yaml = pathlib.Path("skaffold.yaml")
+    if skaffold_yaml.exists():
+        required_tools["skaffold"] = {
+            "check_cmd": ["skaffold", "version"],
+            "install_cmd_brew": ["brew", "install", "skaffold"],
+            "install_cmd_linux": [
+                "curl",
+                "-Lo",
+                "skaffold",
+                "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64",
+                "&&",
+                "sudo",
+                "install",
+                "skaffold",
+                "/usr/local/bin/",
+            ],
+            "description": "Skaffold (Kubernetes development tool)",
+        }
+
+    # Check if helm charts exist
+    helm_paths = [
+        pathlib.Path("deployment/helm"),
+        pathlib.Path("helm"),
+        pathlib.Path("charts"),
+    ]
+    has_helm = any(p.exists() for p in helm_paths)
+
+    if has_helm:
+        required_tools["helm"] = {
+            "check_cmd": ["helm", "version"],
+            "install_cmd_brew": ["brew", "install", "helm"],
+            "install_cmd_linux": [
+                "curl",
+                "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+                "|",
+                "bash",
+            ],
+            "description": "Helm (Kubernetes package manager)",
+        }
+
+    if not required_tools:
+        return
+
+    click.echo("🔍 Checking for required build tools...")
+
+    for tool_name, tool_info in required_tools.items():
+        # Check if tool is installed
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_info['description']} is installed")
+                continue
+        except Exception:
+            pass
+
+        # Tool is not installed
+        click.echo(f"  ⚠️  {tool_info['description']} is not installed")
+
+        # Determine OS and install method
+        system = platform.system().lower()
+        is_macos = system == "darwin"
+
+        if is_macos:
+            # Try brew first
+            if shutil.which("brew"):
+                click.echo(f"  📦 Installing {tool_name} using Homebrew...")
+                try:
+                    install_cmd = tool_info["install_cmd_brew"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo(f"  ✅ {tool_name} installed successfully")
+                        continue
+                    else:
+                        click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+                except Exception as e:
+                    click.echo(f"  ⚠️  Installation error: {e}")
+            else:
+                click.echo(f"  💡 Install {tool_name} manually:")
+                click.echo(f"     brew install {tool_name}")
+        else:
+            # Linux - provide manual instructions
+            click.echo(f"  💡 Install {tool_name} manually:")
+            if tool_name == "skaffold":
+                click.echo(
+                    "     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64"
+                )
+                click.echo("     sudo install skaffold /usr/local/bin/")
+            elif tool_name == "helm":
+                click.echo(
+                    "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+                )
+
+        # Verify installation
+        click.echo(f"  🔍 Verifying {tool_name} installation...")
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_name} is now available")
+            else:
+                click.echo(f"  ⚠️  {tool_name} installation verification failed")
+                click.echo(
+                    f"     Please install it manually and run 'vibe-setup scaffold' again"
+                )
+        except Exception:
+            click.echo(f"  ⚠️  Could not verify {tool_name} installation")
 
 
 if __name__ == "__main__":

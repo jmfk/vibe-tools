@@ -815,219 +815,18 @@ def implement(ctx):
 )
 @click.pass_context
 def build(ctx, force):
-    """Build system reconciliation. Ensures the build system builds all parts and they can start."""
+    """Build the application and verify it runs."""
     if ctx.invoked_subcommand is None:
         _build_reconciliation(ctx, force)
 
 
 def _build_reconciliation(ctx, force):
-    """Build system reconciliation. Ensures the build system builds all parts and they can start."""
-    state = load_project_state()
-    missing = check_dependencies("implement", state)
-    if missing:
-        click.echo(
-            f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
-        )
-        return
-
-    # Handle missing build files
+    """Build the application and verify it runs."""
+    # Check if build.yaml exists - if not, scaffolding needs to be done first
     if not BUILD.exists():
-        if BUILD_SPEC.exists():
-            # build.md exists but not normalized - auto-normalize it
-            click.echo(f"📝 {BUILD_SPEC} found but not normalized. Normalizing...")
-            from vibe_tools.normalize import normalize_prd
-
-            normalize_prd(
-                agent=ctx.obj.get("agent", "cursor-agent"),
-                input_file=str(BUILD_SPEC),
-                auto_overwrite=True,
-                caffeinate=ctx.obj.get("caffeinate", False),
-                stream=ctx.obj.get("stream", False),
-            )
-            if not BUILD.exists():
-                click.echo(
-                    "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
-                )
-                return
-            click.echo("✅ Build specification normalized successfully.")
-        else:
-            # Neither exists - generate from architecture.md
-            if not ARCHITECTURE_SPEC.exists():
-                click.echo(
-                    f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
-                )
-                return
-
-            click.echo(
-                "📋 Build specification not found. Generating from architecture.md..."
-            )
-            agent = ctx.obj.get("agent", "cursor-agent")
-            stream = ctx.obj.get("stream", False)
-
-            # Read architecture.md
-            arch_content = ARCHITECTURE_SPEC.read_text()
-
-            # Generate build.md using agent
-            prompt = f"""You are generating a build specification based on the architecture.
-
-Analyze the architecture and create a comprehensive build.md file that specifies:
-- How to build each application part (backend, frontend, etc.)
-- Build dependencies and requirements
-- Build commands and scripts
-- Development environment setup
-- How to start the application in development mode
-- Build artifacts and outputs
-- Services that need to be started for development
-
-IMPORTANT REQUIREMENTS:
-1. **Makefile Targets**: ALWAYS include a comprehensive set of Makefile targets for:
-   - Building: `make build`, `make build-backend`, `make build-frontend`
-   - Testing: `make test`, `make test-backend`, `make test-frontend`
-   - Development: `make dev`, `make dev-start`, `make dev-stop`, `make dev-restart`
-   - Linting: `make lint`, `make lint-backend`, `make lint-frontend`
-   - Coverage: `make coverage`, `make coverage-backend`, `make coverage-frontend`
-   - Cleanup: `make clean`, `make clean-backend`, `make clean-frontend`
-
-2. **Skaffold and Helm**: If the architecture uses Kubernetes or container orchestration:
-   - Include Skaffold configuration for local Kubernetes development
-   - Include Helm charts for deployment
-   - Document how to use `skaffold dev` for local development
-   - Document Helm chart structure and values
-   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
-   - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
-
-3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
-   - **Log Aggregation**: Set up a log aggregation service (e.g., Loki, ELK stack, or simpler file-based logging)
-   - **Log Storage**: Configure log storage location (local files, centralized service, or cloud logging)
-   - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
-   - **Log Management**: Add Makefile targets for log management:
-     * `make logs` - View all application logs
-     * `make logs-backend` - View backend logs
-     * `make logs-frontend` - View frontend logs
-     * `make logs-follow` - Follow logs in real-time
-     * `make logs-clean` - Clean old log files
-   - **Service Integration**: Ensure all services output logs in a structured format (JSON recommended)
-   - **Development Logging**: Configure development environment to output logs to both console and log files
-   - **Log Levels**: Document log level configuration (DEBUG, INFO, WARNING, ERROR)
-   - If using Docker/Kubernetes: Configure log drivers and log collection
-   - If using Skaffold: Include logging configuration in skaffold.yaml
-
-4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
-
-The architecture specification is in specs/architecture.md:
-
-{arch_content}
-
-Generate a complete build.md file following this structure:
-
-# Build Specification
-
-## 1. Overview
-[High-level overview of the build system and how different parts are built. Mention if using Skaffold/Helm for Kubernetes-based development.]
-
-## 2. Build Components
-[For each component (backend, frontend, etc.), specify:
-- Build commands
-- Dependencies
-- Build outputs/artifacts
-- How to verify the build succeeded]
-
-## 3. Development Environment
-
-### 3.1 Services Required
-[List all services that must be running for development (PostgreSQL, Redis, etc.)]
-
-### 3.2 Environment Variables
-[Required environment variables and .env file setup]
-
-### 3.3 Startup Commands
-[Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
-
-### 3.4 Logging
-[Comprehensive logging solution setup:
-- Log aggregation service and configuration
-- Log storage location and retention policies
-- How to view logs (commands and tools)
-- Log format and structure
-- Log level configuration
-- Integration with services]
-
-### 3.5 Verification
-[How to verify the development environment is running correctly]
-
-## 4. Build System
-
-### 4.1 Makefile Targets
-[COMPREHENSIVE list of all Makefile targets. MUST include:
-- Build targets: build, build-backend, build-frontend
-- Test targets: test, test-backend, test-frontend, test-integration
-- Development targets: dev, dev-start, dev-stop, dev-restart
-- Lint targets: lint, lint-backend, lint-frontend
-- Coverage targets: coverage, coverage-backend, coverage-frontend
-- Clean targets: clean, clean-backend, clean-frontend
-- Install targets: install, install-backend, install-frontend
-- Log targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean]
-
-### 4.2 Container Orchestration
-[If using Kubernetes:
-- Skaffold configuration and usage (`skaffold dev`, `skaffold run`)
-- Helm chart structure and deployment
-- Local cluster setup (Minikube/Kind) instructions]
-
-### 4.3 Docker Builds
-[Docker build commands and Dockerfile locations if applicable]
-
-### 4.4 CI/CD Build Steps
-[CI/CD pipeline steps and automation]
-
-Output ONLY the markdown content for build.md, starting with the title and ending with the last section. Do not include code fences or explanations.
-"""
-
-            cmd = get_agent_command(agent, prompt)
-            output, code = run_agent(cmd, stream=stream)
-
-            if code != 0 or not output.strip():
-                click.echo(
-                    "❌ Failed to generate build.md. Please create it manually using 'vibe architect'."
-                )
-                return
-
-            # Clean output (remove code fences if present)
-            clean_output = output.strip()
-            if clean_output.startswith("```"):
-                lines = clean_output.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                clean_output = "\n".join(lines).strip()
-
-            # Write build.md
-            ensure_dir(BUILD_SPEC.parent)
-            BUILD_SPEC.write_text(clean_output)
-            click.echo(f"✅ Generated {BUILD_SPEC}")
-            click.echo(
-                "📝 Please review the generated build.md, then it will be normalized automatically."
-            )
-
-            # Auto-normalize
-            click.echo("🔄 Normalizing build.md...")
-            from vibe_tools.normalize import normalize_prd
-
-            normalize_prd(
-                agent=agent,
-                input_file=str(BUILD_SPEC),
-                auto_overwrite=True,
-                caffeinate=ctx.obj.get("caffeinate", False),
-                stream=stream,
-            )
-
-            if not BUILD.exists():
-                click.echo(
-                    "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
-                )
-                return
-            click.echo("✅ Build specification normalized successfully.")
+        click.echo("❌ Build configuration not found.")
+        click.echo("   Please run 'vibe-setup scaffold' first to generate build scaffolding.")
+        return
 
     # Check if build.yaml and build-current.yaml are identical (skip if so, unless forced)
     if not force and BUILD.exists() and BUILD_CURRENT.exists():
@@ -1036,98 +835,53 @@ Output ONLY the markdown content for build.md, starting with the title and endin
             click.echo("   Use --force to rebuild anyway.")
             return
 
-    # Check for and install required build tools
-    _check_and_install_build_tools()
-
-    from vibe_tools.ralph import MAX_ITERATIONS, RalphLoop
-
-    agent = ctx.obj.get("agent", "cursor-agent")
-    stream = ctx.obj.get("stream", False)
-
-    loop = RalphLoop(
-        name="Build",
-        desired_file=BUILD,
-        current_file=BUILD_CURRENT,
-        agent=agent,
-        stream=stream,
-    )
-
-    loop.instructions = [
-        "Ensure the build system successfully builds all application parts.",
-        "Verify that the built software can be started in the development environment.",
-        "Check that all build dependencies are correctly configured.",
-        "Ensure build artifacts are generated correctly.",
-        "Test that the application starts successfully after building.",
-        "Ensure the Makefile has comprehensive targets for: build, test, dev-start, dev-stop, dev-restart, lint, and coverage.",
-        "Ensure the Makefile includes logging targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean.",
-        "Set up a logging solution: configure log aggregation, storage, and viewing tools.",
-        "Ensure all services output structured logs (JSON format recommended) to both console and log files.",
-        "Configure log levels (DEBUG, INFO, WARNING, ERROR) appropriately for development environment.",
-        "If using Kubernetes, ensure Skaffold and Helm configurations are properly set up.",
-        "If using Docker/Kubernetes, configure log drivers and log collection in the deployment configuration.",
-        "Extract and document all services/components that need to run in development mode with their startup commands.",
-        "Check skaffold.yaml for deprecated syntax (like artifactOverrides in v4beta11) and update to current syntax (setValueTemplates).",
-        "Verify skaffold.yaml syntax is valid by attempting to parse it or run 'skaffold schema' if available.",
-        "If skaffold is configured, ensure skaffold.yaml has 'defaultRepo: \"\"' under the 'build:' section to prevent push access errors.",
-        "If using a frontend Dockerfile (e.g., deployment/Dockerfile.frontend or frontend/Dockerfile), ensure it uses node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+).",
-        "If skaffold is configured, test that 'skaffold dev' can start without configuration errors.",
-        "Ensure Makefile dev-start target actually starts services (runs commands like uvicorn, npm run dev, etc.), not just echo messages.",
-        "If dev-start only echoes or calls other targets, extract the actual service commands and update dev-start to run them directly or in background.",
-        "Test that 'make dev-start' actually starts the development services and they remain running.",
-        "After fixing configurations, verify services can start: run the startup commands and confirm processes are running and ports are listening.",
-    ]
-
-    # Get max iterations from config
-    config = load_config()
-    iterations_config = config.get("iterations", {})
-    max_build_iterations = iterations_config.get("build", MAX_ITERATIONS)
-
-    click.echo(
-        f"🔄 Build loop will iterate up to {max_build_iterations} times until services work correctly."
-    )
-
-    success = False
-    for iteration in range(1, max_build_iterations + 1):
-        click.echo(f"\n📦 Build iteration {iteration}/{max_build_iterations}...")
-
-        # Run reconciliation
-        reconciliation_success = loop.run()
-
-        if not reconciliation_success:
-            log_issue("build", iteration, max_build_iterations, "Reconciliation failed")
-            if iteration < max_build_iterations:
-                click.echo("  ⚠️  Reconciliation failed, will retry...")
-                continue
-            else:
-                click.echo(
-                    "❌ Build system reconciliation failed after all iterations."
-                )
-                break
-
-        # Test that services actually work
-        click.echo("  🧪 Testing that services can start...")
-        test_success = _test_build_services(debug=ctx.obj.get("debug", False))
-
-        if test_success:
-            log_success(
-                "build", f"Services verified working after {iteration} iteration(s)"
-            )
-            click.echo(
-                "✅ Build system reconciliation complete and services verified working."
-            )
-            success = True
-            break
+    click.echo("\n--- Building Application ---")
+    
+    # Run actual build commands from Makefile or build.yaml
+    click.echo("Running build commands...")
+    
+    # Try to run make build if Makefile exists
+    makefile = pathlib.Path("Makefile")
+    if makefile.exists():
+        click.echo("  Running 'make build'...")
+        result = run_command(["make", "build"], check=False)
+        if result[1] != 0:
+            click.echo("  ⚠️  'make build' failed. Trying individual build steps...")
+            # Try backend build
+            result = run_command(["make", "build-backend"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ Backend build succeeded")
+            # Try frontend build
+            result = run_command(["make", "build-frontend"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ Frontend build succeeded")
         else:
-            log_issue(
-                "build",
-                iteration,
-                max_build_iterations,
-                "Services failed to start or respond",
-            )
-            if iteration < max_build_iterations:
-                click.echo("  ⚠️  Services test failed, will retry reconciliation...")
-            else:
-                click.echo("❌ Services failed to start after all iterations.")
+            click.echo("  ✅ Build completed successfully")
+    else:
+        # Fallback: install dependencies
+        click.echo("  No Makefile found. Installing dependencies...")
+        if pathlib.Path("pyproject.toml").exists():
+            run_command(["pip", "install", "-e", "."], check=False)
+        if pathlib.Path("frontend/package.json").exists():
+            run_command(["npm", "install", "--prefix", "frontend"], check=False)
+            run_command(["npm", "run", "build", "--prefix", "frontend"], check=False)
+
+    # Test that services can start
+    click.echo("\n🧪 Testing that application can start...")
+    test_success = _test_build_services(debug=ctx.obj.get("debug", False))
+
+    if test_success:
+        click.echo("✅ Build complete and application verified working.")
+        
+        # Copy BUILD to BUILD_CURRENT to mark as successful
+        if BUILD.exists():
+            import shutil
+            shutil.copy(BUILD, BUILD_CURRENT)
+        
+        success = True
+    else:
+        click.echo("❌ Application failed to start after build.")
+        success = False
 
     if success:
         click.echo("\nNext Steps:")
