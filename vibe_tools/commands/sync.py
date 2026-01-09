@@ -63,7 +63,7 @@ def fetch_gh_issue_comments(gh_number: int, repo: str) -> str:
             pass
     return comments_body
 
-def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] = None):
+def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] = None, label: Optional[str] = None):
     cmd = ["gh", "issue", "list", "--repo", repo, "--json", "number,title,body,state,labels,updatedAt,url"]
     if not open_only:
         cmd.append("--state")
@@ -71,6 +71,9 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
     if since:
         cmd.append("--since")
         cmd.append(since)
+    if label:
+        cmd.append("--label")
+        cmd.append(label)
     
     stdout, code = run_command(cmd, check=False)
     if code != 0:
@@ -249,7 +252,8 @@ def register_sync(cli):
     @click.option("--full", is_flag=True)
     @click.option("--since", help="Pull issues updated since date")
     @click.option("--open-only", is_flag=True, default=True)
-    def sync_command(dry_run, full, since, open_only):
+    @click.option("--label", help="Filter by label (e.g. vibe-managed)")
+    def sync_command(dry_run, full, since, open_only, label):
         """Synchronize local issues with GitHub."""
         repo = get_github_repo()
         if not repo:
@@ -264,9 +268,9 @@ def register_sync(cli):
         
         # If --full is specified, we pull everything since ever and don't limit to open only
         if full:
-            pull_github_issues(repo, open_only=False, since=None)
+            pull_github_issues(repo, open_only=False, since=None, label=label)
         else:
-            pull_github_issues(repo, open_only=open_only, since=since)
+            pull_github_issues(repo, open_only=open_only, since=since, label=label)
         
         push_local_issues(repo)
         click.echo("Sync complete.")

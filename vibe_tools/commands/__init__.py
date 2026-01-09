@@ -34,12 +34,11 @@ def register_all_commands(cli):
         test_fix,
         testing,
         investigate,
+        issue,
     )
 
     init.register_init(cli)
-    sync.register_sync(cli)
-    investigate.register_investigate(cli)
-    solve.register_solve(cli)
+    issue.register_issue(cli)
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)
