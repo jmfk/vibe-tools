@@ -105,6 +105,18 @@ def register_setup(cli):
 
             generate_prd_plan()
 
+            # Run scaffold to set up build infrastructure and logging
+            click.echo("\n--- Running Build Scaffolding Setup ---")
+            try:
+                from vibe_tools.setup import scaffold
+                # Create a minimal context object for scaffold
+                scaffold_ctx = click.Context(click.Command("scaffold"))
+                scaffold_ctx.obj = ctx.obj
+                scaffold(scaffold_ctx)
+            except Exception as e:
+                click.echo(f"⚠️  Scaffold setup encountered an error: {e}")
+                click.echo("   You can run 'vibe-setup scaffold' manually to set up build infrastructure.")
+
             click.echo("\nNext Steps:")
             click.echo("1. Run 'vibe deps' to install any new testing dependencies.")
             click.echo("2. Start Building (vibe implement)")
