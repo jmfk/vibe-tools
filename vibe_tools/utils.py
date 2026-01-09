@@ -659,6 +659,21 @@ def run_agent(cmd, caffeinate=False, stream=False):
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
 
+    # Check if the command exists before trying to run it
+    command_name = cmd[0] if not caffeinate else cmd[1]
+    if not shutil.which(command_name):
+        error_msg = (
+            f"Command '{command_name}' not found in PATH.\n"
+            f"Please ensure '{command_name}' is installed and available in your PATH.\n"
+        )
+        if command_name == "cursor-agent":
+            error_msg += (
+                "To install cursor-agent, visit: https://github.com/getcursor/cursor-agent\n"
+                "Or install via npm: npm install -g @cursor-agent/cli\n"
+            )
+        logger.error(error_msg)
+        raise FileNotFoundError(f"[Errno 2] No such file or directory: '{command_name}'")
+
     # Use logger.debug for the "Running agent" message
     logger.debug(f"Running agent: {' '.join(cmd)}")
 
@@ -728,6 +743,35 @@ def run_agent(cmd, caffeinate=False, stream=False):
 
     # Log full agent output to debug level (which goes to file)
     logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+
+    # Detect architecture mismatch errors
+    if process.returncode != 0:
+        if "incompatible architecture" in output or "mach-o file, but is an incompatible architecture" in output:
+            import platform
+            node_arch = "unknown"
+            try:
+                node_result = run_command(["node", "-p", "process.arch"], check=False)
+                if node_result[1] == 0:
+                    node_arch = node_result[0].strip()
+            except Exception:
+                pass
+            
+            system_arch = platform.machine()
+            logger.error(
+                f"Architecture mismatch detected. Node.js arch: {node_arch}, System arch: {system_arch}"
+            )
+            print(
+                f"\n❌ Architecture mismatch error detected.\n"
+                f"   Node.js is running in a different architecture than cursor-agent expects.\n"
+                f"   System architecture: {system_arch}\n"
+                f"   Node.js architecture: {node_arch}\n\n"
+                f"   To fix this:\n"
+                f"   1. Check Node.js architecture: node -p 'process.arch'\n"
+                f"   2. If Node.js is x64/x86_64 but system is arm64, reinstall Node.js for arm64:\n"
+                f"      - Using Homebrew: arch -arm64 brew install node\n"
+                f"      - Or use nvm: nvm install --arch=arm64\n"
+                f"   3. If cursor-agent needs to be reinstalled, check cursor-agent documentation.\n"
+            )
 
     return output, process.returncode
 
