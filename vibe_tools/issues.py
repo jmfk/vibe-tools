@@ -56,10 +56,11 @@ class Issue:
 
     def to_markdown(self) -> str:
         frontmatter = self.to_dict()
-        yaml_content = yaml.dump(frontmatter, sort_keys=False)
+        # Ensure correct order of fields in YAML
+        yaml_content = yaml.dump(frontmatter, sort_keys=False, default_flow_style=False)
         content = f"---\n{yaml_content}---\n\n{self.body}"
         if self.comments:
-            content += f"\n\n## External Comments (GitHub)\n{self.comments}"
+            content = content.rstrip() + f"\n\n## External Comments (GitHub)\n{self.comments}"
         return content
 
     @classmethod
@@ -116,7 +117,10 @@ def load_index() -> Dict[str, Any]:
     if not INDEX_FILE.exists():
         return {}
     try:
-        return json.loads(INDEX_FILE.read_text())
+        content = INDEX_FILE.read_text()
+        if not content.strip():
+            return {}
+        return json.loads(content)
     except json.JSONDecodeError:
         return {}
 
@@ -125,20 +129,22 @@ def save_index(index: Dict[str, Any]):
     INDEX_FILE.write_text(json.dumps(index, indent=2))
 
 def save_issue(issue: Issue):
+    # Determine directory based on status
     target_dir = HISTORY_DIR if issue.status == "done" else BACKLOG_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     
     file_path = target_dir / f"{issue.id}.md"
     
-    # If moving from backlog to history, delete from backlog
+    # If moving between directories, cleanup old ones
+    old_backlog = BACKLOG_DIR / f"{issue.id}.md"
+    old_history = HISTORY_DIR / f"{issue.id}.md"
+    
     if issue.status == "done":
-        backlog_path = BACKLOG_DIR / f"{issue.id}.md"
-        if backlog_path.exists():
-            backlog_path.unlink()
+        if old_backlog.exists():
+            old_backlog.unlink()
     else:
-        history_path = HISTORY_DIR / f"{issue.id}.md"
-        if history_path.exists():
-            history_path.unlink()
+        if old_history.exists():
+            old_history.unlink()
 
     file_path.write_text(issue.to_markdown())
     
@@ -153,27 +159,68 @@ def save_issue(issue: Issue):
 
 def load_issue_by_id(issue_id: str) -> Optional[Issue]:
     index = load_index()
-    if issue_id not in index:
-        # Try searching in backlog and history if not in index
-        for path in [BACKLOG_DIR / f"{issue_id}.md", HISTORY_DIR / f"{issue_id}.md"]:
-            if path.exists():
-                return Issue.from_markdown(path.read_text())
-        return None
+    if issue_id in index:
+        path = pathlib.Path(index[issue_id]["file"])
+        if path.exists():
+            return Issue.from_markdown(path.read_text())
     
-    path = pathlib.Path(index[issue_id]["file"])
-    if not path.exists():
-        return None
-    
-    return Issue.from_markdown(path.read_text())
+    # Fallback to direct file search
+    for path in [BACKLOG_DIR / f"{issue_id}.md", HISTORY_DIR / f"{issue_id}.md"]:
+        if path.exists():
+            return Issue.from_markdown(path.read_text())
+            
+    return None
 
 def generate_issue_id() -> str:
-    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    now = datetime.datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
     index = load_index()
     
-    # Count issues for today
+    # Count issues for today across all directories
     today_count = 0
+    prefix = f"ISSUE-{date_str}-"
     for issue_id in index:
-        if issue_id.startswith(f"ISSUE-{date_str}"):
-            today_count += 1
+        if issue_id.startswith(prefix):
+            try:
+                count = int(issue_id.replace(prefix, ""))
+                if count > today_count:
+                    today_count = count
+            except ValueError:
+                pass
             
-    return f"ISSUE-{date_str}-{today_count + 1:03d}"
+    return f"{prefix}{today_count + 1:03d}"
+
+def get_issue_body_template(
+    summary: str = "",
+    repro: str = "",
+    expected: str = "",
+    actual: str = "",
+    evidence: str = "",
+    acceptance: str = "",
+    investigation: str = "",
+    solution: str = ""
+) -> str:
+    return f"""## Summary
+{summary}
+
+## Reproduction Steps
+{repro}
+
+## Expected Behavior
+{expected}
+
+## Actual Behavior
+{actual}
+
+## Evidence
+{evidence}
+
+## Acceptance Criteria
+{acceptance}
+
+## Investigation Notes
+{investigation}
+
+## Solution Notes
+{solution}
+"""

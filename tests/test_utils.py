@@ -82,7 +82,8 @@ def test_is_merged():
 
 
 def test_run_agent():
-    with patch("subprocess.Popen") as mock_popen:
+    with patch("subprocess.Popen") as mock_popen, \
+         patch("shutil.which", return_value="/usr/local/bin/some-agent"):
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = ["line1\n", "line2\n", ""]
         mock_process.returncode = 0
