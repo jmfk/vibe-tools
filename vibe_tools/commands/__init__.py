@@ -27,13 +27,19 @@ def register_all_commands(cli):
         remember,
         rerun,
         setup,
+        solve,
         stats,
         status,
+        sync,
         test_fix,
         testing,
+        investigate,
     )
 
     init.register_init(cli)
+    sync.register_sync(cli)
+    investigate.register_investigate(cli)
+    solve.register_solve(cli)
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)

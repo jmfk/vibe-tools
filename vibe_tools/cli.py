@@ -55,6 +55,9 @@ class OrderedGroup(click.Group):
             "billing-groups",
             "demo-data",
             "init",
+            "sync",
+            "investigate",
+            "solve",
             "devbug",
         ]
 
