@@ -554,6 +554,104 @@ def run_command(cmd, check=True, caffeinate=False):
     return result.stdout.strip(), result.returncode
 
 
+def fix_kubeconfig_api_version() -> bool:
+    """
+    Fix deprecated kubeconfig API versions (v1alpha1 -> v1beta1).
+    
+    Locates kubeconfig file(s) and updates any exec plugins using
+    'client.authentication.k8s.io/v1alpha1' to 'client.authentication.k8s.io/v1beta1'.
+    
+    Returns:
+        True if changes were made, False otherwise
+    """
+    kubeconfig_paths = []
+    
+    # Get kubeconfig path from env var or use default
+    kubeconfig_env = os.environ.get("KUBECONFIG")
+    if kubeconfig_env:
+        # KUBECONFIG can contain multiple paths separated by colons
+        kubeconfig_paths = [pathlib.Path(p.strip()) for p in kubeconfig_env.split(":")]
+    else:
+        # Default location
+        default_path = pathlib.Path.home() / ".kube" / "config"
+        if default_path.exists():
+            kubeconfig_paths = [default_path]
+    
+    if not kubeconfig_paths:
+        logger.debug("No kubeconfig file found to check")
+        return False
+    
+    changes_made = False
+    
+    for kubeconfig_path in kubeconfig_paths:
+        if not kubeconfig_path.exists():
+            logger.debug(f"Kubeconfig file does not exist: {kubeconfig_path}")
+            continue
+        
+        try:
+            # Read and parse kubeconfig
+            with open(kubeconfig_path, "r") as f:
+                config = yaml.safe_load(f)
+            
+            if not config or not isinstance(config, dict):
+                logger.debug(f"Invalid kubeconfig format: {kubeconfig_path}")
+                continue
+            
+            # Track if we need to update this file
+            file_updated = False
+            
+            # Check users section for exec plugins
+            if "users" in config and isinstance(config["users"], list):
+                for user in config["users"]:
+                    if isinstance(user, dict) and "user" in user:
+                        user_config = user["user"]
+                        if isinstance(user_config, dict) and "exec" in user_config:
+                            exec_config = user_config["exec"]
+                            if isinstance(exec_config, dict):
+                                api_version = exec_config.get("apiVersion", "")
+                                if api_version == "client.authentication.k8s.io/v1alpha1":
+                                    exec_config["apiVersion"] = "client.authentication.k8s.io/v1beta1"
+                                    file_updated = True
+                                    logger.info(
+                                        f"Updated exec plugin API version from v1alpha1 to v1beta1 in {kubeconfig_path}"
+                                    )
+            
+            if file_updated:
+                # Create backup before modifying
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                backup_path = kubeconfig_path.parent / f"{kubeconfig_path.name}.backup.{timestamp}"
+                
+                try:
+                    shutil.copy2(kubeconfig_path, backup_path)
+                    logger.debug(f"Created backup: {backup_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to create backup for {kubeconfig_path}: {e}")
+                    # Continue anyway - the fix is more important than the backup
+                
+                # Write updated config
+                try:
+                    with open(kubeconfig_path, "w") as f:
+                        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+                    changes_made = True
+                    logger.info(f"Successfully updated kubeconfig: {kubeconfig_path}")
+                except Exception as e:
+                    logger.error(f"Failed to write updated kubeconfig to {kubeconfig_path}: {e}")
+                    # Try to restore from backup if write failed
+                    if backup_path.exists():
+                        try:
+                            shutil.copy2(backup_path, kubeconfig_path)
+                            logger.info(f"Restored kubeconfig from backup: {backup_path}")
+                        except Exception as restore_error:
+                            logger.error(f"Failed to restore from backup: {restore_error}")
+        
+        except yaml.YAMLError as e:
+            logger.warning(f"Failed to parse kubeconfig {kubeconfig_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Error processing kubeconfig {kubeconfig_path}: {e}")
+    
+    return changes_made
+
+
 def run_agent(cmd, caffeinate=False, stream=False):
     """Runs an agent with a live progress indicator or streaming output."""
     global _agent_called
