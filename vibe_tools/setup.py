@@ -1044,9 +1044,9 @@ IMPORTANT REQUIREMENTS:
      * Document in build.md under "Logging" → "Centralized Log Aggregation"
    
    - **AI-Queryable Logs**: Ensure logs can be queried programmatically:
-     * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{datasource_id}/loki/api/v1/query_range`
+     * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
      * Authentication: Basic auth (username/password from setup) or API token
-     * Example query: `{namespace!="kube-system"}`
+     * Example query: `{{namespace!="kube-system"}}`
      * Document in build.md under "Logging" → "AI-Queryable Logs"
      * Include in build.yaml under `observability.logs`:
        - provider: grafana-loki
@@ -1054,7 +1054,7 @@ IMPORTANT REQUIREMENTS:
        - grafana:
          - url: "http://localhost:3000"
          - port_forward: "kubectl port-forward svc/grafana -n monitoring 3000:3000"
-         - api_endpoint: "/api/datasources/proxy/{id}/loki/api/v1/query_range"
+         - api_endpoint: "/api/datasources/proxy/{{id}}/loki/api/v1/query_range"
          - auth_method: basic-auth
        - loki:
          - retention: "72h"
@@ -1127,9 +1127,9 @@ Generate a complete build.md file following this structure:
 - Log retention: 24-72 hours (configurable for local dev)
 
 #### AI-Queryable Logs
-- Grafana HTTP API: `http://localhost:3000/api/datasources/proxy/{datasource_id}/loki/api/v1/query_range`
+- Grafana HTTP API: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
 - Authentication: Basic auth or API token (credentials from setup)
-- Example query: `{namespace!="kube-system"}`
+- Example query: `{{namespace!="kube-system"}}`
 - See `build.yaml` → `observability.logs` for API details
 
 #### Issue Handling
