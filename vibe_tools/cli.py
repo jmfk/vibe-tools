@@ -6,7 +6,7 @@ import os
 import pathlib
 import shutil
 import subprocess
-from typing import List
+from typing import Any, Dict, List
 
 import click
 import yaml
@@ -1703,6 +1703,16 @@ def _check_and_install_build_tools():
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
+    
+    # If skaffold is detected, check and fix kubeconfig API version
+    if "skaffold" in required_tools:
+        click.echo("🔍 Checking kubeconfig for deprecated API versions...")
+        from vibe_tools.utils import fix_kubeconfig_api_version
+        
+        if fix_kubeconfig_api_version():
+            click.echo("  ✅ Updated kubeconfig to use v1beta1 API version")
+        else:
+            logger.debug("Kubeconfig API version check completed (no changes needed)")
 
 
 def _test_build_services(debug=False):
@@ -1714,6 +1724,16 @@ def _test_build_services(debug=False):
         logger.debug("No services found to test")
         logger.info("  ⚠️  No services configured to test")
         return False
+
+    # Check and fix kubeconfig if skaffold is being used
+    if _uses_skaffold(services):
+        logger.info("  🔍 Detected skaffold usage, checking kubeconfig...")
+        from vibe_tools.utils import fix_kubeconfig_api_version
+        
+        if fix_kubeconfig_api_version():
+            logger.info("  ✅ Updated kubeconfig to use v1beta1 API version")
+        else:
+            logger.debug("Kubeconfig API version check completed (no changes needed)")
 
     logger.info(f"  📋 Found {len(services)} service(s) to test")
     for service in services:
@@ -2538,6 +2558,15 @@ def _save_pids(pids):
     import json
 
     pid_file.write_text(json.dumps(pids, indent=2))
+
+
+def _uses_skaffold(services: List[Dict[str, Any]]) -> bool:
+    """Check if any service in the services list uses skaffold."""
+    for service in services:
+        start_command = service.get("start_command", "")
+        if start_command and "skaffold" in start_command.lower():
+            return True
+    return False
 
 
 def _get_services():
