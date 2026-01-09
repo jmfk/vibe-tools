@@ -4,23 +4,6 @@ from typing import Optional
 from vibe_tools.issues import load_issue_by_id, save_issue, Issue
 from vibe_tools.utils import logger
 
-def append_to_section(body: str, section_title: str, text: str) -> str:
-    """Helper to append text to a specific markdown section."""
-    marker = f"## {section_title}"
-    if marker not in body:
-        return body + f"\n\n{marker}\n{text}"
-    
-    parts = body.split(marker)
-    # parts[0] is everything before section
-    # parts[1] is everything after section title
-    
-    # We want to insert after the section title but before the next section
-    subparts = parts[1].split("\n## ")
-    subparts[0] = subparts[0].rstrip() + f"\n{text}\n"
-    
-    new_parts1 = "\n## ".join(subparts)
-    return parts[0] + marker + new_parts1
-
 def register_solve(cli):
     @click.command(name="solve")
     @click.argument("issue_id")
@@ -46,9 +29,9 @@ def register_solve(cli):
         # In local-first workflow, we want to update the investigation or solution notes
         note = f"- Agent started {mode} mode at {now}"
         if mode == "investigate":
-            issue.body = append_to_section(issue.body, "Investigation Notes", note)
+            issue.body.investigation_notes = (issue.body.investigation_notes + "\n" + note).strip()
         else:
-            issue.body = append_to_section(issue.body, "Solution Notes", note)
+            issue.body.solution_notes = (issue.body.solution_notes + "\n" + note).strip()
             
         issue.updated_at = now
         save_issue(issue)

@@ -35,9 +35,13 @@ def register_all_commands(cli):
         testing,
         investigate,
         issue,
+        migrate,
+        view_implement,
     )
 
     init.register_init(cli)
+    migrate.register_migrate(cli)
+    view_implement.register_view_implement(cli)
     issue.register_issue(cli)
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)

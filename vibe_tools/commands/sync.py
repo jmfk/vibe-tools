@@ -4,18 +4,11 @@ import json
 import os
 from typing import List, Optional
 from vibe_tools.issues import (
-    Issue, GitHubInfo, SyncInfo, load_index, save_issue, 
+    Issue, IssueBody, GitHubInfo, SyncInfo, load_index, save_issue, 
     load_issue_by_id, get_issue_hash, generate_issue_id,
-    BACKLOG_DIR, HISTORY_DIR
+    BACKLOG_DIR, HISTORY_DIR, STATUS_MAPPING
 )
 from vibe_tools.utils import run_command, logger
-
-STATUS_MAPPING = {
-    "backlog": {"github_state": "open", "labels": []},
-    "in_progress": {"github_state": "open", "labels": ["in-progress"]},
-    "blocked": {"github_state": "open", "labels": ["blocked"]},
-    "done": {"github_state": "closed", "labels": ["resolved"]},
-}
 
 GITHUB_TO_LOCAL_STATUS = {
     "OPEN": "backlog",
@@ -105,8 +98,9 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
             if is_local_changed and is_remote_changed:
                 logger.warning(f"Conflict detected for {local_id} (GH#{gh_number}). Marking as blocked.")
                 issue.status = "blocked"
-                if "## CONFLICT" not in issue.body:
-                    issue.body += f"\n\n## CONFLICT\nRemote changes detected on GitHub at {gh_updated_at}. Local changes also exist. Please resolve manually."
+                conflict_note = f"- CONFLICT at {datetime.datetime.now().isoformat()}: Remote changes detected on GitHub at {gh_updated_at}. Local changes also exist. Please resolve manually."
+                if conflict_note not in issue.body.investigation_notes:
+                    issue.body.investigation_notes = (issue.body.investigation_notes + "\n" + conflict_note).strip()
                 save_issue(issue)
                 continue
 
@@ -114,7 +108,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 # Local hasn't changed, safe to update from GH
                 issue.title = gh_issue["title"]
                 issue.comments = fetch_gh_issue_comments(gh_number, repo)
-                issue.body = gh_issue["body"]
+                issue.body = IssueBody.from_markdown(gh_issue["body"])
                 issue.updated_at = gh_updated_at
                 
                 # Map status
@@ -155,7 +149,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 service="unknown",
                 created_at=gh_issue["updatedAt"],
                 updated_at=gh_issue["updatedAt"],
-                body=gh_issue["body"],
+                body=IssueBody.from_markdown(gh_issue["body"]),
                 github=GitHubInfo(
                     repo=repo,
                     number=gh_number,
@@ -192,10 +186,10 @@ def push_local_issues(repo: str):
                 "gh", "issue", "create",
                 "--repo", repo,
                 "--title", issue.title,
-                "--body", issue.body
+                "--body", issue.body.to_markdown()
             ]
             mapping = STATUS_MAPPING.get(issue.status, STATUS_MAPPING["backlog"])
-            for label in mapping["labels"]:
+            for label in mapping["label"]:
                 cmd.extend(["--label", label])
             
             stdout, code = run_command(cmd, check=False)
@@ -221,13 +215,13 @@ def push_local_issues(repo: str):
                 "gh", "issue", "edit", gh_number,
                 "--repo", repo,
                 "--title", issue.title,
-                "--body", issue.body
+                "--body", issue.body.to_markdown()
             ]
             
             mapping = STATUS_MAPPING.get(issue.status, STATUS_MAPPING["backlog"])
             # Remove all possible status labels first (GitHub CLI doesn't have an easy way to clear labels,
             # so we'd have to know what labels were there. Simplified for now: just add the correct one)
-            for label in mapping["labels"]:
+            for label in mapping["label"]:
                 cmd.extend(["--add-label", label])
             
             stdout, code = run_command(cmd, check=False)

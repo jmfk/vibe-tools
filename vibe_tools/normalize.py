@@ -8,6 +8,7 @@ import yaml
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
+    BACKLOG_DIR,
     PRD_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
@@ -78,10 +79,10 @@ def normalize_prd(
     # Only prompt for global overwrite when normalizing all files (not specific files)
     overwrite_mode = "yes" if auto_overwrite else "ask"
     if not input_file:  # Only when normalizing all files
-        existing_prds = list(PRD_DIR.rglob("prd_*.yaml"))
+        existing_prds = list(BACKLOG_DIR.rglob("prd_*.yaml"))
         if existing_prds and not auto_overwrite:
             choice = click.prompt(
-                f"Found {len(existing_prds)} existing files in {PRD_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
+                f"Found {len(existing_prds)} existing files in {BACKLOG_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
                 type=click.Choice(["y", "n", "a"], case_sensitive=False),
                 default="a",
             )
@@ -119,11 +120,8 @@ def normalize_prd(
 
         # Determine target PRD directory (preserving subdirectories)
         rel_dir = spec_path.parent.relative_to(specs_dir)
-        target_prd_dir = PRD_DIR / rel_dir
-        target_prd_dir.mkdir(parents=True, exist_ok=True)
-
-        # Determine output filename with normalized prefix and format
-        # 1. Special case for shared global context files ("global truths")
+        
+        # Determine output filename and path
         global_truths = [
             "architecture",
             "project_overview",
@@ -132,17 +130,18 @@ def normalize_prd(
             "testing",
             "build",
         ]
+        
         if clean_stem in global_truths:
             output_filename = f"{clean_stem}.yaml"
-            # Build goes to project root, others go to PRD directory
             if clean_stem == "build":
                 output_path = VIBE_PROJECT_DIR / output_filename
             else:
-                # Global truths now go to the PRD directory (prds/)
+                # Global truths stay in PRD_DIR (product/prds/)
                 output_path = PRD_DIR / output_filename
         else:
-            # 2. Handle PRD prefixes and format
-            # Ensure it starts with prd_
+            # PRDs go to BACKLOG_DIR (product/prds/backlog/)
+            target_prd_dir = BACKLOG_DIR / rel_dir
+            target_prd_dir.mkdir(parents=True, exist_ok=True)
             output_filename = f"prd_{clean_stem}.yaml"
             output_path = target_prd_dir / output_filename
 

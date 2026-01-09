@@ -5,7 +5,7 @@ import pathlib
 import json
 import re
 from typing import List, Optional
-from vibe_tools.issues import Issue, save_issue, generate_issue_id, get_issue_body_template
+from vibe_tools.issues import Issue, IssueBody, save_issue, generate_issue_id
 from vibe_tools.utils import LOGS_DIR, logger
 
 def get_log_files() -> List[pathlib.Path]:
@@ -24,6 +24,23 @@ def redact_content(content: str) -> str:
         content = re.sub(pattern, replacement, content)
     return content
 
+def cluster_errors(lines: List[str]) -> List[str]:
+    """Very basic clustering of error lines."""
+    clusters = {}
+    for line in lines:
+        # Look for things that look like errors
+        if "ERROR" in line or "Exception" in line or "Error:" in line:
+            # Strip timestamps or common prefixes to cluster
+            # This is a very simple heuristic
+            key = line
+            if " - " in line:
+                key = line.split(" - ", 1)[-1]
+            clusters[key] = clusters.get(key, 0) + 1
+    
+    # Sort by frequency
+    sorted_clusters = sorted(clusters.items(), key=lambda x: x[1], reverse=True)
+    return [f"({count}x) {text}" for text, count in sorted_clusters[:5]]
+
 def register_investigate(cli):
     @click.command(name="investigate")
     @click.option("--logs", help="Path to logs to investigate")
@@ -40,15 +57,23 @@ def register_investigate(cli):
             log_files = get_log_files()
         
         evidence = ""
+        clustered = []
         if log_files:
             click.echo(f"Found {len(log_files)} log files. Analyzing latest: {log_files[0].name}")
             try:
-                content = log_files[0].read_text().splitlines()[-50:]
+                all_lines = log_files[0].read_text().splitlines()
+                content = all_lines[-100:]
                 click.echo("\nLatest log snippets (redacted):")
-                for line in content:
+                for line in content[-20:]:
                     redacted_line = redact_content(line)
                     click.echo(f"  {redacted_line}")
                     evidence += f"{redacted_line}\n"
+                
+                clustered = cluster_errors(all_lines[-500:])
+                if clustered:
+                    click.echo("\nPotential error clusters found:")
+                    for c in clustered:
+                        click.echo(f"  {c}")
             except Exception as e:
                 logger.error(f"Failed to read logs: {e}")
 
@@ -57,19 +82,22 @@ def register_investigate(cli):
         service = service or click.prompt("Service", default="core")
         
         summary = click.prompt("Summary (Markdown supported)")
+        if clustered and not summary:
+            summary = "Potential errors detected:\n" + "\n".join([f"- {c}" for c in clustered])
+            
         reproduction = click.prompt("Reproduction Steps", default="N/A")
         expected = click.prompt("Expected Behavior", default="N/A")
         actual = click.prompt("Actual Behavior", default="N/A")
         acceptance = click.prompt("Acceptance Criteria", default="Fix the issue.")
 
-        body = get_issue_body_template(
+        body = IssueBody(
             summary=summary,
-            repro=reproduction,
-            expected=expected,
-            actual=actual,
+            reproduction_steps=reproduction,
+            expected_behavior=expected,
+            actual_behavior=actual,
             evidence=f"```\n{evidence}\n```" if evidence else "N/A",
-            acceptance=acceptance,
-            investigation=f"- Created via `vibe investigate` on {datetime.datetime.now().isoformat()}"
+            acceptance_criteria=acceptance,
+            investigation_notes=f"- Created via `vibe investigate` on {datetime.datetime.now().isoformat()}"
         )
 
         issue_id = generate_issue_id()
