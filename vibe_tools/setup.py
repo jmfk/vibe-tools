@@ -2,9 +2,12 @@ import datetime
 import pathlib
 import socket
 import subprocess
+import tempfile
+import time
 from typing import Any, Dict, Optional
 
 import click
+import yaml
 from dotenv import find_dotenv, load_dotenv
 
 # Load environment variables from .env file at startup
@@ -954,6 +957,16 @@ def scaffold(ctx):
     # Check and install build tools
     _check_and_install_build_tools()
 
+    # Setup logging infrastructure if Kubernetes is available
+    try:
+        _setup_logging_infrastructure()
+    except click.ClickException as e:
+        click.echo(f"\n❌ Logging infrastructure setup failed: {e}")
+        click.echo("   Continuing with scaffold, but logging will not be available.")
+    except Exception as e:
+        click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
+        click.echo("   Continuing with scaffold, but logging may not be fully configured.")
+
     click.echo("\n✅ Build scaffolding complete.")
     click.echo("Next steps:")
     click.echo("  - Review specs/build.md and project/build.yaml")
@@ -1011,14 +1024,55 @@ IMPORTANT REQUIREMENTS:
    - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
 
 3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
-   - **Log Aggregation**: Set up a log aggregation service (e.g., Loki, ELK stack, or simpler file-based logging)
-   - **Log Storage**: Configure log storage location (local files, centralized service, or cloud logging)
+   - **Quick Log Streaming (Stern)**: For instant log tailing during local debugging:
+     * Install: `brew install stern` (macOS) or download binary for Linux
+     * Usage: `stern .` to tail logs from all running pods
+     * This provides minimum-friction log streaming for developers
+     * Document in build.md under "Logging" → "Quick Log Streaming"
+     * Include in build.yaml under `logging.local.quickstream`:
+       - tool: stern
+       - install: "brew install stern" (or Linux equivalent)
+       - usage: "stern ."
+   
+   - **Centralized Log Aggregation (Loki + Grafana)**: For searchable, time-indexed logs suitable for AI querying:
+     * **Loki**: Log aggregation service running in Kubernetes (single-binary mode, filesystem storage)
+     * **Promtail**: Collects pod logs from all namespaces via Kubernetes service discovery
+     * **Grafana**: UI and API for querying logs
+     * Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
+     * Grafana credentials: Retrieved during setup (default: admin/admin for local dev)
+     * Log retention: 24-72 hours (configurable for local development)
+     * Document in build.md under "Logging" → "Centralized Log Aggregation"
+   
+   - **AI-Queryable Logs**: Ensure logs can be queried programmatically:
+     * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{datasource_id}/loki/api/v1/query_range`
+     * Authentication: Basic auth (username/password from setup) or API token
+     * Example query: `{namespace!="kube-system"}`
+     * Document in build.md under "Logging" → "AI-Queryable Logs"
+     * Include in build.yaml under `observability.logs`:
+       - provider: grafana-loki
+       - access: http-api
+       - grafana:
+         - url: "http://localhost:3000"
+         - port_forward: "kubectl port-forward svc/grafana -n monitoring 3000:3000"
+         - api_endpoint: "/api/datasources/proxy/{id}/loki/api/v1/query_range"
+         - auth_method: basic-auth
+       - loki:
+         - retention: "72h"
+         - storage: filesystem
+       - promtail:
+         - scrape_path: "/var/log/containers/*.log"
+   
+   - **Issue Handling**: Logs are essential for debugging and issue handling:
+     * Mention that `specs/issues.md` (to be created) will guide issue handling workflows
+     * Issue handling command (to be built) will rely on logging infrastructure and Skaffold
+     * Document in build.md under "Logging" → "Issue Handling"
+   
    - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
    - **Log Management**: Add Makefile targets for log management:
      * `make logs` - View all application logs
      * `make logs-backend` - View backend logs
      * `make logs-frontend` - View frontend logs
-     * `make logs-follow` - Follow logs in real-time
+     * `make logs-follow` - Follow logs in real-time (uses stern)
      * `make logs-clean` - Clean old log files
    - **Service Integration**: Ensure all services output logs in a structured format (JSON recommended)
    - **Development Logging**: Configure development environment to output logs to both console and log files
@@ -1058,12 +1112,35 @@ Generate a complete build.md file following this structure:
 [Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
 
 ### 3.4 Logging
-[Comprehensive logging solution setup:
-- Log aggregation service and configuration
-- Log storage location and retention policies
-- How to view logs (commands and tools)
+
+#### Quick Log Streaming (Stern)
+- Install: `brew install stern` (macOS) or download binary (Linux)
+- Usage: `stern .` to tail logs from all pods
+- See `build.yaml` → `logging.local.quickstream` for details
+
+#### Centralized Log Aggregation (Loki + Grafana)
+- **Loki**: Log aggregation service running in Kubernetes
+- **Promtail**: Collects pod logs from all namespaces
+- **Grafana**: UI and API for querying logs
+- Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
+- Grafana credentials: Retrieved during setup (stored securely)
+- Log retention: 24-72 hours (configurable for local dev)
+
+#### AI-Queryable Logs
+- Grafana HTTP API: `http://localhost:3000/api/datasources/proxy/{datasource_id}/loki/api/v1/query_range`
+- Authentication: Basic auth or API token (credentials from setup)
+- Example query: `{namespace!="kube-system"}`
+- See `build.yaml` → `observability.logs` for API details
+
+#### Issue Handling
+- Logs are essential for debugging and issue handling
+- See `specs/issues.md` (to be created) for issue handling workflows
+- Issue handling command (to be built) will rely on logging infrastructure
+
+#### Log Viewing and Management
+- Commands and tools to view logs
 - Log format and structure
-- Log level configuration
+- Log level configuration (DEBUG, INFO, WARNING, ERROR)
 - Integration with services]
 
 ### 3.5 Verification
@@ -1238,6 +1315,504 @@ def _check_and_install_build_tools():
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
+
+
+def _install_stern() -> bool:
+    """Install Stern for live log tailing. Returns True if successful."""
+    import platform
+    import shutil
+
+    from vibe_tools.utils import run_command
+
+    # Check if already installed
+    result = run_command(["stern", "--version"], check=False)
+    if result[1] == 0:
+        click.echo("  ✅ Stern is already installed")
+        return True
+
+    click.echo("  📦 Installing Stern...")
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            try:
+                result = run_command(["brew", "install", "stern"], check=False)
+                if result[1] == 0:
+                    click.echo("  ✅ Stern installed successfully")
+                    return True
+                else:
+                    click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+            except Exception as e:
+                click.echo(f"  ⚠️  Installation error: {e}")
+        else:
+            click.echo("  💡 Install Stern manually: brew install stern")
+            return False
+    else:
+        # Linux - download binary
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                binary_path = pathlib.Path(tmpdir) / "stern"
+                download_cmd = [
+                    "curl",
+                    "-Lo",
+                    str(binary_path),
+                    "https://github.com/stern/stern/releases/latest/download/stern_linux_amd64",
+                ]
+                result = run_command(download_cmd, check=False)
+                if result[1] == 0:
+                    # Make executable and install
+                    binary_path.chmod(0o755)
+                    install_cmd = ["sudo", "mv", str(binary_path), "/usr/local/bin/stern"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo("  ✅ Stern installed successfully")
+                        return True
+                    else:
+                        click.echo(f"  ⚠️  Installation failed: {result[0]}")
+                else:
+                    click.echo(f"  ⚠️  Download failed: {result[0]}")
+        except Exception as e:
+            click.echo(f"  ⚠️  Installation error: {e}")
+
+    # Verify installation
+    result = run_command(["stern", "--version"], check=False)
+    if result[1] == 0:
+        click.echo("  ✅ Stern is now available")
+        return True
+    else:
+        click.echo("  ⚠️  Stern installation verification failed")
+        return False
+
+
+def _ensure_helm_installed() -> bool:
+    """Ensure Helm is installed. Returns True if available."""
+    from vibe_tools.utils import run_command
+
+    result = run_command(["helm", "version"], check=False)
+    if result[1] == 0:
+        return True
+
+    # Try to install via existing logic
+    import platform
+    import shutil
+
+    system = platform.system().lower()
+    is_macos = system == "darwin"
+
+    if is_macos:
+        if shutil.which("brew"):
+            click.echo("  📦 Installing Helm using Homebrew...")
+            result = run_command(["brew", "install", "helm"], check=False)
+            if result[1] == 0:
+                click.echo("  ✅ Helm installed successfully")
+                return True
+    else:
+        click.echo("  💡 Install Helm manually:")
+        click.echo("     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+
+    # Verify
+    result = run_command(["helm", "version"], check=False)
+    return result[1] == 0
+
+
+def _setup_helm_repos() -> bool:
+    """Add Grafana and Loki Helm repos. Returns True if successful."""
+    from vibe_tools.utils import run_command
+
+    repos = [
+        ("grafana", "https://grafana.github.io/helm-charts"),
+        ("prometheus-community", "https://prometheus-community.github.io/helm-charts"),
+    ]
+
+    for repo_name, repo_url in repos:
+        click.echo(f"  📦 Adding Helm repo: {repo_name}...")
+        result = run_command(
+            ["helm", "repo", "add", repo_name, repo_url], check=False
+        )
+        if result[1] != 0:
+            # Repo might already exist, try update
+            if "already exists" in result[0].lower():
+                click.echo(f"  ℹ️  Repo {repo_name} already exists, updating...")
+                result = run_command(["helm", "repo", "update", repo_name], check=False)
+                if result[1] != 0:
+                    click.echo(f"  ⚠️  Failed to update repo {repo_name}: {result[0]}")
+                    return False
+            else:
+                click.echo(f"  ⚠️  Failed to add repo {repo_name}: {result[0]}")
+                return False
+
+    # Update all repos
+    click.echo("  🔄 Updating Helm repos...")
+    result = run_command(["helm", "repo", "update"], check=False)
+    if result[1] != 0:
+        click.echo(f"  ⚠️  Failed to update Helm repos: {result[0]}")
+        return False
+
+    return True
+
+
+def _deploy_loki_stack() -> bool:
+    """Deploy Loki, Promtail, and Grafana via Helm. Returns True if successful."""
+    from vibe_tools.utils import run_command
+
+    namespace = "monitoring"
+
+    # Create namespace if it doesn't exist
+    click.echo(f"  📦 Creating namespace: {namespace}...")
+    result = run_command(
+        ["kubectl", "create", "namespace", namespace], check=False
+    )
+    if result[1] != 0 and "already exists" not in result[0].lower():
+        click.echo(f"  ⚠️  Failed to create namespace: {result[0]}")
+        return False
+
+    # Deploy Loki (single-binary mode, filesystem storage)
+    click.echo("  📦 Deploying Loki...")
+    loki_values = {
+        "loki": {
+            "auth_enabled": False,
+            "commonConfig": {"replication_factor": 1},
+            "storage": {"type": "filesystem"},
+            "schemaConfig": {
+                "configs": [
+                    {
+                        "from": "2024-01-01",
+                        "store": "tsdb",
+                        "object_store": "filesystem",
+                        "schema": "v13",
+                        "index": {"prefix": "index_", "period": "24h"},
+                    }
+                ]
+            },
+            "compactor": {
+                "retention_enabled": True,
+                "retention_delete_delay": "2h",
+                "retention_delete_worker_count": 150,
+            },
+            "limits_config": {
+                "retention_period": "72h",
+                "per_stream_rate_limit": "10MB",
+                "per_stream_rate_limit_burst": "20MB",
+            },
+        },
+        "singleBinary": {"replicas": 1},
+        "test": {"enabled": False},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(loki_values, f)
+        loki_values_file = f.name
+
+    try:
+        result = run_command(
+            [
+                "helm",
+                "upgrade",
+                "--install",
+                "loki",
+                "grafana/loki",
+                "--namespace",
+                namespace,
+                "--values",
+                loki_values_file,
+                "--wait",
+                "--timeout",
+                "5m",
+            ],
+            check=False,
+        )
+        if result[1] != 0:
+            click.echo(f"  ⚠️  Loki deployment failed: {result[0]}")
+            # Show pod logs for debugging
+            click.echo("  📋 Checking Loki pod status...")
+            result = run_command(
+                ["kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/name=loki"],
+                check=False,
+            )
+            click.echo(result[0])
+            result = run_command(
+                ["kubectl", "logs", "-n", namespace, "-l", "app.kubernetes.io/name=loki", "--tail=50"],
+                check=False,
+            )
+            if result[1] == 0:
+                click.echo("  📋 Loki pod logs:")
+                click.echo(result[0])
+            return False
+        click.echo("  ✅ Loki deployed")
+    finally:
+        pathlib.Path(loki_values_file).unlink(missing_ok=True)
+
+    # Deploy Promtail (Kubernetes service discovery)
+    click.echo("  📦 Deploying Promtail...")
+    promtail_values = {
+        "config": {
+            "clients": [{"url": f"http://loki.{namespace}.svc.cluster.local:3100/loki/api/v1/push"}],
+            "serverPort": 3101,
+            "positions": {"filename": "/tmp/positions.yaml"},
+        },
+        "extraArgs": ["-config.expand-env=true"],
+        "serviceAccount": {
+            "create": True,
+        },
+        "rbac": {
+            "create": True,
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(promtail_values, f)
+        promtail_values_file = f.name
+
+    try:
+        result = run_command(
+            [
+                "helm",
+                "upgrade",
+                "--install",
+                "promtail",
+                "grafana/promtail",
+                "--namespace",
+                namespace,
+                "--values",
+                promtail_values_file,
+                "--wait",
+                "--timeout",
+                "5m",
+            ],
+            check=False,
+        )
+        if result[1] != 0:
+            click.echo(f"  ⚠️  Promtail deployment failed: {result[0]}")
+            return False
+        click.echo("  ✅ Promtail deployed")
+    finally:
+        pathlib.Path(promtail_values_file).unlink(missing_ok=True)
+
+    # Deploy Grafana
+    click.echo("  📦 Deploying Grafana...")
+    grafana_values = {
+        "adminUser": "admin",
+        "adminPassword": "admin",  # Default for local dev, should be changed
+        "service": {"type": "ClusterIP", "port": 3000},
+        "datasources": {
+            "datasources.yaml": {
+                "apiVersion": 1,
+                "datasources": [
+                    {
+                        "name": "Loki",
+                        "type": "loki",
+                        "access": "proxy",
+                        "url": f"http://loki.{namespace}.svc.cluster.local:3100",
+                        "isDefault": True,
+                        "version": 1,
+                        "editable": True,
+                    }
+                ],
+            }
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(grafana_values, f)
+        grafana_values_file = f.name
+
+    try:
+        result = run_command(
+            [
+                "helm",
+                "upgrade",
+                "--install",
+                "grafana",
+                "grafana/grafana",
+                "--namespace",
+                namespace,
+                "--values",
+                grafana_values_file,
+                "--wait",
+                "--timeout",
+                "5m",
+            ],
+            check=False,
+        )
+        if result[1] != 0:
+            click.echo(f"  ⚠️  Grafana deployment failed: {result[0]}")
+            # Show pod logs for debugging
+            click.echo("  📋 Checking Grafana pod status...")
+            result = run_command(
+                ["kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/name=grafana"],
+                check=False,
+            )
+            click.echo(result[0])
+            result = run_command(
+                ["kubectl", "logs", "-n", namespace, "-l", "app.kubernetes.io/name=grafana", "--tail=50"],
+                check=False,
+            )
+            if result[1] == 0:
+                click.echo("  📋 Grafana pod logs:")
+                click.echo(result[0])
+            return False
+        click.echo("  ✅ Grafana deployed")
+    finally:
+        pathlib.Path(grafana_values_file).unlink(missing_ok=True)
+
+    # Wait for pods to be ready
+    click.echo("  ⏳ Waiting for pods to be ready...")
+    for _ in range(30):  # Wait up to 5 minutes
+        result = run_command(
+            [
+                "kubectl",
+                "get",
+                "pods",
+                "-n",
+                namespace,
+                "-o",
+                "jsonpath={.items[*].status.phase}",
+            ],
+            check=False,
+        )
+        if result[1] == 0:
+            phases = result[0].split()
+            if all(phase in ["Running", "Succeeded"] for phase in phases if phase):
+                break
+        time.sleep(10)
+
+    return True
+
+
+def _get_grafana_credentials() -> Dict[str, str]:
+    """Retrieve Grafana admin credentials. Returns dict with username and password."""
+    from vibe_tools.utils import run_command
+
+    namespace = "monitoring"
+    credentials = {"username": "admin", "password": "admin"}
+
+    # Try to get password from secret
+    result = run_command(
+        [
+            "kubectl",
+            "get",
+            "secret",
+            "-n",
+            namespace,
+            "grafana",
+            "-o",
+            "jsonpath={.data.admin-password}",
+        ],
+        check=False,
+    )
+    if result[1] == 0 and result[0]:
+        import base64
+
+        try:
+            credentials["password"] = base64.b64decode(result[0]).decode("utf-8")
+        except Exception:
+            pass
+
+    return credentials
+
+
+def _validate_logging_setup() -> bool:
+    """Validate logging setup with a test query. Returns True if successful."""
+    from vibe_tools.utils import run_command
+
+    namespace = "monitoring"
+
+    # Check if pods are running
+    click.echo("  🔍 Validating logging setup...")
+    result = run_command(
+        [
+            "kubectl",
+            "get",
+            "pods",
+            "-n",
+            namespace,
+            "-o",
+            "jsonpath={.items[*].metadata.name}",
+        ],
+        check=False,
+    )
+    if result[1] != 0:
+        click.echo("  ⚠️  Could not check pod status")
+        return False
+
+    pods = result[0].split()
+    expected_pods = ["loki", "promtail", "grafana"]
+    found_pods = [p for p in pods if any(exp in p.lower() for exp in expected_pods)]
+
+    if len(found_pods) < 3:
+        click.echo(f"  ⚠️  Expected 3 pods, found: {found_pods}")
+        return False
+
+    # Check if Grafana service is accessible
+    result = run_command(
+        [
+            "kubectl",
+            "get",
+            "svc",
+            "-n",
+            namespace,
+            "grafana",
+            "-o",
+            "jsonpath={.spec.clusterIP}",
+        ],
+        check=False,
+    )
+    if result[1] != 0:
+        click.echo("  ⚠️  Grafana service not found")
+        return False
+
+    click.echo("  ✅ Logging infrastructure is running")
+    return True
+
+
+def _setup_logging_infrastructure():
+    """Set up logging infrastructure: Stern, Loki, Promtail, Grafana."""
+    from vibe_tools.staging import has_k8s_cluster
+
+    click.echo("\n--- Logging Infrastructure Setup ---")
+
+    # Check if Kubernetes cluster is available
+    if not has_k8s_cluster():
+        click.echo("  ⚠️  Kubernetes cluster not available. Skipping logging setup.")
+        click.echo("     Logging infrastructure requires a local Kubernetes cluster (kind/k3d/minikube).")
+        return
+
+    # Install Stern
+    click.echo("\n📦 Installing Stern for log streaming...")
+    if not _install_stern():
+        click.echo("  ⚠️  Stern installation failed, but continuing with other components...")
+
+    # Ensure Helm is installed
+    click.echo("\n📦 Ensuring Helm is installed...")
+    if not _ensure_helm_installed():
+        click.echo("  ❌ Helm is required for logging infrastructure. Please install it manually.")
+        click.echo("     macOS: brew install helm")
+        click.echo("     Linux: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+        raise click.ClickException("Helm installation failed")
+
+    # Setup Helm repos
+    click.echo("\n📦 Setting up Helm repositories...")
+    if not _setup_helm_repos():
+        click.echo("  ❌ Failed to setup Helm repositories")
+        raise click.ClickException("Helm repo setup failed")
+
+    # Deploy Loki stack
+    click.echo("\n📦 Deploying Loki stack (Loki, Promtail, Grafana)...")
+    if not _deploy_loki_stack():
+        click.echo("  ❌ Failed to deploy Loki stack")
+        raise click.ClickException("Loki stack deployment failed")
+
+    # Get Grafana credentials
+    credentials = _get_grafana_credentials()
+    click.echo(f"\n✅ Logging infrastructure deployed successfully!")
+    click.echo(f"   Grafana credentials: username={credentials['username']}, password={credentials['password']}")
+    click.echo(f"   Access Grafana: kubectl port-forward svc/grafana -n monitoring 3000:3000")
+    click.echo(f"   Then open: http://localhost:3000")
+
+    # Validate setup
+    if not _validate_logging_setup():
+        click.echo("  ⚠️  Logging setup validation had issues, but components are deployed")
 
 
 if __name__ == "__main__":
