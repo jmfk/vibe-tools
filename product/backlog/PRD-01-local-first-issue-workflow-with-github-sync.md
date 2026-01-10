@@ -1,3 +1,8 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjlrM
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
+---
+
 # PRD-XX: Local-First Issue Workflow with GitHub Sync
 
 **Project:** vibe-tools
@@ -285,4 +290,3 @@ Agents must:
 - Should solved issues be squashed into changelogs automatically?
 
 ------
-

@@ -1,3 +1,8 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjlrK
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/4
+---
+
 # PRD: PM LLM Loop Refactor (Gemini 3 Flash & Streaming)
 
 **Status:** Implemented
