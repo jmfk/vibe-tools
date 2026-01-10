@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltc
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/39
+last_synced_at: '2026-01-10T15:24:39.111423'
+sync_hash: 8b61964b7ebe5856e2674822f6dd8ace0b90eb4b300377c902b16c5cbc5519a7
+---
+
 # Rerun System
 
 ## Overview

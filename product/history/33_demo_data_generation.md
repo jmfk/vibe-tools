@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltg
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/43
+last_synced_at: '2026-01-10T15:24:45.940255'
+sync_hash: f5525d69f398a9c5f0faf659f42002af5e596b1455e9455441e77c18fe35344f
+---
+
 # Demo Data Generation
 
 ## Overview

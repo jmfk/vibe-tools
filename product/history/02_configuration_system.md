@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlta
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/37
+last_synced_at: '2026-01-10T15:24:35.391451'
+sync_hash: b51d661d056e16fe57fa1d410358dc953d49b15585b3ae44c68fba0ec321e3a7
+---
+
 # Configuration System
 
 ## Overview

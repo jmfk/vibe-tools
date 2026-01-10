@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltZ
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/36
+last_synced_at: '2026-01-10T15:24:33.837653'
+sync_hash: 88eed4656da62f18bda72332ab6053615eb42f467b20de6f07f42ad504507409
+---
+
 # Cost Reconciliation
 
 ## Overview

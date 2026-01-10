@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltp
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/52
+last_synced_at: '2026-01-10T15:24:59.949215'
+sync_hash: 9fa84eab64b1bfa2052e59fd45e872e539e9e4e7b89436585895e6d53c323a7d
+---
+
 # Google Sheets Integration
 
 ## Overview

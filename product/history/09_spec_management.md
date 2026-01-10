@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltq
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/53
+last_synced_at: '2026-01-10T15:25:01.494702'
+sync_hash: 381cba03de23208fe0f9a0397735ac9f343754bd0e105a1a719e91e2bdd6e39a
+---
+
 # Spec Management
 
 ## Overview

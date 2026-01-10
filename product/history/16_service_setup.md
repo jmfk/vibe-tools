@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlte
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/41
+last_synced_at: '2026-01-10T15:24:42.954046'
+sync_hash: 81c1e9386b5a7e39953a68c749241b76366f60eb7b703d321928ab85900f7210
+---
+
 # Service Setup
 
 ## Overview

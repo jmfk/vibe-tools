@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlto
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/51
+last_synced_at: '2026-01-10T15:24:58.346317'
+sync_hash: daf493c8a1921ac0a85ad3e7c60c57a068ba39faf5ec77dde27203fbf4fc1a4d
+---
+
 # Stats and Billing
 
 ## Overview

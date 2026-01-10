@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlth
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/44
+last_synced_at: '2026-01-10T15:24:47.309117'
+sync_hash: 590266112bff48b90fc6834b117867e20625ce7ef871f459dad32fb1f12fc9f8
+---
+
 # Interactive PRD Writer
 
 ## Overview

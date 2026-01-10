@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltY
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/35
+last_synced_at: '2026-01-10T15:24:32.179092'
+sync_hash: abb29154f4b6c7a608302902b189232a449cfec996edf5064b1d2b0999dd98af
+---
+
 # Service Management
 
 ## Overview

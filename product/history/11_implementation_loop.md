@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlts
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/55
+last_synced_at: '2026-01-10T15:25:04.538839'
+sync_hash: f023ff5483efcb3b56a87e69dfaba1d840a0ae00760c013c0c84a76c0f2f5f10
+---
+
 # Implementation Loop
 
 ## Overview
