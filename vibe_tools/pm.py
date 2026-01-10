@@ -90,7 +90,8 @@ class PMCompleter:
                 "/send", "/reset", "/mode", "/ask", "/agent", "/show", "/edit",
                 "/history", "/files", "/add", "/list", "/ls", "/implemented",
                 "/i", "/ps", "/kill", "/exit", "/conf", "/help", "/focus",
-                "/f", "/switch", "/create", "/delete", "/push", "/queue", "/stop"
+                "/f", "/switch", "/create", "/delete", "/push", "/queue", "/stop",
+                "/qu", "/clear"
             ]
         )
         self.subcommands = {
@@ -137,10 +138,14 @@ class InteractivePM:
         agent_type: str = "cursor-agent",
         prompts_dir: Optional[pathlib.Path] = None,
         stream: bool = True,
+        verbose: bool = False,
+        model_name: str = "gemini-2.0-flash-exp",
     ):
         self.agent_type = agent_type
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
         self.stream = stream
+        self.verbose = verbose
+        self.model_name = model_name
         self.history: List[Dict[str, str]] = []
         self.pending_prompt: str = ""
         self.session_memory: str = ""
@@ -149,11 +154,22 @@ class InteractivePM:
         self.mode = "ASK"
         self.focused_prd: Optional[str] = None
         self.mq = MessageQueue()
-        self.llm = StreamingLLM()
+        self.llm = StreamingLLM(model_name=model_name)
         self._load_session()
         self._setup_readline()
-        self.loop = asyncio.get_event_loop()
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
         self.interrupt_event = asyncio.Event()
+
+    def run(self, query: Optional[str] = None):
+        """Sync wrapper for run_loop."""
+        try:
+            asyncio.run(self.run_loop(query))
+        except KeyboardInterrupt:
+            pass
 
     def _setup_readline(self):
         if readline:
@@ -164,11 +180,13 @@ class InteractivePM:
             if "libedit" in readline.__doc__:
                 readline.parse_and_bind("bind ^I menu-complete")
                 readline.parse_and_bind('bind "\033[Z" backward-menu-complete')
+                readline.parse_and_bind('bind "^Q" "/r\n"')
                 readline.parse_and_bind("bind -e")
             else:
                 readline.parse_and_bind("tab: menu-complete")
                 readline.parse_and_bind(r'"\e[Z": menu-complete-backward')
                 readline.parse_and_bind(r'"\e": kill-whole-line')
+                readline.parse_and_bind(r'"\C-q": "/r\n"')
 
             history_file = VIBE_PROJECT_DIR / ".pm_history"
             if history_file.exists():
@@ -368,7 +386,7 @@ class InteractivePM:
                 self.mq.push(self.pending_prompt)
                 self.pending_prompt = ""
                 click.echo("🚀 Pushing to front and interrupting current...")
-        elif cmd == "/queue":
+        elif cmd in ["/queue", "/qu"]:
             self._handle_queue_command(args)
         elif cmd == "/stop":
             if self.mq.status == "BUSY" and self.mq.current_task:
@@ -376,7 +394,7 @@ class InteractivePM:
                 click.echo("🛑 Interrupted current task.")
             else:
                 click.echo("❌ No task is currently running.")
-        elif cmd in ["/r", "/reset"]:
+        elif cmd in ["/r", "/reset", "/clear"]:
             self.pending_prompt = ""
             self.mq.clear()
             click.echo("✅ Pending prompt and queue cleared.")
@@ -440,8 +458,8 @@ class InteractivePM:
         click.echo("  /send, /s        - Add pending prompt to queue")
         click.echo("  /push            - Interrupt current and start pending prompt immediately")
         click.echo("  /stop            - Stop the current LLM generation")
-        click.echo("  /queue [list|clear|remove <idx>] - Manage message queue")
-        click.echo("  /reset, /r       - Clear pending prompt and queue")
+        click.echo("  /queue, /qu [list|clear|remove <idx>] - Manage message queue")
+        click.echo("  /reset, /r, /clear - Clear pending prompt and queue")
         click.echo("  /mode, /m [ASK|AGENT] - Switch between modes")
         click.echo("  /focus, /f <name|idx> - Focus on a specific PRD")
         click.echo("  /list, /ls [memory|specs] - List items")

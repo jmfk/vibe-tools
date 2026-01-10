@@ -14,4 +14,4 @@ def register_pm(cli):
             agent_type=ctx.obj.get("agent", "cursor-agent"),
             stream=ctx.obj.get("stream", True),
         )
-        asyncio.run(pm_tool.run_loop(query))
+        pm_tool.run(query)
