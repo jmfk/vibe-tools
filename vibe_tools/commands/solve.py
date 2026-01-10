@@ -9,12 +9,14 @@ def _solve_issue(issue: Issue, mode: str, agent: str, stream: bool = False):
     """Internal helper to solve a single issue."""
     click.echo(f"🎯 Starting {mode} mode for issue: {issue.title} ({issue.id})")
     
+    from vibe_tools.commands.sync import sync_issues
     # Update status if not already in progress
     now = datetime.datetime.now().isoformat()
     if issue.status == "backlog":
         issue.status = "in_progress"
         issue.updated_at = now
         save_issue(issue)
+        sync_issues(quiet=True)
         click.echo(f"Status transitioned to: {issue.status}")
 
     # In local-first workflow, we want to update the investigation or solution notes
@@ -26,6 +28,7 @@ def _solve_issue(issue: Issue, mode: str, agent: str, stream: bool = False):
         
     issue.updated_at = now
     save_issue(issue)
+    sync_issues(quiet=True)
     
     if mode == "solve":
         success = issue_solve_loop(issue, agent, stream=stream)
