@@ -12,8 +12,13 @@ def list_issues_impl(status, severity, service, search, full, search_query):
     
     filtered_issues = []
     for issue in issues:
-        if status and issue.status != status:
+        if status:
+            if issue.status != status:
+                continue
+        elif issue.status == "done":
+            # Hide done issues by default unless specifically filtered
             continue
+            
         if severity and issue.severity != severity:
             continue
         if service and service.lower() not in (issue.service or "").lower():
