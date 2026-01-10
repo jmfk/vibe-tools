@@ -25,8 +25,60 @@ def register_migrate(cli):
         ensure_project_structure()
 
         # 1. Handle project -> implementation and specs -> product migration
-        from vibe_tools.utils import migrate_to_project_dir
+        from vibe_tools.utils import (
+            PRODUCT_DIR,
+            PRD_DIR,
+            migrate_to_project_dir,
+            ARCHITECTURE_SPEC,
+            INFRA_SPEC,
+            CICD_SPEC,
+            TESTING_SPEC,
+            BUILD_SPEC,
+            SETUP_SPEC
+        )
         migrate_to_project_dir()
+
+        # 1.1 Move any YAML files accidentally in product/ to implementation/prds/
+        if PRODUCT_DIR.exists():
+            for yaml_file in PRODUCT_DIR.glob("*.yaml"):
+                target_path = PRD_DIR / yaml_file.name
+                if not target_path.exists():
+                    click.echo(f"  📦 Moving {yaml_file.name} to implementation/prds/")
+                    shutil.move(str(yaml_file), str(target_path))
+                else:
+                    click.echo(f"  ⚠️  {yaml_file.name} already exists in implementation/prds/, removing from product/")
+                    yaml_file.unlink()
+
+        # 1.2 Move any markdown files in implementation/ to product/
+        from vibe_tools.utils import VIBE_PROJECT_DIR
+        if VIBE_PROJECT_DIR.exists():
+            for md_file in VIBE_PROJECT_DIR.rglob("*.md"):
+                # Skip instructions if they are meant to be there, but user said NO .md in implementation
+                # Actually instructions/ usually contains .txt, but let's be safe
+                target_path = PRODUCT_DIR / md_file.name
+                if not target_path.exists():
+                    click.echo(f"  📦 Moving {md_file} to product/")
+                    shutil.move(str(md_file), str(target_path))
+                else:
+                    click.echo(f"  ⚠️  {md_file.name} already exists in product/, removing from implementation/")
+                    md_file.unlink()
+
+        # 1.3 Ensure core lifecycle markdown files exist in product/
+        core_md_files = {
+            "build.md": "# Build Configuration\n\nThis file specifies the build process and configuration for the project.",
+            "testing.md": "# Testing Strategy\n\nThis file defines the testing framework, targets, and requirements for the project.",
+            "setup.md": "# Project Setup\n\nThis file outlines the initial setup and configuration requirements for the project.",
+            "infrastructure.md": "# Infrastructure Definition\n\nThis file describes the infrastructure components and requirements.",
+            "cicd.md": "# CI/CD Pipeline\n\nThis file specifies the continuous integration and deployment workflows.",
+        }
+        for filename, initial_content in core_md_files.items():
+            file_path = PRODUCT_DIR / filename
+            if not file_path.exists():
+                # Only create if the corresponding YAML exists or if it's generally expected
+                yaml_name = filename.replace(".md", ".yaml")
+                if (PRD_DIR / yaml_name).exists() or filename in ["build.md", "testing.md"]:
+                    click.echo(f"  📄 Creating missing core spec: {filename}")
+                    file_path.write_text(initial_content)
 
         state = load_project_state()
         state_changed = False
@@ -122,7 +174,7 @@ def register_migrate(cli):
             for md_file in PRODUCT_DIR.glob("*.md"):
                 # Only move if it matches a PRD pattern or we want to organize them
                 # Architecture and Infra stay in root of product/
-                if md_file.name in ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md"]:
+                if md_file.name in ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md", "setup.md"]:
                     continue
 
                 # Check if it should go to history or backlog
@@ -153,10 +205,14 @@ def register_migrate(cli):
                 save_issue(issue)
             click.echo(f"  ✨ Re-indexed {len(all_issues)} issues.")
 
-        # 5. Cleanup legacy directories
+        # 5. Fix paths inside moved files
+        click.echo("📝 Fixing paths inside implementation and product files...")
+        _fix_content_paths()
+
+        # 6. Cleanup legacy directories
         _cleanup_legacy_dirs()
 
-        # 6. Finalize environment
+        # 7. Finalize environment
         click.echo("🔄 Syncing environment...")
         from vibe_tools.utils import sync_env_file
         sync_env_file()
@@ -164,6 +220,48 @@ def register_migrate(cli):
         click.echo("✅ Migration complete.")
 
     cli.add_command(migrate)
+
+
+def _fix_content_paths():
+    """Recursively fixes legacy paths inside files in implementation/ and product/."""
+    replacements = [
+        ("project/prds/", "implementation/prds/"),
+        ("project/logs/", "implementation/logs/"),
+        ("project/costs/", "implementation/costs/"),
+        ("project/instructions/", "implementation/instructions/"),
+        ("project/vibe_data/", "implementation/data/"),
+        ("project/", "implementation/"),
+        ("specs/", "product/"),
+        ("prds/", "implementation/prds/"),
+        ("vibe_data/", "implementation/data/"),
+        ("logs/", "implementation/logs/"),
+        ("costs/", "implementation/costs/"),
+        ("instructions/", "implementation/instructions/"),
+        ("stats/", "implementation/costs/"),
+    ]
+
+    target_dirs = [pathlib.Path("implementation"), pathlib.Path("product"), pathlib.Path("issues")]
+
+    for target_dir in target_dirs:
+        if not target_dir.exists():
+            continue
+
+        click.echo(f"  🔍 Fixing paths in {target_dir}/...")
+        for file_path in target_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            try:
+                content = file_path.read_text()
+                new_content = content
+                for old, new in replacements:
+                    new_content = new_content.replace(old, new)
+
+                if new_content != content:
+                    click.echo(f"    ✨ Updated {file_path}")
+                    file_path.write_text(new_content)
+            except (UnicodeDecodeError, PermissionError):
+                continue
 
 
 def _cleanup_legacy_dirs():

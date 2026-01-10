@@ -64,6 +64,7 @@ TESTING_SPEC = PLANNING_DIR / "testing.md"
 BUILD = VIBE_PROJECT_DIR / "build.yaml"
 BUILD_CURRENT = VIBE_PROJECT_DIR / "build-current.yaml"
 BUILD_SPEC = PLANNING_DIR / "build.md"
+SETUP_SPEC = PLANNING_DIR / "setup.md"
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
@@ -584,9 +585,7 @@ def run_llm(
     full_prompt = f"Execute the given task and return the result.\n\nInstruction: {prompt}\n\nAnswer:"
 
     response = client.models.generate_content(
-        model=gemini_model,
-        contents=full_prompt,
-        config=config if config else None
+        model=gemini_model, contents=full_prompt, config=config if config else None
     )
 
     result = response.text
@@ -1456,13 +1455,23 @@ def get_vibe_status_report():
     all_plans = state.get("plans", {})
     started_prds = state.get("started_prds", [])
     completed_prds_list = state.get("completed_prds", [])
-    
+
     total_prds = len(all_plans)
-    completed_prds = sum(1 for pid, p in all_plans.items() if p.get("status") == "completed" or pid in completed_prds_list)
-    in_progress_prds = sum(1 for pid, p in all_plans.items() if (p.get("status") == "in_progress" or pid in started_prds) and not (p.get("status") == "completed" or pid in completed_prds_list))
+    completed_prds = sum(
+        1
+        for pid, p in all_plans.items()
+        if p.get("status") == "completed" or pid in completed_prds_list
+    )
+    in_progress_prds = sum(
+        1
+        for pid, p in all_plans.items()
+        if (p.get("status") == "in_progress" or pid in started_prds)
+        and not (p.get("status") == "completed" or pid in completed_prds_list)
+    )
     pending_prds = total_prds - completed_prds - in_progress_prds
 
     from vibe_tools.issues import load_all_issues
+
     all_issues = load_all_issues()
     total_issues = len(all_issues)
     completed_issues = sum(1 for i in all_issues if i.status == "done")
@@ -1470,8 +1479,12 @@ def get_vibe_status_report():
     pending_issues = total_issues - completed_issues - in_progress_issues
 
     report.append(click.style("\nSUMMARY:", fg="yellow", bold=True))
-    report.append(f"  - PRDs:   {total_prds} Total ({click.style(str(completed_prds), fg='green')} Done, {click.style(str(in_progress_prds), fg='blue')} In Progress, {click.style(str(pending_prds), fg='white', dim=True)} Pending)")
-    report.append(f"  - Issues: {total_issues} Total ({click.style(str(completed_issues), fg='green')} Done, {click.style(str(in_progress_issues), fg='blue')} In Progress, {click.style(str(pending_issues), fg='white', dim=True)} Pending)")
+    report.append(
+        f"  - PRDs:   {total_prds} Total ({click.style(str(completed_prds), fg='green')} Done, {click.style(str(in_progress_prds), fg='blue')} In Progress, {click.style(str(pending_prds), fg='white', dim=True)} Pending)"
+    )
+    report.append(
+        f"  - Issues: {total_issues} Total ({click.style(str(completed_issues), fg='green')} Done, {click.style(str(in_progress_issues), fg='blue')} In Progress, {click.style(str(pending_issues), fg='white', dim=True)} Pending)"
+    )
 
     active_task = state.get("active_task")
     if active_task:
