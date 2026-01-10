@@ -9,8 +9,14 @@ import yaml
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     BACKLOG_DIR,
+    HISTORY_DIR,
+    INBOX_DIR,
+    REJECTED_DIR,
     PRD_DIR,
     PLANNING_BACKLOG_DIR,
+    PLANNING_HISTORY_DIR,
+    PLANNING_INBOX_DIR,
+    PLANNING_REJECTED_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
     get_prompt,
@@ -124,11 +130,26 @@ def normalize_prd(
 
         _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
 
-        # Determine target PRD directory (preserving subdirectories)
-        try:
+        # Determine target PRD directory based on which product subdirectory it came from
+        if PLANNING_BACKLOG_DIR in spec_path.parents or spec_path.parent == PLANNING_BACKLOG_DIR:
+            target_base = BACKLOG_DIR
             rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
-        except ValueError:
-            rel_dir = spec_path.parent.relative_to(specs_dir)
+        elif PLANNING_HISTORY_DIR in spec_path.parents or spec_path.parent == PLANNING_HISTORY_DIR:
+            target_base = HISTORY_DIR
+            rel_dir = spec_path.parent.relative_to(PLANNING_HISTORY_DIR)
+        elif PLANNING_INBOX_DIR in spec_path.parents or spec_path.parent == PLANNING_INBOX_DIR:
+            target_base = INBOX_DIR
+            rel_dir = spec_path.parent.relative_to(PLANNING_INBOX_DIR)
+        elif PLANNING_REJECTED_DIR in spec_path.parents or spec_path.parent == PLANNING_REJECTED_DIR:
+            target_base = REJECTED_DIR
+            rel_dir = spec_path.parent.relative_to(PLANNING_REJECTED_DIR)
+        else:
+            # Default to backlog if it's in the product root or elsewhere
+            target_base = BACKLOG_DIR
+            try:
+                rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
+            except ValueError:
+                rel_dir = spec_path.parent.relative_to(specs_dir)
         
         # Determine output filename and path
         global_truths = [
@@ -148,8 +169,8 @@ def normalize_prd(
                 # Global truths stay in PRD_DIR (implementation/prds/)
                 output_path = PRD_DIR / output_filename
         else:
-            # PRDs go to BACKLOG_DIR (implementation/prds/backlog/)
-            target_prd_dir = BACKLOG_DIR / rel_dir
+            # PRDs go to the calculated target base (implementation/prds/category/)
+            target_prd_dir = target_base / rel_dir
             target_prd_dir.mkdir(parents=True, exist_ok=True)
             output_filename = f"prd_{clean_stem}.yaml"
             output_path = target_prd_dir / output_filename
