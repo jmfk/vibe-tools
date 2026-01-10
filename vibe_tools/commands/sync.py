@@ -192,10 +192,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
     # 1. Fetch current GitHub discussions
     gh_discussions = fetch_github_discussions(repo_owner, repo_name)
     gh_by_title = {d["title"]: d for d in gh_discussions}
+    gh_by_id = {d["id"]: d for d in gh_discussions}
     
     # Define labels we manage
     vibe_labels = ["inbox", "backlog", "history", "rejected", "system"]
-    label_ids = {l: get_label_id(repo_owner, repo_name, l) for l in vibe_labels}
     
     # Define directories and their labels
     sync_dirs = {
@@ -212,6 +212,9 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
     repo = f"{repo_owner}/{repo_name}"
     for label in vibe_labels:
         ensure_github_label(repo, label)
+    
+    # Now get label IDs after ensuring they exist
+    label_ids = {l: get_label_id(repo_owner, repo_name, l) for l in vibe_labels}
 
     # 2. Sync directories
     for directory, label in sync_dirs.items():
@@ -230,7 +233,12 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
             
-            gh_disc = gh_by_title.get(title)
+            gh_disc = None
+            if meta.sync_info.get('discussion_id'):
+                gh_disc = gh_by_id.get(meta.sync_info['discussion_id'])
+            
+            if not gh_disc:
+                gh_disc = gh_by_title.get(title)
             
             if not gh_disc:
                 # Create discussion
@@ -257,6 +265,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                         meta.sync_hash = meta.get_hash()
                         meta.save()
                         
+                        # Add to local cache to prevent duplicates in same run
+                        gh_by_id[disc["id"]] = disc
+                        gh_by_title[title] = disc
+                        
                         if label_ids[label]:
                             add_discussion_labels(disc["id"], [label_ids[label]])
                             
@@ -270,6 +282,13 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 gh_updated_at = gh_disc["updatedAt"]
                 gh_body = gh_disc["body"]
                 
+                # Update metadata if not present
+                if not meta.sync_info.get('discussion_id'):
+                    meta.sync_info['discussion_id'] = gh_disc["id"]
+                    if 'discussion_url' not in meta.sync_info:
+                         meta.github_discussion_url = gh_disc.get("url") or f"https://github.com/{repo_owner}/{repo_name}/discussions/{gh_disc['number']}"
+                    meta.save()
+
                 # Check for bidirectional sync for inbox
                 if is_inbox:
                     # Compare updatedAt
@@ -345,7 +364,12 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
         body = meta.to_markdown()
         label = "system"
         
-        gh_disc = gh_by_title.get(title)
+        gh_disc = None
+        if meta.sync_info.get('discussion_id'):
+            gh_disc = gh_by_id.get(meta.sync_info['discussion_id'])
+        
+        if not gh_disc:
+            gh_disc = gh_by_title.get(title)
         
         if not gh_disc:
             if dry_run:
@@ -365,10 +389,28 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
             if code == 0:
                 data = json.loads(stdout)
                 disc = data["data"]["createDiscussion"]["discussion"]
+                
+                meta.sync_info['discussion_id'] = disc["id"]
+                meta.github_discussion_url = disc["url"]
+                meta.last_synced_at = datetime.datetime.now().isoformat()
+                meta.sync_hash = meta.get_hash()
+                meta.save()
+
+                # Add to local cache
+                gh_by_id[disc["id"]] = disc
+                gh_by_title[title] = disc
+
                 if label_ids[label]:
                     add_discussion_labels(disc["id"], [label_ids[label]])
                 logger.info(f"Created GitHub Discussion for system spec {filename}")
         else:
+            # Update metadata if not present
+            if not meta.sync_info.get('discussion_id'):
+                meta.sync_info['discussion_id'] = gh_disc["id"]
+                if 'discussion_url' not in meta.sync_info:
+                    meta.github_discussion_url = gh_disc.get("url") or f"https://github.com/{repo_owner}/{repo_name}/discussions/{gh_disc['number']}"
+                meta.save()
+
             # Update (One-way)
             if gh_disc["body"] != body:
                 if dry_run:
@@ -384,6 +426,9 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 ]
                 stdout, code = run_command(cmd, check=False)
                 if code == 0:
+                    meta.last_synced_at = datetime.datetime.now().isoformat()
+                    meta.sync_hash = meta.get_hash()
+                    meta.save()
                     logger.info(f"Updated GitHub Discussion for system spec {filename}")
             
             # Ensure label
@@ -405,69 +450,6 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                     if to_remove_ids:
                         remove_discussion_labels(gh_disc["id"], to_remove_ids)
                         logger.info(f"Removed old status labels from GitHub Discussion {gh_disc['number']}")
-
-    # 3. Handle System files
-    for filename in system_files:
-        prd_path = PRODUCT_DIR / filename
-        if not prd_path.exists():
-            continue
-            
-        if relevant_files is not None:
-            if str(prd_path) not in relevant_files:
-                continue
-
-        meta = get_prd_metadata(prd_path)
-        title = f"[SYSTEM] {meta.title}"
-        body = meta.to_markdown()
-        label = "system"
-        label_id = get_label_id(repo_owner, repo_name, label)
-        
-        gh_disc = gh_by_title.get(title)
-        
-        if not gh_disc:
-            if dry_run:
-                logger.info(f"[DRY RUN] Would create GitHub Discussion for system spec {filename}")
-                continue
-            
-            # Create
-            cmd = [
-                "gh", "api", "graphql",
-                "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
-                "-f", f"repoId={repo_id}",
-                "-f", f"categoryId={category_id}",
-                "-f", f"title={title}",
-                "-f", f"body={body}"
-            ]
-            stdout, code = run_command(cmd, check=False)
-            if code == 0:
-                data = json.loads(stdout)
-                disc = data["data"]["createDiscussion"]["discussion"]
-                if label_id:
-                    add_discussion_labels(disc["id"], [label_id])
-                logger.info(f"Created GitHub Discussion for system spec {filename}")
-        else:
-            # Update (One-way)
-            if gh_disc["body"] != body:
-                if dry_run:
-                    logger.info(f"[DRY RUN] Would update GitHub Discussion for system spec {filename}")
-                    continue
-                    
-                cmd = [
-                    "gh", "api", "graphql",
-                    "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
-                    "-f", f"id={gh_disc['id']}",
-                    "-f", f"title={title}",
-                    "-f", f"body={body}"
-                ]
-                stdout, code = run_command(cmd, check=False)
-                if code == 0:
-                    logger.info(f"Updated GitHub Discussion for system spec {filename}")
-            
-            # Ensure label
-            gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
-            if label not in gh_labels:
-                if not dry_run and label_id:
-                    add_discussion_labels(gh_disc["id"], [label_id])
 
     # 4. Pull new inbox discussions from GitHub
     if not dry_run:

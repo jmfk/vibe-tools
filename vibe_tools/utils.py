@@ -1669,6 +1669,3 @@ def get_vibe_status_report():
 
     report.append("")
     return "\n".join(report)
-
-    report.append("")
-    return "\n".join(report)
