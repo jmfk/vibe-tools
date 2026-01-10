@@ -8,7 +8,10 @@ from vibe_tools.issues import (
     load_issue_by_id, get_issue_hash, generate_issue_id,
     BACKLOG_DIR as ISSUES_BACKLOG_DIR, HISTORY_DIR as ISSUES_HISTORY_DIR, STATUS_MAPPING
 )
-from vibe_tools.utils import run_command, logger, switch_to_main, get_main_branch
+from vibe_tools.utils import (
+    PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR, PLANNING_HISTORY_DIR, PLANNING_REJECTED_DIR, 
+    PRD_DIR, load_project_state, run_command, logger, switch_to_main, get_main_branch
+)
 from vibe_tools.prds import get_prd_metadata
 
 def get_github_repo_info():
@@ -34,6 +37,82 @@ def get_github_repo_info():
     except (json.JSONDecodeError, KeyError):
         return owner, name, None
 
+def get_label_id(owner, name, label_name):
+    query = """
+    query($owner:String!, $name:String!, $labelName:String!) {
+      repository(owner:$owner, name:$name) {
+        label(name:$labelName) { id }
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"owner={owner}",
+        "-f", f"name={name}",
+        "-f", f"labelName={label_name}"
+    ]
+    stdout, code = run_command(cmd, check=False)
+    if code == 0:
+        try:
+            data = json.loads(stdout)
+            label = data.get("data", {}).get("repository", {}).get("label")
+            if label:
+                return label["id"]
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return None
+
+def fetch_github_discussions(owner, name):
+    query = """
+    query($owner:String!, $name:String!) {
+      repository(owner:$owner, name:$name) {
+        discussions(first:100) {
+          nodes {
+            id
+            number
+            title
+            body
+            updatedAt
+            category { name }
+            labels(first:10) { nodes { name } }
+          }
+        }
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"owner={owner}",
+        "-f", f"name={name}"
+    ]
+    stdout, code = run_command(cmd, check=False)
+    if code == 0:
+        try:
+            return json.loads(stdout)["data"]["repository"]["discussions"]["nodes"]
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return []
+
+def add_discussion_labels(discussion_id, label_ids):
+    if not label_ids:
+        return
+    query = """
+    mutation($discussionId:ID!, $labelIds:[ID!]!) {
+      addLabelsToLabelable(input:{labelableId:$discussionId, labelIds:$labelIds}) {
+        clientMutationId
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"discussionId={discussion_id}",
+        "-f", f"labelIds={label_ids}"
+    ]
+    run_command(cmd, check=False)
+
 def get_discussion_category_id(owner, name, category_name="Ideas"):
     stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ discussionCategories(first: 10) {{ nodes {{ id name }} }} }} }}"], check=False)
     if code != 0:
@@ -54,28 +133,50 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
         logger.warning("Could not find 'Ideas' discussion category. Skipping discussion sync.")
         return
 
-    from vibe_tools.utils import PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR
+    from vibe_tools.utils import PRODUCT_DIR
     
-    for directory in [PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR]:
+    # 1. Fetch current GitHub discussions
+    gh_discussions = fetch_github_discussions(repo_owner, repo_name)
+    gh_by_title = {d["title"]: d for d in gh_discussions}
+    
+    # Define directories and their labels
+    sync_dirs = {
+        PLANNING_INBOX_DIR: "inbox",
+        PLANNING_BACKLOG_DIR: "backlog",
+        PLANNING_HISTORY_DIR: "history",
+        PLANNING_REJECTED_DIR: "rejected",
+    }
+
+    # Also handle system files in product root
+    system_files = ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md"]
+    
+    # Ensure all labels exist
+    repo = f"{repo_owner}/{repo_name}"
+    for label in ["inbox", "backlog", "history", "rejected", "system"]:
+        ensure_github_label(repo, label)
+
+    # 2. Sync directories
+    for directory, label in sync_dirs.items():
         if not directory.exists():
             continue
         
-        for prd_path in directory.glob("*"):
-            if prd_path.is_dir() or prd_path.suffix not in ['.md', '.yaml', '.yml']:
-                continue
-            
+        is_inbox = label == "inbox"
+        
+        for prd_path in directory.glob("*.md"):
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
             
-            if dry_run:
-                logger.info(f"[DRY RUN] Would sync GitHub Discussion for {prd_path.name}")
-                continue
-
-            discussion_id = meta.sync_info.get('discussion_id')
+            label_id = get_label_id(repo_owner, repo_name, label)
             
-            if not discussion_id:
+            gh_disc = gh_by_title.get(title)
+            
+            if not gh_disc:
                 # Create discussion
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would create GitHub Discussion for {prd_path.name} with label '{label}'")
+                    continue
+                
                 cmd = [
                     "gh", "api", "graphql",
                     "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
@@ -91,65 +192,200 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
                         disc = data["data"]["createDiscussion"]["discussion"]
                         meta.sync_info['discussion_id'] = disc["id"]
                         meta.github_discussion_url = disc["url"]
+                        meta.last_synced_at = datetime.datetime.now().isoformat()
+                        meta.sync_hash = meta.get_hash()
                         meta.save()
-                        logger.info(f"Created GitHub Discussion for {prd_path.name}")
+                        
+                        if label_id:
+                            add_discussion_labels(disc["id"], [label_id])
+                            
+                        logger.info(f"Created GitHub Discussion for {prd_path.name} with label '{label}'")
                     except (json.JSONDecodeError, KeyError):
                         logger.error(f"Failed to parse discussion creation response for {prd_path.name}")
                 else:
                     logger.error(f"Failed to create GitHub Discussion for {prd_path.name}: {stdout}")
             else:
-                # Update discussion
+                # Sync existing discussion
+                gh_updated_at = gh_disc["updatedAt"]
+                gh_body = gh_disc["body"]
+                
+                # Check for bidirectional sync for inbox
+                if is_inbox:
+                    # Compare updatedAt
+                    local_mtime = datetime.datetime.fromtimestamp(prd_path.stat().st_mtime, tz=datetime.timezone.utc)
+                    gh_time = datetime.datetime.fromisoformat(gh_updated_at.replace("Z", "+00:00"))
+                    
+                    if gh_time > local_mtime and gh_body != body:
+                        # GitHub is newer, pull
+                        if dry_run:
+                            logger.info(f"[DRY RUN] Would pull GitHub Discussion updates for {prd_path.name}")
+                        else:
+                            meta.content = gh_body
+                            meta.last_synced_at = gh_updated_at
+                            meta.sync_hash = meta.get_hash()
+                            meta.save()
+                            logger.info(f"Pulled updates for {prd_path.name} from GitHub")
+                        continue # Skip push
+                
+                # One-way push (vibe-tools -> GitHub) or local is newer in bidirectional
+                if gh_body != body:
+                    if dry_run:
+                        logger.info(f"[DRY RUN] Would update GitHub Discussion for {prd_path.name}")
+                        continue
+                        
+                    cmd = [
+                        "gh", "api", "graphql",
+                        "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                        "-f", f"id={gh_disc['id']}",
+                        "-f", f"title={title}",
+                        "-f", f"body={body}"
+                    ]
+                    stdout, code = run_command(cmd, check=False)
+                    if code == 0:
+                        meta.last_synced_at = datetime.datetime.now().isoformat()
+                        meta.sync_hash = meta.get_hash()
+                        meta.save()
+                        logger.info(f"Updated GitHub Discussion for {prd_path.name}")
+                    else:
+                        logger.error(f"Failed to update GitHub Discussion for {prd_path.name}: {stdout}")
+                
+                # Ensure correct label
+                gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
+                if label not in gh_labels:
+                    if not dry_run and label_id:
+                        add_discussion_labels(gh_disc["id"], [label_id])
+                        logger.info(f"Added label '{label}' to GitHub Discussion {gh_disc['number']}")
+
+    # 3. Handle System files
+    for filename in system_files:
+        prd_path = PRODUCT_DIR / filename
+        if not prd_path.exists():
+            continue
+            
+        meta = get_prd_metadata(prd_path)
+        title = f"[SYSTEM] {meta.title}"
+        body = meta.to_markdown()
+        label = "system"
+        label_id = get_label_id(repo_owner, repo_name, label)
+        
+        gh_disc = gh_by_title.get(title)
+        
+        if not gh_disc:
+            if dry_run:
+                logger.info(f"[DRY RUN] Would create GitHub Discussion for system spec {filename}")
+                continue
+            
+            # Create
+            cmd = [
+                "gh", "api", "graphql",
+                "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                "-f", f"repoId={repo_id}",
+                "-f", f"categoryId={category_id}",
+                "-f", f"title={title}",
+                "-f", f"body={body}"
+            ]
+            stdout, code = run_command(cmd, check=False)
+            if code == 0:
+                data = json.loads(stdout)
+                disc = data["data"]["createDiscussion"]["discussion"]
+                if label_id:
+                    add_discussion_labels(disc["id"], [label_id])
+                logger.info(f"Created GitHub Discussion for system spec {filename}")
+        else:
+            # Update (One-way)
+            if gh_disc["body"] != body:
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would update GitHub Discussion for system spec {filename}")
+                    continue
+                    
                 cmd = [
                     "gh", "api", "graphql",
                     "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
-                    "-f", f"id={discussion_id}",
+                    "-f", f"id={gh_disc['id']}",
                     "-f", f"title={title}",
                     "-f", f"body={body}"
                 ]
                 stdout, code = run_command(cmd, check=False)
-                if code != 0:
-                    logger.error(f"Failed to update GitHub Discussion for {prd_path.name}: {stdout}")
-                else:
-                    logger.info(f"Updated GitHub Discussion for {prd_path.name}")
+                if code == 0:
+                    logger.info(f"Updated GitHub Discussion for system spec {filename}")
+            
+            # Ensure label
+            gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
+            if label not in gh_labels:
+                if not dry_run and label_id:
+                    add_discussion_labels(gh_disc["id"], [label_id])
+
+    # 4. Pull new inbox discussions from GitHub
+    if not dry_run:
+        for gh_disc in gh_discussions:
+            gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
+            if "inbox" in gh_labels and gh_disc["title"] not in [f"[PRD] {get_prd_metadata(p).title}" for p in PLANNING_INBOX_DIR.glob("*.md")]:
+                # New discussion in inbox category, pull it
+                title = gh_disc["title"]
+                if title.startswith("[PRD] "):
+                    clean_title = title[6:]
+                    filename = clean_title.lower().replace(" ", "-") + ".md"
+                    # Avoid duplicates by checking all directories
+                    exists = False
+                    for d in sync_dirs:
+                        if (d / filename).exists():
+                            exists = True
+                            break
+                    if not exists:
+                        prd_path = PLANNING_INBOX_DIR / filename
+                        meta = get_prd_metadata(prd_path)
+                        meta.content = gh_disc["body"]
+                        meta.sync_info['discussion_id'] = gh_disc["id"]
+                        meta.github_discussion_url = f"https://github.com/{repo_owner}/{repo_name}/discussions/{gh_disc['number']}"
+                        meta.last_synced_at = gh_disc["updatedAt"]
+                        meta.sync_hash = meta.get_hash()
+                        meta.save()
+                        logger.info(f"Pulled new GitHub Discussion '{title}' into inbox")
 
 def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
-    from vibe_tools.utils import PRD_DIR, load_project_state
+    from vibe_tools.utils import PRD_DIR, load_project_state, REJECTED_DIR
     state = load_project_state()
     started_prds = state.get("started_prds", [])
     
     backlog_dir = PRD_DIR / "backlog"
     history_dir = PRD_DIR / "history"
+    rejected_dir = REJECTED_DIR
 
     repo = f"{repo_owner}/{repo_name}"
     
+    # System files to ignore for issues
+    system_files = ["architecture.yaml", "infrastructure.yaml", "cicd.yaml", "testing.yaml", "build.yaml"]
+
     if not dry_run:
         # Ensure 'prd' label exists
         ensure_github_label(repo, "prd")
 
-    for directory in [backlog_dir, history_dir]:
+    for directory in [backlog_dir, history_dir, rejected_dir]:
         if not directory.exists():
             continue
         
         is_history = directory.name == "history"
         
-        for prd_path in directory.glob("*"):
-            if prd_path.is_dir() or prd_path.suffix not in ['.md', '.yaml', '.yml']:
+        for prd_path in directory.glob("*.yaml"):
+            if prd_path.name in system_files:
                 continue
-            
+                
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
             
             if dry_run:
-                logger.info(f"[DRY RUN] Would sync GitHub Issue for {prd_path.name}")
+                logger.info(f"[DRY RUN] Would sync GitHub Issue for normalized PRD {prd_path.name}")
                 continue
 
             issue_number = meta.github_issue_number
             
             # Determine labels
             labels = ["prd"]
-            # A bit tricky to get the PRD ID correctly, but usually it's the stem
             prd_id = prd_path.stem
+            if prd_id.startswith("prd_"):
+                prd_id = prd_id[4:]
+                
             if prd_id in started_prds:
                 labels.append("in-progress")
             
@@ -184,7 +420,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
                 else:
                     logger.error(f"Failed to create GitHub Issue for {prd_path.name}: {stderr or stdout}")
             else:
-                # Update issue
+                # Update issue (One-way vibe-tools -> GitHub)
                 cmd = [
                     "gh", "issue", "edit", str(issue_number),
                     "--repo", repo,
@@ -251,16 +487,15 @@ def fetch_gh_issue_comments(gh_number: int, repo: str) -> str:
     return comments_body
 
 def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] = None, label: Optional[str] = None):
-    cmd = ["gh", "issue", "list", "--repo", repo, "--json", "number,title,body,state,labels,updatedAt,url"]
+    # Default to fetching 'issue' labeled items if no label specified
+    target_label = label or "issue"
+    cmd = ["gh", "issue", "list", "--repo", repo, "--label", target_label, "--json", "number,title,body,state,labels,updatedAt,url"]
     if not open_only:
         cmd.append("--state")
         cmd.append("all")
     if since:
         cmd.append("--since")
         cmd.append(since)
-    if label:
-        cmd.append("--label")
-        cmd.append(label)
     
     stdout, code = run_command(cmd, check=False)
     if code != 0:

@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltT
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/31
+last_synced_at: '2026-01-10T15:24:25.980247'
+sync_hash: d1c4e27df2e7e25416ea2a66b7fffc6b80a043b3db84542e57a0a0f316f9ed04
+---
+
 # Architect Interactive Shell
 
 ## Overview

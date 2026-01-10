@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltK
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/23
+last_synced_at: '2026-01-10T15:24:13.401810'
+sync_hash: 5fbfbfe9d74e1412b42743f483288ac0b7d8af70b682539e6e817e1caa5690be
+---
+
 # Core CLI Framework
 
 ## Overview

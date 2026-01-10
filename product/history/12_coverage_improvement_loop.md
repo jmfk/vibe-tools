@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltJ
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/22
+last_synced_at: '2026-01-10T15:24:11.875175'
+sync_hash: df49950c4c0dffa611f984047d8108a0e76884a8be8f9f25cabebd6170a21c77
+---
+
 # Coverage Improvement Loop
 
 ## Overview

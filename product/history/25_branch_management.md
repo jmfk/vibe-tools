@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltS
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/30
+last_synced_at: '2026-01-10T15:24:24.458758'
+sync_hash: 3830cdc1ac04e0fc45c25fa1947dea8b6582b2645b1bfb7904315a6360b6e01f
+---
+
 # Branch Management
 
 ## Overview

@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltU
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/32
+last_synced_at: '2026-01-10T15:24:27.672577'
+sync_hash: 35068d960c99698d21bbeaefc6a996c7415fd1627c43df848535c311aa9ff78c
+---
+
 # Cost Tracking System
 
 ## Overview
