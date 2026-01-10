@@ -23,6 +23,7 @@ dependencies = [
     "mypy",
     "dspy-ai",
     "google-generativeai",
+    "prompt-toolkit",
 ]
 
 [tool.setuptools]
