@@ -9,22 +9,12 @@ def register_issue(cli):
     from vibe_tools.commands.sync import register_sync
     from vibe_tools.commands.investigate import register_investigate
     from vibe_tools.commands.solve import register_solve
-    from vibe_tools.issues import load_index, load_issue_by_id, save_issue
+    from vibe_tools.commands.issue_list import register_issue_list
+    from vibe_tools.commands.issue_add import register_issue_add
+    from vibe_tools.issues import load_issue_by_id, save_issue
 
-    @issue_group.command(name="list")
-    def list_issues():
-        """List all local issues."""
-        index = load_index()
-        if not index:
-            click.echo("No local issues found.")
-            return
-        
-        click.echo(f"{'ID':<20} {'Status':<15} {'Severity':<10} {'Title'}")
-        click.echo("-" * 70)
-        for issue_id in sorted(index.keys()):
-            issue = load_issue_by_id(issue_id)
-            if issue:
-                click.echo(f"{issue.id:<20} {issue.status:<15} {issue.severity:<10} {issue.title}")
+    register_issue_list(issue_group)
+    register_issue_add(issue_group)
 
     @issue_group.command(name="close")
     @click.argument("issue_id")
