@@ -25,7 +25,7 @@ N/A - CLI interactive shell interface.
 - **Interactive Loop**: Main loop similar to architect shell, with PRD-focused features.
 - **PRD Focus**: `/focus <prd_id>` or `/switch <prd_id>` sets focused PRD, displayed in prompt, included in agent context.
 - **Spec Management**:
-  - `/list specs` or `/ls specs`: List all spec files in `specs/`
+  - `/list specs` or `/ls specs`: List all spec files in `product/`
   - `/create <name>`: Create new spec file
   - `/delete <name>`: Delete spec file
   - `/show specs`: Display list of specs
@@ -42,17 +42,17 @@ N/A - CLI interactive shell interface.
   - `/list`, `/ls [memory|specs]`: List memory or specs
   - `/show specs`: Show spec list
   - `/history`, `/ps`, `/kill`, `/help`, `/exit`: Standard commands
-- **Session Persistence**: Saves to `project/pm-session.json`:
+- **Session Persistence**: Saves to `implementation/pm-session.json`:
   - History, pending prompt, session memory, additional files, mode (like architect)
   - `focused_prd`: Currently focused PRD ID
 - **Agent Integration**: Includes focused PRD context, spec files, session memory, attached files in agent prompts.
 - **Implementation Tracking**: `/implemented` command shows which PRDs are implemented, links to implementation status.
 
 ## Infrastructure
-- **Session Storage**: JSON file in `project/pm-session.json`.
-- **History Storage**: Readline history in `project/.pm_history`.
-- **Config Storage**: Editor preferences in `project/pm-config.json`.
-- **Spec Files**: Manages files in `specs/` directory.
+- **Session Storage**: JSON file in `implementation/pm-session.json`.
+- **History Storage**: Readline history in `implementation/.pm_history`.
+- **Config Storage**: Editor preferences in `implementation/pm-config.json`.
+- **Spec Files**: Manages files in `product/` directory.
 
 ## Architecture and Constraints
 - **PRD Focus**: Focused PRD context automatically included in agent prompts, allowing focused refinement.
@@ -73,7 +73,7 @@ N/A - CLI interactive shell interface.
 ## Acceptance Tests
 1. **Shell Startup**: Run `vibe pm`, verify shell starts
 2. **PRD Focus**: Use `/focus prd_01`, verify focus shown in prompt
-3. **Spec Creation**: Use `/create my_feature`, verify spec file created in `specs/`
+3. **Spec Creation**: Use `/create my_feature`, verify spec file created in `product/`
 4. **Spec Listing**: Use `/ls specs`, verify all specs listed
 5. **Prompt with Focus**: Focus on PRD, build prompt, verify PRD context included
 6. **Implementation Status**: Use `/implemented`, verify status shown

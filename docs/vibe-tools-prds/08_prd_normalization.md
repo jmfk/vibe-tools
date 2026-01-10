@@ -6,7 +6,7 @@
 - **Success criteria**: Normalization successfully converts all spec types, handles edge cases, validates output, supports overwrite protection, and produces correct YAML structure.
 
 ## Feature Inspiration
-The `vibe normalize` command converts markdown specification files in `specs/` into YAML PRD files in `project/prds/`. It uses an AI agent to perform the conversion, ensuring the YAML structure matches the expected format. The process supports both individual file conversion and batch processing of all specs.
+The `vibe normalize` command converts markdown specification files in `product/` into YAML PRD files in `implementation/prds/`. It uses an AI agent to perform the conversion, ensuring the YAML structure matches the expected format. The process supports both individual file conversion and batch processing of all specs.
 
 **Key capabilities**:
 - Markdown to YAML conversion
@@ -21,16 +21,16 @@ The `vibe normalize` command converts markdown specification files in `specs/` i
 N/A - CLI command with progress output.
 
 ## Backend
-- **File Discovery**: Finds all `.md` files in `specs/` directory (recursive), or processes specified file(s).
+- **File Discovery**: Finds all `.md` files in `product/` directory (recursive), or processes specified file(s).
 - **Conversion Process**:
   - Reads markdown spec file
   - Loads normalization prompt template
   - Calls AI agent with spec content and prompt
   - Agent generates YAML PRD
   - Validates YAML structure
-  - Saves to `project/prds/` directory
+  - Saves to `implementation/prds/` directory
 - **Naming Convention**:
-  - Implementation PRDs: `prd_{stem}.yaml` (from `specs/prd_*.md` or `specs/*.md`)
+  - Implementation PRDs: `prd_{stem}.yaml` (from `product/prd_*.md` or `product/*.md`)
   - Global truths: `{stem}.yaml` (architecture.yaml, infrastructure.yaml, etc.)
   - Strips leading "prd" markers, normalizes dashes/spaces to underscores
 - **Overwrite Protection**:
@@ -46,8 +46,8 @@ N/A - CLI command with progress output.
 - **Validation**: Checks YAML syntax, verifies required fields present, warns on potential issues.
 
 ## Infrastructure
-- **Input**: Markdown files in `specs/` directory.
-- **Output**: YAML files in `project/prds/` directory.
+- **Input**: Markdown files in `product/` directory.
+- **Output**: YAML files in `implementation/prds/` directory.
 - **Prompt Templates**: Normalization prompt in `prompts/pdr_normalization_prompt.txt`.
 - **AI Agent**: Uses configured agent for conversion.
 

@@ -46,7 +46,7 @@ class PRDWriter:
             stacklevel=2,
         )
         self.agent_type = agent_type
-        self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("specs"))
+        self.specs_dir = pathlib.Path(specs_dir or pathlib.Path("product"))
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
         self.dspy_runner = dspy_runner or self._execute_dspy
         self.agent_runner = agent_runner or self._default_agent_runner
@@ -397,7 +397,7 @@ class InteractivePRD(PRDWriter):
         click.echo("\nAvailable commands:")
         click.echo("  /generate - Generate a markdown PRD draft")
         click.echo("  /review   - View the current draft")
-        click.echo("  /save     - Save the finalized PRD to specs/")
+        click.echo("  /save     - Save the finalized PRD to product/")
         click.echo("  /add <msg>- Manually add information to the context")
         click.echo("  /reset    - Clear all history and start over")
         click.echo("  /help     - Show this help message")

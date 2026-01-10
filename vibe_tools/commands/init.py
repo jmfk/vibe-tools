@@ -22,7 +22,7 @@ def _perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
     maybe_init_git()
 
-    # First, migrate any existing files from root to project/
+    # First, migrate any existing files from root to implementation/
     migrate_to_project_dir()
 
     # Ensure structure exists
@@ -33,7 +33,7 @@ def _perform_basic_init():
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
-    ensure_dir(pathlib.Path("specs"))
+    ensure_dir(pathlib.Path("product"))
     ensure_dir(PRD_DIR)
     ensure_dir(LOGS_DIR)
     ensure_dir(COSTS_DIR)
@@ -61,8 +61,8 @@ def register_init(cli):
 
         click.echo("Please select your starting scenario:")
         click.echo(
-            click.style("  A) Human Specs", bold=True)
-            + " - You already have human-written markdown specs in 'specs/'."
+            click.style("  A) Human Planning", bold=True)
+            + " - You already have human-written markdown specs in 'product/'."
         )
         click.echo(
             click.style("  B) Adoption", bold=True)
@@ -88,7 +88,7 @@ def register_init(cli):
 
         if choice == "A":
             click.echo(
-                "\n📄 Basic initialization complete. Your human specs should be in 'specs/'."
+                "\n📄 Basic initialization complete. Your human specs should be in 'product/'."
             )
         elif choice == "B":
             click.echo("\n🔍 Starting codebase discovery...")

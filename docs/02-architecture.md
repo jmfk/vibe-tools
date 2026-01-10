@@ -30,7 +30,7 @@ vibe-tools is built around a modular, CLI-first architecture that separates conc
 │       ├── implement.py
 │       ├── coverage.py
 │       └── ... (30+ command modules)
-├── specs/                  # Human-readable specifications
+├── product/                  # Human-readable specifications
 │   ├── architecture.md     # System architecture spec
 │   ├── infrastructure.md   # Infrastructure spec
 │   └── *.md                # Feature PRDs
@@ -40,7 +40,7 @@ vibe-tools is built around a modular, CLI-first architecture that separates conc
 │   ├── architect_prompt.txt
 │   ├── pm_prompt.txt
 │   └── ... (other prompts)
-├── project/                # Generated and runtime data
+├── implementation/                # Generated and runtime data
 │   ├── prds/               # Normalized YAML PRDs
 │   │   ├── architecture.yaml
 │   │   ├── infrastructure.yaml
@@ -99,8 +99,8 @@ The Ralph integration layer handles:
 ### 5. Normalization Engine (`vibe_tools/normalize.py`)
 
 Converts human-readable markdown specs into machine-readable YAML PRDs:
-- Processes all `.md` files in `specs/`
-- Generates `prd_*.yaml` files in `project/prds/`
+- Processes all `.md` files in `product/`
+- Generates `prd_*.yaml` files in `implementation/prds/`
 - Handles global truths (architecture, infrastructure, etc.) differently from feature PRDs
 - Uses AI agent to ensure proper YAML structure
 
@@ -109,7 +109,7 @@ Converts human-readable markdown specs into machine-readable YAML PRDs:
 Tracks LLM usage costs:
 - Token estimation
 - Cost calculation per model
-- CSV logging to `project/costs/usage.csv`
+- CSV logging to `implementation/costs/usage.csv`
 - Google Sheets integration (optional)
 - Session cost reporting
 
@@ -127,7 +127,7 @@ Manages local development servers via Docker:
 
 ```mermaid
 flowchart TD
-    A[Human writes spec in specs/] --> B[vibe normalize]
+    A[Human writes spec in product/] --> B[vibe normalize]
     B --> C{Is global truth?}
     C -->|Yes| D[Create YAML in prds/ without prd_ prefix]
     C -->|No| E[Create prd_*.yaml in prds/]
@@ -182,17 +182,17 @@ flowchart TD
 
 ## File Organization Conventions
 
-### Specs Directory (`specs/`)
+### Specs Directory (`product/`)
 - Human-readable markdown files
 - Naming: `NN_description.md` (e.g., `01_pm_prd_focus.md`)
 - Global truths: `architecture.md`, `infrastructure.md`, `cicd.md`, `testing.md`
 
-### PRDs Directory (`project/prds/`)
+### PRDs Directory (`implementation/prds/`)
 - Machine-readable YAML files
 - Global truths: `architecture.yaml`, `infrastructure.yaml`, etc. (no `prd_` prefix)
 - Feature PRDs: `prd_*.yaml` (must have `prd_` prefix)
 
-### Project Directory (`project/`)
+### Project Directory (`implementation/`)
 - All generated and runtime data
 - Configuration: `config.json`
 - State: `state.json`

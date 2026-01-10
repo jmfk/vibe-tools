@@ -33,7 +33,7 @@ The `vibe-setup env` command (default Python version: 3.11.10):
    - Sets local Python version via `pyenv local <venv-name>`
 
 4. **Records configuration**:
-   - Saves environment details to `project/config.json`:
+   - Saves environment details to `implementation/config.json`:
      ```json
      {
        "env": {
@@ -74,7 +74,7 @@ The `vibe-setup deps` command (called automatically by `vibe-setup env`):
 The setup creates the following directory structure:
 
 ```
-project/
+implementation/
 ├── config.json              # Main configuration file
 ├── state.json               # Project state tracking
 ├── legacy-state.json        # Legacy state file
@@ -93,7 +93,7 @@ project/
 ├── instructions/            # Global agent instructions
 └── data/                    # Application data storage
 
-specs/                       # Human-written specifications
+product/                       # Human-written specifications
 ├── architecture.md
 ├── infrastructure.md
 └── *.md                     # Other spec files
@@ -105,7 +105,7 @@ prompts/                     # Override prompts (optional)
 
 ### 5. Configuration Files
 
-#### `.vibe_config.json` / `project/config.json`
+#### `.vibe_config.json` / `implementation/config.json`
 
 Main configuration file containing:
 
@@ -151,7 +151,7 @@ Each service setup:
 - Detects running Docker containers automatically
 - Prompts for host, port, credentials
 - Tests connectivity before saving
-- Stores configuration in `project/config.json` under `services`
+- Stores configuration in `implementation/config.json` under `services`
 
 ### 7. Available Commands
 
@@ -201,7 +201,7 @@ To verify the environment is correctly set up:
 
 4. **Check project structure**:
    ```bash
-   ls -la project/   # Should show all directories
+   ls -la implementation/   # Should show all directories
    ```
 
 ### 9. Shell Configuration
@@ -219,13 +219,13 @@ eval "$(pyenv virtualenv-init -)"
 
 - `PYTHONPATH`: Set to `.` for running tests (via `PYTHONPATH=. pytest`)
 - `GOOGLE_API_KEY`: Stored in `.env` file, loaded via `python-dotenv`
-- Environment variables from `project/config.json` are synced to `.env`
+- Environment variables from `implementation/config.json` are synced to `.env`
 
 ### 11. Git Integration
 
 - If not a git repository, setup prompts to initialize one
 - `.gitignore` is automatically updated to exclude:
-  - `project/` directory contents
+  - `implementation/` directory contents
   - `.env` file
   - `.vibe_config.json` (if exists in root)
 
@@ -273,11 +273,11 @@ When working in this environment:
 
 1. **Python Environment**: Always use the pyenv virtualenv. The `.python-version` file ensures the correct version is used.
 
-2. **Configuration**: Check `project/config.json` for project settings and `project/config.json` under `services` for service connections.
+2. **Configuration**: Check `implementation/config.json` for project settings and `implementation/config.json` under `services` for service connections.
 
 3. **Dependencies**: Python dependencies are in `pyproject.toml`. Frontend dependencies are in `frontend/package.json`.
 
-4. **Project Structure**: All runtime data (logs, costs, PRDs) is in `project/`. Specifications are in `specs/`.
+4. **Project Structure**: All runtime data (logs, costs, PRDs) is in `implementation/`. Specifications are in `product/`.
 
 5. **Testing**: Use `PYTHONPATH=. pytest` for backend tests. Frontend tests use `vitest`.
 
@@ -285,4 +285,4 @@ When working in this environment:
 
 7. **Service Management**: Use `vibe-servers` commands to manage Docker-based local services.
 
-8. **State Management**: Project state is tracked in `project/state.json`. Session state for interactive tools is in `project/*-session.json`.
+8. **State Management**: Project state is tracked in `implementation/state.json`. Session state for interactive tools is in `implementation/*-session.json`.

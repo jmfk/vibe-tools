@@ -6,10 +6,10 @@
 - **Success criteria**: Spec management supports all spec types, global truths properly injected into agent context, specs discoverable and manageable, and clear workflow from specs to PRDs to implementation.
 
 ## Feature Inspiration
-The spec management system organizes specifications into two categories: human-written markdown specs in `specs/` and machine-readable YAML PRDs in `project/prds/`. Global truth files (architecture, infrastructure, CICD, testing, project_overview) are automatically converted to YAML and injected into every agent prompt as context.
+The spec management system organizes specifications into two categories: human-written markdown specs in `product/` and machine-readable YAML PRDs in `implementation/prds/`. Global truth files (architecture, infrastructure, CICD, testing, project_overview) are automatically converted to YAML and injected into every agent prompt as context.
 
 **Key capabilities**:
-- Spec file organization (markdown in specs/, YAML in project/prds/)
+- Spec file organization (markdown in product/, YAML in implementation/prds/)
 - Global truth identification and injection
 - Spec discovery and listing
 - Context management for agents
@@ -27,7 +27,7 @@ N/A - File system organization and CLI commands.
     - Converted to: `prd_*.yaml`
     - Processed individually by implementation loop
 - **Spec Discovery**: `collect_prd_files()` function:
-  - Finds all `prd_*.yaml` files in `project/prds/`
+  - Finds all `prd_*.yaml` files in `implementation/prds/`
   - Excludes global truth files
   - Returns sorted list for processing
 - **Global Truth Injection**: 
@@ -35,8 +35,8 @@ N/A - File system organization and CLI commands.
   - Includes in agent prompt context
   - Provides persistent system state to agents
 - **Spec Workflow**:
-  1. Human writes markdown spec in `specs/`
-  2. `vibe normalize` converts to YAML in `project/prds/`
+  1. Human writes markdown spec in `product/`
+  2. `vibe normalize` converts to YAML in `implementation/prds/`
   3. `vibe implement` processes YAML PRDs
   4. Global truths always included as context
 - **File Management**: 
@@ -45,9 +45,9 @@ N/A - File system organization and CLI commands.
   - Both version controlled (typically)
 
 ## Infrastructure
-- **Spec Storage**: `specs/*.md` files (human-editable).
-- **PRD Storage**: `project/prds/*.yaml` files (generated).
-- **Global Truth Location**: `project/prds/{name}.yaml` (no prd_ prefix).
+- **Spec Storage**: `product/*.md` files (human-editable).
+- **PRD Storage**: `implementation/prds/*.yaml` files (generated).
+- **Global Truth Location**: `implementation/prds/{name}.yaml` (no prd_ prefix).
 
 ## Architecture and Constraints
 - **Separation of Concerns**: Human specs separate from machine PRDs, clear conversion step.
@@ -68,6 +68,6 @@ N/A - File system organization and CLI commands.
 2. **Context Injection**: Run agent command, verify global truths in context
 3. **Spec Discovery**: Create multiple PRDs, verify all discovered
 4. **Workflow**: Write spec, normalize, implement, verify workflow works
-5. **File Organization**: Verify specs in specs/, PRDs in project/prds/
+5. **File Organization**: Verify specs in product/, PRDs in implementation/prds/
 6. **Global Truth Updates**: Update architecture.md, re-normalize, verify context updated
 7. **PRD Processing**: Verify only prd_*.yaml files processed by implement, not global truths

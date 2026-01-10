@@ -36,7 +36,7 @@ These commands represent the main development lifecycle phases.
 #### Phase 2: Normalization
 
 **`vibe normalize [input_files...]`**
-- Normalize human-written PRDs from `specs/` into machine-consumable YAML in `prds/`
+- Normalize human-written PRDs from `product/` into machine-consumable YAML in `prds/`
 - Options:
   - `--yes, -y`: Automatically overwrite existing PRDs
   - `--debug`: Output all prompts and results for debugging
@@ -44,7 +44,7 @@ These commands represent the main development lifecycle phases.
   ```bash
   vibe normalize                    # Normalize all specs
   vibe normalize infrastructure     # Normalize specific spec
-  vibe normalize specs/01_feature.md
+  vibe normalize product/01_feature.md
   ```
 
 #### Phase 3: Setup
@@ -126,7 +126,7 @@ These commands represent the main development lifecycle phases.
 
 **`vibe cost`**
 - Display total estimated cost of LLM usage for this project
-- Reads from `project/costs/usage.csv`
+- Reads from `implementation/costs/usage.csv`
 - See [Cost Tracking](10-cost-tracking.md) for details
 
 **`vibe stats [--api]`**

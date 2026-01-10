@@ -296,7 +296,7 @@ def generate_prd_plan() -> bool:
     """Analyzes PRDs and updates project-state.json with plans."""
     prds = collect_prd_files()
     if not prds:
-        logger.warning("No PRDs found in project/prds/ to generate plan.")
+        logger.warning("No PRDs found in implementation/prds/ to generate plan.")
         return False
 
     state = load_project_state()

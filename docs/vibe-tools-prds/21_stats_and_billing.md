@@ -50,7 +50,7 @@ N/A - CLI commands with formatted output.
   - Provides group-level cost reports
 
 ## Infrastructure
-- **Data Source**: `project/costs/usage.csv`.
+- **Data Source**: `implementation/costs/usage.csv`.
 - **Billing Group Storage**: Database or config file (TBD).
 - **Date Processing**: Parses and filters by dates.
 

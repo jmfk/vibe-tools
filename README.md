@@ -133,7 +133,7 @@ vibe --help
 
 ## Vibe Architect
 
-`vibe architect` is an interactive shell for managing and refining your project's **Architecture** and **Infrastructure** specifications. It uses an AI agent to help you reason about your system and automatically update your `.md` files in `specs/`.
+`vibe architect` is an interactive shell for managing and refining your project's **Architecture** and **Infrastructure** specifications. It uses an AI agent to help you reason about your system and automatically update your `.md` files in `product/`.
 
 ### Key Features
 
@@ -141,7 +141,7 @@ vibe --help
 - **Two Modes**:
   - **ASK** (Default): The agent provides analysis and guidance without modifying files.
   - **AGENT**: The agent is authorized to propose machine-readable updates to `architecture.md` and `infrastructure.md`.
-- **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `project/architect-session.json`.
+- **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `implementation/architect-session.json`.
 - **Editor Integration**: Configure your favorite Markdown or Code editor (e.g., Typora, VS Code) to open response files or specifications.
 - **Context Management**: Attach additional files to the agent's context using `/f add`.
 - **Session Memory**: Add persistent instructions that are sent with every prompt using `/a` or `/add`.
@@ -187,8 +187,8 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ## Specs & PRDs
 
-1. **Start with a human spec.** Write a normative spec in `specs/` (for example `specs/01_platform_vision.md`). That markdown is the source of truth for requirements.
-2. **Global Truths.** Certain files in `specs/` represent the persistent state of the system and are injected into every Ralph prompt as context:
+1. **Start with a human spec.** Write a normative spec in `product/` (for example `product/01_platform_vision.md`). That markdown is the source of truth for requirements.
+2. **Global Truths.** Certain files in `product/` represent the persistent state of the system and are injected into every Ralph prompt as context:
    - `architecture.md` -> `prds/architecture.yaml`
    - `project_overview.md` -> `prds/project_overview.yaml`
    - `infrastructure.md` -> `prds/infrastructure.yaml`

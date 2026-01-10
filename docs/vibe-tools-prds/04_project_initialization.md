@@ -21,16 +21,16 @@ N/A - CLI interactive prompts.
 
 ## Backend
 - **Scenario Selection**: Interactive prompt with four options:
-  - **A) Human Specs**: Assumes user has specs in `specs/`, just initializes structure
+  - **A) Human Specs**: Assumes user has specs in `product/`, just initializes structure
   - **B) Adoption**: Runs codebase discovery via `vibe setup --import-code`
   - **C) Architecture Ready**: Assumes `architecture.yaml` exists, initializes structure
   - **D) Manual Setup**: Just creates directories and templates
 - **Basic Initialization** (`_perform_basic_init()`):
-  - Creates standard directories (`specs/`, `project/prds/`, `project/logs/`, `project/costs/`, `instructions/`)
+  - Creates standard directories (`product/`, `implementation/prds/`, `implementation/logs/`, `implementation/costs/`, `instructions/`)
   - Initializes template directory from package templates
   - Sets up `.gitignore` entries
   - Validates git repository (warns if not a git repo)
-  - Creates initial `specs/` structure if needed
+  - Creates initial `product/` structure if needed
 - **Codebase Discovery**: For scenario B, invokes `vibe setup --import-code` to analyze existing codebase and generate initial specs.
 - **Template Initialization**: Copies prompt templates from package to `prompts/` directory (if not exists), allows project-specific overrides.
 - **Git Integration**: Checks for git repository, initializes if needed (optional), updates `.gitignore`.

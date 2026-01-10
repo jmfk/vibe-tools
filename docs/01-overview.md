@@ -10,7 +10,7 @@ The system follows a **CLI-First** philosophy, prioritizing terminal interaction
 
 ## Key Features
 
-- **PRD-Driven Development**: Changes start with Product Requirements Documents (PRDs) in `specs/`, which are normalized into machine-readable YAML plans
+- **PRD-Driven Development**: Changes start with Product Requirements Documents (PRDs) in `product/`, which are normalized into machine-readable YAML plans
 - **AI Agent Integration**: Seamless integration with Cursor Ralph and other AI agents for automated implementation
 - **Interactive Tools**: Built-in interactive shells for architecture (`vibe architect`) and product management (`vibe pm`)
 - **Infrastructure Management**: Automated setup and management of local development servers (Postgres, Redis, RabbitMQ, etc.)
@@ -96,9 +96,9 @@ vibe monitor
 ```
 /
 ├── vibe_tools/      # Core automation logic and CLI
-├── specs/           # Markdown PRDs and specifications
+├── product/           # Markdown PRDs and specifications
 ├── prompts/         # AI prompt templates
-├── project/         # Architecture and infrastructure definitions (YAML)
+├── implementation/         # Architecture and infrastructure definitions (YAML)
 │   ├── prds/        # Normalized PRD YAML files
 │   ├── logs/        # Execution logs
 │   ├── costs/       # Cost tracking data
@@ -108,7 +108,7 @@ vibe monitor
 
 ## Configuration
 
-The system uses a `.vibe_config.json` file (stored in `project/config.json`) for configuration. This file is automatically created and updated when running setup commands.
+The system uses a `.vibe_config.json` file (stored in `implementation/config.json`) for configuration. This file is automatically created and updated when running setup commands.
 
 See [Configuration](04-configuration.md) for detailed configuration options.
 

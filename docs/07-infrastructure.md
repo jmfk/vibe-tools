@@ -82,7 +82,7 @@ When configuring services, `vibe-setup` automatically:
 ### Configuration Storage
 
 Service configurations are stored in:
-- **Project config**: `project/config.json` (project-specific)
+- **Project config**: `implementation/config.json` (project-specific)
 - **Global config**: `~/.vibe/config.json` (user defaults)
 
 ## Service Details
@@ -240,9 +240,9 @@ The local MinIO setup is configured for seamless transition to Linode Object Sto
 
 The infrastructure specification is managed through:
 
-1. **Markdown spec**: `specs/infrastructure.md`
-2. **Normalized YAML**: `project/prds/infrastructure.yaml`
-3. **Current state**: `project/infrastructure-current.yaml`
+1. **Markdown spec**: `product/infrastructure.md`
+2. **Normalized YAML**: `implementation/prds/infrastructure.yaml`
+3. **Current state**: `implementation/infrastructure-current.yaml`
 
 ### Updating Infrastructure
 
@@ -255,7 +255,7 @@ vibe architect
 
 **Via Normalization:**
 ```bash
-# Edit specs/infrastructure.md
+# Edit product/infrastructure.md
 vibe normalize infrastructure
 ```
 
@@ -268,8 +268,8 @@ vibe infra
 ```
 
 This runs a reconciliation loop comparing:
-- Desired: `project/prds/infrastructure.yaml`
-- Current: `project/infrastructure-current.yaml`
+- Desired: `implementation/prds/infrastructure.yaml`
+- Current: `implementation/infrastructure-current.yaml`
 
 ## Service Verification
 
@@ -377,7 +377,7 @@ curl http://localhost:9200
 **Reset configuration:**
 ```bash
 # Remove from config
-# Edit project/config.json manually
+# Edit implementation/config.json manually
 # Or reconfigure:
 vibe-setup <service>
 ```
