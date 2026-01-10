@@ -1,3 +1,8 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjlwI
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/72
+---
+
 # Infrastructure Specification
 
 ## 1. Overview

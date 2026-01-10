@@ -1,3 +1,8 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjlwH
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/71
+---
+
 # Architecture Specification
 
 ## 1. Core Philosophy
