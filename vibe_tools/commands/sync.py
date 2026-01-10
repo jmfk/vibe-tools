@@ -308,7 +308,8 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                         continue # Skip push
                 
                 # One-way push (vibe-tools -> GitHub) or local is newer in bidirectional
-                if gh_body != body:
+                current_hash = meta.get_hash()
+                if gh_body != body or meta.sync_hash != current_hash:
                     if dry_run:
                         logger.info(f"[DRY RUN] Would update GitHub Discussion for {prd_path.name}")
                         continue
@@ -323,7 +324,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                     stdout, code = run_command(cmd, check=False)
                     if code == 0:
                         meta.last_synced_at = datetime.datetime.now().isoformat()
-                        meta.sync_hash = meta.get_hash()
+                        meta.sync_hash = current_hash
                         meta.save()
                         logger.info(f"Updated GitHub Discussion for {prd_path.name}")
                     else:
@@ -412,7 +413,8 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 meta.save()
 
             # Update (One-way)
-            if gh_disc["body"] != body:
+            current_hash = meta.get_hash()
+            if gh_disc["body"] != body or meta.sync_hash != current_hash:
                 if dry_run:
                     logger.info(f"[DRY RUN] Would update GitHub Discussion for system spec {filename}")
                     continue
@@ -427,7 +429,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 stdout, code = run_command(cmd, check=False)
                 if code == 0:
                     meta.last_synced_at = datetime.datetime.now().isoformat()
-                    meta.sync_hash = meta.get_hash()
+                    meta.sync_hash = current_hash
                     meta.save()
                     logger.info(f"Updated GitHub Discussion for system spec {filename}")
             
@@ -551,6 +553,8 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                         url = stdout.strip()
                         number = int(url.split("/")[-1])
                         meta.github_issue_number = number
+                        meta.last_synced_at = datetime.datetime.now().isoformat()
+                        meta.sync_hash = meta.get_hash()
                         meta.save()
                         logger.info(f"Created GitHub Issue for {prd_path.name}")
                         
@@ -562,6 +566,11 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                     logger.error(f"Failed to create GitHub Issue for {prd_path.name}: {stderr or stdout}")
             else:
                 # Update issue (One-way vibe-tools -> GitHub)
+                # Check if hash has changed
+                current_hash = meta.get_hash()
+                if meta.sync_hash == current_hash:
+                    continue
+
                 cmd = [
                     "gh", "issue", "edit", str(issue_number),
                     "--repo", repo,
@@ -573,6 +582,9 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                 
                 stdout, code, stderr = _run_command_with_stderr(cmd)
                 if code == 0:
+                    meta.last_synced_at = datetime.datetime.now().isoformat()
+                    meta.sync_hash = current_hash
+                    meta.save()
                     if is_history:
                         run_command(["gh", "issue", "close", str(issue_number), "--repo", repo], check=False)
                     else:
@@ -638,9 +650,9 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
         cmd.append("--since")
         cmd.append(since)
     
-    stdout, code = run_command(cmd, check=False)
+    stdout, code, stderr = _run_command_with_stderr(cmd)
     if code != 0:
-        logger.error(f"Failed to fetch GitHub issues: {stdout}")
+        logger.error(f"Failed to fetch GitHub issues: {stderr or stdout}")
         return
 
     gh_issues = json.loads(stdout)
