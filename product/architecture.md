@@ -1,8 +1,8 @@
 ---
 discussion_id: D_kwDOQzI0Lc4AjlwH
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/71
-last_synced_at: '2026-01-10T17:05:45.640520'
-sync_hash: 02c2c443eb8b17331ff0896f9aac35e1b72a7de06e425f411d3c4dfe29138d3a
+last_synced_at: '2026-01-10T22:24:09.174372'
+sync_hash: a5866fdaf779618c765476d0466873864573ca7a28386ae8ec4e4e9633f86e6b
 ---
 
 # Architecture Specification
