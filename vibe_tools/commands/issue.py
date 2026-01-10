@@ -28,7 +28,11 @@ def register_issue(cli):
         issue.status = "done"
         issue.updated_at = datetime.datetime.now().isoformat()
         save_issue(issue)
-        click.echo(f"Issue {issue_id} marked as done. Run 'vibe sync' to close on GitHub.")
+        
+        from vibe_tools.commands.sync import sync_issues
+        sync_issues()
+        
+        click.echo(f"Issue {issue_id} marked as done and synced to GitHub.")
 
     register_investigate(issue_group)
     register_solve(issue_group)

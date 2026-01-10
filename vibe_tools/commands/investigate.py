@@ -119,13 +119,8 @@ def register_investigate(cli):
         click.echo(f"Location: issues/backlog/{issue_id}.md")
         
         if github or click.confirm("Sync to GitHub now?"):
-            from vibe_tools.commands.sync import get_github_repo, push_local_issues
-            repo = get_github_repo()
-            if repo:
-                push_local_issues(repo)
-                click.echo("Synced to GitHub.")
-            else:
-                click.echo("Failed to sync: Not a GitHub repository.")
+            from vibe_tools.commands.sync import sync_issues
+            sync_issues()
                 
     cli.add_command(investigate_command)
     cli.add_command(investigate_command, name="inv")

@@ -88,6 +88,9 @@ def register_issue_add(issue_group):
         
         save_issue(issue)
         
+        from vibe_tools.commands.sync import sync_issues
+        sync_issues(quiet=True)
+        
         issue_path = BACKLOG_DIR / f"{issue.id}.md"
         
         click.echo(f"✅ Issue initialized!")

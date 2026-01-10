@@ -799,6 +799,16 @@ def pull_github_prds(repo: str, dry_run: bool = False):
     """
     pass
 
+def sync_issues(quiet: bool = False):
+    """Helper to sync local issues to GitHub."""
+    repo = get_github_repo()
+    if repo:
+        if not quiet:
+            click.echo(f"Syncing issues with {repo}...")
+        push_local_issues(repo)
+    elif not quiet:
+        click.echo("Warning: Not a GitHub repository. Skipping sync.")
+
 def register_sync(cli):
     @click.command(name="sync")
     @click.option("--dry-run", is_flag=True)
