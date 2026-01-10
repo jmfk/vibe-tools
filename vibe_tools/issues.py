@@ -289,6 +289,9 @@ def load_all_issues() -> List[Issue]:
                     except Exception:
                         continue
     
+    # Sort by created_at, then by id for stability
+    issues.sort(key=lambda x: (x.created_at, x.id))
+    
     return issues
 
 STATUS_MAPPING = {
