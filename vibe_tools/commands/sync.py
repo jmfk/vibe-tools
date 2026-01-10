@@ -451,15 +451,23 @@ def push_local_issues(repo: str):
             else:
                 logger.error(f"Failed to update GitHub issue {gh_number}: {stderr or stdout}")
 
+def pull_github_prds(repo: str, dry_run: bool = False):
+    """Placeholder for pulling PRD updates from GitHub discussions/issues back to local files.
+    For now, we mainly push local -> remote for PRDs.
+    """
+    pass
+
 def register_sync(cli):
     @click.command(name="sync")
     @click.option("--dry-run", is_flag=True)
     @click.option("--full", is_flag=True)
-    @click.option("--since", help="Pull issues updated since date")
+    @click.option("--since", help="Pull updates since date")
+    @click.option("--issues/--no-issues", default=True, help="Sync issues (default: true)")
+    @click.option("--prds/--no-prds", default=True, help="Sync PRDs (default: true)")
     @click.option("--open-only", is_flag=True, default=True)
-    @click.option("--label", help="Filter by label (e.g. vibe-managed)")
-    def sync_command(dry_run, full, since, open_only, label):
-        """Synchronize local issues with GitHub."""
+    @click.option("--label", help="Filter by label")
+    def sync_command(dry_run, full, since, issues, prds, open_only, label):
+        """Synchronize local issues and PRDs with GitHub."""
         repo = get_github_repo()
         if not repo:
             click.echo("Error: Not a GitHub repository.")
@@ -467,16 +475,15 @@ def register_sync(cli):
 
         if dry_run:
             click.echo(f"Dry run: Would sync with {repo}")
-            return
 
         # Remember current branch to switch back later
         stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
         current_branch = stdout.strip()
         main_branch = get_main_branch()
 
-        # Switch to main branch for syncing issues as requested
+        # Switch to main branch for syncing
         if current_branch != main_branch:
-            click.echo(f"Switching to {main_branch} for issue sync...")
+            click.echo(f"Switching to {main_branch} for sync...")
             switch_to_main()
             
             # Verify we are on main
@@ -485,33 +492,35 @@ def register_sync(cli):
                 click.echo(f"Error: Could not switch to {main_branch}. Sync aborted.")
                 return
 
-        click.echo(f"Syncing issues with {repo}...")
-        
-        # Pull owner and repo info for discussions/issues
         owner, name, repo_id = get_github_repo_info()
 
-        # Sync PRDs
-        if owner and name and repo_id:
-            click.echo("Syncing PRD Discussions...")
-            sync_prd_discussions(owner, name, repo_id, dry_run=dry_run)
-            click.echo("Syncing PRD Issues...")
-            sync_prd_issues(owner, name, repo_id, dry_run=dry_run)
+        if prds:
+            if owner and name and repo_id:
+                click.echo(f"Syncing PRDs with {repo}...")
+                sync_prd_discussions(owner, name, repo_id, dry_run=dry_run)
+                sync_prd_issues(owner, name, repo_id, dry_run=dry_run)
+                pull_github_prds(repo, dry_run=dry_run)
+            else:
+                click.echo("Warning: Could not get full GitHub repo info. Skipping PRD sync.")
 
-        # If --full is specified, we pull everything since ever and don't limit to open only
-        if full:
-            pull_github_issues(repo, open_only=False, since=None, label=label)
-        else:
-            pull_github_issues(repo, open_only=open_only, since=since, label=label)
+        if issues:
+            click.echo(f"Syncing issues with {repo}...")
+            # If --full is specified, we pull everything since ever and don't limit to open only
+            if full:
+                pull_github_issues(repo, open_only=False, since=None, label=label)
+            else:
+                pull_github_issues(repo, open_only=open_only, since=since, label=label)
+            
+            push_local_issues(repo)
         
-        push_local_issues(repo)
-        
-        # Commit changes to main
-        run_command(["git", "add", "issues/", "product/", "implementation/"], check=False)
-        # Check if there are staged changes
-        _, diff_code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
-        if diff_code != 0:
-            click.echo("Committing issue changes to main...")
-            run_command(["git", "commit", "-m", "vibe: sync issues"], check=False)
+        if not dry_run:
+            # Commit changes to main
+            run_command(["git", "add", "issues/", "product/", "implementation/"], check=False)
+            # Check if there are staged changes
+            _, diff_code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
+            if diff_code != 0:
+                click.echo("Committing changes to main...")
+                run_command(["git", "commit", "-m", "vibe: sync issues and prds"], check=False)
         
         # Switch back if necessary
         if current_branch and current_branch != main_branch:

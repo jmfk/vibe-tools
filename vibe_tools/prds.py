@@ -120,5 +120,19 @@ class PRDMetadata:
 
         return "\n".join(lines).strip()
 
+    def get_hash(self) -> str:
+        import hashlib
+        import json
+        # Calculate hash of content only (excluding sync info)
+        content_to_hash = self.content
+        if self.is_yaml:
+            # For YAML, hash the data without the sync info key
+            data_copy = self.data.copy()
+            if '_vibe_sync' in data_copy:
+                del data_copy['_vibe_sync']
+            content_to_hash = json.dumps(data_copy, sort_keys=True)
+        
+        return hashlib.sha256(content_to_hash.encode()).hexdigest()
+
 def get_prd_metadata(path: pathlib.Path) -> PRDMetadata:
     return PRDMetadata(path)

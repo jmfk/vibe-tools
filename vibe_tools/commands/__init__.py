@@ -50,6 +50,7 @@ def register_all_commands(cli):
     monitor.register_monitor(cli)
     history.register_history(cli)
     status.register_status(cli)
+    sync.register_sync(cli)
     docs.register_docs(cli)
     cost.register_cost(cli)
     setup.register_setup(cli)
