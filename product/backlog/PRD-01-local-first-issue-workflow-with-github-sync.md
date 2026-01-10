@@ -1,6 +1,8 @@
 ---
 discussion_id: D_kwDOQzI0Lc4AjlrM
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
+last_synced_at: '2026-01-10T17:22:08.100920'
+sync_hash: c6298faffd8ce4e57a57e966e483da592447c4eaf0068c34e9315852392aa582
 ---
 
 # PRD-XX: Local-First Issue Workflow with GitHub Sync

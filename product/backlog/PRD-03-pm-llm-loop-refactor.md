@@ -1,6 +1,8 @@
 ---
 discussion_id: D_kwDOQzI0Lc4AjlrK
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/4
+last_synced_at: '2026-01-10T17:22:07.012210'
+sync_hash: 928f09666aa03bd184d5ff7858618193c13eb9af529a27595f5d1eda82dbf389
 ---
 
 # PRD: PM LLM Loop Refactor (Gemini 3 Flash & Streaming)

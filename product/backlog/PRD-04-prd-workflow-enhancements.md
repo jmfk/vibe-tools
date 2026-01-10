@@ -1,6 +1,8 @@
 ---
 discussion_id: D_kwDOQzI0Lc4AjlrJ
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/3
+last_synced_at: '2026-01-10T17:22:06.567517'
+sync_hash: 0fa521c979f3acf83315274ad7106b570ff40066842cf938058ac40ec2ba39eb
 ---
 
 # PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History
