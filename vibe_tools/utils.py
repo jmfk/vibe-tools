@@ -1309,7 +1309,7 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
 
     # 2. Scan implementation/prds/ for .yaml files
     if PRD_DIR.exists():
-        for yaml_file in PRD_DIR.glob("*.yaml"):
+        for yaml_file in PRD_DIR.rglob("*.yaml"):
             stem = yaml_file.stem
             clean_name = stem.lower()
             # If it's a prd_*.yaml, clean the prefix
