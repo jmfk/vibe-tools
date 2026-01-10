@@ -1,12 +1,13 @@
-import click
 import datetime
-import os
 import pathlib
-import json
 import re
-from typing import List, Optional
-from vibe_tools.issues import Issue, IssueBody, save_issue, generate_issue_id
+from typing import List
+
+import click
+
+from vibe_tools.issues import Issue, IssueBody, generate_issue_id, save_issue
 from vibe_tools.utils import LOGS_DIR, logger
+
 
 def get_log_files() -> List[pathlib.Path]:
     if not LOGS_DIR.exists():
@@ -36,7 +37,7 @@ def cluster_errors(lines: List[str]) -> List[str]:
             if " - " in line:
                 key = line.split(" - ", 1)[-1]
             clusters[key] = clusters.get(key, 0) + 1
-    
+
     # Sort by frequency
     sorted_clusters = sorted(clusters.items(), key=lambda x: x[1], reverse=True)
     return [f"({count}x) {text}" for text, count in sorted_clusters[:5]]
@@ -49,13 +50,13 @@ def register_investigate(cli):
     def investigate_command(logs, service, github):
         """Create issues via guided investigation."""
         click.echo("🚀 Starting guided investigation...")
-        
+
         log_files = []
         if logs:
             log_files = [pathlib.Path(logs)]
         else:
             log_files = get_log_files()
-        
+
         evidence = ""
         clustered = []
         if log_files:
@@ -68,7 +69,7 @@ def register_investigate(cli):
                     redacted_line = redact_content(line)
                     click.echo(f"  {redacted_line}")
                     evidence += f"{redacted_line}\n"
-                
+
                 clustered = cluster_errors(all_lines[-500:])
                 if clustered:
                     click.echo("\nPotential error clusters found:")
@@ -80,11 +81,11 @@ def register_investigate(cli):
         title = click.prompt("\nIssue Title")
         severity = click.prompt("Severity", type=click.Choice(["low", "medium", "high", "critical"]), default="medium")
         service = service or click.prompt("Service", default="core")
-        
+
         summary = click.prompt("Summary (Markdown supported)")
         if clustered and not summary:
             summary = "Potential errors detected:\n" + "\n".join([f"- {c}" for c in clustered])
-            
+
         reproduction = click.prompt("Reproduction Steps", default="N/A")
         expected = click.prompt("Expected Behavior", default="N/A")
         actual = click.prompt("Actual Behavior", default="N/A")
@@ -102,7 +103,7 @@ def register_investigate(cli):
 
         issue_id = generate_issue_id()
         now = datetime.datetime.now().isoformat()
-        
+
         issue = Issue(
             id=issue_id,
             title=title,
@@ -113,14 +114,14 @@ def register_investigate(cli):
             updated_at=now,
             body=body
         )
-        
+
         save_issue(issue)
         click.echo(f"\n✅ Issue created: {issue_id}")
         click.echo(f"Location: issues/backlog/{issue_id}.md")
-        
+
         if github or click.confirm("Sync to GitHub now?"):
             from vibe_tools.commands.sync import sync_issues
             sync_issues()
-                
+
     cli.add_command(investigate_command)
     cli.add_command(investigate_command, name="inv")

@@ -10,12 +10,8 @@ from vibe_tools.utils import (
     PLANNING_BACKLOG_DIR,
     PLANNING_HISTORY_DIR,
     PRODUCT_DIR,
-    PROJECT_STATE_FILE,
     ensure_project_structure,
     load_project_state,
-    save_project_state,
-    logger,
-    run_command,
 )
 
 
@@ -116,10 +112,32 @@ def register_migrate(cli):
                 elif yaml_file.parent == old_prd_dir:
                     yaml_file.unlink()
 
-        if state_changed:
-            save_project_state(state)
-            click.echo("💾 Project state updated.")
-        
-        click.echo("✅ Migration and reconciliation complete.")
+        # 3. Migrate from product/ (previously specs/)
+        if PRODUCT_DIR.exists() and PRODUCT_DIR.is_dir():
+            for md_file in PRODUCT_DIR.glob("*.md"):
+                # Only move if it matches a PRD pattern or we want to organize them
+                # Architecture and Infra stay in root of product/
+                if md_file.name in ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md"]:
+                    continue
+
+                # Check if it should go to history or backlog
+                prd_id = md_file.stem
+                # Clean prd_ prefix for check
+                clean_id = prd_id.lower()
+                if clean_id.startswith("prd-") or clean_id.startswith("prd_"):
+                     clean_id = clean_id[4:]
+
+                target_dir = PLANNING_HISTORY_DIR if clean_id in completed_prds else PLANNING_BACKLOG_DIR
+                target_path = target_dir / md_file.name
+
+                if not target_path.exists():
+                    click.echo(f"  Moving {md_file} to {target_dir}/")
+                    shutil.copy2(md_file, target_path)
+                    md_file.unlink()
+                else:
+                    if md_file.parent == PRODUCT_DIR:
+                        click.echo(f"  Skipping {md_file}, already exists in {target_dir}/")
+
+        click.echo("✅ Migration complete.")
 
     cli.add_command(migrate)

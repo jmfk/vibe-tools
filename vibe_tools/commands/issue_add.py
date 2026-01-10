@@ -1,13 +1,15 @@
-import click
 import datetime
 import json
-from vibe_tools.issues import Issue, IssueBody, save_issue, generate_issue_id, BACKLOG_DIR
-from vibe_tools.utils import run_llm, get_prompt
+
+import click
+
+from vibe_tools.issues import BACKLOG_DIR, Issue, IssueBody, generate_issue_id, save_issue
+from vibe_tools.utils import get_prompt, run_llm
+
 
 def get_interactive_prompt():
     from prompt_toolkit import PromptSession
     from prompt_toolkit.key_binding import KeyBindings
-    from prompt_toolkit.formatted_text import HTML
 
     kb = KeyBindings()
 
@@ -21,10 +23,10 @@ def get_interactive_prompt():
         event.app.exit(result=None)
 
     session = PromptSession(key_bindings=kb)
-    
+
     click.echo(click.style("Enter issue prompt (Ctrl-S or Ctrl-A to save, Ctrl-Q to quit):", fg="cyan"))
     click.echo(click.style("-" * 60, fg="bright_black"))
-    
+
     result = session.prompt(multiline=True)
     return result
 
@@ -44,12 +46,12 @@ def register_issue_add(issue_group):
                 return
 
         click.echo("🤖 Analyzing prompt and generating issue details...")
-        
+
         template_str = get_prompt("issue_add_prompt.txt")
         rendered_prompt = template_str.replace("{{ prompt }}", prompt)
-        
+
         response = run_llm(rendered_prompt)
-        
+
         # Parse JSON from response
         try:
             # Simple JSON extraction in case there's markdown
@@ -59,7 +61,7 @@ def register_issue_add(issue_group):
                 json_str = response[response.find("{"):response.rfind("}")+1]
             else:
                 json_str = response
-            
+
             data = json.loads(json_str)
         except Exception as e:
             click.echo(f"Error parsing AI response: {e}")
@@ -71,10 +73,10 @@ def register_issue_add(issue_group):
         issue_severity = severity or data.get("severity", "medium")
         issue_service = service or data.get("service", "")
         issue_summary = data.get("summary", "")
-        
+
         now = datetime.datetime.now().isoformat()
         issue_id = generate_issue_id()
-        
+
         issue = Issue(
             id=issue_id,
             title=issue_title,
@@ -85,15 +87,15 @@ def register_issue_add(issue_group):
             updated_at=now,
             body=IssueBody(summary=issue_summary),
         )
-        
+
         save_issue(issue)
-        
+
         from vibe_tools.commands.sync import sync_issues
         sync_issues(quiet=True)
-        
+
         issue_path = BACKLOG_DIR / f"{issue.id}.md"
-        
-        click.echo(f"✅ Issue initialized!")
+
+        click.echo("✅ Issue initialized!")
         click.echo(f"ID:       {issue.id}")
         click.echo(f"Title:    {issue.title}")
         click.echo(f"Location: {issue_path.absolute()}")
@@ -105,7 +107,7 @@ def register_issue_add(issue_group):
                                        .replace("{{ title }}", issue.title)\
                                        .replace("{{ summary }}", issue.body.summary)\
                                        .replace("{{ issue_path }}", str(issue_path.absolute()))
-        
+
         clarity_response = run_llm(clarity_prompt)
         try:
             if "```json" in clarity_response:
@@ -122,24 +124,24 @@ def register_issue_add(issue_group):
             click.echo("🛠️  Agent starting research for more context...")
             agent_type = ctx.obj.get("agent", "cursor-agent")
             stream = ctx.obj.get("stream", False)
-            
+
             agent_prompt = clarity_data.get("agent_prompt")
             user_feedback = ""
-            
+
             from vibe_tools.utils import get_agent_command, run_agent
-            
+
             while True:
                 full_prompt = agent_prompt
                 if user_feedback:
                     full_prompt += f"\n\nUser Feedback to your questions:\n{user_feedback}"
-                
+
                 cmd = get_agent_command(agent_type, full_prompt)
                 output, _ = run_agent(cmd, stream=stream)
-                
+
                 # Check for questions from the agent
                 lines = output.splitlines()
                 questions = [line.replace("QUESTION:", "").strip() for line in lines if "QUESTION:" in line]
-                
+
                 if questions:
                     click.echo("\n❓ The agent has some questions for you:")
                     user_feedback = ""
@@ -150,7 +152,7 @@ def register_issue_add(issue_group):
                     continue
                 else:
                     break
-            
+
             click.echo("✅ Agent refinement complete.")
             # Reload issue to show updated path if needed (though it shouldn't change)
             # but we show the location again

@@ -7,7 +7,6 @@ from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
     INFRA_CURRENT,
     INFRA_SPEC,
-    check_dependencies,
     ensure_project_structure,
     get_agent_command,
     get_file_hash,

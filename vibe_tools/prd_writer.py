@@ -1,9 +1,6 @@
 import json
-import os
 import pathlib
 import re
-import shutil
-import subprocess
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -257,7 +254,7 @@ class PRDWriter:
             result = response.parsed
             if not result:
                 raise ValueError("Empty response from Gemini")
-            
+
             return {
                 "questions": result.questions,
                 "satisfied": result.satisfied,

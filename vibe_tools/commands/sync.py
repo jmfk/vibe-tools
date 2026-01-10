@@ -1,18 +1,34 @@
-import click
 import datetime
 import json
-import os
 from typing import List, Optional
+
+import click
+
 from vibe_tools.issues import (
-    Issue, IssueBody, GitHubInfo, SyncInfo, load_index, save_issue, 
-    load_issue_by_id, get_issue_hash, generate_issue_id,
-    BACKLOG_DIR as ISSUES_BACKLOG_DIR, HISTORY_DIR as ISSUES_HISTORY_DIR, STATUS_MAPPING
-)
-from vibe_tools.utils import (
-    PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR, PLANNING_HISTORY_DIR, PLANNING_REJECTED_DIR, 
-    PRD_DIR, load_project_state, run_command, logger, switch_to_main, get_main_branch
+    STATUS_MAPPING,
+    GitHubInfo,
+    Issue,
+    IssueBody,
+    SyncInfo,
+    generate_issue_id,
+    get_issue_hash,
+    load_index,
+    load_issue_by_id,
+    save_issue,
 )
 from vibe_tools.prds import get_prd_metadata
+from vibe_tools.utils import (
+    PLANNING_BACKLOG_DIR,
+    PLANNING_HISTORY_DIR,
+    PLANNING_INBOX_DIR,
+    PLANNING_REJECTED_DIR,
+    PRD_DIR,
+    get_main_branch,
+    load_project_state,
+    logger,
+    run_command,
+    switch_to_main,
+)
 
 ENSURED_LABELS = set()
 
@@ -21,17 +37,17 @@ def get_github_repo_info():
     repo = get_github_repo()
     if not repo:
         return None, None, None
-    
+
     parts = repo.split("/")
     if len(parts) != 2:
         return None, None, None
-    
+
     owner, name = parts
-    
+
     stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ id }} }}"], check=False)
     if code != 0:
         return owner, name, None
-    
+
     try:
         data = json.loads(stdout)
         repo_id = data["data"]["repository"]["id"]
@@ -91,12 +107,12 @@ def get_files_changed_since(commit_hash: str) -> List[str]:
         else:
             if len(parts) >= 2:
                 changed_files.append(parts[1])
-    
+
     # Also include untracked files
     stdout, _ = run_command(["git", "ls-files", "--others", "--exclude-standard"], check=False)
     if stdout.strip():
         changed_files.extend(stdout.strip().splitlines())
-        
+
     return list(set(changed_files))
 
 def fetch_github_discussions(owner, name):
@@ -173,7 +189,7 @@ def get_discussion_category_id(owner, name, category_name="Ideas"):
     stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ discussionCategories(first: 10) {{ nodes {{ id name }} }} }} }}"], check=False)
     if code != 0:
         return None
-    
+
     try:
         data = json.loads(stdout)
         for node in data["data"]["repository"]["discussionCategories"]["nodes"]:
@@ -190,15 +206,15 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
         return
 
     from vibe_tools.utils import PRODUCT_DIR
-    
+
     # 1. Fetch current GitHub discussions
     gh_discussions = fetch_github_discussions(repo_owner, repo_name)
     gh_by_title = {d["title"]: d for d in gh_discussions}
     gh_by_id = {d["id"]: d for d in gh_discussions}
-    
+
     # Define labels we manage
     vibe_labels = ["inbox", "backlog", "history", "rejected", "system"]
-    
+
     # Define directories and their labels
     sync_dirs = {
         PLANNING_INBOX_DIR: "inbox",
@@ -209,12 +225,12 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
 
     # Also handle system files in product root
     system_files = ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md"]
-    
+
     # Ensure all labels exist
     repo = f"{repo_owner}/{repo_name}"
     for label in vibe_labels:
         ensure_github_label(repo, label)
-    
+
     # Now get label IDs after ensuring they exist
     label_ids = {l: get_label_id(repo_owner, repo_name, l) for l in vibe_labels}
 
@@ -222,10 +238,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
     for directory, label in sync_dirs.items():
         if not directory.exists():
             continue
-        
+
         is_inbox = label == "inbox"
         is_backlog = label == "backlog"
-        
+
         for prd_path in directory.glob("*.md"):
             if relevant_files is not None:
                 if str(prd_path) not in relevant_files and not is_inbox and not is_backlog:
@@ -234,23 +250,23 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
-            
+
             gh_disc = None
             if meta.sync_info.get('discussion_id'):
                 gh_disc = gh_by_id.get(meta.sync_info['discussion_id'])
-            
+
             if not gh_disc:
                 gh_disc = gh_by_title.get(title)
-            
+
             if not gh_disc:
                 # Create discussion
                 if dry_run:
                     logger.info(f"[DRY RUN] Would create GitHub Discussion for {prd_path.name} with label '{label}'")
                     continue
-                
+
                 cmd = [
                     "gh", "api", "graphql",
-                    "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                    "-f", "query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) { createDiscussion(input: { repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }) { discussion { id url } } }",
                     "-f", f"repoId={repo_id}",
                     "-f", f"categoryId={category_id}",
                     "-f", f"title={title}",
@@ -266,14 +282,14 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                         meta.last_synced_at = datetime.datetime.now().isoformat()
                         meta.sync_hash = meta.get_hash()
                         meta.save()
-                        
+
                         # Add to local cache to prevent duplicates in same run
                         gh_by_id[disc["id"]] = disc
                         gh_by_title[title] = disc
-                        
+
                         if label_ids[label]:
                             add_discussion_labels(disc["id"], [label_ids[label]])
-                            
+
                         logger.info(f"Created GitHub Discussion for {prd_path.name} with label '{label}'")
                     except (json.JSONDecodeError, KeyError):
                         logger.error(f"Failed to parse discussion creation response for {prd_path.name}")
@@ -283,7 +299,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 # Sync existing discussion
                 gh_updated_at = gh_disc["updatedAt"]
                 gh_body = gh_disc["body"]
-                
+
                 # Update metadata if not present
                 if not meta.sync_info.get('discussion_id'):
                     meta.sync_info['discussion_id'] = gh_disc["id"]
@@ -296,7 +312,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                     # Compare updatedAt
                     local_mtime = datetime.datetime.fromtimestamp(prd_path.stat().st_mtime, tz=datetime.timezone.utc)
                     gh_time = datetime.datetime.fromisoformat(gh_updated_at.replace("Z", "+00:00"))
-                    
+
                     if gh_time > local_mtime and gh_body != body:
                         # GitHub is newer, pull
                         if dry_run:
@@ -308,17 +324,17 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                             meta.save()
                             logger.info(f"Pulled updates for {prd_path.name} from GitHub")
                         continue # Skip push
-                
+
                 # One-way push (vibe-tools -> GitHub) or local is newer in bidirectional
                 current_hash = meta.get_hash()
                 if gh_body != body or meta.sync_hash != current_hash:
                     if dry_run:
                         logger.info(f"[DRY RUN] Would update GitHub Discussion for {prd_path.name}")
                         continue
-                        
+
                     cmd = [
                         "gh", "api", "graphql",
-                        "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                        "-f", "query=mutation($id: ID!, $title: String!, $body: String!) { updateDiscussion(input: { discussionId: $id, title: $title, body: $body }) { discussion { id url } } }",
                         "-f", f"id={gh_disc['id']}",
                         "-f", f"title={title}",
                         "-f", f"body={body}"
@@ -331,7 +347,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                         logger.info(f"Updated GitHub Discussion for {prd_path.name}")
                     else:
                         logger.error(f"Failed to update GitHub Discussion for {prd_path.name}: {stdout}")
-                
+
                 # Manage labels: ensure correct one is there, remove others
                 gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
                 if label not in gh_labels:
@@ -340,7 +356,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                     elif label_ids[label]:
                         add_discussion_labels(gh_disc["id"], [label_ids[label]])
                         logger.info(f"Added label '{label}' to GitHub Discussion {gh_disc['number']}")
-                
+
                 # Remove other status labels
                 to_remove_labels = [l for l in vibe_labels if l in gh_labels and l != label]
                 if to_remove_labels:
@@ -357,7 +373,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
         prd_path = PRODUCT_DIR / filename
         if not prd_path.exists():
             continue
-            
+
         if relevant_files is not None:
             if str(prd_path) not in relevant_files:
                 continue
@@ -366,23 +382,23 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
         title = f"[SYSTEM] {meta.title}"
         body = meta.to_markdown()
         label = "system"
-        
+
         gh_disc = None
         if meta.sync_info.get('discussion_id'):
             gh_disc = gh_by_id.get(meta.sync_info['discussion_id'])
-        
+
         if not gh_disc:
             gh_disc = gh_by_title.get(title)
-        
+
         if not gh_disc:
             if dry_run:
                 logger.info(f"[DRY RUN] Would create GitHub Discussion for system spec {filename}")
                 continue
-            
+
             # Create
             cmd = [
                 "gh", "api", "graphql",
-                "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                "-f", "query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) { createDiscussion(input: { repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }) { discussion { id url } } }",
                 "-f", f"repoId={repo_id}",
                 "-f", f"categoryId={category_id}",
                 "-f", f"title={title}",
@@ -392,7 +408,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
             if code == 0:
                 data = json.loads(stdout)
                 disc = data["data"]["createDiscussion"]["discussion"]
-                
+
                 meta.sync_info['discussion_id'] = disc["id"]
                 meta.github_discussion_url = disc["url"]
                 meta.last_synced_at = datetime.datetime.now().isoformat()
@@ -420,10 +436,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 if dry_run:
                     logger.info(f"[DRY RUN] Would update GitHub Discussion for system spec {filename}")
                     continue
-                    
+
                 cmd = [
                     "gh", "api", "graphql",
-                    "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                    "-f", "query=mutation($id: ID!, $title: String!, $body: String!) { updateDiscussion(input: { discussionId: $id, title: $title, body: $body }) { discussion { id url } } }",
                     "-f", f"id={gh_disc['id']}",
                     "-f", f"title={title}",
                     "-f", f"body={body}"
@@ -434,7 +450,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                     meta.sync_hash = current_hash
                     meta.save()
                     logger.info(f"Updated GitHub Discussion for system spec {filename}")
-            
+
             # Ensure label
             gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
             if label not in gh_labels:
@@ -443,7 +459,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                 elif label_ids[label]:
                     add_discussion_labels(gh_disc["id"], [label_ids[label]])
                     logger.info(f"Added label '{label}' to GitHub Discussion {gh_disc['number']}")
-            
+
             # Remove other status labels
             to_remove_labels = [l for l in vibe_labels if l in gh_labels and l != label]
             if to_remove_labels:
@@ -483,16 +499,16 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
                         logger.info(f"Pulled new GitHub Discussion '{title}' into inbox")
 
 def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_files=None):
-    from vibe_tools.utils import PRD_DIR, load_project_state, REJECTED_DIR
+    from vibe_tools.utils import REJECTED_DIR
     state = load_project_state()
     started_prds = state.get("started_prds", [])
-    
+
     backlog_dir = PRD_DIR / "backlog"
     history_dir = PRD_DIR / "history"
     rejected_dir = REJECTED_DIR
 
     repo = f"{repo_owner}/{repo_name}"
-    
+
     # System files to ignore for issues
     system_files = ["architecture.yaml", "infrastructure.yaml", "cicd.yaml", "testing.yaml", "build.yaml"]
 
@@ -503,14 +519,14 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
     for directory in [backlog_dir, history_dir, rejected_dir]:
         if not directory.exists():
             continue
-        
+
         is_history = directory.name == "history"
         is_backlog = directory.name == "backlog"
-        
+
         for prd_path in directory.glob("*.yaml"):
             if prd_path.name in system_files:
                 continue
-            
+
             if relevant_files is not None:
                 if str(prd_path) not in relevant_files and not is_backlog:
                     continue
@@ -518,22 +534,22 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
-            
+
             if dry_run:
                 logger.info(f"[DRY RUN] Would sync GitHub Issue for normalized PRD {prd_path.name}")
                 continue
 
             issue_number = meta.github_issue_number
-            
+
             # Determine labels
             labels = ["prd"]
             prd_id = prd_path.stem
             if prd_id.startswith("prd_"):
                 prd_id = prd_id[4:]
-                
+
             if prd_id in started_prds:
                 labels.append("in-progress")
-            
+
             # Ensure labels exist
             for label in labels:
                 ensure_github_label(repo, label)
@@ -548,7 +564,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                 ]
                 for label in labels:
                     cmd.extend(["--label", label])
-                
+
                 stdout, code, stderr = _run_command_with_stderr(cmd)
                 if code == 0:
                     try:
@@ -559,7 +575,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                         meta.sync_hash = meta.get_hash()
                         meta.save()
                         logger.info(f"Created GitHub Issue for {prd_path.name}")
-                        
+
                         if is_history:
                             run_command(["gh", "issue", "close", str(number), "--repo", repo], check=False)
                     except (ValueError, IndexError):
@@ -581,7 +597,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
                 ]
                 for label in labels:
                     cmd.extend(["--add-label", label])
-                
+
                 stdout, code, stderr = _run_command_with_stderr(cmd)
                 if code == 0:
                     meta.last_synced_at = datetime.datetime.now().isoformat()
@@ -607,10 +623,10 @@ def get_github_repo():
     url = stdout.strip()
     if not url:
         return None
-        
+
     if "github.com" not in url:
         return None
-    
+
     # Handle both ssh and https
     if url.startswith("git@github.com:"):
         repo = url.replace("git@github.com:", "").replace(".git", "")
@@ -650,7 +666,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
         cmd.append("all")
     if since:
         cmd.extend(["--search", f"updated:>={since}"])
-    
+
     stdout, code, stderr = _run_command_with_stderr(cmd)
     if code != 0:
         logger.error(f"Failed to fetch GitHub issues: {stderr or stdout}")
@@ -658,22 +674,22 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
 
     gh_issues = json.loads(stdout)
     index = load_index()
-    
+
     # Map gh_number to local_id
     gh_to_local = {v["github_number"]: k for k, v in index.items() if v.get("github_number")}
 
     for gh_issue in gh_issues:
         gh_number = gh_issue["number"]
         gh_updated_at = gh_issue["updatedAt"]
-        
+
         if gh_number in gh_to_local:
             local_id = gh_to_local[gh_number]
             issue = load_issue_by_id(local_id)
             if not issue:
                 continue
-            
+
             current_hash = get_issue_hash(issue)
-            
+
             # Conflict detection
             is_local_changed = issue.sync and current_hash != issue.sync.sync_hash
             is_remote_changed = issue.sync and gh_updated_at > issue.sync.last_synced_at
@@ -693,7 +709,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 issue.comments = fetch_gh_issue_comments(gh_number, repo)
                 issue.body = IssueBody.from_markdown(gh_issue["body"])
                 issue.updated_at = gh_updated_at
-                
+
                 # Map status
                 if gh_issue["state"] == "CLOSED":
                     issue.status = "done"
@@ -705,7 +721,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                         issue.status = "blocked"
                     else:
                         issue.status = "backlog"
-                
+
                 issue.sync = SyncInfo(
                     last_synced_at=gh_updated_at,
                     sync_hash=get_issue_hash(issue)
@@ -716,7 +732,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
             # Create new local issue
             local_id = generate_issue_id()
             status = GITHUB_TO_LOCAL_STATUS.get(gh_issue["state"], "backlog")
-            
+
             labels = [l["name"] for l in gh_issue["labels"]]
             if status == "backlog":
                 if "in-progress" in labels:
@@ -758,13 +774,13 @@ def ensure_github_label(repo: str, label: str):
     cache_key = f"{repo}:{label}"
     if cache_key in ENSURED_LABELS:
         return
-        
+
     _, code, _ = _run_command_with_stderr(["gh", "label", "view", label, "--repo", repo])
     if code != 0:
         logger.info(f"Creating missing label '{label}' on GitHub...")
         # Use a default color (blue-ish)
         run_command(["gh", "label", "create", label, "--repo", repo, "--color", "0075ca"], check=False)
-    
+
     ENSURED_LABELS.add(cache_key)
 
 def push_local_issues(repo: str, relevant_files=None):
@@ -780,17 +796,17 @@ def push_local_issues(repo: str, relevant_files=None):
         issue = load_issue_by_id(local_id)
         if not issue:
             continue
-        
+
         current_hash = get_issue_hash(issue)
         if issue.sync and issue.sync.sync_hash == current_hash:
             continue
-        
+
         if issue.status == "blocked":
             logger.info(f"Skipping blocked issue {local_id}")
             continue
 
         mapping = STATUS_MAPPING.get(issue.status, STATUS_MAPPING["backlog"])
-        
+
         # Ensure labels exist before trying to use them
         for label in mapping["label"]:
             ensure_github_label(repo, label)
@@ -805,7 +821,7 @@ def push_local_issues(repo: str, relevant_files=None):
             ]
             for label in mapping["label"]:
                 cmd.extend(["--label", label])
-            
+
             stdout, code, stderr = _run_command_with_stderr(cmd)
             if code == 0:
                 url = stdout.strip()
@@ -831,12 +847,12 @@ def push_local_issues(repo: str, relevant_files=None):
                 "--title", issue.title,
                 "--body", issue.body.to_markdown()
             ]
-            
+
             # Remove all possible status labels first (GitHub CLI doesn't have an easy way to clear labels,
             # so we'd have to know what labels were there. Simplified for now: just add the correct one)
             for label in mapping["label"]:
                 cmd.extend(["--add-label", label])
-            
+
             stdout, code, stderr = _run_command_with_stderr(cmd)
             if code == 0:
                 if mapping["github_state"] == "closed":
@@ -897,7 +913,7 @@ def register_sync(cli):
         if current_branch != main_branch:
             click.echo(f"Switching to {main_branch} for sync...")
             switch_to_main()
-            
+
             # Verify we are on main
             stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
             if stdout.strip() != main_branch:
@@ -909,7 +925,7 @@ def register_sync(cli):
         # Determine relevant files for optimization
         relevant_files = None
         last_sync_time = since
-        
+
         if not full:
             last_hash, last_time = get_last_sync_info(main_branch)
             if last_hash:
@@ -934,9 +950,9 @@ def register_sync(cli):
                 pull_github_issues(repo, open_only=False, since=None, label=label)
             else:
                 pull_github_issues(repo, open_only=open_only, since=last_sync_time, label=label)
-            
+
             push_local_issues(repo, relevant_files=relevant_files)
-        
+
         if not dry_run:
             # Commit changes to main
             run_command(["git", "add", "issues/", "product/", "implementation/"], check=False)
@@ -945,7 +961,7 @@ def register_sync(cli):
             if diff_code != 0:
                 click.echo("Committing changes to main...")
                 run_command(["git", "commit", "-m", "vibe: sync issues and prds"], check=False)
-        
+
         # Switch back if necessary
         if current_branch and current_branch != main_branch:
             click.echo(f"Switching back to {current_branch}...")

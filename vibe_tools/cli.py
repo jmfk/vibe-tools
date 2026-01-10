@@ -83,8 +83,6 @@ from vibe_tools.utils import (
     BUILD,
     BUILD_CURRENT,
     BUILD_SPEC,
-    CICD,
-    CICD_CURRENT,
     CICD_SPEC,
     COSTS_DIR,
     INFRA,
@@ -111,8 +109,6 @@ from vibe_tools.utils import (
     get_prompt,
     load_config,
     load_project_state,
-    log_issue,
-    log_success,
     logger,
     reset_prd_state,
     run_agent,
@@ -784,7 +780,6 @@ def implement(ctx):
         )
         return
 
-    from vibe_tools.utils import collect_prd_files
 
     if not collect_prd_files():
         click.echo("❌ No machine-readable PRD YAMLs found in implementation/prds/.")
@@ -920,7 +915,7 @@ def _build_reconciliation(ctx, force):
                 ),
                 "make dev-start",
             )
-            click.echo(f"[ ] Start development services:")
+            click.echo("[ ] Start development services:")
             click.echo(f"     {make_cmd}")
         else:
             click.echo(
@@ -1075,7 +1070,6 @@ def build_debug(ctx):
 @click.pass_context
 def devbug(ctx, output):
     """Collect comprehensive diagnostic data for debugging build and run issues."""
-    import socket
     import datetime
 
     output_path = (
@@ -1128,7 +1122,7 @@ def devbug(ctx, output):
             main_pid = pid_info.get("main_pid")
             child_pids = pid_info.get("child_pids", [])
             process_name = pid_info.get("process_name")
-            command = pid_info.get("command", "")
+            # command = pid_info.get("command", "")
 
             pid_status = {}
             if main_pid:
@@ -1377,7 +1371,6 @@ def devbug(ctx, output):
 def _check_and_install_build_tools():
     """Check for required build tools (skaffold, helm) and install if missing."""
     import platform
-    import subprocess
 
     required_tools = {}
 
@@ -1483,7 +1476,7 @@ def _check_and_install_build_tools():
             else:
                 click.echo(f"  ⚠️  {tool_name} installation verification failed")
                 click.echo(
-                    f"     Please install it manually and run 'vibe build' again"
+                    "     Please install it manually and run 'vibe build' again"
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
@@ -2746,7 +2739,7 @@ def branch_group(ctx):
 def branch_base(ctx, branch_name, new_base):
     """Get or set the base branch for a feature branch."""
     from vibe_tools.branches import set_branch_base
-    from vibe_tools.utils import load_project_state, run_command, get_main_branch
+    from vibe_tools.utils import get_main_branch, load_project_state, run_command
 
     if not branch_name:
         # Show current branch and its base
@@ -2935,14 +2928,11 @@ def kill(yes):
 def stats(ctx, api, billing_groups, days, start_date, end_date):
     """Generate statistics report from usage files or Cursor API."""
     from vibe_tools.stats import (
-        generate_report,
-        generate_billing_groups_report,
-        list_usage_files,
-        fetch_daily_usage_data,
-        fetch_spending_data,
         fetch_usage_events,
+        generate_billing_groups_report,
+        generate_report,
         list_billing_groups,
-        get_billing_group,
+        list_usage_files,
     )
     from vibe_tools.utils import get_cursor_api_key
 
@@ -3086,7 +3076,7 @@ def billing_groups_group(ctx):
 @click.pass_context
 def billing_groups_list(ctx, billing_cycle):
     """List all billing groups."""
-    from vibe_tools.stats import list_billing_groups, generate_billing_groups_report
+    from vibe_tools.stats import generate_billing_groups_report, list_billing_groups
     from vibe_tools.utils import get_cursor_api_key
 
     api_key = get_cursor_api_key()
@@ -3140,7 +3130,7 @@ def billing_groups_create(ctx, name):
 @click.pass_context
 def billing_groups_get(ctx, group_id, billing_cycle):
     """Get details of a specific billing group."""
-    from vibe_tools.stats import get_billing_group, generate_billing_groups_report
+    from vibe_tools.stats import generate_billing_groups_report, get_billing_group
     from vibe_tools.utils import get_cursor_api_key
 
     api_key = get_cursor_api_key()
@@ -3256,24 +3246,24 @@ Define the demo data needed for the staging environment.
         click.echo(f"✅ Created {demodata_path}")
 
     pm.focused_prd = "demodata.md"
-    click.echo(f"📝 Opening PM session focused on demodata.md")
+    click.echo("📝 Opening PM session focused on demodata.md")
     click.echo(
         "Use /mode agent to enable file editing, then describe your demo data requirements."
     )
     pm.run()
 
 
-@demo_data_cli.command()
+@demo_data_cli.command(name="setup")
 @click.option(
     "--clean", is_flag=True, help="Clean existing data before setting up demo data"
 )
 @click.pass_context
-def setup(ctx, clean):
+def setup_demo_data(ctx, clean):
     """Setup demo data according to product/demodata.md."""
     from vibe_tools.staging import (
-        get_required_services,
         check_service_health,
         detect_environment,
+        get_required_services,
     )
 
     demodata_path = SPECS_DIR / "demodata.md"

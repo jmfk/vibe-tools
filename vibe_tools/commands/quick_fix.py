@@ -1,11 +1,9 @@
 import pathlib
 import re
-from typing import Callable, Dict, List, Optional
 
 import click
 
-from vibe_tools.ralph import QuickFixLoop
-from vibe_tools.utils import get_prompt, logger, log_issue, log_start, log_success, run_llm, run_command
+from vibe_tools.utils import get_prompt, log_issue, log_start, log_success, logger, run_command, run_llm
 
 
 def register_quick_fix(cli):

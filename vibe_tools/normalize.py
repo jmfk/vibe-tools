@@ -1,22 +1,22 @@
 import pathlib
 import re
 import sys
-from typing import Any, Dict, List
 
 import click
 import yaml
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
+from vibe_tools.ralph import _switch_to_branch
 from vibe_tools.utils import (
     BACKLOG_DIR,
     HISTORY_DIR,
     INBOX_DIR,
-    REJECTED_DIR,
-    PRD_DIR,
     PLANNING_BACKLOG_DIR,
     PLANNING_HISTORY_DIR,
     PLANNING_INBOX_DIR,
     PLANNING_REJECTED_DIR,
+    PRD_DIR,
+    REJECTED_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
     get_prompt,
@@ -28,7 +28,6 @@ from vibe_tools.utils import (
     save_project_state,
     switch_to_main,
 )
-from vibe_tools.ralph import _switch_to_branch
 
 DEFAULT_SPECS_DIR = pathlib.Path("product")
 
@@ -150,7 +149,7 @@ def normalize_prd(
                 rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
             except ValueError:
                 rel_dir = spec_path.parent.relative_to(specs_dir)
-        
+
         # Determine output filename and path
         global_truths = [
             "architecture",
@@ -160,7 +159,7 @@ def normalize_prd(
             "testing",
             "build",
         ]
-        
+
         if clean_stem in global_truths:
             output_filename = f"{clean_stem}.yaml"
             if clean_stem == "build":

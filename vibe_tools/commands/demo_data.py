@@ -1,4 +1,3 @@
-import pathlib
 
 import click
 
@@ -61,7 +60,7 @@ Define the demo data needed for the staging environment.
             click.echo(f"✅ Created {demodata_path}")
 
         pm.focused_prd = "demodata.md"
-        click.echo(f"📝 Opening PM session focused on demodata.md")
+        click.echo("📝 Opening PM session focused on demodata.md")
         click.echo(
             "Use /mode agent to enable file editing, then describe your demo data requirements."
         )

@@ -1,11 +1,11 @@
 import datetime
-import json
-import os
-import pathlib
-import yaml
 import hashlib
+import json
+import pathlib
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
+
+import yaml
 
 ISSUES_DIR = pathlib.Path("issues")
 BACKLOG_DIR = ISSUES_DIR / "backlog"
@@ -68,13 +68,13 @@ class IssueBody:
             "Investigation Notes": "",
             "Solution Notes": ""
         }
-        
+
         current_section = "Summary"  # Default to Summary
         lines = text.splitlines()
-        
+
         # Check if it has any headers at all
         has_headers = any(line.startswith("## ") for line in lines)
-        
+
         if not has_headers:
             return cls(summary=text.strip())
 
@@ -84,10 +84,10 @@ class IssueBody:
                 if title in sections:
                     current_section = title
                     continue
-            
+
             if current_section:
                 sections[current_section] = (sections[current_section] + "\n" + line).strip()
-        
+
         return cls(
             summary=sections["Summary"],
             reproduction_steps=sections["Reproduction Steps"],
@@ -146,27 +146,27 @@ class Issue:
     def from_markdown(cls, content: str) -> "Issue":
         if not content.startswith("---"):
             raise ValueError("Invalid issue format: missing frontmatter")
-        
+
         parts = content.split("---", 2)
         if len(parts) < 3:
             raise ValueError("Invalid issue format: missing frontmatter or body")
-        
+
         frontmatter = yaml.safe_load(parts[1])
         rest = parts[2].strip()
-        
+
         comments = ""
         body_text = rest
         if "## External Comments (GitHub)" in rest:
             body_text, comments = rest.split("## External Comments (GitHub)", 1)
             body_text = body_text.strip()
             comments = comments.strip()
-        
+
         github_data = frontmatter.get("github")
         github_info = GitHubInfo(**github_data) if github_data else None
-        
+
         sync_data = frontmatter.get("sync")
         sync_info = SyncInfo(**sync_data) if sync_data else None
-        
+
         return cls(
             id=frontmatter["id"],
             title=frontmatter["title"],
@@ -211,13 +211,13 @@ def save_issue(issue: Issue):
     # Determine directory based on status
     target_dir = HISTORY_DIR if issue.status == "done" else BACKLOG_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
-    
+
     file_path = target_dir / f"{issue.id}.md"
-    
+
     # If moving between directories, cleanup old ones
     old_backlog = BACKLOG_DIR / f"{issue.id}.md"
     old_history = HISTORY_DIR / f"{issue.id}.md"
-    
+
     if issue.status == "done":
         if old_backlog.exists():
             old_backlog.unlink()
@@ -226,7 +226,7 @@ def save_issue(issue: Issue):
             old_history.unlink()
 
     file_path.write_text(issue.to_markdown())
-    
+
     # Update index
     index = load_index()
     index[issue.id] = {
@@ -242,19 +242,19 @@ def load_issue_by_id(issue_id: str) -> Optional[Issue]:
         path = pathlib.Path(index[issue_id]["file"])
         if path.exists():
             return Issue.from_markdown(path.read_text())
-    
+
     # Fallback to direct file search
     for path in [BACKLOG_DIR / f"{issue_id}.md", HISTORY_DIR / f"{issue_id}.md"]:
         if path.exists():
             return Issue.from_markdown(path.read_text())
-            
+
     return None
 
 def generate_issue_id() -> str:
     now = datetime.datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     index = load_index()
-    
+
     # Count issues for today across all directories
     today_count = 0
     prefix = f"ISSUE-{date_str}-"
@@ -266,7 +266,7 @@ def generate_issue_id() -> str:
                     today_count = count
             except ValueError:
                 pass
-            
+
     return f"{prefix}{today_count + 1:03d}"
 
 def load_all_issues() -> List[Issue]:
@@ -276,7 +276,7 @@ def load_all_issues() -> List[Issue]:
         issue = load_issue_by_id(issue_id)
         if issue:
             issues.append(issue)
-    
+
     # Also check directories for any issues not in index
     for directory in [BACKLOG_DIR, HISTORY_DIR]:
         if directory.exists():
@@ -288,10 +288,10 @@ def load_all_issues() -> List[Issue]:
                         issues.append(issue)
                     except Exception:
                         continue
-    
+
     # Sort by created_at, then by id for stability
     issues.sort(key=lambda x: (x.created_at, x.id))
-    
+
     return issues
 
 STATUS_MAPPING = {

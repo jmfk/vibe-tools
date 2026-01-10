@@ -6,10 +6,10 @@ import json
 import logging
 import os
 import pathlib
+import shutil
 import signal
 import subprocess
 import sys
-import shutil
 import time
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional
@@ -149,19 +149,19 @@ def ensure_project_structure():
     BACKLOG_DIR.mkdir(exist_ok=True)
     HISTORY_DIR.mkdir(exist_ok=True)
     REJECTED_DIR.mkdir(exist_ok=True)
-    
+
     PLANNING_DIR.mkdir(exist_ok=True)
     PLANNING_INBOX_DIR.mkdir(exist_ok=True)
     PLANNING_BACKLOG_DIR.mkdir(exist_ok=True)
     PLANNING_HISTORY_DIR.mkdir(exist_ok=True)
     PLANNING_REJECTED_DIR.mkdir(exist_ok=True)
-    
+
     ISSUES_DIR.mkdir(exist_ok=True)
     ISSUES_BACKLOG_DIR.mkdir(exist_ok=True)
     ISSUES_HISTORY_DIR.mkdir(exist_ok=True)
     ISSUES_FAILS_DIR.mkdir(exist_ok=True)
     ISSUES_META_DIR.mkdir(exist_ok=True)
-    
+
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
 
@@ -581,7 +581,7 @@ def run_llm(
 
     # We use a simple prompt that mimics dspy's behavior
     full_prompt = f"Execute the given task and return the result.\n\nInstruction: {prompt}\n\nAnswer:"
-    
+
     response = client.models.generate_content(
         model=gemini_model,
         contents=full_prompt,
@@ -658,7 +658,7 @@ def fix_kubeconfig_api_version() -> bool:
 
         try:
             # Read and parse kubeconfig
-            with open(kubeconfig_path, "r") as f:
+            with open(kubeconfig_path) as f:
                 config = yaml.safe_load(f)
 
             if not config or not isinstance(config, dict):

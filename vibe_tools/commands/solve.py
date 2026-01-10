@@ -1,14 +1,16 @@
-import click
 import datetime
-from typing import Optional, List
-from vibe_tools.issues import load_issue_by_id, save_issue, Issue, load_all_issues
-from vibe_tools.utils import logger, load_config
+from typing import Optional
+
+import click
+
+from vibe_tools.issues import Issue, load_all_issues, load_issue_by_id, save_issue
 from vibe_tools.ralph import issue_solve_loop
+
 
 def _solve_issue(issue: Issue, mode: str, agent: str, stream: bool = False):
     """Internal helper to solve a single issue."""
     click.echo(f"🎯 Starting {mode} mode for issue: {issue.title} ({issue.id})")
-    
+
     from vibe_tools.commands.sync import sync_issues
     # Update status if not already in progress
     now = datetime.datetime.now().isoformat()
@@ -25,11 +27,11 @@ def _solve_issue(issue: Issue, mode: str, agent: str, stream: bool = False):
         issue.body.investigation_notes = (issue.body.investigation_notes + "\n" + note).strip()
     else:
         issue.body.solution_notes = (issue.body.solution_notes + "\n" + note).strip()
-        
+
     issue.updated_at = now
     save_issue(issue)
     sync_issues(quiet=True)
-    
+
     if mode == "solve":
         success = issue_solve_loop(issue, agent, stream=stream)
         if success:

@@ -439,7 +439,7 @@ def llm(ctx):
         if click.confirm("Would you like to configure it now?", default=True):
             ctx.invoke(api)
             # Reload environment after saving key
-            from dotenv import load_dotenv, find_dotenv
+            from dotenv import find_dotenv, load_dotenv
 
             load_dotenv(find_dotenv() or ".env", override=True)
             api_key = get_google_api_key()
@@ -467,7 +467,7 @@ def llm(ctx):
             )
 
     except Exception as e:
-        click.echo(f"❌ Gemini Integration: FAILED")
+        click.echo("❌ Gemini Integration: FAILED")
         click.echo(f"\nError Details:\n{str(e)}")
 
         # Check for common issues
@@ -903,15 +903,12 @@ def eject_prompts():
 @click.pass_context
 def scaffold(ctx):
     """Generate build scaffolding (build.md, build.yaml, Makefile, Dockerfiles, etc.)."""
+    from vibe_tools.normalize import normalize_prd
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
         BUILD,
         BUILD_SPEC,
-        ensure_dir,
-        get_agent_command,
-        run_agent,
     )
-    from vibe_tools.normalize import normalize_prd
 
     click.echo("\n--- Build Scaffolding Setup ---")
 
@@ -986,8 +983,6 @@ def _generate_build_spec(agent, stream):
         ARCHITECTURE_SPEC,
         BUILD_SPEC,
         ensure_dir,
-        get_agent_command,
-        run_agent,
     )
 
     if not ARCHITECTURE_SPEC.exists():
@@ -1210,7 +1205,6 @@ def _check_and_install_build_tools():
     """Check for required build tools (skaffold, helm) and install if missing."""
     import platform
     import shutil
-    import subprocess
 
     from vibe_tools.utils import run_command
 
@@ -1318,7 +1312,7 @@ def _check_and_install_build_tools():
             else:
                 click.echo(f"  ⚠️  {tool_name} installation verification failed")
                 click.echo(
-                    f"     Please install it manually and run 'vibe config scaffold' again"
+                    "     Please install it manually and run 'vibe config scaffold' again"
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
@@ -2143,7 +2137,7 @@ def _setup_logging_infrastructure():
     if not has_k8s_cluster():
         click.echo("  ⚠️  Kubernetes cluster not available.")
         click.echo("     Logging infrastructure requires a local Kubernetes cluster (kind/k3d/minikube).")
-        
+
         # Check if kubectl is installed
         if not _ensure_kubectl_installed():
             click.echo("  ❌ kubectl is required but could not be installed.")
@@ -2152,7 +2146,7 @@ def _setup_logging_infrastructure():
 
         # Check which cluster tools are available
         available_tools = _get_available_cluster_tools()
-        
+
         # Prompt user to choose a cluster tool
         click.echo("\n  Set Up Local Kubernetes Cluster")
         click.echo("  What type of Kubernetes cluster would you like to install?")
@@ -2168,7 +2162,7 @@ def _setup_logging_infrastructure():
         click.echo("  Option 3: Minikube")
         click.echo("           - Full-featured local Kubernetes")
         click.echo("           - Supports multiple drivers")
-        
+
         if available_tools:
             click.echo(f"\n  Note: {', '.join(available_tools)} already installed")
             if "kind" in available_tools:
@@ -2248,10 +2242,10 @@ def _setup_logging_infrastructure():
 
     # Get Grafana credentials
     credentials = _get_grafana_credentials()
-    click.echo(f"\n✅ Logging infrastructure deployed successfully!")
+    click.echo("\n✅ Logging infrastructure deployed successfully!")
     click.echo(f"   Grafana credentials: username={credentials['username']}, password={credentials['password']}")
-    click.echo(f"   Access Grafana: kubectl port-forward svc/grafana -n monitoring 3000:3000")
-    click.echo(f"   Then open: http://localhost:3000")
+    click.echo("   Access Grafana: kubectl port-forward svc/grafana -n monitoring 3000:3000")
+    click.echo("   Then open: http://localhost:3000")
 
     # Validate setup
     if not _validate_logging_setup():

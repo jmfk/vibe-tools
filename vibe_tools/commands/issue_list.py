@@ -1,15 +1,17 @@
-import click
 import re
-from typing import Optional
+
+import click
+
 from vibe_tools.issues import load_all_issues
+
 
 def list_issues_impl(status, severity, service, search, full, search_query):
     """Internal implementation of issue listing."""
     issues = load_all_issues()
-    
+
     # Merge search and search_query
     effective_search = search or search_query
-    
+
     filtered_issues = []
     for issue in issues:
         if status:
@@ -18,12 +20,12 @@ def list_issues_impl(status, severity, service, search, full, search_query):
         elif issue.status == "done":
             # Hide done issues by default unless specifically filtered
             continue
-            
+
         if severity and issue.severity != severity:
             continue
         if service and service.lower() not in (issue.service or "").lower():
             continue
-        
+
         if effective_search:
             pattern = re.compile(effective_search, re.IGNORECASE)
             match_title = pattern.search(issue.title)
@@ -31,9 +33,9 @@ def list_issues_impl(status, severity, service, search, full, search_query):
             match_status = pattern.search(issue.status)
             if not (match_title or match_body or match_status):
                 continue
-        
+
         filtered_issues.append(issue)
-    
+
     if not filtered_issues:
         click.echo("No matching issues found.")
         return
@@ -67,7 +69,7 @@ def register_issue_list(issue_group):
         click.option("--full", "-v", is_flag=True, help="Display detailed view"),
         click.argument("search_query", required=False)
     ]
-    
+
     def add_options(f):
         for option in reversed(options):
             f = option(f)
