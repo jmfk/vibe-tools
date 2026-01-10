@@ -257,7 +257,7 @@ Iterative improvement loops:
 - **Click**: CLI framework
 - **PyYAML**: YAML parsing and generation
 - **rich**: Terminal formatting
-- **dspy-ai**: LLM orchestration for PRD generation
+- **google-genai**: LLM orchestration for PRD generation
 - **gspread**: Google Sheets integration
 - **pytest**: Testing framework
 

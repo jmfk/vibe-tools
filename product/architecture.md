@@ -15,7 +15,7 @@ The project follows a **CLI-First** philosophy. We prioritize terminal interacti
 ### 2.1 Backend
 - **Language**: Python 3.11
 - **CLI**: Click (for a robust command-line interface)
-- **AI Orchestration**: `dspy` for structured LLM interactions
+- **AI Orchestration**: `google-genai` for structured LLM interactions
 
 ### 2.2 AI & Tooling
 - **Vibe CLI**: Unified command-line interface (`vibe`) for all developer workflows.
@@ -67,5 +67,5 @@ The core of the project's operation follows an 8-phase lifecycle, driven by the 
 ## 6. Key Design Patterns
 - **CLI-First Workflow**: All tasks are driven by the unified `vibe` command.
 - **PRD-Driven Development**: Changes start with a PRD in `product/`, which is then normalized into `implementation/`.
-- **Agentic Loops**: Uses `dspy` and custom agents (like Ralph) for iterative code generation and improvement.
+- **Agentic Loops**: Uses `google-genai` and custom agents (like Ralph) for iterative code generation and improvement.
 - **Tiered Configuration**: Environment management via project-level `.vibe_config.json` and global `~/.vibe/config.json`.

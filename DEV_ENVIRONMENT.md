@@ -67,7 +67,7 @@ The `vibe-setup deps` command (called automatically by `vibe-setup env`):
 4. **Project dependencies** (from `pyproject.toml`):
    - click, gspread, google-auth, google-auth-oauthlib, python-dotenv
    - requests, rich, PyYAML, pytest, pytest-cov, pytest-asyncio
-   - ruff, mypy, dspy-ai
+   - ruff, mypy, google-genai
 
 ### 4. Project Structure
 
@@ -196,7 +196,7 @@ To verify the environment is correctly set up:
 3. **Check configuration**:
    ```bash
    vibe-setup test   # Test all configured services
-   vibe-setup dspy   # Test DSPy/LLM connectivity
+   vibe-setup llm   # Test Gemini/LLM connectivity
    ```
 
 4. **Check project structure**:

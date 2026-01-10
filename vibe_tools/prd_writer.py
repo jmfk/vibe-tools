@@ -220,16 +220,21 @@ class PRDWriter:
         return "\n".join(lines)
 
     def _ensure_dspy_available(self) -> None:
-        """Check if dspy library is installed."""
+        """Check if google-genai library is installed."""
         try:
-            import dspy
+            from google import genai
         except ImportError:
             raise click.ClickException(
-                "The `dspy-ai` library is required but not found. Please install it."
+                "The `google-genai` library is required but not found. Please install it."
             )
 
     def _execute_dspy(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        import dspy
+        from google import genai
+        from pydantic import BaseModel
+
+        class PRDResponse(BaseModel):
+            questions: List[str]
+            satisfied: bool
 
         api_key = get_google_api_key()
 
@@ -238,41 +243,31 @@ class PRDWriter:
                 "Google API Key is missing. Please run `vibe config api` first."
             )
 
-        lm = dspy.LM("gemini/gemini-2.0-flash-exp", api_key=api_key)
+        client = genai.Client(api_key=api_key)
 
-        with dspy.context(lm=lm):
-
-            class PRDQuestionSignature(dspy.Signature):
-                """Analyzes project context and generates follow-up questions or signals completion."""
-
-                context = dspy.InputField(
-                    desc="JSON string containing project context and requirements"
-                )
-                questions = dspy.OutputField(
-                    desc="List of follow-up questions to clarify requirements"
-                )
-                satisfied = dspy.OutputField(
-                    desc="Boolean: True if enough information is present to generate PRD",
-                    type=bool,
-                )
-
-            # Use TypedPredictor for better structured output handling
-            predictor = dspy.TypedPredictor(PRDQuestionSignature)
-            try:
-                result = predictor(context=json.dumps(payload))
-                return {
-                    "questions": (
-                        result.questions
-                        if isinstance(result.questions, list)
-                        else [result.questions]
-                    ),
-                    "satisfied": bool(result.satisfied),
-                }
-            except Exception as e:
-                logger.error(f"DSPy execution failed: {e}")
-                raise click.ClickException(
-                    f"Failed to process requirements with DSPy: {e}"
-                )
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=f"Analyzes project context and generates follow-up questions or signals completion.\n\nContext: {json.dumps(payload)}",
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": PRDResponse,
+                },
+            )
+            result = response.parsed
+            if not result:
+                raise ValueError("Empty response from Gemini")
+            
+            return {
+                "questions": result.questions,
+                "satisfied": result.satisfied,
+            }
+        except Exception as e:
+            from vibe_tools.utils import logger
+            logger.error(f"Gemini execution failed: {e}")
+            raise click.ClickException(
+                f"Failed to process requirements with Gemini: {e}"
+            )
 
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
