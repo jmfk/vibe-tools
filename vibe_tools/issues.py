@@ -68,9 +68,15 @@ class IssueBody:
             "Solution Notes": ""
         }
         
-        current_section = None
+        current_section = "Summary"  # Default to Summary
         lines = text.splitlines()
         
+        # Check if it has any headers at all
+        has_headers = any(line.startswith("## ") for line in lines)
+        
+        if not has_headers:
+            return cls(summary=text.strip())
+
         for line in lines:
             if line.startswith("## "):
                 title = line[3:].strip()
@@ -105,6 +111,10 @@ class Issue:
     github: Optional[GitHubInfo] = None
     sync: Optional[SyncInfo] = None
     comments: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.body, str):
+            self.body = IssueBody.from_markdown(self.body)
 
     def to_dict(self) -> Dict[str, Any]:
         d = {

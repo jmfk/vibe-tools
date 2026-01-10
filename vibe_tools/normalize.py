@@ -80,7 +80,7 @@ def normalize_prd(
     overwrite_mode = "yes" if auto_overwrite else "ask"
     if not input_file:  # Only when normalizing all files
         existing_prds = list(BACKLOG_DIR.rglob("prd_*.yaml"))
-        if existing_prds and not auto_overwrite:
+        if existing_prds and not auto_overwrite and sys.stdin.isatty():
             choice = click.prompt(
                 f"Found {len(existing_prds)} existing files in {BACKLOG_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
                 type=click.Choice(["y", "n", "a"], case_sensitive=False),
