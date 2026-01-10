@@ -102,6 +102,10 @@ def register_migrate(cli):
         old_prd_dir = pathlib.Path("implementation/prds")
         if old_prd_dir.exists() and old_prd_dir.is_dir():
             for yaml_file in old_prd_dir.glob("*.yaml"):
+                # Exclude core lifecycle files - these should remain in implementation/prds/
+                if yaml_file.name in ["architecture.yaml", "infrastructure.yaml", "project_overview.yaml", "cicd.yaml", "testing.yaml", "build.yaml"]:
+                    continue
+
                 prd_id = yaml_file.stem
                 target_dir = HISTORY_DIR if prd_id in completed_prds else BACKLOG_DIR
                 target_path = target_dir / yaml_file.name
@@ -139,6 +143,49 @@ def register_migrate(cli):
                     if md_file.parent == PRODUCT_DIR:
                         click.echo(f"  Skipping {md_file}, already exists in {target_dir}/")
 
+        # 4. Reconcile Issue Index
+        click.echo("📋 Reconciling issue index...")
+        from vibe_tools.issues import load_all_issues, save_issue
+        all_issues = load_all_issues()
+        if all_issues:
+            for issue in all_issues:
+                # save_issue updates the index.json
+                save_issue(issue)
+            click.echo(f"  ✨ Re-indexed {len(all_issues)} issues.")
+
+        # 5. Cleanup legacy directories
+        _cleanup_legacy_dirs()
+
+        # 6. Finalize environment
+        click.echo("🔄 Syncing environment...")
+        from vibe_tools.utils import sync_env_file
+        sync_env_file()
+
         click.echo("✅ Migration complete.")
 
     cli.add_command(migrate)
+
+
+def _cleanup_legacy_dirs():
+    """Removes legacy directories if they are empty."""
+    legacy_dirs = ["project", "specs", "prds", "stats", "implementation/prds/trash", "product/trash"]
+    for d in legacy_dirs:
+        path = pathlib.Path(d)
+        if path.exists() and path.is_dir():
+            # Check if empty (ignoring hidden files)
+            contents = list(path.iterdir())
+            if not contents:
+                click.echo(f"  🧹 Removing empty legacy directory: {d}")
+                try:
+                    path.rmdir()
+                except OSError as e:
+                    click.echo(f"  ⚠️ Could not remove {d}: {e}")
+            else:
+                # If only contains .DS_Store or similar, remove it and the dir
+                if len(contents) == 1 and contents[0].name == ".DS_Store":
+                    contents[0].unlink()
+                    click.echo(f"  🧹 Removing empty legacy directory (after cleaning .DS_Store): {d}")
+                    try:
+                        path.rmdir()
+                    except OSError as e:
+                        click.echo(f"  ⚠️ Could not remove {d}: {e}")
