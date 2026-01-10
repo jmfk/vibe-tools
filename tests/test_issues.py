@@ -24,7 +24,7 @@ def test_issue_serialization():
     loaded = Issue.from_markdown(markdown)
     assert loaded.id == issue.id
     assert loaded.title == issue.title
-    assert loaded.body == "## Summary\nTest body"
+    assert loaded.body.to_markdown() == "## Summary\nTest body"
 
 def test_save_and_load_issue(tmp_path, monkeypatch):
     # Setup temporary issues directory
