@@ -14,6 +14,8 @@ from vibe_tools.utils import (
 )
 from vibe_tools.prds import get_prd_metadata
 
+ENSURED_LABELS = set()
+
 def get_github_repo_info():
     """Returns (owner, name, repo_id)"""
     repo = get_github_repo()
@@ -647,8 +649,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
         cmd.append("--state")
         cmd.append("all")
     if since:
-        cmd.append("--since")
-        cmd.append(since)
+        cmd.extend(["--search", f"updated:>={since}"])
     
     stdout, code, stderr = _run_command_with_stderr(cmd)
     if code != 0:
@@ -754,11 +755,17 @@ def _run_command_with_stderr(cmd):
 
 def ensure_github_label(repo: str, label: str):
     """Ensures a label exists on GitHub, creating it if necessary."""
+    cache_key = f"{repo}:{label}"
+    if cache_key in ENSURED_LABELS:
+        return
+        
     _, code, _ = _run_command_with_stderr(["gh", "label", "view", label, "--repo", repo])
     if code != 0:
         logger.info(f"Creating missing label '{label}' on GitHub...")
         # Use a default color (blue-ish)
         run_command(["gh", "label", "create", label, "--repo", repo, "--color", "0075ca"], check=False)
+    
+    ENSURED_LABELS.add(cache_key)
 
 def push_local_issues(repo: str, relevant_files=None):
     index = load_index()
