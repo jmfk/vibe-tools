@@ -8,7 +8,7 @@ import tempfile
 from typing import Any, Dict, List, Optional
 
 import click
-import google.generativeai as genai
+from google import genai
 
 try:
     import readline
@@ -68,14 +68,15 @@ class StreamingLLM:
         api_key = get_google_api_key()
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe config api`.")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = model_name
 
     async def stream(self, prompt: str):
         """Async generator of chunks."""
         try:
-            response = await self.model.generate_content_async(prompt, stream=True)
-            async for chunk in response:
+            async for chunk in await self.client.aio.models.generate_content_stream(
+                model=self.model_name, contents=prompt
+            ):
                 if chunk.text:
                     yield chunk.text
         except Exception as e:

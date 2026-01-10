@@ -22,7 +22,7 @@ dependencies = [
     "ruff",
     "mypy",
     "dspy-ai",
-    "google-generativeai",
+    "google-genai",
     "prompt-toolkit",
 ]
 

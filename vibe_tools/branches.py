@@ -119,17 +119,27 @@ def set_branch_base(branch: str, base: str):
 
 def merge_branches(src: str, dst: str):
     """Merges src branch into dst branch and updates lineage."""
-    from vibe_tools.utils import run_command, load_project_state, save_project_state
+    from vibe_tools.utils import run_command, load_project_state, save_project_state, get_main_branch
     
     click.echo(f"🔄 Merging {click.style(src, fg='cyan')} into {click.style(dst, fg='cyan')}...")
     
-    # 1. Checkout dst
+    # 1. Ensure dst exists, if not create it from main
+    _, code = run_command(["git", "rev-parse", "--verify", dst], check=False)
+    if code != 0:
+        main_branch = get_main_branch()
+        click.echo(f"🌿 Destination branch {click.style(dst, fg='cyan')} does not exist. Creating from {click.style(main_branch, fg='blue')}...")
+        run_command(["git", "checkout", main_branch], check=False)
+        run_command(["git", "checkout", "-b", dst], check=False)
+        # Switch back to src to perform the merge from the right context if needed, 
+        # though git merge can be done from dst.
+    
+    # 2. Checkout dst
     _, code = run_command(["git", "checkout", dst], check=False)
     if code != 0:
         click.echo(f"❌ Failed to checkout {dst}")
         return
     
-    # 2. Merge src
+    # 3. Merge src
     stdout, code = run_command(["git", "merge", src], check=False)
     if code != 0:
         click.echo(f"❌ Merge failed:\n{stdout}")

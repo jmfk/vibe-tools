@@ -881,6 +881,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
     """Executes the implementation loop for a specific issue."""
     config = load_config()
+
+    # Check automerge sync before starting
+    if not check_automerge_sync(config):
+        logger.error("❌ Aborted due to automerge sync failure or user cancellation.")
+        return False
+
     iterations_config = config.get("iterations", {})
     max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
     max_debug_iterations = iterations_config.get("debug", 5)
@@ -1005,11 +1011,17 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
 
     if success:
         log_success("issue_solve", f"Issue {issue.id} solved successfully.")
-        # Commit final adjustments
+
+        # Update status and save locally first so it can be committed
+        issue.status = "done"
+        issue.updated_at = datetime.datetime.now().isoformat()
+        save_issue(issue)
+
+        # Commit final adjustments including the status update
         if is_dirty():
             run_command(["git", "add", "."], check=False)
             run_command(
-                ["git", "commit", "-m", f"vibe: final fix for {issue.id}"], check=False
+                ["git", "commit", "-m", f"vibe: final fix and status update for {issue.id}"], check=False
             )
 
         # Merge if auto_merge is enabled
@@ -1022,9 +1034,6 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
         else:
             switch_to_main()
 
-        issue.status = "done"
-        issue.updated_at = datetime.datetime.now().isoformat()
-        save_issue(issue)
         return True
     else:
         logger.error(
