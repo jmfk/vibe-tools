@@ -769,7 +769,7 @@ def pm(ctx, query):
         agent_type=ctx.obj.get("agent", "cursor-agent"),
         stream=ctx.obj.get("stream", True),
     )
-    pm_tool.run_loop(query)
+    pm_tool.run(query)
 
 
 @cli.command()
