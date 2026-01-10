@@ -10,6 +10,7 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
     BACKLOG_DIR,
     PRD_DIR,
+    PLANNING_BACKLOG_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
     get_prompt,
@@ -68,11 +69,16 @@ def normalize_prd(
             sys.exit(1)
         files_to_process = [path]
     else:
-        # Find all markdown files in specs and subdirectories
-        files_to_process = list(specs_dir.rglob("*.md"))
+        # ONLY normalize from the backlog directory
+        if not PLANNING_BACKLOG_DIR.exists():
+            print(f"❌ Backlog directory not found: {PLANNING_BACKLOG_DIR}/.")
+            print("   Run 'vibe pm' or 'vibe architect' to create PRDs first.")
+            return
+
+        # Find all markdown files in backlog and subdirectories
+        files_to_process = list(PLANNING_BACKLOG_DIR.rglob("*.md"))
         if not files_to_process:
-            print(f"❌ No markdown specs found in {specs_dir}/.")
-            print("   Run 'vibe pm' or 'vibe architect' to create them first.")
+            print(f"❌ No markdown specs found in {PLANNING_BACKLOG_DIR}/.")
             return
 
     # Check for existing normalized files
@@ -119,7 +125,10 @@ def normalize_prd(
         _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
 
         # Determine target PRD directory (preserving subdirectories)
-        rel_dir = spec_path.parent.relative_to(specs_dir)
+        try:
+            rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
+        except ValueError:
+            rel_dir = spec_path.parent.relative_to(specs_dir)
         
         # Determine output filename and path
         global_truths = [
