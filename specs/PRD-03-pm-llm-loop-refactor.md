@@ -1,5 +1,8 @@
 # PRD: PM LLM Loop Refactor (Gemini 3 Flash & Streaming)
 
+**Status:** Implemented
+**Last updated:** 2026-01-10
+
 ## Overview
 - **Problem Statement**: The current `vibe pm` script relies on a standard agent call pattern that is slower and lacks real-time interactivity. Product management workflows require faster responses, streaming feedback, and the ability to manage multiple concurrent or queued thoughts.
 - **User Benefits**: Instant feedback via streaming, more efficient interaction through direct Gemini 3 Flash integration (bypassing heavy agent wrappers where appropriate), and advanced control over the LLM's thought process (queuing, stopping, pushing).
