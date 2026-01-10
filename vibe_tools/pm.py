@@ -69,7 +69,7 @@ class StreamingLLM:
         """Async generator of chunks."""
         try:
             # Use the direct aio client for high-performance streaming
-            async for chunk in self.client.aio.models.generate_content_stream(
+            async for chunk in await self.client.aio.models.generate_content_stream(
                 model=self.model_name, contents=prompt
             ):
                 if chunk.text:
