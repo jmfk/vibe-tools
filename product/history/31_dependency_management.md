@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltb
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/38
+last_synced_at: '2026-01-10T15:24:37.686211'
+sync_hash: 8e76f315bcd4462bd223ccff4ed857e9c68239aefeda7acd3ee6631eed28c803
+---
+
 # Dependency Management
 
 ## Overview

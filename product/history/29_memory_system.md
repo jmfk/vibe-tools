@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltn
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/50
+last_synced_at: '2026-01-10T15:24:56.903111'
+sync_hash: 4d84719c25f1e48e2c7987dced78508dbffe0215ea5330e9d326828aa0d2b8be
+---
+
 # Memory System
 
 ## Overview

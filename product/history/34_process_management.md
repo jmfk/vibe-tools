@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajlti
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/45
+last_synced_at: '2026-01-10T15:24:49.386589'
+sync_hash: 0f9672149af3fd76d5480d2209203eaa8ce184a139d7ea27c5dcd09399d6e30b
+---
+
 # Process Management
 
 ## Overview

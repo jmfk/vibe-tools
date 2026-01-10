@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltf
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/42
+last_synced_at: '2026-01-10T15:24:44.506426'
+sync_hash: 5a80ae050378fc6f75991fd102405041bed9ab57ebde47ae18e1435aeb53934f
+---
+
 # PM Interactive Shell
 
 ## Overview

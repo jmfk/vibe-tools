@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4Ajltl
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/48
+last_synced_at: '2026-01-10T15:24:53.998750'
+sync_hash: 4445b882914215d99bfab6efa947eec0563e58ccff150e2dfa00f241a696b344
+---
+
 # Project Tester
 
 ## Overview
