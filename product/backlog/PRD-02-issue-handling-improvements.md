@@ -1,6 +1,8 @@
 ---
 discussion_id: D_kwDOQzI0Lc4AjlrL
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
+last_synced_at: '2026-01-10T17:22:07.589596'
+sync_hash: 18443269ab898b94a5a32679dfb5d8bcca8e265641fbbc600b6bdc84127d5b34
 ---
 
 # PRD-02: Issue Handling Improvements
