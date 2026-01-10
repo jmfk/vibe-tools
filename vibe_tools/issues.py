@@ -106,6 +106,7 @@ class Issue:
     status: str  # backlog, in_progress, blocked, done
     severity: str  # low, medium, high, critical
     service: str
+    summary: str
     created_at: str
     updated_at: str
     body: IssueBody
@@ -124,6 +125,7 @@ class Issue:
             "status": self.status,
             "severity": self.severity,
             "service": self.service,
+            "summary": self.summary,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -137,6 +139,8 @@ class Issue:
         frontmatter = self.to_dict()
         yaml_content = yaml.dump(frontmatter, sort_keys=False, default_flow_style=False)
         body_text = self.body.to_markdown()
+        # If body has summary, it might be redundant, but IssueBody.to_markdown handles it.
+        # We'll keep them separate for now as per PRD.
         content = f"---\n{yaml_content}---\n\n{body_text}"
         if self.comments:
             content = content.rstrip() + f"\n\n## External Comments (GitHub)\n{self.comments}"
@@ -173,6 +177,7 @@ class Issue:
             status=frontmatter["status"],
             severity=frontmatter["severity"],
             service=frontmatter["service"],
+            summary=frontmatter.get("summary", ""),
             created_at=frontmatter["created_at"],
             updated_at=frontmatter["updated_at"],
             body=IssueBody.from_markdown(body_text),

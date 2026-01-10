@@ -110,6 +110,7 @@ def register_investigate(cli):
             status="backlog",
             severity=severity,
             service=service,
+            summary=summary,
             created_at=now,
             updated_at=now,
             body=body
