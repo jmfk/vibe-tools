@@ -258,6 +258,28 @@ def generate_issue_id() -> str:
             
     return f"{prefix}{today_count + 1:03d}"
 
+def load_all_issues() -> List[Issue]:
+    index = load_index()
+    issues = []
+    for issue_id in sorted(index.keys()):
+        issue = load_issue_by_id(issue_id)
+        if issue:
+            issues.append(issue)
+    
+    # Also check directories for any issues not in index
+    for directory in [BACKLOG_DIR, HISTORY_DIR]:
+        if directory.exists():
+            for file in directory.glob("*.md"):
+                issue_id = file.stem
+                if issue_id not in index:
+                    try:
+                        issue = Issue.from_markdown(file.read_text())
+                        issues.append(issue)
+                    except Exception:
+                        continue
+    
+    return issues
+
 STATUS_MAPPING = {
     "backlog": {
         "github_state": "open",
