@@ -178,6 +178,7 @@ def migrate_to_project_dir():
         pathlib.Path("costs"): COSTS_DIR,
         pathlib.Path("instructions"): INSTRUCTIONS_DIR,
         pathlib.Path("vibe_data"): VIBE_DATA_DIR,
+        pathlib.Path("stats"): COSTS_DIR,
         pathlib.Path(".vibe_config.json"): CONFIG_FILE,
         pathlib.Path("architecture.yaml"): ARCHITECTURE,
         pathlib.Path("architecture-current.yaml"): ARCHITECTURE_CURRENT,
