@@ -21,7 +21,6 @@ dependencies = [
     "pytest-asyncio",
     "ruff",
     "mypy",
-    "dspy-ai",
     "google-genai",
     "prompt-toolkit",
 ]

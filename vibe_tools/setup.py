@@ -427,11 +427,11 @@ def test():
             click.echo(f"❌ Failed (could not reach {host}:{port})")
 
 
-@setup_cli.command()
+@setup_cli.command(name="llm")
 @click.pass_context
-def dspy(ctx):
-    """Verify DSPy integration and LLM connectivity."""
-    click.echo("\n--- DSPy Integration Test ---")
+def llm(ctx):
+    """Verify Gemini integration and LLM connectivity."""
+    click.echo("\n--- Gemini Integration Test ---")
 
     api_key = get_google_api_key()
     if not api_key:
@@ -451,7 +451,7 @@ def dspy(ctx):
         click.echo("❌ Still no API key found. Cannot proceed with test.")
         return
 
-    click.echo("⏳ Making test call to LLM via DSPy library...")
+    click.echo("⏳ Making test call to LLM via google-genai library...")
     try:
         from vibe_tools.utils import run_llm
 
@@ -460,14 +460,14 @@ def dspy(ctx):
 
         click.echo(f"🤖 Agent Response: {response}")
         if "READY" in response.upper():
-            click.echo("✅ DSPy Integration: SUCCESS")
+            click.echo("✅ Gemini Integration: SUCCESS")
         else:
             click.echo(
-                "⚠️  DSPy Integration: PARTIAL (Response received but didn't match expectation)"
+                "⚠️  Gemini Integration: PARTIAL (Response received but didn't match expectation)"
             )
 
     except Exception as e:
-        click.echo(f"❌ DSPy Integration: FAILED")
+        click.echo(f"❌ Gemini Integration: FAILED")
         click.echo(f"\nError Details:\n{str(e)}")
 
         # Check for common issues
@@ -478,7 +478,14 @@ def dspy(ctx):
                 "\n💡 Hint: Your API key might be invalid. Run 'vibe config api' to reset it."
             )
         elif "module" in str(e).lower():
-            click.echo("\n💡 Hint: Ensure 'dspy-ai' is installed in your environment.")
+            click.echo("\n💡 Hint: Ensure 'google-genai' is installed in your environment.")
+
+
+@setup_cli.command(name="dspy", hidden=True)
+@click.pass_context
+def dspy_alias(ctx):
+    """Alias for 'llm' command."""
+    ctx.invoke(llm)
 
 
 @setup_cli.command()
@@ -488,7 +495,7 @@ def api():
 
     current_google_key = get_google_api_key() or ""
     new_google_key = click.prompt(
-        "Enter Google API Key (for Gemini/DSPy)",
+        "Enter Google API Key (for Gemini/google-genai)",
         default=current_google_key,
         hide_input=True,
     )
