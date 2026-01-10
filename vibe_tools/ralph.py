@@ -912,7 +912,14 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
     tests = ralph_config.get("tests", True)
 
     branch_name = f"issue/{issue.id}"
-    parent_branch = get_main_branch()
+
+    # Determine parent branch (use automerge branch if enabled)
+    # This ensures that sequential issues in a batch see each other's changes.
+    auto_merge = ralph_config.get("auto_merge", False)
+    if auto_merge:
+        parent_branch = get_automerge_branch(config)
+    else:
+        parent_branch = get_main_branch()
 
     logger.info(f"🚀 Solving Issue: {issue.title} ({issue.id})")
     log_start("issue_solve", f"Issue: {issue.title} ({issue.id})")
