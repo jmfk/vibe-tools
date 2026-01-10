@@ -1,1 +1,12 @@
-{}
+{
+  "ISSUE-2026-01-10-001": {
+    "file": "issues/backlog/ISSUE-2026-01-10-001.md",
+    "github_number": null,
+    "updated_at": "2026-01-10T11:35:26.480577"
+  },
+  "ISSUE-2026-01-10-002": {
+    "file": "issues/backlog/ISSUE-2026-01-10-002.md",
+    "github_number": 1,
+    "updated_at": "2026-01-10T12:05:00.000000"
+  }
+}
