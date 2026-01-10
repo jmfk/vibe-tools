@@ -2,7 +2,7 @@
 
 **Project:** vibe-tools
 **Feature:** Issue Management Enhancements (List, Search, Add)
-**Status:** Draft
+**Status:** Implemented
 **Owner:** Core Platform
 **Last updated:** 2026-01-09
 

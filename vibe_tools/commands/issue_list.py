@@ -23,7 +23,8 @@ def list_issues_impl(status, severity, service, search, full, search_query):
             pattern = re.compile(effective_search, re.IGNORECASE)
             match_title = pattern.search(issue.title)
             match_body = pattern.search(issue.body.to_markdown())
-            if not (match_title or match_body):
+            match_status = pattern.search(issue.status)
+            if not (match_title or match_body or match_status):
                 continue
         
         filtered_issues.append(issue)
