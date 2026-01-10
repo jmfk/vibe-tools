@@ -54,7 +54,7 @@ class MessageQueue:
 
 
 class StreamingLLM:
-    def __init__(self, model_name: str = "gemini-2.0-flash-exp"):
+    def __init__(self, model_name: str = "gemini-3-flash"):
         # Map aliases
         if model_name == "gemini-3-flash":
             model_name = "gemini-2.0-flash-exp"
@@ -68,7 +68,8 @@ class StreamingLLM:
     async def stream(self, prompt: str):
         """Async generator of chunks."""
         try:
-            async for chunk in await self.client.aio.models.generate_content_stream(
+            # Use the direct aio client for high-performance streaming
+            async for chunk in self.client.aio.models.generate_content_stream(
                 model=self.model_name, contents=prompt
             ):
                 if chunk.text:
@@ -134,7 +135,7 @@ class InteractivePM:
         prompts_dir: Optional[pathlib.Path] = None,
         stream: bool = True,
         verbose: bool = False,
-        model_name: str = "gemini-2.0-flash-exp",
+        model_name: str = "gemini-3-flash",
     ):
         self.agent_type = agent_type
         self.prompts_dir = pathlib.Path(prompts_dir or pathlib.Path("prompts"))
@@ -152,12 +153,6 @@ class InteractivePM:
         self.llm = StreamingLLM(model_name=model_name)
         self._load_session()
         self._setup_readline()
-        try:
-            self.loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-        self.interrupt_event = asyncio.Event()
 
     def run(self, query: Optional[str] = None):
         """Sync wrapper for run_loop."""
@@ -239,6 +234,7 @@ class InteractivePM:
 
     async def run_loop(self, initial_prompt: Optional[str] = None):
         """Main interactive loop."""
+        loop = asyncio.get_running_loop()
         click.echo(click.style("\n📋 VIBE PRODUCT MANAGER (Async Mode)", fg="magenta", bold=True))
         click.echo("Refine your PRDs and specifications interactively.")
         click.echo("Type /help for available commands.\n")
@@ -262,7 +258,7 @@ class InteractivePM:
             prompt_symbol = f"{MODE_COLOR}({self.mode}){focus_text}{status_text}{RESET} {BOLD}👤{RESET} "
 
             try:
-                user_input = await self.loop.run_in_executor(None, lambda: input(prompt_symbol).strip())
+                user_input = await loop.run_in_executor(None, lambda: input(prompt_symbol).strip())
             except EOFError: break
             except KeyboardInterrupt:
                 if self.mq.status == "BUSY":
