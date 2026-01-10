@@ -33,27 +33,43 @@ from vibe_tools.utils import (
 ENSURED_LABELS = set()
 
 def get_github_repo_info():
-    """Returns (owner, name, repo_id)"""
+    """Returns (owner, name, repo_id, discussions_enabled)"""
     repo = get_github_repo()
     if not repo:
-        return None, None, None
+        return None, None, None, False
 
     parts = repo.split("/")
     if len(parts) != 2:
-        return None, None, None
+        return None, None, None, False
 
     owner, name = parts
 
-    stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ id }} }}"], check=False)
+    query = """
+    query($owner:String!, $name:String!) {
+      repository(owner:$owner, name:$name) {
+        id
+        hasDiscussionsEnabled
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"owner={owner}",
+        "-f", f"name={name}"
+    ]
+    stdout, code = run_command(cmd, check=False)
     if code != 0:
-        return owner, name, None
+        return owner, name, None, False
 
     try:
         data = json.loads(stdout)
-        repo_id = data["data"]["repository"]["id"]
-        return owner, name, repo_id
+        repo_data = data["data"]["repository"]
+        repo_id = repo_data["id"]
+        has_discussions = repo_data.get("hasDiscussionsEnabled", False)
+        return owner, name, repo_id, has_discussions
     except (json.JSONDecodeError, KeyError):
-        return owner, name, None
+        return owner, name, None, False
 
 def get_label_id(owner, name, label_name):
     query = """
@@ -93,7 +109,8 @@ def get_last_sync_info(branch_name: str):
 def get_files_changed_since(commit_hash: str) -> List[str]:
     """Returns a list of files changed since the given commit hash."""
     # --name-status gives us M, A, D, R etc.
-    stdout, _ = run_command(["git", "diff", "--name-status", commit_hash, "HEAD"], check=False)
+    # We omit HEAD to include staged and unstaged changes relative to the commit
+    stdout, _ = run_command(["git", "diff", "--name-status", commit_hash], check=False)
     changed_files = []
     for line in stdout.strip().splitlines():
         if not line: continue
@@ -186,23 +203,29 @@ def remove_discussion_labels(discussion_id, label_ids):
     run_command(cmd, check=False)
 
 def get_discussion_category_id(owner, name, category_name="Ideas"):
-    stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ discussionCategories(first: 10) {{ nodes {{ id name }} }} }} }}"], check=False)
+    stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ discussionCategories(first: 20) {{ nodes {{ id name }} }} }} }}"], check=False)
     if code != 0:
         return None
 
     try:
         data = json.loads(stdout)
-        for node in data["data"]["repository"]["discussionCategories"]["nodes"]:
+        categories = data["data"]["repository"]["discussionCategories"]["nodes"]
+        for node in categories:
             if node["name"] == category_name:
                 return node["id"]
+        
+        # If not found, log available categories for the user
+        cat_names = [c["name"] for c in categories]
+        logger.debug(f"Available discussion categories: {', '.join(cat_names)}")
     except (json.JSONDecodeError, KeyError):
         pass
     return None
 
-def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant_files=None):
+def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant_files=None, full=False):
     category_id = get_discussion_category_id(repo_owner, repo_name)
     if not category_id:
-        logger.warning("Could not find 'Ideas' discussion category. Skipping discussion sync.")
+        logger.warning(f"Could not find 'Ideas' discussion category in {repo_owner}/{repo_name}. Skipping discussion sync.")
+        logger.info("Tip: Create an 'Ideas' category in GitHub Discussions to enable PRD synchronization.")
         return
 
     from vibe_tools.utils import PRODUCT_DIR
@@ -475,7 +498,13 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
     if not dry_run:
         for gh_disc in gh_discussions:
             gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
-            if "inbox" in gh_labels and gh_disc["title"] not in [f"[PRD] {get_prd_metadata(p).title}" for p in PLANNING_INBOX_DIR.glob("*.md")]:
+            
+            # Pull if it has 'inbox' label OR if we are doing a full sync and it's a [PRD]
+            should_pull = "inbox" in gh_labels
+            if full and gh_disc["title"].startswith("[PRD] "):
+                should_pull = True
+                
+            if should_pull and gh_disc["title"] not in [f"[PRD] {get_prd_metadata(p).title}" for p in PLANNING_INBOX_DIR.glob("*.md")]:
                 # New discussion in inbox category, pull it
                 title = gh_disc["title"]
                 if title.startswith("[PRD] "):
@@ -658,9 +687,13 @@ def fetch_gh_issue_comments(gh_number: int, repo: str) -> str:
     return comments_body
 
 def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] = None, label: Optional[str] = None):
-    # Default to fetching 'issue' labeled items if no label specified
-    target_label = label or "issue"
-    cmd = ["gh", "issue", "list", "--repo", repo, "--label", target_label, "--json", "number,title,body,state,labels,updatedAt,url"]
+    # Default to fetching 'issue' labeled items if no label specified.
+    # If label is explicitly an empty string, fetch all issues.
+    target_label = label if label is not None else "issue"
+    cmd = ["gh", "issue", "list", "--repo", repo, "--json", "number,title,body,state,labels,updatedAt,url"]
+    if target_label:
+        cmd.extend(["--label", target_label])
+    
     if not open_only:
         cmd.append("--state")
         cmd.append("all")
@@ -897,6 +930,10 @@ def register_sync(cli):
     @click.option("--label", help="Filter by label")
     def sync_command(dry_run, full, since, issues, prds, open_only, label):
         """Synchronize local issues and PRDs with GitHub."""
+        from vibe_tools.commands.migrate import run_reconciliation
+        # Run reconciliation first to ensure local state is clean
+        run_reconciliation(quiet=True)
+
         repo = get_github_repo()
         if not repo:
             click.echo("Error: Not a GitHub repository.")
@@ -921,7 +958,7 @@ def register_sync(cli):
                 click.echo(f"Error: Could not switch to {main_branch}. Sync aborted.")
                 return
 
-        owner, name, repo_id = get_github_repo_info()
+        owner, name, repo_id, has_discussions = get_github_repo_info()
 
         # Determine relevant files for optimization
         relevant_files = None
@@ -937,10 +974,25 @@ def register_sync(cli):
 
         if prds:
             if owner and name and repo_id:
-                click.echo(f"Syncing PRDs with {repo}...")
-                sync_prd_discussions(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files)
-                sync_prd_issues(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files)
-                pull_github_prds(repo, dry_run=dry_run)
+                if not has_discussions:
+                    click.echo(click.style(f"Warning: GitHub Discussions are NOT enabled for {owner}/{name}.", fg="yellow"))
+                    if click.confirm("Would you like to enable GitHub Discussions now?"):
+                        stdout, code = run_command(["gh", "repo", "edit", f"{owner}/{name}", "--enable-discussions"], check=False)
+                        if code == 0:
+                            click.echo(click.style("✅ GitHub Discussions enabled.", fg="green"))
+                            has_discussions = True
+                            # Refresh repo_id and info just in case, though repo_id shouldn't change
+                            owner, name, repo_id, has_discussions = get_github_repo_info()
+                        else:
+                            click.echo(click.style(f"❌ Failed to enable GitHub Discussions: {stdout}", fg="red"))
+                    
+                if not has_discussions:
+                    click.echo("PRD synchronization requires Discussions. Skipping PRD sync.")
+                else:
+                    click.echo(f"Syncing PRDs with {repo}...")
+                    sync_prd_discussions(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files, full=full)
+                    sync_prd_issues(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files)
+                    pull_github_prds(repo, dry_run=dry_run)
             else:
                 click.echo("Warning: Could not get full GitHub repo info. Skipping PRD sync.")
 
