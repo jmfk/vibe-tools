@@ -63,6 +63,40 @@ def get_label_id(owner, name, label_name):
             pass
     return None
 
+def get_last_sync_info(branch_name: str):
+    """Returns (hash, timestamp) of the last 'vibe: sync' commit."""
+    # %H for hash, %aI for author date in ISO 8601 format
+    stdout, _ = run_command(["git", "log", branch_name, "--grep=vibe: sync", "-n", "1", "--format=%H %aI"], check=False)
+    parts = stdout.strip().split()
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return None, None
+
+def get_files_changed_since(commit_hash: str) -> List[str]:
+    """Returns a list of files changed since the given commit hash."""
+    # --name-status gives us M, A, D, R etc.
+    stdout, _ = run_command(["git", "diff", "--name-status", commit_hash, "HEAD"], check=False)
+    changed_files = []
+    for line in stdout.strip().splitlines():
+        if not line: continue
+        parts = line.split()
+        if not parts: continue
+        status = parts[0]
+        if status.startswith('R'): # Renamed
+            if len(parts) >= 3:
+                changed_files.append(parts[1])
+                changed_files.append(parts[2])
+        else:
+            if len(parts) >= 2:
+                changed_files.append(parts[1])
+    
+    # Also include untracked files
+    stdout, _ = run_command(["git", "ls-files", "--others", "--exclude-standard"], check=False)
+    if stdout.strip():
+        changed_files.extend(stdout.strip().splitlines())
+        
+    return list(set(changed_files))
+
 def fetch_github_discussions(owner, name):
     query = """
     query($owner:String!, $name:String!) {
@@ -147,7 +181,7 @@ def get_discussion_category_id(owner, name, category_name="Ideas"):
         pass
     return None
 
-def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
+def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant_files=None):
     category_id = get_discussion_category_id(repo_owner, repo_name)
     if not category_id:
         logger.warning("Could not find 'Ideas' discussion category. Skipping discussion sync.")
@@ -185,8 +219,13 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
             continue
         
         is_inbox = label == "inbox"
+        is_backlog = label == "backlog"
         
         for prd_path in directory.glob("*.md"):
+            if relevant_files is not None:
+                if str(prd_path) not in relevant_files and not is_inbox and not is_backlog:
+                    continue
+
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
@@ -297,6 +336,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
         if not prd_path.exists():
             continue
             
+        if relevant_files is not None:
+            if str(prd_path) not in relevant_files:
+                continue
+
         meta = get_prd_metadata(prd_path)
         title = f"[SYSTEM] {meta.title}"
         body = meta.to_markdown()
@@ -369,6 +412,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
         if not prd_path.exists():
             continue
             
+        if relevant_files is not None:
+            if str(prd_path) not in relevant_files:
+                continue
+
         meta = get_prd_metadata(prd_path)
         title = f"[SYSTEM] {meta.title}"
         body = meta.to_markdown()
@@ -449,7 +496,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
                         meta.save()
                         logger.info(f"Pulled new GitHub Discussion '{title}' into inbox")
 
-def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
+def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_files=None):
     from vibe_tools.utils import PRD_DIR, load_project_state, REJECTED_DIR
     state = load_project_state()
     started_prds = state.get("started_prds", [])
@@ -472,11 +519,16 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
             continue
         
         is_history = directory.name == "history"
+        is_backlog = directory.name == "backlog"
         
         for prd_path in directory.glob("*.yaml"):
             if prd_path.name in system_files:
                 continue
-                
+            
+            if relevant_files is not None:
+                if str(prd_path) not in relevant_files and not is_backlog:
+                    continue
+
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
@@ -714,9 +766,16 @@ def ensure_github_label(repo: str, label: str):
         # Use a default color (blue-ish)
         run_command(["gh", "label", "create", label, "--repo", repo, "--color", "0075ca"], check=False)
 
-def push_local_issues(repo: str):
+def push_local_issues(repo: str, relevant_files=None):
     index = load_index()
     for local_id in index:
+        issue_path = index[local_id]["file"]
+        if relevant_files is not None:
+            # Issues in backlog are always relevant for status updates
+            is_backlog = "issues/backlog" in issue_path
+            if issue_path not in relevant_files and not is_backlog:
+                continue
+
         issue = load_issue_by_id(local_id)
         if not issue:
             continue
@@ -846,11 +905,23 @@ def register_sync(cli):
 
         owner, name, repo_id = get_github_repo_info()
 
+        # Determine relevant files for optimization
+        relevant_files = None
+        last_sync_time = since
+        
+        if not full:
+            last_hash, last_time = get_last_sync_info(main_branch)
+            if last_hash:
+                relevant_files = set(get_files_changed_since(last_hash))
+                if not last_sync_time:
+                    last_sync_time = last_time
+                click.echo(f"Optimizing sync using git diff since last sync ({last_hash[:8]})")
+
         if prds:
             if owner and name and repo_id:
                 click.echo(f"Syncing PRDs with {repo}...")
-                sync_prd_discussions(owner, name, repo_id, dry_run=dry_run)
-                sync_prd_issues(owner, name, repo_id, dry_run=dry_run)
+                sync_prd_discussions(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files)
+                sync_prd_issues(owner, name, repo_id, dry_run=dry_run, relevant_files=relevant_files)
                 pull_github_prds(repo, dry_run=dry_run)
             else:
                 click.echo("Warning: Could not get full GitHub repo info. Skipping PRD sync.")
@@ -861,9 +932,9 @@ def register_sync(cli):
             if full:
                 pull_github_issues(repo, open_only=False, since=None, label=label)
             else:
-                pull_github_issues(repo, open_only=open_only, since=since, label=label)
+                pull_github_issues(repo, open_only=open_only, since=last_sync_time, label=label)
             
-            push_local_issues(repo)
+            push_local_issues(repo, relevant_files=relevant_files)
         
         if not dry_run:
             # Commit changes to main
