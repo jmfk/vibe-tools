@@ -6,7 +6,7 @@ from typing import List, Optional
 from vibe_tools.issues import (
     Issue, IssueBody, GitHubInfo, SyncInfo, load_index, save_issue, 
     load_issue_by_id, get_issue_hash, generate_issue_id,
-    BACKLOG_DIR, HISTORY_DIR, STATUS_MAPPING
+    BACKLOG_DIR as ISSUES_BACKLOG_DIR, HISTORY_DIR as ISSUES_HISTORY_DIR, STATUS_MAPPING
 )
 from vibe_tools.utils import run_command, logger, switch_to_main, get_main_branch
 from vibe_tools.prds import get_prd_metadata
@@ -126,7 +126,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
         # Ensure 'prd' label exists
         ensure_github_label(repo, "prd")
 
-    for directory in [BACKLOG_DIR, HISTORY_DIR]:
+    for directory in [backlog_dir, history_dir]:
         if not directory.exists():
             continue
         
