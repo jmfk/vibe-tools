@@ -25,6 +25,7 @@ The project follows a **CLI-First** philosophy. We prioritize terminal interacti
 ├── vibe_tools/      # Core automation logic and CLI implementation
 ├── product/         # Markdown PRDs and high-level specifications
 ├── implementation/  # Machine-readable state, logs, and normalized PRDs
+├── issues/          # Local-first issue tracking and management
 ├── prompts/         # AI prompt templates
 ├── tests/           # Comprehensive test suite
 ├── docs/            # User and developer documentation
@@ -38,7 +39,7 @@ The core of the project's operation follows an 8-phase lifecycle, driven by the 
 2.  **Setup**: `vibe setup` - Initialize the project environment and reconcile architecture.
 3.  **Deps**: `vibe deps` - Manage and install project dependencies.
 4.  **Implement**: `vibe implement` - Execute the main implementation loop using AI agents.
-5.  **Infra**: `vibe infra` - Provision and manage production infrastructure.
+5.  **Infra**: `vibe infra` - Provision and manage production infrastructure. (Optional: only needed if the project requires cloud deployment).
 6.  **Testing**: `vibe testing` - Run test suites and improve coverage.
 7.  **CICD**: `vibe cicd` - Configure and run continuous integration and deployment pipelines.
 8.  **Deploy**: `vibe deploy` - Deploy the application to target environments.
@@ -46,12 +47,14 @@ The core of the project's operation follows an 8-phase lifecycle, driven by the 
 ## 5. Core Commands
 
 ### 5.1 Project Management
-- `vibe architect`: Generate or update core specifications (architecture, infra, etc.).
+- `vibe architect`: Generate or update core specifications (architecture, infra, etc.). Note: `infrastructure.md` is optional.
 - `vibe pm`: Interactive session for managing PRDs and project backlog.
 - `vibe status`: Comprehensive report of project progress and system health.
+- `vibe sync`: Synchronize local issues and PRDs with GitHub.
 - `vibe init`: Initialize a new vibe-tools project structure.
 
 ### 5.2 Development Support
+- `vibe issue`: Local-first issue management (add, list, close, investigate, solve).
 - `vibe history`: View the development history and completed PRDs.
 - `vibe memory`: Access and manage the project's long-term memory.
 - `vibe cost`: Report estimated LLM and infrastructure costs.
