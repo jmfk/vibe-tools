@@ -61,6 +61,10 @@ class MessageQueue:
 
 class StreamingLLM:
     def __init__(self, model_name: str = "gemini-2.0-flash-exp"):
+        # Map aliases
+        if model_name == "gemini-3-flash":
+            model_name = "gemini-2.0-flash-exp"
+            
         api_key = get_google_api_key()
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe-setup api`.")
@@ -69,17 +73,13 @@ class StreamingLLM:
 
     async def stream(self, prompt: str):
         """Async generator of chunks."""
-        # Note: google-generativeai's generate_content is synchronous but can be wrapped or used with stream=True
-        # For true async, we use the async client if available or run in executor
-        loop = asyncio.get_event_loop()
-        
-        def _get_stream():
-            return self.model.generate_content(prompt, stream=True)
-
-        response = await loop.run_in_executor(None, _get_stream)
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        try:
+            response = await self.model.generate_content_async(prompt, stream=True)
+            async for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            yield f"\n❌ LLM Error: {str(e)}"
 
 
 class PMCompleter:
@@ -90,7 +90,7 @@ class PMCompleter:
                 "/send", "/reset", "/mode", "/ask", "/agent", "/show", "/edit",
                 "/history", "/files", "/add", "/list", "/ls", "/implemented",
                 "/i", "/ps", "/kill", "/exit", "/conf", "/help", "/focus",
-                "/f", "/switch", "/create", "/delete", "/push", "/queue"
+                "/f", "/switch", "/create", "/delete", "/push", "/queue", "/stop"
             ]
         )
         self.subcommands = {
@@ -370,6 +370,12 @@ class InteractivePM:
                 click.echo("🚀 Pushing to front and interrupting current...")
         elif cmd == "/queue":
             self._handle_queue_command(args)
+        elif cmd == "/stop":
+            if self.mq.status == "BUSY" and self.mq.current_task:
+                self.mq.current_task.cancel()
+                click.echo("🛑 Interrupted current task.")
+            else:
+                click.echo("❌ No task is currently running.")
         elif cmd in ["/r", "/reset"]:
             self.pending_prompt = ""
             self.mq.clear()
@@ -433,6 +439,7 @@ class InteractivePM:
         click.echo("\nAvailable commands:")
         click.echo("  /send, /s        - Add pending prompt to queue")
         click.echo("  /push            - Interrupt current and start pending prompt immediately")
+        click.echo("  /stop            - Stop the current LLM generation")
         click.echo("  /queue [list|clear|remove <idx>] - Manage message queue")
         click.echo("  /reset, /r       - Clear pending prompt and queue")
         click.echo("  /mode, /m [ASK|AGENT] - Switch between modes")
