@@ -1,5 +1,6 @@
 import click
 
+
 def register_issue(cli):
     @click.group(name="issue")
     def issue_group():
@@ -7,9 +8,9 @@ def register_issue(cli):
         pass
 
     from vibe_tools.commands.investigate import register_investigate
-    from vibe_tools.commands.solve import register_solve
-    from vibe_tools.commands.issue_list import register_issue_list
     from vibe_tools.commands.issue_add import register_issue_add
+    from vibe_tools.commands.issue_list import register_issue_list
+    from vibe_tools.commands.solve import register_solve
     from vibe_tools.issues import load_issue_by_id, save_issue
 
     register_issue_list(issue_group)
@@ -23,15 +24,15 @@ def register_issue(cli):
         if not issue:
             click.echo(f"Error: Issue {issue_id} not found.")
             return
-        
+
         import datetime
         issue.status = "done"
         issue.updated_at = datetime.datetime.now().isoformat()
         save_issue(issue)
-        
+
         from vibe_tools.commands.sync import sync_issues
         sync_issues()
-        
+
         click.echo(f"Issue {issue_id} marked as done and synced to GitHub.")
 
     register_investigate(issue_group)

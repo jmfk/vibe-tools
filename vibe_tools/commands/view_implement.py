@@ -1,14 +1,15 @@
 import pathlib
+
 import click
+
 from vibe_tools.utils import (
-    INBOX_DIR,
     BACKLOG_DIR,
     HISTORY_DIR,
+    INBOX_DIR,
     REJECTED_DIR,
-    PRD_DIR,
     open_in_editor,
-    logger,
 )
+
 
 def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
     """Helper to list PRDs in a directory with paging and search."""
@@ -22,7 +23,7 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
 
     batch_size = 10
     total_pages = (len(files) + batch_size - 1) // batch_size if files else 1
-    
+
     start_idx = (page - 1) * batch_size
     end_idx = start_idx + batch_size
     batch = files[start_idx:end_idx]
@@ -34,7 +35,7 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
 
     for i, f in enumerate(batch, 1):
         click.echo(f"  {start_idx + i}. {f.name}")
-    
+
     if total_pages > 1:
         click.echo(f"\nUse '--page' to see other pages (Total items: {len(files)})")
 
@@ -45,13 +46,13 @@ def find_prd(prd_id: str):
         exact = folder / prd_id
         if exact.exists():
             return exact
-        
+
         # Try with extensions
         for ext in [".yaml", ".md"]:
             f = folder / f"{prd_id}{ext}"
             if f.exists():
                 return f
-        
+
         # Try partial match
         matches = list(folder.glob(f"*{prd_id}*"))
         if matches:
@@ -114,7 +115,7 @@ def move(prd_id, target):
         "history": HISTORY_DIR,
         "rejected": REJECTED_DIR,
     }
-    
+
     source_file = find_prd(prd_id)
     if not source_file:
         click.echo(f"❌ Could not find PRD: {prd_id}")
@@ -153,18 +154,18 @@ def edit(prd_id):
     if not source_file:
         click.echo(f"❌ Could not find PRD: {prd_id}")
         return
-    
+
     open_in_editor(source_file)
 
 def register_view_implement(cli):
     cli.add_command(i)
     # Also register as 'view implement' if needed, but 'i' is the requested short form.
     # To support 'view implement', we'd need a 'view' group.
-    
+
     @click.group()
     def view():
         """View project components."""
         pass
-    
+
     view.add_command(i, name="implement")
     cli.add_command(view)

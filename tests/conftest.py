@@ -35,14 +35,14 @@ def safeguard_git_operations(request):
     def safeguarded_run(cmd, *args, **kwargs):
         if isinstance(cmd, list) and len(cmd) > 0 and cmd[0] == "git":
             subcommand = cmd[1] if len(cmd) > 1 else None
-            
+
             if subcommand in forbidden_git_subcommands:
                 raise RuntimeError(
                     f"Forbidden git mutation detected in test '{request.node.name}'! "
                     f"Command: {' '.join(cmd)}. "
                     "You must mock git commands to prevent real git side-effects."
                 )
-            
+
             if subcommand == "branch" and len(cmd) > 2 and cmd[2] in ["-D", "-d"]:
                  raise RuntimeError(
                     f"Forbidden git branch deletion detected in test '{request.node.name}'! "

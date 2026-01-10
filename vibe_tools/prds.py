@@ -1,7 +1,9 @@
 import pathlib
-import yaml
 import re
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import yaml
+
 
 class PRDMetadata:
     def __init__(self, path: pathlib.Path):
@@ -44,7 +46,7 @@ class PRDMetadata:
                 self.data['_vibe_sync'] = self.sync_info
             elif '_vibe_sync' in self.data:
                 del self.data['_vibe_sync']
-            
+
             content = yaml.dump(self.data, sort_keys=False, default_flow_style=False)
             self.path.write_text(content)
         else:
@@ -53,7 +55,7 @@ class PRDMetadata:
                 new_content = f"---\n{frontmatter}---\n\n{self.content}"
             else:
                 new_content = self.content
-            
+
             self.path.write_text(new_content)
 
     @property
@@ -117,7 +119,7 @@ class PRDMetadata:
         for key, value in self.data.items():
             if key == '_vibe_sync':
                 continue
-            
+
             lines.append(f"## {key.replace('_', ' ').title()}")
             if isinstance(value, list):
                 for item in value:
@@ -147,7 +149,7 @@ class PRDMetadata:
             if '_vibe_sync' in data_copy:
                 del data_copy['_vibe_sync']
             content_to_hash = json.dumps(data_copy, sort_keys=True)
-        
+
         return hashlib.sha256(content_to_hash.encode()).hexdigest()
 
 def get_prd_metadata(path: pathlib.Path) -> PRDMetadata:

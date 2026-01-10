@@ -1,13 +1,11 @@
 import base64
 import csv
 import datetime
-import json
 import pathlib
 import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-import click
 import requests
 
 
@@ -15,7 +13,7 @@ def list_usage_files(stats_dir: pathlib.Path) -> List[pathlib.Path]:
     """List all CSV files in stats directory, sorted by date (latest first)."""
     if not stats_dir.exists():
         return []
-    
+
     csv_files = sorted(
         stats_dir.glob("*.csv"),
         key=lambda p: _extract_date_from_file(p),
@@ -33,24 +31,24 @@ def _extract_date_from_file(file_path: pathlib.Path) -> datetime.datetime:
             return datetime.datetime.strptime(date_match.group(1), "%Y-%m-%d")
         except ValueError:
             pass
-    
+
     # Fallback to file modification time
     if file_path.exists():
         return datetime.datetime.fromtimestamp(file_path.stat().st_mtime)
-    
+
     return datetime.datetime.min
 
 
 def detect_csv_format(file_path: pathlib.Path) -> str:
     """Detect the format of the CSV file."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         reader = csv.reader(f)
         header = next(reader, None)
         if not header:
             return "unknown"
-        
+
         header_str = ",".join(header).lower()
-        
+
         if "date" in header_str and "kind" in header_str and "model" in header_str:
             return "usage-events"
         elif "timestamp" in header_str and "prd" in header_str and "phase" in header_str:
@@ -71,8 +69,8 @@ def parse_usage_csv(file_path: pathlib.Path) -> Dict[str, Any]:
         "by_prd": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
         "by_agent": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
     }
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
+
+    with open(file_path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
@@ -83,34 +81,34 @@ def parse_usage_csv(file_path: pathlib.Path) -> Dict[str, Any]:
                 model = row.get("Model", "N/A")
                 prd = row.get("PRD", "N/A")
                 agent = row.get("Agent", "N/A")
-                
+
                 data["rows"].append(row)
                 data["total_cost"] += cost
                 data["total_input_tokens"] += input_tokens
                 data["total_output_tokens"] += output_tokens
-                
+
                 data["by_phase"][phase]["count"] += 1
                 data["by_phase"][phase]["cost"] += cost
                 data["by_phase"][phase]["input_tokens"] += input_tokens
                 data["by_phase"][phase]["output_tokens"] += output_tokens
-                
+
                 data["by_model"][model]["count"] += 1
                 data["by_model"][model]["cost"] += cost
                 data["by_model"][model]["input_tokens"] += input_tokens
                 data["by_model"][model]["output_tokens"] += output_tokens
-                
+
                 data["by_prd"][prd]["count"] += 1
                 data["by_prd"][prd]["cost"] += cost
                 data["by_prd"][prd]["input_tokens"] += input_tokens
                 data["by_prd"][prd]["output_tokens"] += output_tokens
-                
+
                 data["by_agent"][agent]["count"] += 1
                 data["by_agent"][agent]["cost"] += cost
                 data["by_agent"][agent]["input_tokens"] += input_tokens
                 data["by_agent"][agent]["output_tokens"] += output_tokens
             except (ValueError, KeyError):
                 continue
-    
+
     return data
 
 
@@ -125,25 +123,25 @@ def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
         "by_model": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0, "cache_read": 0}),
         "by_kind": defaultdict(lambda: {"count": 0, "cost": 0.0}),
     }
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
+
+    with open(file_path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
                 cost_str = row.get("Cost", "0").replace(",", "")
                 cost = float(cost_str) if cost_str else 0.0
-                
+
                 # Handle different input token columns
                 input_with_cache = int(row.get("Input (w/ Cache Write)", 0) or 0)
                 input_without_cache = int(row.get("Input (w/o Cache Write)", 0) or 0)
                 cache_read = int(row.get("Cache Read", 0) or 0)
                 output_tokens = int(row.get("Output Tokens", 0) or 0)
-                
+
                 total_input = input_with_cache + input_without_cache
-                
+
                 model = row.get("Model", "N/A")
                 kind = row.get("Kind", "N/A")
-                
+
                 # Only count included rows
                 if "Included" in kind:
                     data["rows"].append(row)
@@ -151,18 +149,18 @@ def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
                     data["total_input_tokens"] += total_input
                     data["total_output_tokens"] += output_tokens
                     data["total_cache_read"] += cache_read
-                    
+
                     data["by_model"][model]["count"] += 1
                     data["by_model"][model]["cost"] += cost
                     data["by_model"][model]["input_tokens"] += total_input
                     data["by_model"][model]["output_tokens"] += output_tokens
                     data["by_model"][model]["cache_read"] += cache_read
-                    
+
                     data["by_kind"][kind]["count"] += 1
                     data["by_kind"][kind]["cost"] += cost
-            except (ValueError, KeyError) as e:
+            except (ValueError, KeyError):
                 continue
-    
+
     return data
 
 
@@ -178,7 +176,7 @@ def cursor_api_request(method: str, endpoint: str, api_key: str, data: Optional[
         "Authorization": f"Basic {auth}",
         "Content-Type": "application/json",
     }
-    
+
     if method == "GET":
         response = requests.get(url, headers=headers, params=data)
     elif method == "POST":
@@ -189,7 +187,7 @@ def cursor_api_request(method: str, endpoint: str, api_key: str, data: Optional[
         response = requests.delete(url, headers=headers)
     else:
         raise ValueError(f"Unsupported HTTP method: {method}")
-    
+
     response.raise_for_status()
     if response.status_code == 204:
         return {}
@@ -214,7 +212,7 @@ def fetch_spending_data(api_key: str, search_term: Optional[str] = None, page: i
     return cursor_api_request("POST", "/teams/spend", api_key, data)
 
 
-def fetch_usage_events(api_key: str, start_date: datetime.datetime, end_date: datetime.datetime, 
+def fetch_usage_events(api_key: str, start_date: datetime.datetime, end_date: datetime.datetime,
                       email: Optional[str] = None, page: int = 1, page_size: int = 25) -> Dict[str, Any]:
     """Fetch usage events from Cursor API."""
     start_ms = int(start_date.timestamp() * 1000)
@@ -251,7 +249,7 @@ def create_billing_group(api_key: str, name: str) -> Dict[str, Any]:
     return cursor_api_request("POST", "/teams/groups", api_key, {"name": name})
 
 
-def update_billing_group(api_key: str, group_id: str, name: Optional[str] = None, 
+def update_billing_group(api_key: str, group_id: str, name: Optional[str] = None,
                         directory_group_id: Optional[str] = None) -> Dict[str, Any]:
     """Update a billing group."""
     data = {}
@@ -289,7 +287,7 @@ def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
         "by_kind": defaultdict(lambda: {"count": 0, "cost": 0.0}),
         "by_user": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
     }
-    
+
     events = api_data.get("usageEvents", [])
     for event in events:
         try:
@@ -297,37 +295,37 @@ def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
             input_tokens = token_usage.get("inputTokens", 0)
             output_tokens = token_usage.get("outputTokens", 0)
             cache_read = token_usage.get("cacheReadTokens", 0)
-            cache_write = token_usage.get("cacheWriteTokens", 0)
+            # cache_write = token_usage.get("cacheWriteTokens", 0)
             model_cost_cents = token_usage.get("totalCents", 0.0)
             cursor_token_fee = event.get("cursorTokenFee", 0.0)
             total_cost = (model_cost_cents + cursor_token_fee) / 100.0
-            
+
             model = event.get("model", "N/A")
             kind = event.get("kind", "N/A")
             user_email = event.get("userEmail", "N/A")
-            
+
             data["rows"].append(event)
             data["total_cost"] += total_cost
             data["total_input_tokens"] += input_tokens
             data["total_output_tokens"] += output_tokens
             data["total_cache_read"] += cache_read
-            
+
             data["by_model"][model]["count"] += 1
             data["by_model"][model]["cost"] += total_cost
             data["by_model"][model]["input_tokens"] += input_tokens
             data["by_model"][model]["output_tokens"] += output_tokens
             data["by_model"][model]["cache_read"] += cache_read
-            
+
             data["by_kind"][kind]["count"] += 1
             data["by_kind"][kind]["cost"] += total_cost
-            
+
             data["by_user"][user_email]["count"] += 1
             data["by_user"][user_email]["cost"] += total_cost
             data["by_user"][user_email]["input_tokens"] += input_tokens
             data["by_user"][user_email]["output_tokens"] += output_tokens
         except (ValueError, KeyError):
             continue
-    
+
     return data
 
 
@@ -339,7 +337,7 @@ def parse_api_daily_usage(api_data: Dict[str, Any]) -> Dict[str, Any]:
         "by_user": defaultdict(lambda: {"count": 0, "cost": 0.0, "total_lines_added": 0, "total_lines_deleted": 0}),
         "by_model": defaultdict(lambda: {"count": 0}),
     }
-    
+
     daily_data = api_data.get("data", [])
     for day in daily_data:
         data["rows"].append(day)
@@ -347,17 +345,17 @@ def parse_api_daily_usage(api_data: Dict[str, Any]) -> Dict[str, Any]:
         data["by_user"][email]["count"] += 1
         data["by_user"][email]["total_lines_added"] += day.get("totalLinesAdded", 0)
         data["by_user"][email]["total_lines_deleted"] += day.get("totalLinesDeleted", 0)
-        
+
         model = day.get("mostUsedModel", "N/A")
         data["by_model"][model]["count"] += 1
-    
+
     return data
 
 
 def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, Any], format_type: str, source: str = "file") -> str:
     """Generate markdown report with statistics and tables."""
     lines = []
-    lines.append(f"# Usage Statistics Report")
+    lines.append("# Usage Statistics Report")
     lines.append("")
     if file_path:
         lines.append(f"**Source:** `{file_path.name}` ({source})")
@@ -367,7 +365,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
     lines.append("")
     lines.append("---")
     lines.append("")
-    
+
     # Summary Statistics
     lines.append("## Summary Statistics")
     lines.append("")
@@ -386,7 +384,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         avg_cost = data['total_cost'] / len(data['rows'])
         lines.append(f"| Average Cost per Request | ${avg_cost:.6f} |")
     lines.append("")
-    
+
     # By Model
     if data.get('by_model'):
         lines.append("## Statistics by Model")
@@ -408,7 +406,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
                 stats = data['by_model'][model]
                 lines.append(f"| {model} | {stats['count']:,} |")
         lines.append("")
-    
+
     # By User
     if data.get('by_user'):
         lines.append("## Statistics by User")
@@ -433,7 +431,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
                     f"{stats.get('total_lines_deleted', 0):,} |"
                 )
         lines.append("")
-    
+
     # By Phase (for usage.csv format)
     if data.get('by_phase'):
         lines.append("## Statistics by Phase")
@@ -448,7 +446,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
             )
         lines.append("")
-    
+
     # By PRD (for usage.csv format)
     if data.get('by_prd'):
         lines.append("## Top 20 PRDs by Cost")
@@ -464,7 +462,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
             )
         lines.append("")
-    
+
     # By Agent (for usage.csv format)
     if data.get('by_agent'):
         lines.append("## Statistics by Agent")
@@ -479,7 +477,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
             )
         lines.append("")
-    
+
     # By Kind (for usage-events format)
     if data.get('by_kind'):
         lines.append("## Statistics by Kind")
@@ -491,7 +489,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
             avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
             lines.append(f"| {kind} | {stats['count']:,} | ${stats['cost']:.4f} | ${avg:.6f} |")
         lines.append("")
-    
+
     # Cost Distribution Chart (ASCII)
     if data.get('by_model') and 'cost' in next(iter(data['by_model'].values()), {}):
         lines.append("## Cost Distribution by Model")
@@ -506,7 +504,7 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
             lines.append(f"{model[:30]:<30} |{bar} ${cost:.4f}")
         lines.append("```")
         lines.append("")
-    
+
     return "\n".join(lines)
 
 
@@ -519,43 +517,43 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
     lines.append("")
     lines.append("---")
     lines.append("")
-    
+
     billing_cycle = groups_data.get("billingCycle", {})
     if billing_cycle:
         cycle_start = datetime.datetime.fromtimestamp(billing_cycle.get("cycleStart", 0) / 1000)
         cycle_end = datetime.datetime.fromtimestamp(billing_cycle.get("cycleEnd", 0) / 1000)
         lines.append(f"**Billing Cycle:** {cycle_start.strftime('%Y-%m-%d')} to {cycle_end.strftime('%Y-%m-%d')}")
         lines.append("")
-    
+
     lines.append("## Billing Groups")
     lines.append("")
     lines.append("| Group Name | Members | Spend (USD) | Daily Spend Trend |")
     lines.append("|------------|---------|-------------|-------------------|")
-    
+
     groups = groups_data.get("groups", [])
     for group in groups:
         name = group.get("name", "N/A")
         member_count = group.get("memberCount", 0)
         spend_cents = group.get("spendCents", 0)
         spend_dollars = spend_cents / 100.0
-        
+
         daily_spend = group.get("dailySpend", [])
         if daily_spend:
             trend = f"{len(daily_spend)} days"
         else:
             trend = "N/A"
-        
+
         lines.append(f"| {name} | {member_count} | ${spend_dollars:.2f} | {trend} |")
-    
+
     unassigned = groups_data.get("unassignedGroup")
     if unassigned:
         spend_cents = unassigned.get("spendCents", 0)
         spend_dollars = spend_cents / 100.0
         member_count = unassigned.get("memberCount", 0)
         lines.append(f"| {unassigned.get('name', 'Unassigned')} | {member_count} | ${spend_dollars:.2f} | N/A |")
-    
+
     lines.append("")
-    
+
     # Detailed group information
     for group in groups:
         lines.append(f"### {group.get('name', 'Unknown Group')}")
@@ -565,7 +563,7 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
         lines.append(f"- **Members:** {group.get('memberCount', 0)}")
         lines.append(f"- **Spend:** ${group.get('spendCents', 0) / 100.0:.2f}")
         lines.append("")
-        
+
         current_members = group.get("currentMembers", [])
         if current_members:
             lines.append("#### Current Members")
@@ -579,7 +577,7 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
                 spend_dollars = spend_cents / 100.0
                 lines.append(f"| {name} | {email} | ${spend_dollars:.2f} |")
             lines.append("")
-        
+
         daily_spend = group.get("dailySpend", [])
         if daily_spend:
             lines.append("#### Daily Spend Trend")
@@ -592,15 +590,15 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
                 spend_dollars = spend_cents / 100.0
                 lines.append(f"| {date} | ${spend_dollars:.2f} |")
             lines.append("")
-    
+
     return "\n".join(lines)
 
 
-def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path, 
+def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path,
                    api_data: Optional[Dict[str, Any]] = None, source: str = "file") -> pathlib.Path:
     """Generate statistics report for a usage file or API data."""
     reports_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if api_data:
         if "usageEvents" in api_data:
             data = parse_api_usage_events(api_data)
@@ -614,16 +612,16 @@ def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path
         if not file_path:
             raise ValueError("Either file_path or api_data must be provided")
         format_type = detect_csv_format(file_path)
-        
+
         if format_type == "usage":
             data = parse_usage_csv(file_path)
         elif format_type == "usage-events":
             data = parse_usage_events_csv(file_path)
         else:
             raise ValueError(f"Unknown CSV format: {format_type}")
-    
+
     markdown = generate_markdown_report(file_path, data, format_type, source)
-    
+
     # Generate report filename
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     if file_path:
@@ -631,7 +629,7 @@ def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path
     else:
         report_filename = f"report_api_{timestamp}.md"
     report_path = reports_dir / report_filename
-    
+
     report_path.write_text(markdown, encoding='utf-8')
-    
+
     return report_path

@@ -1,10 +1,7 @@
 import asyncio
 import collections
 import pathlib
-import signal
 import subprocess
-import sys
-import tempfile
 from typing import Any, Dict, List, Optional
 
 import click
@@ -22,15 +19,12 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     cleanup_stale_processes,
     ensure_dir,
-    get_agent_command,
     get_agent_processes,
     get_google_api_key,
     get_instructions_context,
     get_prompt,
     load_project_state,
     logger,
-    reset_prd_state,
-    run_agent,
 )
 
 
@@ -64,7 +58,7 @@ class StreamingLLM:
         # Map aliases
         if model_name == "gemini-3-flash":
             model_name = "gemini-2.0-flash-exp"
-            
+
         api_key = get_google_api_key()
         if not api_key:
             raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe config api`.")
@@ -304,7 +298,7 @@ class InteractivePM:
 
             self.mq.status = "BUSY"
             prompt_content = self.mq.items.popleft()
-            
+
             self.mq.current_task = asyncio.create_task(self._execute_llm_task(prompt_content))
             try:
                 await self.mq.current_task
@@ -316,10 +310,10 @@ class InteractivePM:
 
     async def _execute_llm_task(self, query: str):
         full_prompt = self._build_prompt_with_query(query)
-        
+
         mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
         click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
-        
+
         full_response = ""
         try:
             async for chunk in self.llm.stream(full_prompt):
@@ -331,11 +325,11 @@ class InteractivePM:
             return
 
         self.history.append({"role": "user", "content": query})
-        
+
         # Handle FILE_UPDATE if in AGENT mode
         if self.mode == "AGENT" and "FILE_UPDATE:" in full_response:
             self._handle_file_updates(full_response)
-        
+
         self.history.append({"role": "pm", "content": full_response})
         self._save_session()
 
@@ -435,7 +429,7 @@ class InteractivePM:
             self._handle_conf_command_internal(args)
         else:
             click.echo(f"❌ Unknown command: {cmd}")
-        
+
         self._save_session()
         return False
 
@@ -579,7 +573,7 @@ class InteractivePM:
     def _build_prompt_with_query(self, query: str) -> str:
         try: template = get_prompt(self.PROMPT_FILENAME)
         except: return query
-        
+
         specs_context = ""
         primary_focus = ""
         if SPECS_DIR.exists():
@@ -587,13 +581,13 @@ class InteractivePM:
                 if self.focused_prd == f.name:
                     primary_focus = f"PRIMARY FOCUS: {f.name}\n\n{f.read_text()}"
                 else: specs_context += f"- {f.name}\n"
-        
+
         state = load_project_state()
         impl = ", ".join(state.get("completed_prds", []))
         history = "\n".join([f"{h['role']}: {h['content'][:200]}" for h in self.history])
-        
+
         mode_instr = "ASK mode: No file updates." if self.mode == "ASK" else "AGENT mode: Can update files using FILE_UPDATE: <filename>"
-        
+
         return template.format(
             mode=self.mode,
             mode_instructions=mode_instr,

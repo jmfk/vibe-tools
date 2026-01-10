@@ -1,12 +1,10 @@
 """Infrastructure deployment generation for Kubernetes clusters on various platforms."""
-import json
 import pathlib
 from typing import Any, Dict, List, Optional
 
 import yaml
 
-from vibe_tools.utils import INFRA, INFRA_SPEC, logger, load_config, run_command
-
+from vibe_tools.utils import INFRA, logger
 
 DEPLOYMENT_DIR = pathlib.Path("deployment")
 TERRAFORM_DIR = DEPLOYMENT_DIR / "terraform"
@@ -26,7 +24,7 @@ def load_infrastructure_spec() -> Dict[str, Any]:
     if not INFRA.exists():
         logger.warning(f"Infrastructure spec {INFRA} not found")
         return {}
-    
+
     try:
         return yaml.safe_load(INFRA.read_text()) or {}
     except Exception as e:
@@ -44,9 +42,9 @@ def generate_k8s_cluster_config(
     """Generate Kubernetes cluster configuration for a target platform."""
     if output_dir is None:
         output_dir = K8S_DEPLOY_DIR / platform
-    
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     config = {
         "platform": platform,
         "region": region,
@@ -55,7 +53,7 @@ def generate_k8s_cluster_config(
         "kubernetes_version": "1.28",
         "cluster_name": "vibe-cluster",
     }
-    
+
     if platform == "linode":
         return generate_linode_k8s_config(config, output_dir)
     elif platform == "aws":
@@ -74,7 +72,7 @@ def generate_k8s_cluster_config(
 def generate_linode_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
     """Generate Terraform config for Linode Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
-    
+
     terraform_content = f'''terraform {{
   required_version = ">= 1.0"
   
@@ -143,9 +141,9 @@ output "status" {{
   value       = linode_lke_cluster.main.status
 }}
 '''
-    
+
     terraform_file.write_text(terraform_content)
-    
+
     # Generate variables file
     terraform_vars = output_dir / "terraform.tfvars.example"
     terraform_vars.write_text('''linode_token = "your-linode-api-token-here"
@@ -153,10 +151,10 @@ region      = "us-east"
 node_count  = 3
 node_size   = "g6-standard-2"
 ''')
-    
+
     # Generate README
     readme = output_dir / "README.md"
-    readme.write_text(f'''# Linode Kubernetes Cluster Deployment
+    readme.write_text('''# Linode Kubernetes Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -172,14 +170,14 @@ node_size   = "g6-standard-2"
 ## Outputs
 After deployment, the kubeconfig will be available as a Terraform output.
 ''')
-    
+
     return {"terraform_file": str(terraform_file), "platform": "linode"}
 
 
 def generate_aws_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
     """Generate Terraform config for AWS EKS cluster."""
     terraform_file = output_dir / "main.tf"
-    
+
     terraform_content = f'''terraform {{
   required_version = ">= 1.0"
   
@@ -313,11 +311,11 @@ output "cluster_security_group_id" {{
   value       = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }}
 '''
-    
+
     terraform_file.write_text(terraform_content)
-    
+
     readme = output_dir / "README.md"
-    readme.write_text(f'''# AWS EKS Cluster Deployment
+    readme.write_text('''# AWS EKS Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -337,14 +335,14 @@ This is a simplified EKS configuration. For production, add:
 - Load balancer controller
 - Additional security configurations
 ''')
-    
+
     return {"terraform_file": str(terraform_file), "platform": "aws"}
 
 
 def generate_hetzner_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
     """Generate Terraform config for Hetzner Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
-    
+
     terraform_content = f'''terraform {{
   required_version = ">= 1.0"
   
@@ -426,11 +424,11 @@ output "master_ip" {{
   value       = hcloud_server.master.ipv4_address
 }}
 '''
-    
+
     terraform_file.write_text(terraform_content)
-    
+
     readme = output_dir / "README.md"
-    readme.write_text(f'''# Hetzner k3s Cluster Deployment
+    readme.write_text('''# Hetzner k3s Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -447,14 +445,14 @@ output "master_ip" {{
 ## Note
 This uses k3s (lightweight Kubernetes) on Hetzner Cloud.
 ''')
-    
+
     return {"terraform_file": str(terraform_file), "platform": "hetzner"}
 
 
 def generate_digitalocean_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
     """Generate Terraform config for DigitalOcean Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
-    
+
     terraform_content = f'''terraform {{
   required_version = ">= 1.0"
   
@@ -517,11 +515,11 @@ output "endpoint" {{
   value       = digitalocean_kubernetes_cluster.main.endpoint
 }}
 '''
-    
+
     terraform_file.write_text(terraform_content)
-    
+
     readme = output_dir / "README.md"
-    readme.write_text(f'''# DigitalOcean Kubernetes Cluster Deployment
+    readme.write_text('''# DigitalOcean Kubernetes Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -534,15 +532,15 @@ output "endpoint" {{
 4. Run `terraform plan`
 5. Run `terraform apply`
 ''')
-    
+
     return {"terraform_file": str(terraform_file), "platform": "digitalocean"}
 
 
 def generate_bare_metal_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
     """Generate SSH + cloud-init config for bare metal deployment."""
     readme = output_dir / "README.md"
-    
-    readme.write_text(f'''# Bare Metal Kubernetes Deployment
+
+    readme.write_text('''# Bare Metal Kubernetes Deployment
 
 ## Prerequisites
 - SSH access to target machines
@@ -560,7 +558,7 @@ def generate_bare_metal_k8s_config(config: Dict[str, Any], output_dir: pathlib.P
 - `setup-worker.sh`: Worker node setup script
 - `inventory.example`: Example inventory file
 ''')
-    
+
     # Generate master setup script
     master_script = output_dir / "setup-master.sh"
     master_script.write_text('''#!/bin/bash
@@ -578,7 +576,7 @@ sudo cat /var/lib/rancher/k3s/server/node-token > /tmp/k3s-token
 echo "K3S_TOKEN saved to /tmp/k3s-token"
 ''')
     master_script.chmod(0o755)
-    
+
     # Generate worker setup script
     worker_script = output_dir / "setup-worker.sh"
     worker_script.write_text('''#!/bin/bash
@@ -592,7 +590,7 @@ fi
 curl -sfL https://get.k3s.io | K3S_URL="$K3S_URL" K3S_TOKEN="$K3S_TOKEN" sh -
 ''')
     worker_script.chmod(0o755)
-    
+
     # Generate inventory example
     inventory = output_dir / "inventory.example"
     inventory.write_text('''[masters]
@@ -603,14 +601,14 @@ worker1 ansible_host=192.168.1.11 ansible_user=root
 worker2 ansible_host=192.168.1.12 ansible_user=root
 worker3 ansible_host=192.168.1.13 ansible_user=root
 ''')
-    
+
     return {"platform": "bare-metal", "scripts": ["setup-master.sh", "setup-worker.sh"]}
 
 
 def generate_docker_build_system(infra_spec: Dict[str, Any]) -> Dict[str, Any]:
     """Generate Docker build system configuration."""
     ensure_deployment_dirs()
-    
+
     # Generate main Dockerfile if it doesn't exist
     dockerfile = DEPLOYMENT_DIR / "Dockerfile"
     if not dockerfile.exists():
@@ -636,7 +634,7 @@ EXPOSE 8000
 # Run application
 CMD ["python", "-m", "vibe_tools.cli"]
 ''')
-    
+
     # Generate docker-compose for building
     docker_compose_build = BUILD_DIR / "docker-compose.build.yml"
     docker_compose_build.write_text('''version: '3.8'
@@ -651,7 +649,7 @@ services:
       - ../../:/app
     command: /bin/bash
 ''')
-    
+
     # Generate build script
     build_script = BUILD_DIR / "build.sh"
     build_script.write_text('''#!/bin/bash
@@ -672,7 +670,7 @@ fi
 echo "✅ Build complete"
 ''')
     build_script.chmod(0o755)
-    
+
     # Generate Makefile targets
     makefile_targets = BUILD_DIR / "Makefile.targets"
     makefile_targets.write_text('''
@@ -697,7 +695,7 @@ build-frontend:
 build-all: build build-docker build-frontend
 	@echo "✅ All builds complete"
 ''')
-    
+
     return {
         "dockerfile": str(dockerfile),
         "build_script": str(build_script),
@@ -712,15 +710,15 @@ def generate_all_infrastructure(
     """Generate all infrastructure configurations."""
     if platforms is None:
         platforms = ["linode", "aws", "hetzner", "digitalocean", "bare-metal"]
-    
+
     ensure_deployment_dirs()
     infra_spec = load_infrastructure_spec()
-    
+
     results = {
         "platforms": {},
         "build_system": None,
     }
-    
+
     # Generate platform configs
     for platform in platforms:
         try:
@@ -729,7 +727,7 @@ def generate_all_infrastructure(
         except Exception as e:
             logger.error(f"Failed to generate config for {platform}: {e}")
             results["platforms"][platform] = {"error": str(e)}
-    
+
     # Generate build system
     if build_system:
         try:
@@ -737,5 +735,5 @@ def generate_all_infrastructure(
         except Exception as e:
             logger.error(f"Failed to generate build system: {e}")
             results["build_system"] = {"error": str(e)}
-    
+
     return results

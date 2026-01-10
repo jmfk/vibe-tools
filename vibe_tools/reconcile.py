@@ -2,7 +2,8 @@ import csv
 import datetime
 import pathlib
 import sys
-from typing import List, Dict, Any, Optional
+from typing import Optional
+
 
 def parse_iso_timestamp(ts: str) -> Optional[datetime.datetime]:
     """Parse ISO timestamp from Cursor export."""
@@ -75,7 +76,7 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
 
     matches = []
     unmatched_registered = []
-    
+
     # Matching logic: Time window (e.g., 2 minutes) and model name
     time_window = datetime.timedelta(minutes=2)
 
@@ -84,7 +85,7 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
         for exp in exported_events:
             if exp["matched"]:
                 continue
-            
+
             # Check model and time window
             if reg["model"] == exp["model"] and abs(reg["timestamp"] - exp["timestamp"]) <= time_window:
                 exp["matched"] = True
@@ -92,7 +93,7 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
                 matches.append((reg, exp))
                 found_match = True
                 break
-        
+
         if not found_match:
             unmatched_registered.append(reg)
 
@@ -100,15 +101,15 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
 
     # Print Report
     print("=" * 60)
-    print(f"COST RECONCILIATION REPORT")
+    print("COST RECONCILIATION REPORT")
     print("=" * 60)
     print(f"Registered File: {registered_path}")
     print(f"Exported File:   {exported_path}")
     print("-" * 60)
-    
+
     total_reg_cost = sum(r["cost"] for r in registered_events)
     total_exp_cost = sum(e["cost"] for e in exported_events)
-    
+
     print(f"Total Registered Cost: ${total_reg_cost:.4f}")
     print(f"Total Exported Cost:   ${total_exp_cost:.4f}")
     print(f"Difference:            ${abs(total_reg_cost - total_exp_cost):.4f}")
@@ -138,12 +139,12 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
         cost_diff = abs(reg["cost"] - exp["cost"])
         if cost_diff > 0.0001:
             discrepancies.append((reg, exp, cost_diff))
-    
+
     if discrepancies:
         discrepancies.sort(key=lambda x: x[2], reverse=True)
         for reg, exp, diff in discrepancies[:10]:
             print(f"  Match at {reg['timestamp']}: Reg ${reg['cost']:.4f} vs Exp ${exp['cost']:.4f} (Diff: ${diff:.4f})")
-        
+
         # Calculate average multiplier
         multipliers = [exp["cost"] / reg["cost"] for reg, exp in matches if reg["cost"] > 0]
         if multipliers:

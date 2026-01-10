@@ -3,15 +3,16 @@ Core engine for the modular project lifecycle.
 Includes the Planner Agent, Reconciliation Loops, and Implementation Loop.
 """
 
-import pathlib
 import datetime
-from typing import List, Callable, Optional, Dict, Any
+import pathlib
+import sys
+from typing import Callable, List
 
 import yaml
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
+from vibe_tools.issues import FAILS_DIR, Issue, save_issue
 from vibe_tools.utils import (
-    ARCHITECTURE,
     ARCHITECTURE_SPEC,
     BACKLOG_DIR,
     BUILD,
@@ -25,6 +26,7 @@ from vibe_tools.utils import (
     collect_prd_files,
     get_agent_command,
     get_automerge_branch,
+    get_changed_files,
     get_file_hash,
     get_main_branch,
     get_prompt,
@@ -41,7 +43,6 @@ from vibe_tools.utils import (
     save_project_state,
     switch_to_main,
 )
-from vibe_tools.issues import Issue, save_issue, FAILS_DIR, load_issue_by_id
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
@@ -513,7 +514,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         plans_to_run = state.get("plans", {})
 
     if not plans_to_run:
-        logger.error(f"❌ No plans or PRDs found.")
+        logger.error("❌ No plans or PRDs found.")
         return False
 
     config = load_config()
@@ -1140,6 +1141,4 @@ def _switch_to_branch(
             logger.error(
                 f"Agent was unable to resolve git conflict. Final error: {final_output}"
             )
-            import sys
-
             sys.exit(1)

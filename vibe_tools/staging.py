@@ -7,15 +7,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import click
 import yaml
 
-from vibe_tools.servers import DEFAULT_SERVER_CONFIGS, get_server_configs, get_container_status
+from vibe_tools.servers import get_container_status, get_server_configs
 from vibe_tools.utils import (
-    CONFIG_FILE,
-    GLOBAL_SERVERS_FILE,
-    load_config,
-    load_global_servers,
-    logger,
-    run_command,
     VIBE_PROJECT_DIR,
+    load_config,
+    run_command,
 )
 
 STAGING_DIR = VIBE_PROJECT_DIR / "staging"
@@ -185,17 +181,17 @@ def check_service_health(service_name: str, service_config: Dict[str, Any], env_
     # First check if it's a reused container
     if check_reused and env_type != "kubernetes":
         # Try to find the original service key
-        server_configs = get_server_configs()
-        service_mapping = {
-            "postgres": "postgres",
-            "redis": "redis",
-            "rabbitmq": "rabbitmq",
-            "elasticsearch": "elasticsearch",
-            "minio_linode": "s3-linode",
-            "minio_aws": "s3-aws",
-            "mailhog": "mailhog",
-            "imgproxy": "imgproxy",
-        }
+        # server_configs = get_server_configs()
+        # service_mapping = {
+        #     "postgres": "postgres",
+        #     "redis": "redis",
+        #     "rabbitmq": "rabbitmq",
+        #     "elasticsearch": "elasticsearch",
+        #     "minio_linode": "s3-linode",
+        #     "minio_aws": "s3-aws",
+        #     "mailhog": "mailhog",
+        #     "imgproxy": "imgproxy",
+        # }
         # Reverse lookup
         for server_key, project_key in {
             "postgres": "postgres",
@@ -555,7 +551,6 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
 
         # Add ports
         if "port" in service_config:
-            port = service_config["port"]
             if server_key == "postgres":
                 deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 5432})
             elif server_key == "redis":
@@ -619,7 +614,6 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
         }
 
         if "port" in service_config:
-            port = service_config["port"]
             if server_key == "postgres":
                 service["spec"]["ports"].append({"port": 5432, "targetPort": 5432})
             elif server_key == "redis":
@@ -834,10 +828,10 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
 
         # Load into cluster
         if k8s_type == "minikube":
-            click.echo(f"  Loading image into minikube...")
+            click.echo("  Loading image into minikube...")
             run_command(["minikube", "image", "load", image_name], check=False)
         elif k8s_type == "kind":
-            click.echo(f"  Loading image into kind...")
+            click.echo("  Loading image into kind...")
             # Get kind cluster name
             stdout, _ = run_command(["kind", "get", "clusters"], check=False)
             if stdout.strip():
@@ -847,7 +841,7 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
 
     click.echo("✅ Staging environment started")
     click.echo(f"  Namespace: {namespace}")
-    click.echo(f"  View status: vibe-staging status")
+    click.echo("  View status: vibe-staging status")
 
 
 def _setup_docker_compose_staging(services: Dict[str, Any], app_services: List[Dict[str, Any]], isolated: bool = False):
@@ -874,7 +868,7 @@ def _setup_docker_compose_staging(services: Dict[str, Any], app_services: List[D
 
     click.echo("✅ Staging environment started")
     click.echo(f"  Compose file: {DOCKER_COMPOSE_FILE}")
-    click.echo(f"  View status: vibe-staging status")
+    click.echo("  View status: vibe-staging status")
 
 
 @staging_cli.command()

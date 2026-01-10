@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from vibe_tools.normalize import normalize_prd
 
@@ -41,13 +41,13 @@ def test_normalize_prd_with_file(tmp_path):
          patch("vibe_tools.normalize.switch_to_main"), \
          patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
          patch("vibe_tools.normalize.run_agent") as mock_agent:
-        
-        mock_agent.return_value = ("yaml content", 0)
+
+        mock_agent.return_value = ("key: yaml content", 0)
         normalize_prd(agent="cursor-agent", auto_overwrite=True)
 
         mock_agent.assert_called()
         assert (prds_dir / "backlog" / "prd_01_test.yaml").exists()
-        # yaml.safe_dump adds a newline and potentially "..." 
+        # yaml.safe_dump adds a newline and potentially "..."
         content = (prds_dir / "backlog" / "prd_01_test.yaml").read_text()
         assert "yaml content" in content
 
@@ -73,8 +73,8 @@ def test_normalize_prd_recursive(tmp_path):
          patch("vibe_tools.cli.load_config", return_value={}), \
          patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
          patch("vibe_tools.normalize.run_agent") as mock_agent:
-        
-        mock_agent.return_value = ("yaml infra content", 0)
+
+        mock_agent.return_value = ("infra: yaml infra content", 0)
         normalize_prd(agent="cursor-agent", auto_overwrite=True)
 
         assert (prds_dir / "backlog" / "infra" / "prd_infra_01_test.yaml").exists()
@@ -100,16 +100,16 @@ def test_normalize_prd_with_invalid_yaml_fix(tmp_path):
          patch("vibe_tools.normalize.switch_to_main"), \
          patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
          patch("vibe_tools.normalize.run_agent") as mock_agent:
-        
+
         # Return invalid YAML first
         mock_agent.return_value = ("key: : invalid", 0)
-        
+
         with patch("vibe_tools.utils.run_llm") as mock_run_llm:
             # Return fixed YAML
             mock_run_llm.return_value = "key: fixed"
-            
+
             normalize_prd(agent="cursor-agent", auto_overwrite=True)
-        
+
             mock_run_llm.assert_called()
             assert (prds_dir / "backlog" / "prd_01_invalid.yaml").exists()
             assert "key: fixed" in (prds_dir / "backlog" / "prd_01_invalid.yaml").read_text()
