@@ -168,7 +168,7 @@ class CostLogger:
                 gc = gspread.service_account(filename=str(creds_path))
             else:
                 logger.warning(
-                    "⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe-setup google'."
+                    "⚠️ Google Sheets logging enabled but no credentials found (.vibe_authorized_user.json or .vibe_google_creds.json). Run 'vibe config google'."
                 )
                 return
 

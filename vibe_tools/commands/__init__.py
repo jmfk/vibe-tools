@@ -75,3 +75,9 @@ def register_all_commands(cli):
     stats.register_stats(cli)
     billing_groups.register_billing_groups(cli)
     demo_data.register_demo_data(cli)
+
+    from vibe_tools.servers import servers_cli
+    cli.add_command(servers_cli, name="servers")
+
+    from vibe_tools.setup import setup_cli
+    cli.add_command(setup_cli, name="config")

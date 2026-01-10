@@ -235,7 +235,7 @@ class PRDWriter:
 
         if not api_key:
             raise click.ClickException(
-                "Google API Key is missing. Please run `vibe-setup api` first."
+                "Google API Key is missing. Please run `vibe config api` first."
             )
 
         lm = dspy.LM("gemini/gemini-2.0-flash-exp", api_key=api_key)

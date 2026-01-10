@@ -480,7 +480,7 @@ Global commands for Cursor Ralph loop and coverage improvement.
 
 ## Configuration
 
-The tools use a `.vibe_config.json` file in the project root for configuration. This file is automatically created and updated when running `vibe-setup google`.
+The tools use a `.vibe_config.json` file in the project root for configuration. This file is automatically created and updated when running `vibe config google`.
 
 ### Example `.vibe_config.json`
 
@@ -559,18 +559,18 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 
 ### Service Configuration
 
-Use the `vibe-setup` command to record connection details for the supporting services your projects rely on:
+Use the `vibe config` command to record connection details for the supporting services your projects rely on:
 
-- `vibe-setup postgres`
-- `vibe-setup redis`
-- `vibe-setup rabbitmq`
-- `vibe-setup elasticsearch`
-- `vibe-setup s3-linode`
-- `vibe-setup s3-aws`
-- `vibe-setup imgproxy`
-- `vibe-setup api`
-- `vibe-setup google`
-- `vibe-setup test`: Verify connectivity for all configured services.
+- `vibe config postgres`
+- `vibe config redis`
+- `vibe config rabbitmq`
+- `vibe config elasticsearch`
+- `vibe config s3-linode`
+- `vibe config s3-aws`
+- `vibe config imgproxy`
+- `vibe config api`
+- `vibe config google`
+- `vibe config test`: Verify connectivity for all configured services.
 
 Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `.vibe_config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
 
@@ -604,8 +604,8 @@ vibe --help
 - `vibe remember`: Alias for `vibe memory`.
 - `vibe history`: Check the status of all PRDs.
 - `vibe cost`: View total estimated cost of LLM usage.
-- `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
-- `vibe-setup google`: Configure Google Sheets for cost logging.
+- `vibe config api`: Configure API keys for Google Gemini/DSPy.
+- `vibe config google`: Configure Google Sheets for cost logging.
 
 ## Vibe Architect
 
@@ -637,14 +637,14 @@ vibe --help
 
 ### Local Infrastructure
 
-Manage local development servers via Docker using `vibe-servers`:
+Manage local development servers via Docker using `vibe servers`:
 
-- `vibe-servers list`: List supported servers (Postgres, Redis, RabbitMQ, Elasticsearch, MailHog, MinIO-Linode, MinIO-AWS, imgproxy) and their status.
-- `vibe-servers install <service>`: Pull and run the Docker container for a service. Use `minio` as a shorthand to choose between Linode and AWS styles.
-- `vibe-servers start/stop <service>`: Start or stop one or all servers.
-- `vibe-servers logs <service>`: View logs for one or all servers.
-- `vibe-servers status`: Show detailed status and port mappings.
-- `vibe-servers remove <service>`: Remove a service container.
+- `vibe servers list`: List supported servers (Postgres, Redis, RabbitMQ, Elasticsearch, MailHog, MinIO-Linode, MinIO-AWS, imgproxy) and their status.
+- `vibe servers install <service>`: Pull and run the Docker container for a service. Use `minio` as a shorthand to choose between Linode and AWS styles.
+- `vibe servers start/stop <service>`: Start or stop one or all servers.
+- `vibe servers logs <service>`: View logs for one or all servers.
+- `vibe servers status`: Show detailed status and port mappings.
+- `vibe servers remove <service>`: Remove a service container.
 
 ### Linode Object Storage Compatibility
 

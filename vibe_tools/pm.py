@@ -67,7 +67,7 @@ class StreamingLLM:
             
         api_key = get_google_api_key()
         if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe-setup api`.")
+            raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe config api`.")
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
 

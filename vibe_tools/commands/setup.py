@@ -115,7 +115,7 @@ def register_setup(cli):
                 scaffold(scaffold_ctx)
             except Exception as e:
                 click.echo(f"⚠️  Scaffold setup encountered an error: {e}")
-                click.echo("   You can run 'vibe-setup scaffold' manually to set up build infrastructure.")
+                click.echo("   You can run 'vibe config scaffold' manually to set up build infrastructure.")
 
             click.echo("\nNext Steps:")
             click.echo("1. Run 'vibe deps' to install any new testing dependencies.")

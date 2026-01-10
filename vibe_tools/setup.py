@@ -410,7 +410,7 @@ def test():
     services = config.get("services", {})
 
     if not services:
-        click.echo("No services configured. Run 'vibe-setup <service>' first.")
+        click.echo("No services configured. Run 'vibe config <service>' first.")
         return
 
     click.echo("\n--- Service Connectivity Test ---")
@@ -475,7 +475,7 @@ def dspy(ctx):
             click.echo("\n💡 Hint: Your Google AI Studio quota might be exceeded.")
         elif "api_key" in str(e).lower() or "unauthorized" in str(e).lower():
             click.echo(
-                "\n💡 Hint: Your API key might be invalid. Run 'vibe-setup api' to reset it."
+                "\n💡 Hint: Your API key might be invalid. Run 'vibe config api' to reset it."
             )
         elif "module" in str(e).lower():
             click.echo("\n💡 Hint: Ensure 'dspy-ai' is installed in your environment.")
@@ -1311,7 +1311,7 @@ def _check_and_install_build_tools():
             else:
                 click.echo(f"  ⚠️  {tool_name} installation verification failed")
                 click.echo(
-                    f"     Please install it manually and run 'vibe-setup scaffold' again"
+                    f"     Please install it manually and run 'vibe config scaffold' again"
                 )
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
