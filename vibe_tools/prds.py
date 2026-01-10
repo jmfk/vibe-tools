@@ -73,6 +73,22 @@ class PRDMetadata:
         self.sync_info['issue_number'] = number
 
     @property
+    def last_synced_at(self) -> Optional[str]:
+        return self.sync_info.get('last_synced_at')
+
+    @last_synced_at.setter
+    def last_synced_at(self, value: str):
+        self.sync_info['last_synced_at'] = value
+
+    @property
+    def sync_hash(self) -> Optional[str]:
+        return self.sync_info.get('sync_hash')
+
+    @sync_hash.setter
+    def sync_hash(self, value: str):
+        self.sync_info['sync_hash'] = value
+
+    @property
     def title(self) -> str:
         # Try to find a title in the PRD
         if self.is_yaml:

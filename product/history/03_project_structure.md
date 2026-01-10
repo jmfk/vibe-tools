@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltP
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/28
+last_synced_at: '2026-01-10T15:24:20.993853'
+sync_hash: 70295b216734def43830e28175f0cfb1762d338833e60010d0ceaffe9d486765
+---
+
 # Project Structure
 
 ## Overview

@@ -30,13 +30,13 @@ ISSUES_META_DIR = ISSUES_DIR / "meta"
 PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
 PLANNING_BACKLOG_DIR = PLANNING_DIR / "backlog"
 PLANNING_HISTORY_DIR = PLANNING_DIR / "history"
-PLANNING_TRASH_DIR = PLANNING_DIR / "trash"
+PLANNING_REJECTED_DIR = PLANNING_DIR / "rejected"
 
 PRD_DIR = VIBE_PROJECT_DIR / "prds"
 INBOX_DIR = PRD_DIR / "inbox"
 BACKLOG_DIR = PRD_DIR / "backlog"
 HISTORY_DIR = PRD_DIR / "history"
-TRASH_DIR = PRD_DIR / "trash"
+REJECTED_DIR = PRD_DIR / "rejected"
 
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
@@ -148,13 +148,13 @@ def ensure_project_structure():
     INBOX_DIR.mkdir(exist_ok=True)
     BACKLOG_DIR.mkdir(exist_ok=True)
     HISTORY_DIR.mkdir(exist_ok=True)
-    TRASH_DIR.mkdir(exist_ok=True)
+    REJECTED_DIR.mkdir(exist_ok=True)
     
     PLANNING_DIR.mkdir(exist_ok=True)
     PLANNING_INBOX_DIR.mkdir(exist_ok=True)
     PLANNING_BACKLOG_DIR.mkdir(exist_ok=True)
     PLANNING_HISTORY_DIR.mkdir(exist_ok=True)
-    PLANNING_TRASH_DIR.mkdir(exist_ok=True)
+    PLANNING_REJECTED_DIR.mkdir(exist_ok=True)
     
     ISSUES_DIR.mkdir(exist_ok=True)
     ISSUES_BACKLOG_DIR.mkdir(exist_ok=True)
@@ -188,6 +188,8 @@ def migrate_to_project_dir():
         pathlib.Path("cicd-current.yaml"): CICD_CURRENT,
         pathlib.Path("testing.yaml"): TESTING_CONFIG,
         pathlib.Path("testing-current.yaml"): TESTING_CURRENT,
+        pathlib.Path("product/trash"): PLANNING_REJECTED_DIR,
+        pathlib.Path("implementation/prds/trash"): REJECTED_DIR,
     }
 
     import shutil

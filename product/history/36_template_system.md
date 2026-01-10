@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltI
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/21
+last_synced_at: '2026-01-10T15:24:10.322199'
+sync_hash: e2d187a933ce5d6128e936b3ed32e8d289b0d3c889756e5d2a6d043f7ca3293f
+---
+
 # Template System
 
 ## Overview

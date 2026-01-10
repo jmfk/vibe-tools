@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltH
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/20
+last_synced_at: '2026-01-10T15:24:08.763858'
+sync_hash: c1cc6a0f3eed68755bab8faf152df0759f04a26eb602295ea33c628c50634f94
+---
+
 # Monitoring System
 
 ## Overview

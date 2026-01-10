@@ -4,7 +4,7 @@ from vibe_tools.utils import (
     INBOX_DIR,
     BACKLOG_DIR,
     HISTORY_DIR,
-    TRASH_DIR,
+    REJECTED_DIR,
     PRD_DIR,
     open_in_editor,
     logger,
@@ -40,7 +40,7 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
 
 def find_prd(prd_id: str):
     """Finds a PRD file by ID or partial name across all PRD folders."""
-    for folder in [INBOX_DIR, BACKLOG_DIR, HISTORY_DIR, TRASH_DIR]:
+    for folder in [INBOX_DIR, BACKLOG_DIR, HISTORY_DIR, REJECTED_DIR]:
         # Try exact match first
         exact = folder / prd_id
         if exact.exists():
@@ -92,27 +92,27 @@ def history(search, page):
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 @click.option("--page", "-p", default=1, help="Page number.")
-def trash(search, page):
-    """List dismissed PRDs in trash."""
-    list_prds(TRASH_DIR, search, page)
+def rejected(search, page):
+    """List dismissed PRDs in rejected."""
+    list_prds(REJECTED_DIR, search, page)
 
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 def all(search):
     """List all PRDs across all folders."""
-    for folder in [INBOX_DIR, BACKLOG_DIR, HISTORY_DIR, TRASH_DIR]:
+    for folder in [INBOX_DIR, BACKLOG_DIR, HISTORY_DIR, REJECTED_DIR]:
         list_prds(folder, search)
 
 @i.command()
 @click.argument("prd_id")
-@click.argument("target", type=click.Choice(["inbox", "backlog", "history", "trash"]))
+@click.argument("target", type=click.Choice(["inbox", "backlog", "history", "rejected"]))
 def move(prd_id, target):
     """Move a PRD to a different status folder."""
     target_map = {
         "inbox": INBOX_DIR,
         "backlog": BACKLOG_DIR,
         "history": HISTORY_DIR,
-        "trash": TRASH_DIR,
+        "rejected": REJECTED_DIR,
     }
     
     source_file = find_prd(prd_id)
@@ -134,16 +134,16 @@ def move(prd_id, target):
 @i.command()
 @click.argument("prd_id")
 def dismiss(prd_id):
-    """Move a PRD to the trash folder."""
+    """Move a PRD to the rejected folder."""
     source_file = find_prd(prd_id)
     if not source_file:
         click.echo(f"❌ Could not find PRD: {prd_id}")
         return
 
-    target_path = TRASH_DIR / source_file.name
+    target_path = REJECTED_DIR / source_file.name
     import shutil
     shutil.move(str(source_file), str(target_path))
-    click.echo(f"✅ Dismissed {source_file.name} to trash")
+    click.echo(f"✅ Dismissed {source_file.name} to rejected")
 
 @i.command()
 @click.argument("prd_id")

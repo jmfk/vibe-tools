@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltL
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/24
+last_synced_at: '2026-01-10T15:24:14.797825'
+sync_hash: d3b0dad652889d5b35aa3c6792e7d0ea5fbe89ea928e29605e618b9eb5543527
+---
+
 # Project Initialization
 
 ## Overview

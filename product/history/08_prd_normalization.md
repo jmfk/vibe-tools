@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltM
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/25
+last_synced_at: '2026-01-10T15:24:16.301161'
+sync_hash: 92885216f2e838d28e7f00b5668af61d1e92e58b3572c40729d9185e66224e9b
+---
+
 # PRD Normalization
 
 ## Overview

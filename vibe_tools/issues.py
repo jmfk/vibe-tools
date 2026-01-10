@@ -297,18 +297,18 @@ def load_all_issues() -> List[Issue]:
 STATUS_MAPPING = {
     "backlog": {
         "github_state": "open",
-        "label": []
+        "label": ["issue"]
     },
     "in_progress": {
         "github_state": "open",
-        "label": ["in-progress"]
+        "label": ["issue", "in-progress"]
     },
     "blocked": {
         "github_state": "open",
-        "label": ["blocked"]
+        "label": ["issue", "blocked"]
     },
     "done": {
         "github_state": "closed",
-        "label": ["resolved"]
+        "label": ["issue", "resolved"]
     }
 }

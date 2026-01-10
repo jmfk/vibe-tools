@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltW
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/33
+last_synced_at: '2026-01-10T15:24:29.206970'
+sync_hash: 2b00c6a74fc04dc3574350ca4f0f0e82735a2b670097fba9cc49b55843bb10a8
+---
+
 # Deployment Automation
 
 ## Overview

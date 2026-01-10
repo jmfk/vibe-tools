@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltQ
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/29
+last_synced_at: '2026-01-10T15:24:22.324825'
+sync_hash: 57d776767df93170ec68e58171a6196b9aab66b6c657b62b7d585f17263a60db
+---
+
 # Quick Fix
 
 ## Overview

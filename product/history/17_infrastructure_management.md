@@ -1,3 +1,10 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjltN
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/26
+last_synced_at: '2026-01-10T15:24:18.115466'
+sync_hash: e4f32983349ab9de8bfbc008ebed1ee5958e1fca7ecff2e67fbf3fec95758cc8
+---
+
 # Infrastructure Management
 
 ## Overview
