@@ -109,8 +109,28 @@ def add_discussion_labels(discussion_id, label_ids):
         "gh", "api", "graphql",
         "-f", f"query={query}",
         "-f", f"discussionId={discussion_id}",
-        "-f", f"labelIds={label_ids}"
     ]
+    for lid in label_ids:
+        cmd.extend(["-f", f"labelIds[]={lid}"])
+    run_command(cmd, check=False)
+
+def remove_discussion_labels(discussion_id, label_ids):
+    if not label_ids:
+        return
+    query = """
+    mutation($discussionId:ID!, $labelIds:[ID!]!) {
+      removeLabelsFromLabelable(input:{labelableId:$discussionId, labelIds:$labelIds}) {
+        clientMutationId
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"discussionId={discussion_id}",
+    ]
+    for lid in label_ids:
+        cmd.extend(["-f", f"labelIds[]={lid}"])
     run_command(cmd, check=False)
 
 def get_discussion_category_id(owner, name, category_name="Ideas"):
@@ -139,6 +159,10 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
     gh_discussions = fetch_github_discussions(repo_owner, repo_name)
     gh_by_title = {d["title"]: d for d in gh_discussions}
     
+    # Define labels we manage
+    vibe_labels = ["inbox", "backlog", "history", "rejected", "system"]
+    label_ids = {l: get_label_id(repo_owner, repo_name, l) for l in vibe_labels}
+    
     # Define directories and their labels
     sync_dirs = {
         PLANNING_INBOX_DIR: "inbox",
@@ -152,7 +176,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
     
     # Ensure all labels exist
     repo = f"{repo_owner}/{repo_name}"
-    for label in ["inbox", "backlog", "history", "rejected", "system"]:
+    for label in vibe_labels:
         ensure_github_label(repo, label)
 
     # 2. Sync directories
@@ -166,8 +190,6 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
             meta = get_prd_metadata(prd_path)
             title = f"[PRD] {meta.title}"
             body = meta.to_markdown()
-            
-            label_id = get_label_id(repo_owner, repo_name, label)
             
             gh_disc = gh_by_title.get(title)
             
@@ -196,8 +218,8 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
                         meta.sync_hash = meta.get_hash()
                         meta.save()
                         
-                        if label_id:
-                            add_discussion_labels(disc["id"], [label_id])
+                        if label_ids[label]:
+                            add_discussion_labels(disc["id"], [label_ids[label]])
                             
                         logger.info(f"Created GitHub Discussion for {prd_path.name} with label '{label}'")
                     except (json.JSONDecodeError, KeyError):
@@ -249,12 +271,97 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
                     else:
                         logger.error(f"Failed to update GitHub Discussion for {prd_path.name}: {stdout}")
                 
-                # Ensure correct label
+                # Manage labels: ensure correct one is there, remove others
                 gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
                 if label not in gh_labels:
-                    if not dry_run and label_id:
-                        add_discussion_labels(gh_disc["id"], [label_id])
+                    if dry_run:
+                        logger.info(f"[DRY RUN] Would add label '{label}' to GitHub Discussion {gh_disc['number']}")
+                    elif label_ids[label]:
+                        add_discussion_labels(gh_disc["id"], [label_ids[label]])
                         logger.info(f"Added label '{label}' to GitHub Discussion {gh_disc['number']}")
+                
+                # Remove other status labels
+                to_remove_labels = [l for l in vibe_labels if l in gh_labels and l != label]
+                if to_remove_labels:
+                    if dry_run:
+                        logger.info(f"[DRY RUN] Would remove labels {to_remove_labels} from GitHub Discussion {gh_disc['number']}")
+                    else:
+                        to_remove_ids = [label_ids[l] for l in to_remove_labels if label_ids[l]]
+                        if to_remove_ids:
+                            remove_discussion_labels(gh_disc["id"], to_remove_ids)
+                            logger.info(f"Removed old status labels from GitHub Discussion {gh_disc['number']}")
+
+    # 3. Handle System files
+    for filename in system_files:
+        prd_path = PRODUCT_DIR / filename
+        if not prd_path.exists():
+            continue
+            
+        meta = get_prd_metadata(prd_path)
+        title = f"[SYSTEM] {meta.title}"
+        body = meta.to_markdown()
+        label = "system"
+        
+        gh_disc = gh_by_title.get(title)
+        
+        if not gh_disc:
+            if dry_run:
+                logger.info(f"[DRY RUN] Would create GitHub Discussion for system spec {filename}")
+                continue
+            
+            # Create
+            cmd = [
+                "gh", "api", "graphql",
+                "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                "-f", f"repoId={repo_id}",
+                "-f", f"categoryId={category_id}",
+                "-f", f"title={title}",
+                "-f", f"body={body}"
+            ]
+            stdout, code = run_command(cmd, check=False)
+            if code == 0:
+                data = json.loads(stdout)
+                disc = data["data"]["createDiscussion"]["discussion"]
+                if label_ids[label]:
+                    add_discussion_labels(disc["id"], [label_ids[label]])
+                logger.info(f"Created GitHub Discussion for system spec {filename}")
+        else:
+            # Update (One-way)
+            if gh_disc["body"] != body:
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would update GitHub Discussion for system spec {filename}")
+                    continue
+                    
+                cmd = [
+                    "gh", "api", "graphql",
+                    "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                    "-f", f"id={gh_disc['id']}",
+                    "-f", f"title={title}",
+                    "-f", f"body={body}"
+                ]
+                stdout, code = run_command(cmd, check=False)
+                if code == 0:
+                    logger.info(f"Updated GitHub Discussion for system spec {filename}")
+            
+            # Ensure label
+            gh_labels = [l["name"] for l in gh_disc["labels"]["nodes"]]
+            if label not in gh_labels:
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would add label '{label}' to GitHub Discussion {gh_disc['number']}")
+                elif label_ids[label]:
+                    add_discussion_labels(gh_disc["id"], [label_ids[label]])
+                    logger.info(f"Added label '{label}' to GitHub Discussion {gh_disc['number']}")
+            
+            # Remove other status labels
+            to_remove_labels = [l for l in vibe_labels if l in gh_labels and l != label]
+            if to_remove_labels:
+                if dry_run:
+                    logger.info(f"[DRY RUN] Would remove labels {to_remove_labels} from GitHub Discussion {gh_disc['number']}")
+                else:
+                    to_remove_ids = [label_ids[l] for l in to_remove_labels if label_ids[l]]
+                    if to_remove_ids:
+                        remove_discussion_labels(gh_disc["id"], to_remove_ids)
+                        logger.info(f"Removed old status labels from GitHub Discussion {gh_disc['number']}")
 
     # 3. Handle System files
     for filename in system_files:
