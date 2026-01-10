@@ -621,6 +621,21 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
         logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
         log_start("implement", f"Plan: {title} ({plan_id})")
+
+        # Update status in project-state.json to in_progress
+        state = load_project_state()
+        if plan_id not in state["plans"]:
+            state["plans"][plan_id] = {}
+        state["plans"][plan_id]["status"] = "in_progress"
+
+        # Mark in started_prds
+        if plan_id not in state.get("started_prds", []):
+            if "started_prds" not in state:
+                state["started_prds"] = []
+            state["started_prds"].append(plan_id)
+        
+        save_project_state(state)
+
         _switch_to_branch(
             branch_name, agent, plan_id, parent_branch=parent_branch, stream=stream
         )
