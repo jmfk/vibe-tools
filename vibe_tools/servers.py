@@ -132,7 +132,7 @@ def list_servers():
 
         click.echo(f"{name:<15} {status_display:<15} {config['description']}")
 
-    click.echo("\nRun 'vibe-servers install <service>' to set up a new server.")
+    click.echo("\nRun 'vibe servers install <service>' to set up a new server.")
 
 @servers_cli.command()
 @click.argument("service")
@@ -282,7 +282,7 @@ def start(service):
         click.echo(f"Server '{service}' is already running.")
         return
     if status == "not_created":
-        click.echo(f"Server '{service}' is not installed. Use 'vibe-servers install {service}' first.")
+        click.echo(f"Server '{service}' is not installed. Use 'vibe servers install {service}' first.")
         return
 
     click.echo(f"Starting {service}...")

@@ -88,7 +88,7 @@ def get_docker_compose_cmd() -> Optional[List[str]]:
 
 
 def check_existing_container(service_key: str, server_key: str) -> Optional[str]:
-    """Check if a vibe-servers container is running for this service."""
+    """Check if a vibe servers container is running for this service."""
     server_configs = get_server_configs()
     if server_key not in server_configs:
         return None
@@ -104,18 +104,18 @@ def check_existing_container(service_key: str, server_key: str) -> Optional[str]
 
 
 def get_required_services() -> Dict[str, Any]:
-    """Get required services from config, integrating with vibe-servers."""
+    """Get required services from config, integrating with vibe servers."""
     # First, get services from project config
     config = load_config()
     project_services = config.get("services", {})
 
-    # Also get global server configs from vibe-servers
+    # Also get global server configs from vibe servers
     server_configs = get_server_configs()
 
     # Merge: project config takes precedence, but use server configs as defaults
     services = {}
 
-    # Map vibe-servers service names to project service keys
+    # Map vibe servers service names to project service keys
     service_mapping = {
         "postgres": "postgres",
         "redis": "redis",
@@ -722,16 +722,16 @@ def staging_cli():
 
 
 @staging_cli.command()
-@click.option("--isolated", is_flag=True, default=False, help="Create isolated containers instead of reusing existing vibe-servers containers")
+@click.option("--isolated", is_flag=True, default=False, help="Create isolated containers instead of reusing existing vibe servers containers")
 def up(isolated):
-    """Start the complete staging environment. By default, reuses existing vibe-servers containers."""
+    """Start the complete staging environment. By default, reuses existing vibe servers containers."""
     env_type = detect_environment()
     click.echo(f"Detected environment: {env_type}")
 
     if isolated:
         click.echo("Mode: Isolated (creating new containers)")
     else:
-        click.echo("Mode: Reuse (connecting to existing vibe-servers containers)")
+        click.echo("Mode: Reuse (connecting to existing vibe servers containers)")
 
     if env_type == "kubernetes":
         k8s_type = detect_k8s_type()
@@ -746,7 +746,7 @@ def up(isolated):
 
     # Check for existing containers if not isolated
     if not isolated:
-        click.echo("\nChecking for existing vibe-servers containers...")
+        click.echo("\nChecking for existing vibe servers containers...")
         reused_count = 0
         for service_key in services.keys():
             server_key = None

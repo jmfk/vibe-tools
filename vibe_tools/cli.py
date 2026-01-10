@@ -247,7 +247,7 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
 
         if not project_init:
             click.echo("\nRun 'vibe init' to set up templates.")
-            click.echo("Run 'vibe-setup api' to configure LLM access.")
+            click.echo("Run 'vibe config api' to configure LLM access.")
 
         click.echo("\nAvailable commands:")
         for command in cli.list_commands(ctx):
@@ -829,7 +829,7 @@ def _build_reconciliation(ctx, force):
     if not BUILD.exists():
         click.echo("❌ Build configuration not found.")
         click.echo(
-            "   Please run 'vibe-setup scaffold' first to generate build scaffolding."
+            "   Please run 'vibe config scaffold' first to generate build scaffolding."
         )
         return
 

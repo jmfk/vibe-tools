@@ -38,9 +38,13 @@ The project supports sophisticated infrastructure provisioning and deployment to
 
 ## 4. Configuration & Environment Management
 - **Unified CLI**: The `vibe` command provides a single interface for managing infrastructure:
-    - `vibe infra`: General infrastructure management.
+    - `vibe infra`: General infrastructure management and cloud reconciliation.
     - `vibe setup`: Environment and service configuration.
-    - `vibe deploy`: Deployment to target environments.
+    - `vibe deploy`: Deployment to target cloud environments.
+- **Local Service Management**: Supporting services are managed via `vibe servers`:
+    - `vibe servers list`: List available local services.
+    - `vibe servers install <service>`: Setup a new local service via Docker.
+    - `vibe servers start/stop`: Manage service state.
 - **Tiered Configuration**:
     - **Global**: `~/.vibe/config.json` for user-specific settings and credentials.
     - **Project-Level**: `.vibe_config.json` for project-specific infrastructure definitions.

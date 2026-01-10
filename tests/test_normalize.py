@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from vibe_tools.normalize import normalize_prd
 
@@ -9,12 +9,18 @@ def test_normalize_prd_no_files(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
-        with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-            with patch("vibe_tools.normalize.get_prompt", return_value="prompt"):
-                normalize_prd(agent="cursor-agent")
-                # No files found should return early
-                assert len(list(prds_dir.glob("*.yaml"))) == 0
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir), \
+         patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"), \
+         patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize._switch_to_branch"), \
+         patch("vibe_tools.normalize.run_command"), \
+         patch("vibe_tools.normalize.is_dirty", return_value=False), \
+         patch("vibe_tools.normalize.switch_to_main"), \
+         patch("vibe_tools.normalize.get_prompt", return_value="prompt"):
+        normalize_prd(agent="cursor-agent")
+        # No files found should return early
+        assert len(list(prds_dir.glob("*.yaml"))) == 0
 
 
 def test_normalize_prd_with_file(tmp_path):
@@ -25,25 +31,25 @@ def test_normalize_prd_with_file(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
-        with patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"):
-            with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-                with patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"):
-                    with patch("vibe_tools.normalize.run_agent") as mock_agent:
-                        with patch("vibe_tools.utils.run_command") as mock_run_utils, \
-                             patch("vibe_tools.normalize.run_command") as mock_run_norm, \
-                             patch("vibe_tools.ralph.run_command") as mock_run_ralph:
-                            mock_run_utils.return_value = ("", 0)
-                            mock_run_norm.return_value = ("", 0)
-                            mock_run_ralph.return_value = ("", 0)
-                            mock_agent.return_value = ("yaml content", 0)
-                            normalize_prd(agent="cursor-agent", auto_overwrite=True)
-    
-                        mock_agent.assert_called()
-                        assert (prds_dir / "backlog" / "prd_01_test.yaml").exists()
-                        # yaml.safe_dump adds a newline and potentially "..." 
-                        content = (prds_dir / "backlog" / "prd_01_test.yaml").read_text()
-                        assert "yaml content" in content
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir), \
+         patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"), \
+         patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize._switch_to_branch"), \
+         patch("vibe_tools.normalize.run_command"), \
+         patch("vibe_tools.normalize.is_dirty", return_value=False), \
+         patch("vibe_tools.normalize.switch_to_main"), \
+         patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
+         patch("vibe_tools.normalize.run_agent") as mock_agent:
+        
+        mock_agent.return_value = ("yaml content", 0)
+        normalize_prd(agent="cursor-agent", auto_overwrite=True)
+
+        mock_agent.assert_called()
+        assert (prds_dir / "backlog" / "prd_01_test.yaml").exists()
+        # yaml.safe_dump adds a newline and potentially "..." 
+        content = (prds_dir / "backlog" / "prd_01_test.yaml").read_text()
+        assert "yaml content" in content
 
 
 def test_normalize_prd_recursive(tmp_path):
@@ -56,25 +62,24 @@ def test_normalize_prd_recursive(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
-        with patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"):
-            with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-                # Also patch the CLI load_config which is called inside normalize_prd
-                with patch("vibe_tools.cli.load_config", return_value={}):
-                    with patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"):
-                        with patch("vibe_tools.normalize.run_agent") as mock_agent:
-                            with patch("vibe_tools.utils.run_command") as mock_run_utils, \
-                                 patch("vibe_tools.normalize.run_command") as mock_run_norm, \
-                                 patch("vibe_tools.ralph.run_command") as mock_run_ralph:
-                                mock_run_utils.return_value = ("", 0)
-                                mock_run_norm.return_value = ("", 0)
-                                mock_run_ralph.return_value = ("", 0)
-                                mock_agent.return_value = ("yaml infra content", 0)
-                                normalize_prd(agent="cursor-agent", auto_overwrite=True)
-    
-                            assert (prds_dir / "backlog" / "infra" / "prd_infra_01_test.yaml").exists()
-                            content = (prds_dir / "backlog" / "infra" / "prd_infra_01_test.yaml").read_text()
-                            assert "yaml infra content" in content
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir), \
+         patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"), \
+         patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize._switch_to_branch"), \
+         patch("vibe_tools.normalize.run_command"), \
+         patch("vibe_tools.normalize.is_dirty", return_value=False), \
+         patch("vibe_tools.normalize.switch_to_main"), \
+         patch("vibe_tools.cli.load_config", return_value={}), \
+         patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
+         patch("vibe_tools.normalize.run_agent") as mock_agent:
+        
+        mock_agent.return_value = ("yaml infra content", 0)
+        normalize_prd(agent="cursor-agent", auto_overwrite=True)
+
+        assert (prds_dir / "backlog" / "infra" / "prd_infra_01_test.yaml").exists()
+        content = (prds_dir / "backlog" / "infra" / "prd_infra_01_test.yaml").read_text()
+        assert "yaml infra content" in content
 
 
 def test_normalize_prd_with_invalid_yaml_fix(tmp_path):
@@ -85,26 +90,26 @@ def test_normalize_prd_with_invalid_yaml_fix(tmp_path):
     prds_dir = tmp_path / "prds"
     prds_dir.mkdir()
 
-    with patch("vibe_tools.normalize.PRD_DIR", prds_dir):
-        with patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"):
-            with patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir):
-                with patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"):
-                    with patch("vibe_tools.normalize.run_agent") as mock_agent:
-                        with patch("vibe_tools.utils.run_command") as mock_run_utils, \
-                             patch("vibe_tools.normalize.run_command") as mock_run_norm, \
-                             patch("vibe_tools.ralph.run_command") as mock_run_ralph:
-                            mock_run_utils.return_value = ("", 0)
-                            mock_run_norm.return_value = ("", 0)
-                            mock_run_ralph.return_value = ("", 0)
-                            # Return invalid YAML first
-                            mock_agent.return_value = ("key: : invalid", 0)
-                            
-                            with patch("vibe_tools.utils.run_llm") as mock_run_llm:
-                                # Return fixed YAML
-                                mock_run_llm.return_value = "key: fixed"
-                                
-                                normalize_prd(agent="cursor-agent", auto_overwrite=True)
-                            
-                                mock_run_llm.assert_called()
-                                assert (prds_dir / "backlog" / "prd_01_invalid.yaml").exists()
-                                assert "key: fixed" in (prds_dir / "backlog" / "prd_01_invalid.yaml").read_text()
+    with patch("vibe_tools.normalize.PRD_DIR", prds_dir), \
+         patch("vibe_tools.normalize.BACKLOG_DIR", prds_dir / "backlog"), \
+         patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize._switch_to_branch"), \
+         patch("vibe_tools.normalize.run_command"), \
+         patch("vibe_tools.normalize.is_dirty", return_value=False), \
+         patch("vibe_tools.normalize.switch_to_main"), \
+         patch("vibe_tools.normalize.get_prompt", return_value="normalize {PASTE HUMAN PRD HERE}"), \
+         patch("vibe_tools.normalize.run_agent") as mock_agent:
+        
+        # Return invalid YAML first
+        mock_agent.return_value = ("key: : invalid", 0)
+        
+        with patch("vibe_tools.utils.run_llm") as mock_run_llm:
+            # Return fixed YAML
+            mock_run_llm.return_value = "key: fixed"
+            
+            normalize_prd(agent="cursor-agent", auto_overwrite=True)
+        
+            mock_run_llm.assert_called()
+            assert (prds_dir / "backlog" / "prd_01_invalid.yaml").exists()
+            assert "key: fixed" in (prds_dir / "backlog" / "prd_01_invalid.yaml").read_text()
