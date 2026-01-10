@@ -12,6 +12,7 @@ from vibe_tools.utils import (
     PRODUCT_DIR,
     ensure_project_structure,
     load_project_state,
+    run_command,
 )
 
 
