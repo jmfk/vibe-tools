@@ -6,7 +6,6 @@ def register_issue(cli):
         """Local-first issue management with GitHub sync."""
         pass
 
-    from vibe_tools.commands.sync import register_sync
     from vibe_tools.commands.investigate import register_investigate
     from vibe_tools.commands.solve import register_solve
     from vibe_tools.commands.issue_list import register_issue_list
@@ -29,9 +28,8 @@ def register_issue(cli):
         issue.status = "done"
         issue.updated_at = datetime.datetime.now().isoformat()
         save_issue(issue)
-        click.echo(f"Issue {issue_id} marked as done. Run 'vibe issue sync' to close on GitHub.")
+        click.echo(f"Issue {issue_id} marked as done. Run 'vibe sync' to close on GitHub.")
 
-    register_sync(issue_group)
     register_investigate(issue_group)
     register_solve(issue_group)
 
