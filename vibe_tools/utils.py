@@ -20,6 +20,13 @@ from dotenv import find_dotenv, load_dotenv, set_key
 VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
+
+ISSUES_DIR = pathlib.Path("issues")
+ISSUES_BACKLOG_DIR = ISSUES_DIR / "backlog"
+ISSUES_HISTORY_DIR = ISSUES_DIR / "history"
+ISSUES_FAILS_DIR = ISSUES_DIR / "fails"
+ISSUES_META_DIR = ISSUES_DIR / "meta"
+
 PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
 PLANNING_BACKLOG_DIR = PLANNING_DIR / "backlog"
 PLANNING_HISTORY_DIR = PLANNING_DIR / "history"
@@ -148,6 +155,12 @@ def ensure_project_structure():
     PLANNING_BACKLOG_DIR.mkdir(exist_ok=True)
     PLANNING_HISTORY_DIR.mkdir(exist_ok=True)
     PLANNING_TRASH_DIR.mkdir(exist_ok=True)
+    
+    ISSUES_DIR.mkdir(exist_ok=True)
+    ISSUES_BACKLOG_DIR.mkdir(exist_ok=True)
+    ISSUES_HISTORY_DIR.mkdir(exist_ok=True)
+    ISSUES_FAILS_DIR.mkdir(exist_ok=True)
+    ISSUES_META_DIR.mkdir(exist_ok=True)
     
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
