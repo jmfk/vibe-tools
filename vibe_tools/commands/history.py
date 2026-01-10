@@ -38,14 +38,17 @@ def register_history(cli):
 
             # Check status in plans first (Source of Truth)
             plan_status = None
+            prd_id = f"prd_{project_name}"
             if prd_stem in plans:
                 plan_status = plans[prd_stem].get("status")
             elif project_name in plans:
                 plan_status = plans[project_name].get("status")
+            elif prd_id in plans:
+                plan_status = plans[prd_id].get("status")
 
-            if plan_status == "completed" or prd_stem in completed_prds or project_name in completed_prds:
+            if plan_status == "completed" or prd_stem in completed_prds or project_name in completed_prds or prd_id in completed_prds:
                 status = click.style("✅ DONE", fg="green")
-            elif plan_status == "in_progress" or prd_stem in started_prds or project_name in started_prds:
+            elif plan_status == "in_progress" or prd_stem in started_prds or project_name in started_prds or prd_id in started_prds:
                 status = click.style("⏳ IN_PROGRESS", fg="blue")
             else:
                 status = click.style("⚪️ PENDING", fg="white", dim=True)
