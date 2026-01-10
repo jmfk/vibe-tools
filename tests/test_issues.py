@@ -8,6 +8,7 @@ def test_issue_serialization():
         status="backlog",
         severity="medium",
         service="core",
+        summary="Test summary",
         created_at="2026-01-09T10:00:00Z",
         updated_at="2026-01-09T10:00:00Z",
         body="## Summary\nTest body"
@@ -38,6 +39,7 @@ def test_save_and_load_issue(tmp_path, monkeypatch):
         status="backlog",
         severity="medium",
         service="core",
+        summary="Test summary",
         created_at="2026-01-09T10:00:00Z",
         updated_at="2026-01-09T10:00:00Z",
         body="## Summary\nTest body"
@@ -70,6 +72,7 @@ def test_issue_hash():
         status="backlog",
         severity="low",
         service="svc",
+        summary="Summary",
         created_at="now",
         updated_at="now",
         body="Body"
@@ -103,6 +106,7 @@ def test_generate_issue_id(tmp_path, monkeypatch):
     issue = Issue(
         id=id1,
         title="T", status="backlog", severity="l", service="s",
+        summary="S",
         created_at="n", updated_at="n", body="B"
     )
     save_issue(issue)

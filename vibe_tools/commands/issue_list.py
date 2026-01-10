@@ -42,20 +42,20 @@ def list_issues_impl(status, severity, service, search, full, search_query):
 
     if full:
         for issue in filtered_issues:
-            click.echo("=" * 40)
+            click.echo("=" * 80)
             click.echo(f"ID:       {issue.id}")
             click.echo(f"Title:    {issue.title}")
             click.echo(f"Status:   {issue.status}")
             click.echo(f"Severity: {issue.severity}")
             click.echo(f"Service:  {issue.service or 'N/A'}")
-            click.echo("-" * 40)
+            click.echo("-" * 80)
             click.echo(issue.body.to_markdown())
             click.echo("")
     else:
         # Table View
         header = f"{'ID':<25} {'Status':<12} {'Severity':<10} {'Service':<15} {'Title'}"
         click.echo(header)
-        click.echo("-" * len(header))
+        click.echo("-" * 100)
         for issue in filtered_issues:
             service_str = issue.service or "N/A"
             click.echo(f"{issue.id:<25} {issue.status:<12} {issue.severity:<10} {service_str:<15} {issue.title}")

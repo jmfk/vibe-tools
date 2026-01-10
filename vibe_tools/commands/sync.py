@@ -746,6 +746,7 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
                 status=status,
                 severity="medium",
                 service="unknown",
+                summary=gh_issue["title"],  # Use title as fallback summary for sync
                 created_at=gh_issue["updatedAt"],
                 updated_at=gh_issue["updatedAt"],
                 body=IssueBody.from_markdown(gh_issue["body"]),
