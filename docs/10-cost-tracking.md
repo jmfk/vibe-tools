@@ -58,7 +58,7 @@ Total estimated cost: $X.XX USD
 
 View detailed session report in logs:
 ```bash
-tail -f project/logs/<command>.log
+tail -f implementation/logs/<command>.log
 ```
 
 Report format:
@@ -79,7 +79,7 @@ TOTAL SESSION COST:                                          $0.002690
 
 ### Local CSV Log
 
-Costs are logged to `project/costs/usage.csv`:
+Costs are logged to `implementation/costs/usage.csv`:
 
 ```csv
 Timestamp,PRD,Phase,Iteration,Agent,Model,Input Tokens,Output Tokens,Cost (USD),Purpose
@@ -96,7 +96,7 @@ vibe-setup google
 ```
 
 **Configuration:**
-- Enable in `project/config.json`:
+- Enable in `implementation/config.json`:
   ```json
   {
     "use_google_sheets": true,
@@ -145,7 +145,7 @@ Tokens are estimated at ~4 characters per token:
 
 ### Setting Budgets
 
-Configure default budget in `project/config.json`:
+Configure default budget in `implementation/config.json`:
 ```json
 {
   "default_budget": 5.0
@@ -178,7 +178,7 @@ vibe stats
 View costs per PRD:
 ```bash
 # Check CSV file
-cat project/costs/usage.csv | grep "prd_01_feature"
+cat implementation/costs/usage.csv | grep "prd_01_feature"
 ```
 
 ### By Phase
@@ -261,7 +261,7 @@ vibe status
 
 **Check file permissions:**
 ```bash
-ls -la project/costs/
+ls -la implementation/costs/
 # Ensure directory is writable
 ```
 
@@ -295,7 +295,7 @@ vibe-setup google
 - Ensure credentials have access
 
 **Missing data:**
-- Check CSV log: `project/costs/usage.csv`
+- Check CSV log: `implementation/costs/usage.csv`
 - Verify Google Sheets API is enabled
 - Check network connectivity
 
@@ -313,10 +313,10 @@ Automatically generated at command completion:
 Analyze CSV data:
 ```bash
 # Total by PRD
-cat project/costs/usage.csv | awk -F',' '{sum[$2]+=$10} END {for (i in sum) print i, sum[i]}'
+cat implementation/costs/usage.csv | awk -F',' '{sum[$2]+=$10} END {for (i in sum) print i, sum[i]}'
 
 # Total by phase
-cat project/costs/usage.csv | awk -F',' '{sum[$3]+=$10} END {for (i in sum) print i, sum[i]}'
+cat implementation/costs/usage.csv | awk -F',' '{sum[$3]+=$10} END {for (i in sum) print i, sum[i]}'
 ```
 
 ### Google Sheets Analysis

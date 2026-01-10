@@ -37,7 +37,7 @@ vibe architect "Review the current architecture"
 
 **AGENT Mode**
 - Agent is authorized to modify files
-- Updates `specs/architecture.md` and `specs/infrastructure.md`
+- Updates `product/architecture.md` and `product/infrastructure.md`
 - Use with caution
 
 **Switching Modes:**
@@ -121,7 +121,7 @@ vibe architect "Review the current architecture"
 
 ### Session Persistence
 
-Sessions are saved in `project/architect-session.json`:
+Sessions are saved in `implementation/architect-session.json`:
 - Pending prompts
 - Session memory
 - History
@@ -188,7 +188,7 @@ vibe pm "Create a PRD for user authentication"
 
 Similar to `vibe architect` but focused on PRDs:
 - Same slash commands (with PRD-specific additions)
-- Session persistence in `project/pm-session.json`
+- Session persistence in `implementation/pm-session.json`
 - Focus mode for working on specific PRDs
 
 ### PRD-Specific Commands
@@ -240,7 +240,7 @@ All commands from `vibe architect` plus PRD-specific ones:
 
 ### Session Persistence
 
-Sessions saved in `project/pm-session.json`:
+Sessions saved in `implementation/pm-session.json`:
 - Pending prompts
 - Session memory
 - History
@@ -282,7 +282,7 @@ Type /s to send, /r to reset, or keep typing to add more.
 
 (AGENT) 👤 /s
 
-[Agent updates specs/01_auth.md...]
+[Agent updates product/01_auth.md...]
 ```
 
 ## Common Features
@@ -364,7 +364,7 @@ Session memory is sent with every prompt.
 
 ### Session Not Loading
 
-- Check `project/architect-session.json` or `project/pm-session.json`
+- Check `implementation/architect-session.json` or `implementation/pm-session.json`
 - Verify file permissions
 - Try `/reset` to start fresh
 

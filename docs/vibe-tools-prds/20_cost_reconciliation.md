@@ -21,7 +21,7 @@ N/A - CLI command or utility function.
 
 ## Backend
 - **Input Files**:
-  - Registered: `project/costs/usage.csv` (vibe-tools logs)
+  - Registered: `implementation/costs/usage.csv` (vibe-tools logs)
   - Exported: Cursor export CSV file
 - **Parsing**:
   - `parse_iso_timestamp()`: Parses ISO timestamps from Cursor export

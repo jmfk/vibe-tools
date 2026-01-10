@@ -156,8 +156,8 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ## Specs & PRDs
 
-1. **Start with a human spec.** Write a normative spec in `specs/` (for example `specs/01_platform_vision.md`). That markdown is the source of truth for requirements.
-2. **Global Truths.** Certain files in `specs/` represent the persistent state of the system and are injected into every Ralph prompt as context:
+1. **Start with a human spec.** Write a normative spec in `product/` (for example `product/01_platform_vision.md`). That markdown is the source of truth for requirements.
+2. **Global Truths.** Certain files in `product/` represent the persistent state of the system and are injected into every Ralph prompt as context:
    - `architecture.md` -> `prds/architecture.yaml`
    - `project_overview.md` -> `prds/project_overview.yaml`
    - `infrastructure.md` -> `prds/infrastructure.yaml`

@@ -934,7 +934,7 @@ def generate_infrastructure_spec(
             prd_files.append(prd_file)
 
     if not prd_files:
-        click.echo("❌ No PRD files found in specs/. Please create PRDs first.")
+        click.echo("❌ No PRD files found in product/. Please create PRDs first.")
         return
 
     # Read PRD contents

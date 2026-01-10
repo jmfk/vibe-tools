@@ -12,12 +12,12 @@ TASK:
    - Title
    - Description
    - PRD References: For each PRD this plan originates from, include:
-     - A link to the Markdown Spec file (e.g., [PRD-01](specs/PRD-01-minimal-htmx-server.md))
+     - A link to the Markdown Spec file (e.g., [PRD-01](product/PRD-01-minimal-htmx-server.md))
      - The full YAML content of the PRD inside a collapsed `<details>` block.
    - Dependencies: IDs of other plans that MUST be completed first.
    - Success Criteria: Specific, measurable checks (e.g., 'API endpoint /health returns 200', 'Database table users exists').
    - Test Targets: Specific Makefile targets to run (e.g., 'test-backend', 'test-frontend').
-6. Update 'project/state.json' by adding all generated plans to the "plans" object.
+6. Update 'implementation/state.json' by adding all generated plans to the "plans" object.
 
 FORMAT for state.json "plans" entry:
   "plan_id": {

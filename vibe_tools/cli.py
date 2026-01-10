@@ -126,7 +126,7 @@ from vibe_tools.utils import (
 load_dotenv(find_dotenv() or ".env")
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
-SPECS_DIR = pathlib.Path("specs")
+SPECS_DIR = pathlib.Path("product")
 
 
 @click.group(invoke_without_command=True, cls=OrderedGroup)
@@ -237,12 +237,12 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
                 click.echo(f"    {display_name}: {host}:{port}")
 
         specs_dir = (
-            pathlib.Path("specs")
-            if pathlib.Path("specs").exists()
-            else pathlib.Path("spec")
+            pathlib.Path("product")
+            if pathlib.Path("product").exists()
+            else pathlib.Path("product")
         )
         click.echo(
-            f"  Specs Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to specs/)'}"
+            f"  Planning Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to product/)'}"
         )
 
         if not project_init:
@@ -275,8 +275,8 @@ def init(ctx):
 
     click.echo("Please select your starting scenario:")
     click.echo(
-        click.style("  A) Human Specs", bold=True)
-        + " - You already have human-written markdown specs in 'specs/'."
+        click.style("  A) Human Planning", bold=True)
+        + " - You already have human-written markdown specs in 'product/'."
     )
     click.echo(
         click.style("  B) Adoption", bold=True)
@@ -302,7 +302,7 @@ def init(ctx):
 
     if choice == "A":
         click.echo(
-            "\n📄 Basic initialization complete. Your human specs should be in 'specs/'."
+            "\n📄 Basic initialization complete. Your human specs should be in 'product/'."
         )
     elif choice == "B":
         click.echo("\n🔍 Starting codebase discovery...")
@@ -341,7 +341,7 @@ def _perform_basic_init():
         migrate_to_project_dir,
     )
 
-    # First, migrate any existing files from root to project/
+    # First, migrate any existing files from root to implementation/
     migrate_to_project_dir()
 
     # Ensure structure exists
@@ -352,7 +352,7 @@ def _perform_basic_init():
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
-    ensure_dir(pathlib.Path("specs"))
+    ensure_dir(pathlib.Path("product"))
     ensure_dir(PRD_DIR)
     ensure_dir(LOGS_DIR)
     ensure_dir(COSTS_DIR)
@@ -411,7 +411,7 @@ def coverage(ctx):
 )
 @click.pass_context
 def normalize(ctx, input_files, yes, debug):
-    """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
+    """Phase 2: Normalize human-written PRDs from product/ into machine-consumable YAML in prds/."""
     maybe_init_git()
     state = load_project_state()
     missing = check_dependencies("normalize", state)
@@ -430,8 +430,8 @@ def normalize(ctx, input_files, yes, debug):
         "cicd": CICD_SPEC,
         "testing": TESTING_SPEC,
         "build": BUILD_SPEC,
-        "project-overview": pathlib.Path("specs/project-overview.md"),
-        "project_overview": pathlib.Path("specs/project-overview.md"),
+        "project-overview": pathlib.Path("product/project-overview.md"),
+        "project_overview": pathlib.Path("product/project-overview.md"),
     }
 
     # Process input files: map special names and resolve paths
@@ -459,7 +459,7 @@ def normalize(ctx, input_files, yes, debug):
                 debug=debug,
             )
     else:
-        # No files specified, normalize all files in specs/
+        # No files specified, normalize all files in product/
         click.echo("🔄 Normalizing specs...")
         normalize_prd(
             agent=ctx.obj["agent"],
@@ -471,7 +471,7 @@ def normalize(ctx, input_files, yes, debug):
         )
 
     click.echo("\nNext Steps:")
-    click.echo("[ ] Review/Edit generated YAMLs in project/prds/")
+    click.echo("[ ] Review/Edit generated YAMLs in implementation/prds/")
     click.echo("[ ] Architecture Setup (vibe setup)")
     click.echo("[ ] Install Dependencies (vibe deps)")
     click.echo("[ ] Start Building (vibe implement)")
@@ -787,7 +787,7 @@ def implement(ctx):
     from vibe_tools.utils import collect_prd_files
 
     if not collect_prd_files():
-        click.echo("❌ No machine-readable PRD YAMLs found in project/prds/.")
+        click.echo("❌ No machine-readable PRD YAMLs found in implementation/prds/.")
         click.echo(
             "   Run 'vibe pm' to refine specs and 'vibe normalize' to generate them."
         )
@@ -1070,7 +1070,7 @@ def build_debug(ctx):
     "--output",
     "-o",
     type=click.Path(),
-    help="Output file path for diagnostic data (default: project/devbug-report.json)",
+    help="Output file path for diagnostic data (default: implementation/devbug-report.json)",
 )
 @click.pass_context
 def devbug(ctx, output):
@@ -1236,7 +1236,7 @@ def devbug(ctx, output):
         "build-current.yaml": BUILD_CURRENT,
         "build.md": BUILD_SPEC,
         "skaffold.yaml": pathlib.Path("skaffold.yaml"),
-        "project/run-pids.json": _get_pid_file(),
+        "implementation/run-pids.json": _get_pid_file(),
     }
 
     for file_key, file_path in files_to_check.items():
@@ -3220,7 +3220,7 @@ def demo_data_cli():
 @demo_data_cli.command()
 @click.pass_context
 def design(ctx):
-    """Design demo data PRD in specs/demodata.md using PM system."""
+    """Design demo data PRD in product/demodata.md using PM system."""
     from vibe_tools.pm import InteractivePM
 
     agent = ctx.obj.get("agent", "cursor-agent")
@@ -3269,7 +3269,7 @@ Define the demo data needed for the staging environment.
 )
 @click.pass_context
 def setup(ctx, clean):
-    """Setup demo data according to specs/demodata.md."""
+    """Setup demo data according to product/demodata.md."""
     from vibe_tools.staging import (
         get_required_services,
         check_service_health,
@@ -3278,7 +3278,7 @@ def setup(ctx, clean):
 
     demodata_path = SPECS_DIR / "demodata.md"
     if not demodata_path.exists():
-        click.echo("❌ specs/demodata.md not found. Run 'vibe demo-data design' first.")
+        click.echo("❌ product/demodata.md not found. Run 'vibe demo-data design' first.")
         return
 
     # Check staging is running
@@ -3313,7 +3313,7 @@ def setup(ctx, clean):
     # Build prompt for data setup
     prompt = f"""You are setting up demo data for a staging environment.
 
-The demo data specification is in specs/demodata.md:
+The demo data specification is in product/demodata.md:
 
 {spec_content}
 

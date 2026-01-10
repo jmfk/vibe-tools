@@ -46,8 +46,8 @@ The `RalphLoop` class implements reconciliation:
 ```python
 loop = RalphLoop(
     name="Architecture Setup",
-    desired_file=pathlib.Path("project/prds/architecture.yaml"),
-    current_file=pathlib.Path("project/architecture-current.yaml"),
+    desired_file=pathlib.Path("implementation/prds/architecture.yaml"),
+    current_file=pathlib.Path("implementation/architecture-current.yaml"),
     agent="cursor-agent",
     stream=False,
     caffeinate=False,
@@ -231,10 +231,10 @@ vibe implement --debug
 Check reconciliation state:
 ```bash
 # View desired state
-cat project/prds/architecture.yaml
+cat implementation/prds/architecture.yaml
 
 # View current state
-cat project/architecture-current.yaml
+cat implementation/architecture-current.yaml
 
 # Check git status
 git status
@@ -261,7 +261,7 @@ git status
 
 ### Ralph Settings
 
-In `project/config.json`:
+In `implementation/config.json`:
 
 ```json
 {
@@ -309,7 +309,7 @@ In `project/config.json`:
 
 1. **Monitor long-running loops**: Use `vibe monitor`
 2. **Check costs regularly**: Use `vibe cost`
-3. **Review logs**: Check `project/logs/` for details
+3. **Review logs**: Check `implementation/logs/` for details
 
 ## Advanced Usage
 

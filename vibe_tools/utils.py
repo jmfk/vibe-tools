@@ -17,10 +17,15 @@ from typing import Any, Dict, List, Optional
 import yaml
 from dotenv import find_dotenv, load_dotenv, set_key
 
-VIBE_PROJECT_DIR = pathlib.Path("project")
+VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
+PLANNING_DIR = PRODUCT_DIR
+PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
+PLANNING_BACKLOG_DIR = PLANNING_DIR / "backlog"
+PLANNING_HISTORY_DIR = PLANNING_DIR / "history"
+PLANNING_TRASH_DIR = PLANNING_DIR / "trash"
 
-PRD_DIR = PRODUCT_DIR / "prds"
+PRD_DIR = VIBE_PROJECT_DIR / "prds"
 INBOX_DIR = PRD_DIR / "inbox"
 BACKLOG_DIR = PRD_DIR / "backlog"
 HISTORY_DIR = PRD_DIR / "history"
@@ -38,26 +43,26 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 # Core lifecycle files
 ARCHITECTURE = PRD_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
-ARCHITECTURE_SPEC = pathlib.Path("specs/architecture.md")
+ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
 OVERVIEW = PRD_DIR / "project_overview.yaml"
 INFRA = PRD_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
-INFRA_SPEC = pathlib.Path("specs/infrastructure.md")
+INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
 CICD = PRD_DIR / "cicd.yaml"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
-CICD_SPEC = pathlib.Path("specs/cicd.md")
+CICD_SPEC = PLANNING_DIR / "cicd.md"
 TESTING_CONFIG = PRD_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
-TESTING_SPEC = pathlib.Path("specs/testing.md")
+TESTING_SPEC = PLANNING_DIR / "testing.md"
 BUILD = VIBE_PROJECT_DIR / "build.yaml"
 BUILD_CURRENT = VIBE_PROJECT_DIR / "build-current.yaml"
-BUILD_SPEC = pathlib.Path("specs/build.md")
+BUILD_SPEC = PLANNING_DIR / "build.md"
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
 PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
 PM_SESSION_FILE = VIBE_PROJECT_DIR / "pm-session.json"
-SPECS_DIR = pathlib.Path("specs")
+SPECS_DIR = PLANNING_DIR
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 
@@ -137,13 +142,22 @@ def ensure_project_structure():
     BACKLOG_DIR.mkdir(exist_ok=True)
     HISTORY_DIR.mkdir(exist_ok=True)
     TRASH_DIR.mkdir(exist_ok=True)
+    
+    PLANNING_DIR.mkdir(exist_ok=True)
+    PLANNING_INBOX_DIR.mkdir(exist_ok=True)
+    PLANNING_BACKLOG_DIR.mkdir(exist_ok=True)
+    PLANNING_HISTORY_DIR.mkdir(exist_ok=True)
+    PLANNING_TRASH_DIR.mkdir(exist_ok=True)
+    
     INSTRUCTIONS_DIR.mkdir(exist_ok=True)
     GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
 
 
 def migrate_to_project_dir():
-    """Migrates files and directories from the project root to the 'project/' directory."""
+    """Migrates files and directories from the project root to the 'implementation/' directory."""
     migration_map = {
+        pathlib.Path("project"): VIBE_PROJECT_DIR,
+        pathlib.Path("specs"): PLANNING_DIR,
         pathlib.Path("prds"): PRD_DIR,
         pathlib.Path("project-state.json"): PROJECT_STATE_FILE,
         pathlib.Path(".ralph_state.json"): STATE_FILE,
@@ -1245,14 +1259,14 @@ def collect_prd_files():
 
 def collect_all_prd_info() -> List[Dict[str, Any]]:
     """
-    Collects information about all PRDs from both specs/ and project/prds/.
+    Collects information about all PRDs from both product/ and implementation/prds/.
     Returns a list of dicts with: name, has_md, has_yaml, md_path, yaml_path
     """
     import re
 
     prd_info = {}
 
-    # 1. Scan specs/ for .md files
+    # 1. Scan product/ for .md files
     if SPECS_DIR.exists():
         for md_file in SPECS_DIR.rglob("*.md"):
             # Exclude special global truth files if they are not meant to be listed as PRDs
@@ -1278,7 +1292,7 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
                 prd_info[clean_name]["has_md"] = True
                 prd_info[clean_name]["md_path"] = md_file
 
-    # 2. Scan project/prds/ for .yaml files
+    # 2. Scan implementation/prds/ for .yaml files
     if PRD_DIR.exists():
         for yaml_file in PRD_DIR.glob("*.yaml"):
             stem = yaml_file.stem
@@ -1493,7 +1507,7 @@ def get_vibe_status_report():
             status_display = (
                 click.style("⚪ PENDING", fg="white", dim=True) + sync_status
             )
-            # Special hint for normalize phase if nothing is in specs/
+            # Special hint for normalize phase if nothing is in product/
             if phase_id == "normalize":
                 if not SPECS_DIR.exists() or not list(SPECS_DIR.rglob("*.md")):
                     status_display += (

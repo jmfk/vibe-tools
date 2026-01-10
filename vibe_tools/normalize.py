@@ -23,7 +23,7 @@ from vibe_tools.utils import (
 )
 from vibe_tools.ralph import _switch_to_branch
 
-DEFAULT_SPECS_DIR = pathlib.Path("specs")
+DEFAULT_SPECS_DIR = pathlib.Path("product")
 
 
 def normalize_prd(
@@ -136,10 +136,10 @@ def normalize_prd(
             if clean_stem == "build":
                 output_path = VIBE_PROJECT_DIR / output_filename
             else:
-                # Global truths stay in PRD_DIR (product/prds/)
+                # Global truths stay in PRD_DIR (implementation/prds/)
                 output_path = PRD_DIR / output_filename
         else:
-            # PRDs go to BACKLOG_DIR (product/prds/backlog/)
+            # PRDs go to BACKLOG_DIR (implementation/prds/backlog/)
             target_prd_dir = BACKLOG_DIR / rel_dir
             target_prd_dir.mkdir(parents=True, exist_ok=True)
             output_filename = f"prd_{clean_stem}.yaml"

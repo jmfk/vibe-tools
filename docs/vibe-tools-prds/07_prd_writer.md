@@ -36,13 +36,13 @@ N/A - CLI interactive prompts and Q&A.
   - Initial request
   - Complete interview log
   - PRD template structure
-- **Spec File Creation**: Saves generated PRD as markdown file in `specs/` directory with appropriate naming.
+- **Spec File Creation**: Saves generated PRD as markdown file in `product/` directory with appropriate naming.
 - **Max Rounds**: Configurable maximum interview rounds (default: 8), prevents infinite loops.
 
 ## Infrastructure
 - **DSPy Dependency**: Requires DSPy library for question generation.
 - **AI Agent**: Uses configured agent (default: Gemini) for PRD generation.
-- **File Storage**: Saves PRDs in `specs/` directory.
+- **File Storage**: Saves PRDs in `product/` directory.
 
 ## Architecture and Constraints
 - **Deprecation**: This feature is deprecated in favor of `vibe pm` interactive shell, which provides more flexibility.
@@ -64,6 +64,6 @@ N/A - CLI interactive prompts and Q&A.
 4. **Satisfaction Detection**: Provide complete answers, verify satisfaction signaled
 5. **PRD Generation**: Complete interview, verify PRD generated
 6. **PRD Quality**: Verify generated PRD includes all required sections
-7. **File Creation**: Verify PRD saved in `specs/` with correct name
+7. **File Creation**: Verify PRD saved in `product/` with correct name
 8. **Max Rounds**: Test with incomplete answers, verify max rounds enforced
 9. **Integration**: Verify generated PRD can be normalized and implemented

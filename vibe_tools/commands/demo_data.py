@@ -27,7 +27,7 @@ def register_demo_data(cli):
     @demo_data_cli.command()
     @click.pass_context
     def design(ctx):
-        """Design demo data PRD in specs/demodata.md using PM system."""
+        """Design demo data PRD in product/demodata.md using PM system."""
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
         verbose = ctx.obj.get("verbose", False)
@@ -73,10 +73,10 @@ Define the demo data needed for the staging environment.
     )
     @click.pass_context
     def setup(ctx, clean):
-        """Setup demo data according to specs/demodata.md."""
+        """Setup demo data according to product/demodata.md."""
         demodata_path = SPECS_DIR / "demodata.md"
         if not demodata_path.exists():
-            click.echo("❌ specs/demodata.md not found. Run 'vibe demo-data design' first.")
+            click.echo("❌ product/demodata.md not found. Run 'vibe demo-data design' first.")
             return
 
         # Check staging is running
@@ -109,7 +109,7 @@ Define the demo data needed for the staging environment.
         # Build prompt for data setup
         prompt = f"""You are setting up demo data for a staging environment.
 
-The demo data specification is in specs/demodata.md:
+The demo data specification is in product/demodata.md:
 
 {spec_content}
 

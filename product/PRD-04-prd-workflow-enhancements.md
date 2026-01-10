@@ -13,8 +13,8 @@ Currently, PRDs are stored in a single folder (`project/prds/`) and their status
 ## Proposed Changes
 
 ### 1. New Directory Structure
-The primary location for PRDs will change from `project/prds/` to `product/prds/`.
-Within `product/prds/`, the following subdirectories will exist:
+The primary location for PRDs will change from `project/prds/` to `product/`.
+Within `product/`, the following subdirectories will exist:
 *   `inbox/`: For new, un-triaged PRDs or suggestions.
 *   `backlog/`: For PRDs planned for implementation. The implementation loop will process these in alphabetical order (supporting numeric prefixes like `01_...`).
 *   `history/`: For successfully implemented PRDs.
@@ -23,9 +23,9 @@ Within `product/prds/`, the following subdirectories will exist:
 ### 2. Migration Command
 A new command `vibe migrate` will be introduced to transition existing projects to this structure.
 *   **Behavior**:
-    *   Creates the `product/prds/{inbox,backlog,history,trash}` directories.
-    *   Reads `project/state.json` to identify `completed_prds` and moves corresponding files from `project/prds/` to `product/prds/history/`.
-    *   Moves all other PRDs from `project/prds/` to `product/prds/backlog/`.
+    *   Creates the `product/{inbox,backlog,history,trash}` directories.
+    *   Reads `project/state.json` to identify `completed_prds` and moves corresponding files from `project/prds/` to `product/history/`.
+    *   Moves all other PRDs from `project/prds/` to `product/backlog/`.
     *   If `vibe-tools-prds/` exists (legacy), it should also be considered during migration.
 *   **Idempotency**: The command should be safe to run multiple times. It should skip files already in the target directories.
 
@@ -51,7 +51,7 @@ A new configuration option `editor` will be added to `vibe_tools` configuration 
 
 ### 5. Implementation Loop Updates
 The existing `vibe implement` loop will be updated to:
-*   Look for machine-readable PRDs in `product/prds/backlog/`.
+*   Look for machine-readable PRDs in `product/backlog/`.
 *   Upon successful implementation of a PRD, move the file from `backlog/` to `history/`.
 
 ## Success Criteria

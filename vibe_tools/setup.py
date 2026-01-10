@@ -969,7 +969,7 @@ def scaffold(ctx):
 
     click.echo("\n✅ Build scaffolding complete.")
     click.echo("Next steps:")
-    click.echo("  - Review specs/build.md and project/build.yaml")
+    click.echo("  - Review product/build.md and implementation/build.yaml")
     click.echo("  - Run 'vibe build' to build and test the application")
 
 
@@ -1063,7 +1063,7 @@ IMPORTANT REQUIREMENTS:
          - scrape_path: "/var/log/containers/*.log"
    
    - **Issue Handling**: Logs are essential for debugging and issue handling:
-     * Mention that `specs/issues.md` (to be created) will guide issue handling workflows
+     * Mention that `product/issues.md` (to be created) will guide issue handling workflows
      * Issue handling command (to be built) will rely on logging infrastructure and Skaffold
      * Document in build.md under "Logging" → "Issue Handling"
    
@@ -1082,7 +1082,7 @@ IMPORTANT REQUIREMENTS:
 
 4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
 
-The architecture specification is in specs/architecture.md:
+The architecture specification is in product/architecture.md:
 
 {arch_content}
 
@@ -1134,7 +1134,7 @@ Generate a complete build.md file following this structure:
 
 #### Issue Handling
 - Logs are essential for debugging and issue handling
-- See `specs/issues.md` (to be created) for issue handling workflows
+- See `product/issues.md` (to be created) for issue handling workflows
 - Issue handling command (to be built) will rely on logging infrastructure
 
 #### Log Viewing and Management

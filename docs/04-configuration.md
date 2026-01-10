@@ -4,13 +4,13 @@
 
 vibe-tools uses multiple configuration files for different purposes:
 
-- **`project/config.json`**: Project-specific configuration (formerly `.vibe_config.json`)
+- **`implementation/config.json`**: Project-specific configuration (formerly `.vibe_config.json`)
 - **`~/.vibe/config.json`**: Global user configuration
 - **`.env`**: Environment variables (API keys, secrets)
-- **`project/state.json`**: Project state and phase tracking
+- **`implementation/state.json`**: Project state and phase tracking
 - **`~/.vibe/servers.json`**: Global server configurations
 
-## Project Configuration (`project/config.json`)
+## Project Configuration (`implementation/config.json`)
 
 The main configuration file is automatically created and updated when running setup commands.
 
@@ -263,7 +263,7 @@ Global configuration stored in user home directory. Currently used for:
 - Global server configurations
 - User preferences (future)
 
-## Project State (`project/state.json`)
+## Project State (`implementation/state.json`)
 
 Tracks project implementation state:
 
@@ -303,7 +303,7 @@ vibe status
 
 **View specific config file:**
 ```bash
-cat project/config.json
+cat implementation/config.json
 ```
 
 ### Updating Configuration
@@ -316,16 +316,16 @@ vibe-setup google       # Update Google Sheets config
 ```
 
 **Manual editing:**
-- Edit `project/config.json` directly
+- Edit `implementation/config.json` directly
 - Configuration is validated on next command execution
 
 ### Configuration Migration
 
 The system automatically migrates configuration from old locations:
-- `.vibe_config.json` → `project/config.json`
-- `prds/` → `project/prds/`
-- `logs/` → `project/logs/`
-- Other legacy paths → `project/` directory
+- `.vibe_config.json` → `implementation/config.json`
+- `prds/` → `implementation/prds/`
+- `logs/` → `implementation/logs/`
+- Other legacy paths → `implementation/` directory
 
 Migration happens automatically on first command execution.
 
@@ -340,8 +340,8 @@ Migration happens automatically on first command execution.
 ## Troubleshooting
 
 **Configuration not loading:**
-- Check file exists: `ls project/config.json`
-- Verify JSON syntax: `python -m json.tool project/config.json`
+- Check file exists: `ls implementation/config.json`
+- Verify JSON syntax: `python -m json.tool implementation/config.json`
 - Check file permissions
 
 **Service connection issues:**
@@ -352,6 +352,6 @@ Migration happens automatically on first command execution.
 **Migration issues:**
 - Old files may still exist in root directory
 - Run `vibe init` to ensure proper structure
-- Check `project/` directory for migrated files
+- Check `implementation/` directory for migrated files
 
 See [Troubleshooting](12-troubleshooting.md) for more help.

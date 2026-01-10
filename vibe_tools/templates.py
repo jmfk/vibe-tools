@@ -312,14 +312,14 @@ Respond with the actions you are taking. Output code only where possible, or cle
 4. '{infra_spec}': Markdown specification of the DESIRED infrastructure.
 
 The '-current.yaml' files must describe what is CURRENTLY implemented. Pay special attention to identifying how tests are currently run for both frontend and backend.
-The '.md' files in 'specs/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
+The '.md' files in 'product/' should be human-readable specifications that we can review and then 'vibe normalize' into the desired '.yaml' files.
 
 ACTUAL CODEBASE:
 (The agent has access to the filesystem to perform this analysis)
 
 Once you have analyzed the codebase and written ALL four files, include <promise>DONE</promise>.
 """,
-    "architecture_proposal_prompt.txt": """Analyze the PRDs in prds/ and propose a comprehensive 'architecture.yaml' file that defines the tech stack, database schema, and project structure.""",
+    "architecture_proposal_prompt.txt": """Analyze the PRDs in implementation/prds/ and propose a comprehensive 'architecture.yaml' file that defines the tech stack, database schema, and project structure.""",
     "Makefile": """.PHONY: test test-backend test-frontend test-infra test-integration test-regression lint lint-backend lint-frontend
 
 test: test-backend test-frontend test-infra test-integration test-regression lint
@@ -403,23 +403,23 @@ If they provide an instruction to modify one of the files, perform the logic and
 USER QUERY:
 {query}
 """,
-    "pm_prompt.txt": """You are an expert Product Manager (PM). You are helping the user create, refine, and manage Product Requirements Documents (PRDs) in the 'specs/' directory.
+    "pm_prompt.txt": """You are an expert Product Manager (PM). You are helping the user create, refine, and manage Product Requirements Documents (PRDs) in the 'product/' directory.
 
-Currently, you have access to the existing specifications in the 'specs/' directory.
+Currently, you have access to the existing specifications in the 'product/' directory.
 
 MODE: {mode}
 
 {mode_instructions}
 
 TASK:
-Your goal is to refine existing PRDs or create new ones in the 'specs/' directory.
+Your goal is to refine existing PRDs or create new ones in the 'product/' directory.
 
 CRITICAL RULES FOR UPDATING FILES:
-- If you are updating or creating a file in 'specs/', you MUST start your response with 'FILE_UPDATE: <filename>'.
-- For example, if updating 'specs/01_auth.md', use 'FILE_UPDATE: 01_auth.md'.
+- If you are updating or creating a file in 'product/', you MUST start your response with 'FILE_UPDATE: <filename>'.
+- For example, if updating 'product/01_auth.md', use 'FILE_UPDATE: 01_auth.md'.
 - Provide the FULL content of the file after your changes.
 - IMPORTANT: You are NOT allowed to edit PRDs that have already been implemented. These are listed in the 'IMPLEMENTED PRDS' section below. If the user wants to change an implemented PRD, suggest creating a NEW PRD (a 'v2' or refinement) that builds upon it, but DO NOT modify the original file.
-- If creating a NEW PRD, ensure the filename is descriptive and follows the existing naming convention (e.g., 'specs/XX_feature_name.md').
+- If creating a NEW PRD, ensure the filename is descriptive and follows the existing naming convention (e.g., 'product/XX_feature_name.md').
 
 EXISTING SPECS:
 {specs_content}
@@ -576,7 +576,7 @@ vibe --help
 
 ## Vibe Architect
 
-`vibe architect` is an interactive shell for managing and refining your project's **Architecture** and **Infrastructure** specifications. It uses an AI agent to help you reason about your system and automatically update your `.md` files in `specs/`.
+`vibe architect` is an interactive shell for managing and refining your project's **Architecture** and **Infrastructure** specifications. It uses an AI agent to help you reason about your system and automatically update your `.md` files in `product/`.
 
 ### Key Features
 
@@ -584,7 +584,7 @@ vibe --help
 - **Two Modes**:
   - **ASK** (Default): The agent provides analysis and guidance without modifying files.
   - **AGENT**: The agent is authorized to propose machine-readable updates to `architecture.md` and `infrastructure.md`.
-- **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `project/architect-session.json`.
+- **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `implementation/architect-session.json`.
 - **Editor Integration**: Configure your favorite Markdown or Code editor (e.g., Typora, VS Code) to open response files or specifications.
 - **Context Management**: Attach additional files to the agent's context using `/f add`.
 - **Session Memory**: Add persistent instructions that are sent with every prompt using `/a` or `/add`.
@@ -630,8 +630,8 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ## Specs & PRDs
 
-1. **Start with a human spec.** Write a normative spec in `specs/` (for example `specs/01_platform_vision.md`). That markdown is the source of truth for requirements.
-2. **Global Truths.** Certain files in `specs/` represent the persistent state of the system and are injected into every Ralph prompt as context:
+1. **Start with a human spec.** Write a normative spec in `product/` (for example `product/01_platform_vision.md`). That markdown is the source of truth for requirements.
+2. **Global Truths.** Certain files in `product/` represent the persistent state of the system and are injected into every Ralph prompt as context:
    - `architecture.md` -> `prds/architecture.yaml`
    - `project_overview.md` -> `prds/project_overview.yaml`
    - `infrastructure.md` -> `prds/infrastructure.yaml`

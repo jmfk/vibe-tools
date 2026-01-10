@@ -25,7 +25,7 @@ def register_normalize(cli):
     )
     @click.pass_context
     def normalize(ctx, input_files, yes, debug):
-        """Phase 2: Normalize human-written PRDs from specs/ into machine-consumable YAML in prds/."""
+        """Phase 2: Normalize human-written PRDs from product/ into machine-consumable YAML in prds/."""
         maybe_init_git()
         state = load_project_state()
         missing = check_dependencies("normalize", state)
@@ -44,8 +44,8 @@ def register_normalize(cli):
             "cicd": CICD_SPEC,
             "testing": TESTING_SPEC,
             "build": BUILD_SPEC,
-            "project-overview": pathlib.Path("specs/project-overview.md"),
-            "project_overview": pathlib.Path("specs/project-overview.md"),
+            "project-overview": pathlib.Path("product/project-overview.md"),
+            "project_overview": pathlib.Path("product/project-overview.md"),
         }
 
         # Process input files: map special names and resolve paths
@@ -73,7 +73,7 @@ def register_normalize(cli):
                     debug=debug,
                 )
         else:
-            # No files specified, normalize all files in specs/
+            # No files specified, normalize all files in product/
             click.echo("🔄 Normalizing specs...")
             normalize_prd(
                 agent=ctx.obj["agent"],
@@ -85,7 +85,7 @@ def register_normalize(cli):
             )
 
         click.echo("\nNext Steps:")
-        click.echo("[ ] Review/Edit generated YAMLs in project/prds/")
+        click.echo("[ ] Review/Edit generated YAMLs in implementation/prds/")
         click.echo("[ ] Architecture Setup (vibe setup)")
         click.echo("[ ] Install Dependencies (vibe deps)")
         click.echo("[ ] Start Building (vibe implement)")

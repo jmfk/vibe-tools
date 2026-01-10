@@ -9,7 +9,7 @@ This guide covers common issues encountered when using vibe-tools and how to res
 ### Configuration File Not Found
 
 **Symptoms:**
-- `project/config.json` not found
+- `implementation/config.json` not found
 - Commands fail with configuration errors
 
 **Solutions:**
@@ -19,7 +19,7 @@ vibe init
 
 # Or create manually
 mkdir -p project
-echo '{}' > project/config.json
+echo '{}' > implementation/config.json
 ```
 
 ### Configuration Not Loading
@@ -31,10 +31,10 @@ echo '{}' > project/config.json
 **Solutions:**
 ```bash
 # Verify file exists and is readable
-cat project/config.json
+cat implementation/config.json
 
 # Check JSON syntax
-python -m json.tool project/config.json
+python -m json.tool implementation/config.json
 
 # Re-run command to reload config
 vibe status
@@ -91,7 +91,7 @@ vibe-setup api
 **Solutions:**
 - Check agent output for `<promise>DONE</promise>`
 - Verify prompt format
-- Review agent logs: `project/logs/<command>.log`
+- Review agent logs: `implementation/logs/<command>.log`
 - Try different agent: `--agent claude`
 
 ### Agent Errors
@@ -106,7 +106,7 @@ vibe-setup api
 vibe implement --debug
 
 # Check logs
-tail -f project/logs/implement.log
+tail -f implementation/logs/implement.log
 
 # Review agent output
 # Look for error messages in logs
@@ -123,10 +123,10 @@ tail -f project/logs/implement.log
 **Solutions:**
 ```bash
 # Check specs directory
-ls specs/
+ls product/
 
 # Verify PRD files exist
-find specs/ -name "*.md"
+find product/ -name "*.md"
 
 # Create PRD if missing
 vibe pm
@@ -147,10 +147,10 @@ vibe normalize --debug
 # Verify spec file is valid markdown
 
 # Re-normalize specific file
-vibe normalize specs/problematic.md
+vibe normalize product/problematic.md
 
 # Check YAML output
-cat project/prds/prd_*.yaml | python -m yaml
+cat implementation/prds/prd_*.yaml | python -m yaml
 ```
 
 ### YAML Syntax Errors
@@ -162,11 +162,11 @@ cat project/prds/prd_*.yaml | python -m yaml
 **Solutions:**
 ```bash
 # Validate YAML
-python -c "import yaml; yaml.safe_load(open('project/prds/prd_01.yaml'))"
+python -c "import yaml; yaml.safe_load(open('implementation/prds/prd_01.yaml'))"
 
 # Fix manually if needed
 # Or re-normalize
-vibe normalize specs/01_feature.md --yes
+vibe normalize product/01_feature.md --yes
 ```
 
 ## Implementation Issues
@@ -189,7 +189,7 @@ vibe kill
 git status
 
 # Review logs
-tail -f project/logs/implement.log
+tail -f implementation/logs/implement.log
 
 # Reset if needed
 vibe rerun <prd_id>
@@ -204,13 +204,13 @@ vibe rerun <prd_id>
 **Solutions:**
 ```bash
 # Check desired file
-cat project/prds/architecture.yaml
+cat implementation/prds/architecture.yaml
 
 # Check current file
-cat project/architecture-current.yaml
+cat implementation/architecture-current.yaml
 
 # Verify files exist
-ls project/prds/
+ls implementation/prds/
 
 # Re-run reconciliation
 vibe setup  # or specific reconciliation step
@@ -285,7 +285,7 @@ vibe-setup test
 vibe status
 
 # Verify host/port
-cat project/config.json | grep -A 5 "<service>"
+cat implementation/config.json | grep -A 5 "<service>"
 ```
 
 ### Docker Issues
@@ -362,10 +362,10 @@ vibe status
 **Solutions:**
 ```bash
 # Check directory exists
-ls project/costs/
+ls implementation/costs/
 
 # Verify permissions
-ls -la project/costs/
+ls -la implementation/costs/
 
 # Check Google Sheets config
 vibe status
@@ -425,7 +425,7 @@ vibe init
 ls -la | grep -E "(prds|logs|costs)"
 
 # Manually migrate if needed
-# Move files to project/ directory
+# Move files to implementation/ directory
 ```
 
 ## Performance Issues
@@ -465,14 +465,14 @@ ls -la | grep -E "(prds|logs|costs)"
 **Solutions:**
 ```bash
 # Check session file
-cat project/architect-session.json
-cat project/pm-session.json
+cat implementation/architect-session.json
+cat implementation/pm-session.json
 
 # Verify file permissions
-ls -la project/*-session.json
+ls -la implementation/*-session.json
 
 # Reset if corrupted
-rm project/architect-session.json
+rm implementation/architect-session.json
 vibe architect  # Creates new session
 ```
 
@@ -518,10 +518,10 @@ Collect debug information:
 vibe status > debug-status.txt
 
 # Configuration
-cat project/config.json > debug-config.json
+cat implementation/config.json > debug-config.json
 
 # Recent logs
-tail -100 project/logs/*.log > debug-logs.txt
+tail -100 implementation/logs/*.log > debug-logs.txt
 
 # Process list
 vibe ps > debug-processes.txt
@@ -533,13 +533,13 @@ Check log files for details:
 
 ```bash
 # List log files
-ls project/logs/
+ls implementation/logs/
 
 # View recent logs
-tail -f project/logs/<command>.log
+tail -f implementation/logs/<command>.log
 
 # Search logs
-grep "error" project/logs/*.log
+grep "error" implementation/logs/*.log
 ```
 
 ### Common Commands for Debugging
@@ -558,10 +558,10 @@ vibe kill
 vibe-setup test
 
 # Check configuration
-cat project/config.json
+cat implementation/config.json
 
 # View project state
-cat project/state.json
+cat implementation/state.json
 ```
 
 ## Prevention
@@ -571,7 +571,7 @@ cat project/state.json
 1. **Regular status checks**: `vibe status` regularly
 2. **Monitor processes**: `vibe ps` before long operations
 3. **Clean up**: `vibe kill` if processes stuck
-4. **Backup state**: Commit `project/state.json` regularly
+4. **Backup state**: Commit `implementation/state.json` regularly
 5. **Test services**: `vibe-setup test` after changes
 
 ### Maintenance
@@ -586,7 +586,7 @@ cat project/state.json
 
 If issues persist:
 
-1. **Check logs**: Review `project/logs/` for errors
+1. **Check logs**: Review `implementation/logs/` for errors
 2. **Verify setup**: Run `vibe init` and `vibe-setup api`
 3. **Test minimal case**: Try with simple PRD
 4. **Check dependencies**: Verify all services available

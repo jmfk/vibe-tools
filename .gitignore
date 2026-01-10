@@ -29,8 +29,27 @@ node_modules/
 
 vibe_data/*
 
-project/
-
-project/data/*
+implementation/
+implementation/data/*
+implementation/logs/
+implementation/costs/
+implementation/*-session.json
+implementation/.architect_history
+implementation/.pm_history
+implementation/architect-config.json
+implementation/pm-config.json
+implementation/run-pids.json
+implementation/devbug-report.json
+implementation/implementation-state.json
+implementation/architecture-current.yaml
+implementation/infrastructure-current.yaml
+implementation/cicd-current.yaml
+implementation/testing-current.yaml
+implementation/build-current.yaml
+implementation/build.yaml
+implementation/state.json
+implementation/config.json
+!implementation/prds/
+!implementation/prds/**/*.yaml
 stats/*
 reports/*

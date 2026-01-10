@@ -21,7 +21,7 @@ N/A - CLI with live-updating display.
 ## Backend
 - **Monitoring Loop**: 
   - Polls loop state files periodically (default: 2 seconds)
-  - Reads state from `project/{loop-name}-current.yaml` or state files
+  - Reads state from `implementation/{loop-name}-current.yaml` or state files
   - Updates display with current status
 - **State Detection**:
   - Checks for running loops (process detection, state files)
@@ -43,7 +43,7 @@ N/A - CLI with live-updating display.
   - Balances responsiveness vs CPU usage
 
 ## Infrastructure
-- **State Files**: Reads from `project/` directory.
+- **State Files**: Reads from `implementation/` directory.
 - **Process Detection**: May check for running processes.
 - **Display**: Terminal-based, uses ANSI codes for updates.
 

@@ -30,13 +30,13 @@ N/A - CLI-only interface.
 - **Configuration Management**: Loads `.vibe_config.json` from project root, merges with defaults, validates required fields.
 - **Logging System**: Per-command logging setup, console and file handlers, configurable log levels based on verbose/debug flags.
 - **Cost Tracking Integration**: Registers atexit handler to finalize cost reports, tracks session costs across all commands.
-- **Project Initialization**: Ensures `project/` directory exists, migrates legacy files, validates git repository.
+- **Project Initialization**: Ensures `implementation/` directory exists, migrates legacy files, validates git repository.
 
 ## Infrastructure
 - **Deployment**: Python package installable via pip, entry points defined in `setup.py`/`pyproject.toml`.
 - **Dependencies**: Click (CLI framework), python-dotenv (environment variables), standard library (logging, pathlib, atexit).
 - **Configuration Storage**: `.vibe_config.json` in project root (user-editable, git-ignored by default).
-- **Logging Storage**: Command-specific log files in `project/logs/` directory.
+- **Logging Storage**: Command-specific log files in `implementation/logs/` directory.
 
 ## Architecture and Constraints
 - **Modular Design**: Commands registered via `register_all_commands()` function, allowing easy addition of new commands.

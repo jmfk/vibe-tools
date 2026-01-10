@@ -26,18 +26,18 @@ flowchart TD
 
 ## Step 1: Create Human Specifications
 
-Start by writing human-readable markdown specifications in the `specs/` directory.
+Start by writing human-readable markdown specifications in the `product/` directory.
 
 ### Global Truths
 
 Certain specifications represent persistent system state and are treated as "global truths":
 
-- **`specs/architecture.md`**: System architecture
-- **`specs/infrastructure.md`**: Infrastructure configuration
-- **`specs/cicd.md`**: CI/CD pipeline configuration
-- **`specs/testing.md`**: Testing strategy and configuration
-- **`specs/build.md`**: Build configuration
-- **`specs/project_overview.md`**: Project overview and context
+- **`product/architecture.md`**: System architecture
+- **`product/infrastructure.md`**: Infrastructure configuration
+- **`product/cicd.md`**: CI/CD pipeline configuration
+- **`product/testing.md`**: Testing strategy and configuration
+- **`product/build.md`**: Build configuration
+- **`product/project_overview.md`**: Project overview and context
 
 These files are:
 - Converted to YAML without the `prd_` prefix
@@ -53,7 +53,7 @@ Feature PRDs follow a naming convention:
 
 Example structure:
 ```
-specs/
+product/
 ├── architecture.md
 ├── infrastructure.md
 ├── 01_user_authentication.md
@@ -73,7 +73,7 @@ vibe pm
 - See [Interactive Tools](08-interactive-tools.md)
 
 **Option 2: Manual Creation**
-- Create markdown files in `specs/`
+- Create markdown files in `product/`
 - Follow PRD template structure
 - Use clear, structured format
 
@@ -87,14 +87,14 @@ vibe normalize
 
 ### Normalization Process
 
-1. **Scans `specs/` directory** for all `.md` files
+1. **Scans `product/` directory** for all `.md` files
 2. **Determines PRD type**:
    - Global truths → `*.yaml` (no prefix)
    - Features → `prd_*.yaml` (with prefix)
 3. **Creates normalization branch**: `vibe/normalize/<prd_name>`
 4. **Uses AI agent** to convert markdown to structured YAML
 5. **Validates YAML** syntax and structure
-6. **Saves to `project/prds/`**
+6. **Saves to `implementation/prds/`**
 
 ### Normalization Options
 
@@ -106,7 +106,7 @@ vibe normalize
 **Normalize specific spec:**
 ```bash
 vibe normalize infrastructure
-vibe normalize specs/01_feature.md
+vibe normalize product/01_feature.md
 ```
 
 **Auto-overwrite existing:**
@@ -123,7 +123,7 @@ vibe normalize --debug
 
 **Global Truths:**
 ```
-project/prds/
+implementation/prds/
 ├── architecture.yaml
 ├── infrastructure.yaml
 ├── cicd.yaml
@@ -132,7 +132,7 @@ project/prds/
 
 **Feature PRDs:**
 ```
-project/prds/
+implementation/prds/
 ├── prd_01_feature_name.yaml
 ├── prd_02_another_feature.yaml
 └── features/
@@ -159,7 +159,7 @@ dependencies:
 
 ## Step 3: Project State Management
 
-Normalized PRDs are tracked in `project/state.json`:
+Normalized PRDs are tracked in `implementation/state.json`:
 
 ```json
 {
@@ -178,7 +178,7 @@ Normalized PRDs are tracked in `project/state.json`:
 
 ### State Lifecycle
 
-1. **Discovery**: PRDs found in `project/prds/`
+1. **Discovery**: PRDs found in `implementation/prds/`
 2. **Planning**: PRDs grouped into implementation plans
 3. **Implementation**: Plans executed in order
 4. **Completion**: Status updated in state
@@ -242,7 +242,7 @@ vibe implemented
 
 ## Global Agent Instructions
 
-Instructions in `project/instructions/` are injected into every agent prompt:
+Instructions in `implementation/instructions/` are injected into every agent prompt:
 
 ```bash
 vibe memory "Always use type hints in Python"
@@ -251,7 +251,7 @@ vibe memory "Follow PEP 8 style guide"
 
 These instructions:
 - Applied to all agent interactions
-- Stored in `project/instructions/` directory
+- Stored in `implementation/instructions/` directory
 - Read automatically by agent execution
 
 ## Best Practices
@@ -288,7 +288,7 @@ These instructions:
 ## Troubleshooting
 
 **PRD not found:**
-- Check `specs/` directory exists
+- Check `product/` directory exists
 - Verify file has `.md` extension
 - Run `vibe normalize` to generate YAML
 
@@ -298,13 +298,13 @@ These instructions:
 - Verify AI agent is configured
 
 **State out of sync:**
-- Check `project/state.json`
+- Check `implementation/state.json`
 - Run `vibe status` to see current state
 - Use `vibe rerun` to reset if needed
 
 **Global truths not updating:**
 - Use `vibe architect` to update architecture
 - Ensure normalization runs after changes
-- Check YAML files in `project/prds/`
+- Check YAML files in `implementation/prds/`
 
 See [Troubleshooting](12-troubleshooting.md) for more help.

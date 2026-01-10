@@ -97,10 +97,10 @@ class PMCompleter:
         self.subcommands = {
             "/files": sorted(["list", "add", "remove"]),
             "/history": sorted(["list", "view", "remove"]),
-            "/list": sorted(["memory", "specs"]),
-            "/ls": sorted(["memory", "specs"]),
+            "/list": sorted(["memory", "product"]),
+            "/ls": sorted(["memory", "product"]),
             "/conf": sorted(["md", "code"]),
-            "/show": sorted(["specs"]),
+            "/show": sorted(["product"]),
             "/kill": sorted(["all"]),
             "/queue": sorted(["list", "clear", "remove"]),
         }
@@ -345,7 +345,7 @@ class InteractivePM:
             lines = part.strip().splitlines()
             if not lines: continue
             filename = lines[0].strip()
-            if filename.startswith("specs/"): filename = filename[6:]
+            if filename.startswith("product/"): filename = filename[6:]
             content = "\n".join(lines[1:]).strip()
 
             state = load_project_state()
@@ -493,7 +493,7 @@ class InteractivePM:
         click.echo(f"✅ Mode: {click.style(self.mode, fg=color)}")
 
     def _handle_show_command(self, args):
-        if not args or args.lower() == "specs": self._list_specs()
+        if not args or args.lower() == "product": self._list_specs()
         else:
             p = SPECS_DIR / args
             if not p.suffix: p = p.with_suffix(".md")
@@ -565,7 +565,7 @@ class InteractivePM:
         files = sorted(SPECS_DIR.glob("*.md"))
         state = load_project_state()
         completed = state.get("completed_prds", [])
-        click.echo("\n--- specs/ ---")
+        click.echo("\n--- product/ ---")
         for i, f in enumerate(files):
             style = {"fg": "cyan", "bold": True} if self.focused_prd == f.name else {"fg": "white"}
             status = click.style(" [DONE]", fg="green") if f.stem in completed else ""

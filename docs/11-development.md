@@ -323,7 +323,7 @@ vibe your-command
 
 ### State File Structure
 
-`project/state.json` tracks project state:
+`implementation/state.json` tracks project state:
 
 ```json
 {
@@ -355,7 +355,7 @@ save_project_state(state)
 
 ### Log Structure
 
-Logs are written to `project/logs/<command>.log`:
+Logs are written to `implementation/logs/<command>.log`:
 - Rotating file handler
 - DEBUG level to file
 - INFO/WARNING to console (configurable)

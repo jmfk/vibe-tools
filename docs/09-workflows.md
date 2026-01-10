@@ -62,7 +62,7 @@ vibe status
 
 ### Configuration
 
-Set coverage targets in `project/config.json`:
+Set coverage targets in `implementation/config.json`:
 
 ```json
 {
@@ -114,7 +114,7 @@ vibe normalize
 
 # Normalize specific spec
 vibe normalize infrastructure
-vibe normalize specs/01_feature.md
+vibe normalize product/01_feature.md
 
 # Auto-overwrite existing
 vibe normalize --yes
@@ -136,7 +136,7 @@ vibe normalize --debug
 
 ```bash
 # Review generated YAMLs
-ls project/prds/
+ls implementation/prds/
 
 # Check project state
 vibe status
@@ -162,7 +162,7 @@ vibe implement --caffeinate
 
 ### Implementation Sequence
 
-1. **Load state**: Reads `project/state.json`
+1. **Load state**: Reads `implementation/state.json`
 2. **Generate plans**: If not present, creates from PRDs
 3. **For each plan**:
    - Switch to plan branch
@@ -321,8 +321,8 @@ Debug and fix issues:
 vibe status
 
 # 2. View logs
-ls project/logs/
-tail -f project/logs/implement.log
+ls implementation/logs/
+tail -f implementation/logs/implement.log
 
 # 3. Check processes
 vibe ps
@@ -392,7 +392,7 @@ vibe status
 ### Error Recovery
 
 1. **Check status first**: `vibe status` shows current state
-2. **Review logs**: Check `project/logs/` for details
+2. **Review logs**: Check `implementation/logs/` for details
 3. **Kill stuck processes**: `vibe kill` if needed
 4. **Rerun if needed**: `vibe rerun <prd_id>` to reset
 
@@ -448,10 +448,10 @@ make test
 vibe normalize --debug
 
 # Check YAML syntax
-cat project/prds/prd_*.yaml | python -m yaml
+cat implementation/prds/prd_*.yaml | python -m yaml
 
 # Re-normalize specific file
-vibe normalize specs/problematic.md
+vibe normalize product/problematic.md
 ```
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
