@@ -9,6 +9,200 @@ from vibe_tools.issues import (
     BACKLOG_DIR, HISTORY_DIR, STATUS_MAPPING
 )
 from vibe_tools.utils import run_command, logger, switch_to_main, get_main_branch
+from vibe_tools.prds import get_prd_metadata
+
+def get_github_repo_info():
+    """Returns (owner, name, repo_id)"""
+    repo = get_github_repo()
+    if not repo:
+        return None, None, None
+    
+    parts = repo.split("/")
+    if len(parts) != 2:
+        return None, None, None
+    
+    owner, name = parts
+    
+    stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ id }} }}"], check=False)
+    if code != 0:
+        return owner, name, None
+    
+    try:
+        data = json.loads(stdout)
+        repo_id = data["data"]["repository"]["id"]
+        return owner, name, repo_id
+    except (json.JSONDecodeError, KeyError):
+        return owner, name, None
+
+def get_discussion_category_id(owner, name, category_name="Ideas"):
+    stdout, code = run_command(["gh", "api", "graphql", "-f", f"query=query {{ repository(owner: \"{owner}\", name: \"{name}\") {{ discussionCategories(first: 10) {{ nodes {{ id name }} }} }} }}"], check=False)
+    if code != 0:
+        return None
+    
+    try:
+        data = json.loads(stdout)
+        for node in data["data"]["repository"]["discussionCategories"]["nodes"]:
+            if node["name"] == category_name:
+                return node["id"]
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False):
+    category_id = get_discussion_category_id(repo_owner, repo_name)
+    if not category_id:
+        logger.warning("Could not find 'Ideas' discussion category. Skipping discussion sync.")
+        return
+
+    from vibe_tools.utils import PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR
+    
+    for directory in [PLANNING_INBOX_DIR, PLANNING_BACKLOG_DIR]:
+        if not directory.exists():
+            continue
+        
+        for prd_path in directory.glob("*"):
+            if prd_path.is_dir() or prd_path.suffix not in ['.md', '.yaml', '.yml']:
+                continue
+            
+            meta = get_prd_metadata(prd_path)
+            title = f"[PRD] {meta.title}"
+            body = meta.to_markdown()
+            
+            if dry_run:
+                logger.info(f"[DRY RUN] Would sync GitHub Discussion for {prd_path.name}")
+                continue
+
+            discussion_id = meta.sync_info.get('discussion_id')
+            
+            if not discussion_id:
+                # Create discussion
+                cmd = [
+                    "gh", "api", "graphql",
+                    "-f", f"query=mutation($repoId: ID!, $categoryId: ID!, $title: String!, $body: String!) {{ createDiscussion(input: {{ repositoryId: $repoId, categoryId: $categoryId, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                    "-f", f"repoId={repo_id}",
+                    "-f", f"categoryId={category_id}",
+                    "-f", f"title={title}",
+                    "-f", f"body={body}"
+                ]
+                stdout, code = run_command(cmd, check=False)
+                if code == 0:
+                    try:
+                        data = json.loads(stdout)
+                        disc = data["data"]["createDiscussion"]["discussion"]
+                        meta.sync_info['discussion_id'] = disc["id"]
+                        meta.github_discussion_url = disc["url"]
+                        meta.save()
+                        logger.info(f"Created GitHub Discussion for {prd_path.name}")
+                    except (json.JSONDecodeError, KeyError):
+                        logger.error(f"Failed to parse discussion creation response for {prd_path.name}")
+                else:
+                    logger.error(f"Failed to create GitHub Discussion for {prd_path.name}: {stdout}")
+            else:
+                # Update discussion
+                cmd = [
+                    "gh", "api", "graphql",
+                    "-f", f"query=mutation($id: ID!, $title: String!, $body: String!) {{ updateDiscussion(input: {{ discussionId: $id, title: $title, body: $body }}) {{ discussion {{ id url }} }} }}",
+                    "-f", f"id={discussion_id}",
+                    "-f", f"title={title}",
+                    "-f", f"body={body}"
+                ]
+                stdout, code = run_command(cmd, check=False)
+                if code != 0:
+                    logger.error(f"Failed to update GitHub Discussion for {prd_path.name}: {stdout}")
+                else:
+                    logger.info(f"Updated GitHub Discussion for {prd_path.name}")
+
+def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False):
+    from vibe_tools.utils import PRD_DIR, load_project_state
+    state = load_project_state()
+    started_prds = state.get("started_prds", [])
+    
+    backlog_dir = PRD_DIR / "backlog"
+    history_dir = PRD_DIR / "history"
+
+    repo = f"{repo_owner}/{repo_name}"
+    
+    if not dry_run:
+        # Ensure 'prd' label exists
+        ensure_github_label(repo, "prd")
+
+    for directory in [BACKLOG_DIR, HISTORY_DIR]:
+        if not directory.exists():
+            continue
+        
+        is_history = directory.name == "history"
+        
+        for prd_path in directory.glob("*"):
+            if prd_path.is_dir() or prd_path.suffix not in ['.md', '.yaml', '.yml']:
+                continue
+            
+            meta = get_prd_metadata(prd_path)
+            title = f"[PRD] {meta.title}"
+            body = meta.to_markdown()
+            
+            if dry_run:
+                logger.info(f"[DRY RUN] Would sync GitHub Issue for {prd_path.name}")
+                continue
+
+            issue_number = meta.github_issue_number
+            
+            # Determine labels
+            labels = ["prd"]
+            # A bit tricky to get the PRD ID correctly, but usually it's the stem
+            prd_id = prd_path.stem
+            if prd_id in started_prds:
+                labels.append("in-progress")
+            
+            # Ensure labels exist
+            for label in labels:
+                ensure_github_label(repo, label)
+
+            if not issue_number:
+                # Create issue
+                cmd = [
+                    "gh", "issue", "create",
+                    "--repo", repo,
+                    "--title", title,
+                    "--body", body
+                ]
+                for label in labels:
+                    cmd.extend(["--label", label])
+                
+                stdout, code, stderr = _run_command_with_stderr(cmd)
+                if code == 0:
+                    try:
+                        url = stdout.strip()
+                        number = int(url.split("/")[-1])
+                        meta.github_issue_number = number
+                        meta.save()
+                        logger.info(f"Created GitHub Issue for {prd_path.name}")
+                        
+                        if is_history:
+                            run_command(["gh", "issue", "close", str(number), "--repo", repo], check=False)
+                    except (ValueError, IndexError):
+                        logger.error(f"Failed to parse issue URL for {prd_path.name}: {url}")
+                else:
+                    logger.error(f"Failed to create GitHub Issue for {prd_path.name}: {stderr or stdout}")
+            else:
+                # Update issue
+                cmd = [
+                    "gh", "issue", "edit", str(issue_number),
+                    "--repo", repo,
+                    "--title", title,
+                    "--body", body
+                ]
+                for label in labels:
+                    cmd.extend(["--add-label", label])
+                
+                stdout, code, stderr = _run_command_with_stderr(cmd)
+                if code == 0:
+                    if is_history:
+                        run_command(["gh", "issue", "close", str(issue_number), "--repo", repo], check=False)
+                    else:
+                        run_command(["gh", "issue", "reopen", str(issue_number), "--repo", repo], check=False)
+                    logger.info(f"Updated GitHub Issue for {prd_path.name}")
+                else:
+                    logger.error(f"Failed to update GitHub Issue {issue_number} for {prd_path.name}: {stderr or stdout}")
 
 GITHUB_TO_LOCAL_STATUS = {
     "OPEN": "backlog",
@@ -293,6 +487,16 @@ def register_sync(cli):
 
         click.echo(f"Syncing issues with {repo}...")
         
+        # Pull owner and repo info for discussions/issues
+        owner, name, repo_id = get_github_repo_info()
+
+        # Sync PRDs
+        if owner and name and repo_id:
+            click.echo("Syncing PRD Discussions...")
+            sync_prd_discussions(owner, name, repo_id, dry_run=dry_run)
+            click.echo("Syncing PRD Issues...")
+            sync_prd_issues(owner, name, repo_id, dry_run=dry_run)
+
         # If --full is specified, we pull everything since ever and don't limit to open only
         if full:
             pull_github_issues(repo, open_only=False, since=None, label=label)
@@ -302,7 +506,7 @@ def register_sync(cli):
         push_local_issues(repo)
         
         # Commit changes to main
-        run_command(["git", "add", "issues/"], check=False)
+        run_command(["git", "add", "issues/", "product/", "implementation/"], check=False)
         # Check if there are staged changes
         _, diff_code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
         if diff_code != 0:
