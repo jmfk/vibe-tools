@@ -18,6 +18,7 @@ def register_history(cli):
         state = load_project_state()
         completed_prds = state.get("completed_prds", [])
         started_prds = state.get("started_prds", [])
+        plans = state.get("plans", {})
 
         for info in prds:
             project_name = info["name"]
@@ -35,9 +36,16 @@ def register_history(cli):
             md_status = "✅" if info["has_md"] else "❌"
             yaml_status = "✅" if info["has_yaml"] else "❌"
 
-            if prd_stem in completed_prds or project_name in completed_prds:
+            # Check status in plans first (Source of Truth)
+            plan_status = None
+            if prd_stem in plans:
+                plan_status = plans[prd_stem].get("status")
+            elif project_name in plans:
+                plan_status = plans[project_name].get("status")
+
+            if plan_status == "completed" or prd_stem in completed_prds or project_name in completed_prds:
                 status = click.style("✅ DONE", fg="green")
-            elif prd_stem in started_prds or project_name in started_prds:
+            elif plan_status == "in_progress" or prd_stem in started_prds or project_name in started_prds:
                 status = click.style("⏳ IN_PROGRESS", fg="blue")
             else:
                 status = click.style("⚪️ PENDING", fg="white", dim=True)

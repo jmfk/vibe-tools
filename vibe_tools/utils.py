@@ -1447,9 +1447,26 @@ def get_vibe_status_report():
 
     # 1. Project Info
     project_name = state.get("project_name", get_project_name())
-    version = state.get("version", "1.0")
+    version = state.get("version", "1.1")
     report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name} (v{version})")
     report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
+
+    # High-level Summary
+    all_plans = state.get("plans", {})
+    total_prds = len(all_plans)
+    completed_prds = sum(1 for p in all_plans.values() if p.get("status") == "completed")
+    in_progress_prds = sum(1 for p in all_plans.values() if p.get("status") == "in_progress")
+    pending_prds = total_prds - completed_prds - in_progress_prds
+
+    from vibe_tools.issues import load_all_issues
+    all_issues = load_all_issues()
+    total_issues = len(all_issues)
+    completed_issues = sum(1 for i in all_issues if i.status == "done")
+    pending_issues = total_issues - completed_issues
+
+    report.append(click.style("\nSUMMARY:", fg="yellow", bold=True))
+    report.append(f"  - PRDs:   {total_prds} Total ({click.style(str(completed_prds), fg='green')} Done, {click.style(str(in_progress_prds), fg='blue')} In Progress, {click.style(str(pending_prds), fg='white', dim=True)} Pending)")
+    report.append(f"  - Issues: {total_issues} Total ({click.style(str(completed_issues), fg='green')} Done, {click.style(str(pending_issues), fg='white', dim=True)} Pending)")
 
     active_task = state.get("active_task")
     if active_task:
