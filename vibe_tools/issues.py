@@ -10,6 +10,7 @@ from dataclasses import dataclass, asdict
 ISSUES_DIR = pathlib.Path("issues")
 BACKLOG_DIR = ISSUES_DIR / "backlog"
 HISTORY_DIR = ISSUES_DIR / "history"
+FAILS_DIR = ISSUES_DIR / "fails"
 META_DIR = ISSUES_DIR / "meta"
 INDEX_FILE = META_DIR / "index.json"
 

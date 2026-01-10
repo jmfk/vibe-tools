@@ -4,11 +4,10 @@ Includes the Planner Agent, Reconciliation Loops, and Implementation Loop.
 """
 
 import pathlib
-from typing import List
+import datetime
+from typing import List, Callable, Optional, Dict, Any
 
 import yaml
-
-from typing import Callable, Optional
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.utils import (
@@ -42,6 +41,7 @@ from vibe_tools.utils import (
     save_project_state,
     switch_to_main,
 )
+from vibe_tools.issues import Issue, save_issue, FAILS_DIR, load_issue_by_id
 
 MAX_ITERATIONS = 10
 COMPLETION_PROMISE = "<promise>DONE</promise>"
@@ -876,6 +876,188 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             return False
 
     return True
+
+
+def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
+    """Executes the implementation loop for a specific issue."""
+    config = load_config()
+    iterations_config = config.get("iterations", {})
+    max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
+    max_debug_iterations = iterations_config.get("debug", 5)
+
+    ralph_config = config.get("ralph", {})
+    review = ralph_config.get("review", True)
+    tests = ralph_config.get("tests", True)
+
+    branch_name = f"issue/{issue.id}"
+    parent_branch = get_main_branch()
+
+    logger.info(f"🚀 Solving Issue: {issue.title} ({issue.id})")
+    log_start("issue_solve", f"Issue: {issue.title} ({issue.id})")
+    _switch_to_branch(
+        branch_name, agent, issue.id, parent_branch=parent_branch, stream=stream
+    )
+
+    history = []
+    success = False
+
+    for i in range(1, max_impl_iterations + 1):
+        logger.info(f"🛠️ [ISSUE SOLVE] Iteration {i}/{max_impl_iterations}")
+        iteration_data = {"iteration": i, "outcome": "failed", "details": ""}
+
+        # 1. Implementation
+        try:
+            prompt_template = get_prompt("issue_solve_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
+            return False
+
+        prompt = prompt_template.format(
+            issue_id=issue.id,
+            issue_title=issue.title,
+            issue_body=issue.body.to_markdown(),
+        )
+        cmd = get_agent_command(agent, prompt)
+        output, code = run_agent(cmd, stream=stream)
+
+        if code != 0 or COMPLETION_PROMISE not in output:
+            reason = (
+                f"Agent failed with exit code {code}"
+                if code != 0
+                else "Agent did not provide completion promise"
+            )
+            log_issue("issue_solve", i, max_impl_iterations, reason)
+            iteration_data["details"] = reason
+            history.append(iteration_data)
+            continue
+
+        # Commit iteration changes
+        if is_dirty():
+            logger.info(f"💾 Committing iteration {i} changes for {issue.id}...")
+            run_command(["git", "add", "."], check=False)
+            run_command(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    f"vibe: issue solve iteration {i} for {issue.id}",
+                ],
+                check=False,
+            )
+
+        # 2. Quality Gates
+        passed_gates = True
+        gate_details = []
+
+        if tests:
+            from vibe_tools.testing import ProjectTester
+
+            tester = ProjectTester()
+            # For issues, we might want to run all tests or a subset.
+            # Defaulting to all 'test' targets for now.
+            test_targets = ["test"]
+
+            be_targets = [t for t in test_targets if tester.is_backend_target(t)]
+            fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
+
+            if be_targets:
+                if not debugging_loop(
+                    agent, be_targets, stream=stream, iterations=max_debug_iterations
+                ):
+                    passed_gates = False
+                    gate_details.append("Backend tests failed")
+
+            if passed_gates and fe_targets:
+                if not debugging_loop(
+                    agent, fe_targets, stream=stream, iterations=max_debug_iterations
+                ):
+                    passed_gates = False
+                    gate_details.append("Frontend tests failed")
+
+        if passed_gates and review:
+            try:
+                review_prompt_template = get_prompt("implementation_review_prompt.txt")
+                review_prompt = review_prompt_template.format(
+                    title=issue.title,
+                    description=issue.body.summary,
+                    success_criteria=issue.body.acceptance_criteria
+                    or "Resolve the issue as described.",
+                )
+                review_cmd = get_agent_command(agent, review_prompt)
+                review_output, _ = run_agent(review_cmd, stream=stream)
+                if "<review>PASSED</review>" not in review_output:
+                    passed_gates = False
+                    gate_details.append("Agentic review failed")
+            except Exception as e:
+                logger.error(f"Review failed: {e}")
+                passed_gates = False
+                gate_details.append(f"Review error: {e}")
+
+        if passed_gates:
+            success = True
+            iteration_data["outcome"] = "success"
+            history.append(iteration_data)
+            break
+        else:
+            iteration_data["details"] = "; ".join(gate_details)
+            history.append(iteration_data)
+            logger.info("🔄 Retrying issue solve to fix quality issues...")
+
+    if success:
+        log_success("issue_solve", f"Issue {issue.id} solved successfully.")
+        # Commit final adjustments
+        if is_dirty():
+            run_command(["git", "add", "."], check=False)
+            run_command(
+                ["git", "commit", "-m", f"vibe: final fix for {issue.id}"], check=False
+            )
+
+        # Merge if auto_merge is enabled
+        if ralph_config.get("auto_merge", False):
+            automerge_branch = get_automerge_branch(config)
+            from vibe_tools.branches import merge_branches
+
+            merge_branches(branch_name, automerge_branch)
+            switch_to_main()
+        else:
+            switch_to_main()
+
+        issue.status = "done"
+        issue.updated_at = datetime.datetime.now().isoformat()
+        save_issue(issue)
+        return True
+    else:
+        logger.error(
+            f"❌ Failed to solve issue {issue.id} after {max_impl_iterations} iterations."
+        )
+
+        # Generate failure report
+        attempts_summary = ""
+        for h in history:
+            attempts_summary += (
+                f"- Iteration {h['iteration']}: {h['outcome']}. {h['details']}\n"
+            )
+
+        modified_files = "\n".join([f"- {f}" for f in get_changed_files(parent_branch)])
+
+        try:
+            report_template = get_prompt("issue_fail_report_template.md")
+            report = report_template.format(
+                issue_id=issue.id,
+                issue_title=issue.title,
+                iterations=max_impl_iterations,
+                attempts_summary=attempts_summary,
+                modified_files=modified_files,
+            )
+
+            FAILS_DIR.mkdir(parents=True, exist_ok=True)
+            report_path = FAILS_DIR / f"{issue.id}.md"
+            report_path.write_text(report)
+            logger.info(f"📄 Failure report written to {report_path}")
+        except Exception as e:
+            logger.error(f"Failed to write failure report: {e}")
+
+        return False
 
 
 def _switch_to_branch(

@@ -268,6 +268,39 @@ SUCCESS CRITERIA:
 If the implementation meets all requirements, respond with: <review>PASSED</review>
 Otherwise, list the issues.
 """,
+    "issue_solve_prompt.txt": """You are the Issue Solver Agent. Your task is to resolve the following issue.
+
+ISSUE DETAILS:
+ID: {issue_id}
+Title: {issue_title}
+
+ISSUE BODY:
+{issue_body}
+
+TASK:
+1. Analyze the issue and the current state of the codebase.
+2. Implement the necessary changes to fix the issue.
+3. Verify your changes against the acceptance criteria if provided.
+4. Include <promise>DONE</promise> in your response when the fix is implemented.
+""",
+    "issue_fail_report_template.md": """# Issue Failure Report: {issue_id}
+
+## Issue Details
+- **ID:** {issue_id}
+- **Title:** {issue_title}
+- **Status:** FAILED
+- **Iterations:** {iterations}
+
+## Summary of Attempts
+{attempts_summary}
+
+## Final Codebase State
+The following files were modified during the attempts:
+{modified_files}
+
+## Analysis of Failure
+The agent was unable to resolve the issue within the maximum number of iterations. Check the logs for detailed iteration outputs.
+""",
     "git_fix_prompt.txt": """A git operation failed while trying to switch to branch '{branch_name}' for PRD '{project_name}'.
 
 ERROR:
