@@ -58,15 +58,15 @@ def register_solve(cli):
                 return
             _solve_issue(issue, mode, agent, stream)
         elif solve_next:
-            issues = [i for i in load_all_issues() if i.status == "backlog"]
+            issues = [i for i in load_all_issues() if i.status in ("backlog", "in_progress")]
             if not issues:
-                click.echo("No issues in backlog.")
+                click.echo("No issues in backlog or in progress.")
                 return
             _solve_issue(issues[0], mode, agent, stream)
         elif solve_all:
-            issues = [i for i in load_all_issues() if i.status == "backlog"]
+            issues = [i for i in load_all_issues() if i.status in ("backlog", "in_progress")]
             if not issues:
-                click.echo("No issues in backlog.")
+                click.echo("No issues in backlog or in progress.")
                 return
             click.echo(f"Solving {len(issues)} issues...")
             for issue in issues:
