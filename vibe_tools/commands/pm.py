@@ -9,8 +9,9 @@ def register_pm(cli):
     @click.pass_context
     def pm(ctx, query):
         """Phase 1: Interactive PRD and specification manager."""
+        import asyncio
         pm_tool = InteractivePM(
             agent_type=ctx.obj.get("agent", "cursor-agent"),
             stream=ctx.obj.get("stream", True),
         )
-        pm_tool.run_loop(query)
+        asyncio.run(pm_tool.run_loop(query))

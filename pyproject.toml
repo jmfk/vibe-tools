@@ -22,6 +22,7 @@ dependencies = [
     "ruff",
     "mypy",
     "dspy-ai",
+    "google-generativeai",
 ]
 
 [tool.setuptools]
