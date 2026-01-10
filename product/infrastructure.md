@@ -1,27 +1,47 @@
-# Infrastructure Specification (Desired)
+# Infrastructure Specification
 
 ## 1. Overview
-The infrastructure is designed to be "boring" and reliable, prioritizing standard tools that are easy to run locally via Docker and easy to deploy in production.
+The infrastructure is designed to be reliable and scalable, prioritizing standard tools that are easy to run locally via Docker and easy to deploy to cloud providers via Kubernetes and Terraform.
 
-## 2. Primary Services
+## 2. Local Development Services
+All infrastructure components have a corresponding Docker-based setup for local development, managed via the unified `vibe` CLI.
 
-### 2.1 Cache & Queue (Redis)
-- **Role**: Session storage, caching, and potentially background task management.
-- **Local Dev**: Alpine-based Docker container (`redis:alpine`).
+### 2.1 Database & Storage
+- **Postgres**: Primary relational database, using `pgvector/pgvector:pg16` for vector search capabilities.
+- **Redis**: In-memory data store for caching and session management.
+- **MinIO**: S3-compatible object storage (available in both Linode and AWS addressing styles).
 
-### 2.2 Object Storage (S3)
-- **Role**: Storage for user-uploaded content, assets, and backups.
-- **Compatibility**: Must support standard S3 API (AWS, Linode, MinIO).
-- **Configuration**: Managed via environment variables and `vibe-setup`.
+### 2.2 Messaging & Search
+- **RabbitMQ**: Message broker for asynchronous task management.
+- **Elasticsearch**: Distributed search and analytics engine.
 
-## 3. External Integrations
-- **Google Sheets API**: For data synchronization and export tasks.
-- **LLM Providers**: Accessed via standard APIs for AI-driven features in `vibe-tools`.
+### 2.3 Development Tools
+- **MailHog**: Email testing tool for capturing and viewing outgoing emails during development.
+- **imgproxy**: On-the-fly image resizing and conversion service.
 
-## 4. Environment Management
-- **Configuration**: All secrets and environment-specific settings are stored in `.env` (not committed).
-- **Tooling**: `vibe-setup` provides an interactive way to configure these services and verify connectivity.
+## 3. Cloud Deployment
+The project supports sophisticated infrastructure provisioning and deployment to multiple cloud providers.
 
-## 5. Deployment & Local Orchestration
-- **Containers**: All infrastructure components must have a corresponding Docker-based setup for local development.
-- **Vibe Servers**: The `vibe-servers` command manages the lifecycle of these local containers, ensuring a consistent developer experience.
+### 3.1 Kubernetes Clusters
+- **Managed K8s**: Automated generation of Terraform configurations for:
+    - **AWS EKS**
+    - **Linode LKE**
+    - **DigitalOcean DOKS**
+- **Lightweight K8s (k3s)**: Automated setup for:
+    - **Hetzner Cloud**
+    - **Bare Metal** servers
+
+### 3.2 Deployment Workflow
+- **Terraform**: Used for Infrastructure as Code (IaC) to provision cloud resources.
+- **Docker**: Containerization for all application components and services.
+- **Kubernetes (k8s)**: Orchestration for container deployment and management.
+
+## 4. Configuration & Environment Management
+- **Unified CLI**: The `vibe` command provides a single interface for managing infrastructure:
+    - `vibe infra`: General infrastructure management.
+    - `vibe setup`: Environment and service configuration.
+    - `vibe deploy`: Deployment to target environments.
+- **Tiered Configuration**:
+    - **Global**: `~/.vibe/config.json` for user-specific settings and credentials.
+    - **Project-Level**: `.vibe_config.json` for project-specific infrastructure definitions.
+- **Environment Variables**: Managed and populated based on the tiered configuration.
