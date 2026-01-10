@@ -548,26 +548,34 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             continue
 
         plan_file_str = plan_info.get("file")
-        if not plan_file_str:
-            # If path missing, try fallback to PRD_DIR
-            plan_file_path = PRD_DIR / f"{plan_id}.yaml"
-            if not plan_file_path.is_file():
-                logger.error(
-                    f"Plan {plan_id} has no file path and fallback {plan_file_path} not found. Skipping."
-                )
-                continue
-        else:
+        plan_file_path = None
+
+        if plan_file_str:
             plan_file_path = pathlib.Path(plan_file_str)
             if not plan_file_path.is_file():
-                # Try fallback to PRD_DIR
-                fallback_path = PRD_DIR / f"{plan_id}.yaml"
-                if fallback_path.is_file():
-                    plan_file_path = fallback_path
-                else:
-                    logger.error(
-                        f"Plan file {plan_file_path} not found and no fallback in {PRD_DIR}. Skipping."
-                    )
-                    continue
+                plan_file_path = None
+
+        if not plan_file_path:
+            # Fallback search order: BACKLOG_DIR, PRD_DIR, HISTORY_DIR
+            fallbacks = [
+                BACKLOG_DIR / f"{plan_id}.yaml",
+                PRD_DIR / f"{plan_id}.yaml",
+                HISTORY_DIR / f"{plan_id}.yaml",
+            ]
+            for fb in fallbacks:
+                if fb.is_file():
+                    plan_file_path = fb
+                    # Update state with the correct path for next time
+                    state["plans"][plan_id]["file"] = str(fb)
+                    save_project_state(state)
+                    logger.info(f"📍 Found plan {plan_id} at {fb} and updated state.")
+                    break
+
+            if not plan_file_path:
+                logger.error(
+                    f"❌ Plan file for {plan_id} not found (searched state path, {BACKLOG_DIR}, {PRD_DIR}, {HISTORY_DIR}). Skipping."
+                )
+                continue
 
         plan_yaml_path = plan_file_path
 
