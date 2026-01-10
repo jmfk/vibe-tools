@@ -1,3 +1,8 @@
+---
+discussion_id: D_kwDOQzI0Lc4AjlrL
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
+---
+
 # PRD-02: Issue Handling Improvements
 
 **Project:** vibe-tools

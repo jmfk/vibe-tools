@@ -8,5 +8,15 @@
     "file": "issues/backlog/ISSUE-2026-01-10-002.md",
     "github_number": 1,
     "updated_at": "2026-01-10T14:10:35.551973"
+  },
+  "ISSUE-2026-01-10-003": {
+    "file": "issues/backlog/ISSUE-2026-01-10-003.md",
+    "github_number": 8,
+    "updated_at": "2026-01-10T13:20:28Z"
+  },
+  "ISSUE-2026-01-10-004": {
+    "file": "issues/backlog/ISSUE-2026-01-10-004.md",
+    "github_number": 7,
+    "updated_at": "2026-01-10T13:20:26Z"
   }
 }
