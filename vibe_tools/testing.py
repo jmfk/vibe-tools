@@ -138,10 +138,10 @@ class ProjectTester:
         failures.extend([{"id": m, "type": "backend"} for m in pytest_matches])
 
         # Vitest failures
-        # Example: ❯ tests/initial.test.ts > some test
-        # We might need a more robust regex for vitest if it's used
-        vitest_matches = re.findall(r"FAIL\s+(frontend/[^\s]+\.test\.[jt]s)\s+>\s+(.+)", output)
-        failures.extend([{"id": f"{m[0]} - {m[1]}", "file": m[0], "name": m[1], "type": "frontend"} for m in vitest_matches])
+        # Example: ❯ src/components/workflow/SearchHeader.test.tsx > SearchHeader > should render correctly
+        # Example: FAIL  frontend/src/components/workflow/SearchHeader.test.tsx > SearchHeader > should render correctly
+        vitest_matches = re.findall(r"(?:FAIL|❯)\s+([^\s]+\.test\.[jt]sx?)(?:\s+>\s+(.+))?", output)
+        failures.extend([{"id": f"{m[0]} - {m[1] if m[1] else 'Unknown Test'}", "file": m[0], "name": m[1] if m[1] else "", "type": "frontend"} for m in vitest_matches])
 
         return failures
 
