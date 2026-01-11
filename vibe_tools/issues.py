@@ -12,6 +12,7 @@ BACKLOG_DIR = ISSUES_DIR / "backlog"
 HISTORY_DIR = ISSUES_DIR / "history"
 FAILS_DIR = ISSUES_DIR / "fails"
 META_DIR = ISSUES_DIR / "meta"
+INDEX_FILE = META_DIR / "index.json"
 
 @dataclass
 class GitHubInfo:
@@ -215,6 +216,28 @@ def save_issue(issue: Issue):
             old_history.unlink()
 
     file_path.write_text(issue.to_markdown())
+
+    # Update index
+    index = load_index()
+    index[issue.id] = {
+        "file": str(file_path),
+        "updated_at": issue.updated_at
+    }
+    if issue.github:
+        index[issue.id]["github_number"] = issue.github.number
+    save_index(index)
+
+def load_index() -> Dict[str, Any]:
+    if INDEX_FILE.exists():
+        try:
+            return json.loads(INDEX_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+def save_index(index: Dict[str, Any]):
+    META_DIR.mkdir(parents=True, exist_ok=True)
+    INDEX_FILE.write_text(json.dumps(index, indent=2))
 
 def load_issue_by_id(issue_id: str) -> Optional[Issue]:
     # Search in known directories
