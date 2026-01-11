@@ -161,11 +161,6 @@ def run_reconciliation(quiet=False):
     state = load_project_state()
     save_project_state(state) # This will strip redundant fields as per my new save_project_state
 
-    # 5. Delete legacy index.json
-    if index_file.exists():
-        index_file.unlink()
-        if not quiet: click.echo("  🗑️  Removed legacy issues/meta/index.json")
-
     # 6. Legacy folder cleanup
     legacy_prd_dirs = ["backlog", "history", "inbox", "rejected"]
     for d in legacy_prd_dirs:
