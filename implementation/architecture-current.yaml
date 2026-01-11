@@ -1,0 +1,27 @@
+SYSTEM_CONTRACT:
+  Language: Python 3.9+
+  CLI: Click
+  Philosophy: CLI-First
+  AI_Prompts: Version-controlled in prompts/
+
+DOMAIN_MODEL:
+  vibe_tools: Core automation logic and CLI
+  specs: Markdown PRDs and specifications
+  prompts: AI prompt templates
+  project: Architecture and infrastructure definitions (YAML)
+  tests: Comprehensive test suite
+
+CAPABILITIES:
+  vibe_command:
+    - PRD generation
+    - Test coverage improvement
+    - Infrastructure management
+    - Drive all infrastructure and common tasks
+  Workflow:
+    - CLI-First workflow
+    - PRD-Driven Development (PRDs in specs/ normalized into plans)
+
+OUTPUT_TARGETS:
+  - Markdown PRDs (specs/)
+  - Architecture and infrastructure definitions (YAML in project/)
+  - Plans
