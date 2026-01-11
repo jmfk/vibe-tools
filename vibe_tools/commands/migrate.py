@@ -32,6 +32,10 @@ def run_reconciliation(quiet=False):
     if not quiet:
         click.echo("🚀 Starting comprehensive migration and reconciliation...")
 
+    # First, migrate from root or legacy paths to the project directory
+    from vibe_tools.utils import migrate_to_project_dir
+    migrate_to_project_dir()
+
     ensure_project_structure()
 
     # 1. Load legacy data before it gets hidden by the new load_project_state

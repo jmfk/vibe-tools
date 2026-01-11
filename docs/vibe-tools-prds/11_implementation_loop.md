@@ -38,7 +38,7 @@ N/A - CLI command with progress output.
      - Track success/failure
   4. Report final status
 - **State Tracking**: 
-  - Saves implementation state to `implementation/implementation-state.json`
+  - Saves implementation state to `implementation/state.json`
   - Tracks which PRDs completed, failed, in progress
   - Used by `vibe implemented` command
 - **Progress Reporting**: 
@@ -49,7 +49,7 @@ N/A - CLI command with progress output.
 
 ## Infrastructure
 - **PRD Storage**: `implementation/prds/prd_*.yaml` files.
-- **State Storage**: `implementation/implementation-state.json`.
+- **State Storage**: `implementation/state.json`.
 - **Implementation Locations**: Determined by PRD (codebase structure).
 
 ## Architecture and Constraints

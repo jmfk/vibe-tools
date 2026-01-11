@@ -20,7 +20,7 @@ N/A - CLI commands with formatted output.
 
 ## Backend
 - **State Tracking**: 
-  - Tracks PRD state in `implementation/implementation-state.json`
+  - Tracks PRD state in `implementation/state.json`
   - Records: PRD ID, status, last updated, iterations, completion
   - Updated by implementation loop
 - **History Command** (`vibe history`):
@@ -42,7 +42,7 @@ N/A - CLI commands with formatted output.
   - Updated by loops and commands
 
 ## Infrastructure
-- **State Storage**: `implementation/implementation-state.json`.
+- **State Storage**: `implementation/state.json`.
 - **PRD Files**: Reads from `implementation/prds/` directory.
 
 ## Architecture and Constraints

@@ -26,7 +26,7 @@ N/A - CLI command, integrates with architect shell.
 
 ## Backend
 - **Spec File**: `specs/infrastructure.md` (human-written markdown).
-- **YAML Conversion**: Converts to `project/prds/infrastructure.yaml` (global truth).
+- **YAML Conversion**: Converts to `implementation/prds/infrastructure.yaml` (global truth).
 - **Architect Integration**: Can be refined via `vibe architect` shell.
 - **Implementation**: Infrastructure can be implemented via Ralph loop:
   - Desired: `infrastructure.yaml`
@@ -41,7 +41,7 @@ N/A - CLI command, integrates with architect shell.
 
 ## Infrastructure
 - **Spec Storage**: `specs/infrastructure.md`.
-- **YAML Storage**: `project/prds/infrastructure.yaml`.
+- **YAML Storage**: `implementation/prds/infrastructure.yaml`.
 - **Integration**: Works with architect shell and Ralph loop.
 
 ## Architecture and Constraints

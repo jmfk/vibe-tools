@@ -55,7 +55,7 @@ N/A - CLI commands with formatted output.
 
 ## Infrastructure
 - **Git Integration**: Uses git commands for branch operations.
-- **State Storage**: Branch information in `project/state.json`.
+- **State Storage**: Branch information in `implementation/state.json`.
 
 ## Architecture and Constraints
 - **Git Dependency**: Requires git repository, fails gracefully if not available.
