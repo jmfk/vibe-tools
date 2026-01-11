@@ -60,7 +60,7 @@ class ProjectTester:
             return ["make", "frontend-test"]
 
         if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
-            return ["npm", "--prefix", str(self.frontend_root), "test", "--", "--run"]
+            return ["npx", "--prefix", str(self.frontend_root), "vitest", "run"]
 
         return None
 
@@ -182,6 +182,11 @@ class ProjectTester:
                 "lint-frontend",
             ]
 
+        # Inject CI=true to prevent interactive hangs
+        env = os.environ.copy()
+        env["CI"] = "true"
+        env["VITE_CI"] = "true"
+
         if changed_only:
             changed_files = get_changed_files()
             if changed_files:
@@ -197,7 +202,24 @@ class ProjectTester:
         def run_target(target):
             if self.has_make_target(target):
                 logger.info(f"Running target: make {target}")
-                output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
+                # We need to pass the env to subprocess.run. 
+                # Since run_command doesn't take env, we'll need to wrap it or modify it.
+                # Actually, run_command doesn't take env as a parameter.
+                # Let's check run_command again.
+                
+                # If I can't change run_command, I can set it in os.environ before calling it.
+                original_env = os.environ.copy()
+                try:
+                    os.environ["CI"] = "true"
+                    os.environ["VITE_CI"] = "true"
+                    output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
+                finally:
+                    # Restore original env
+                    for k in ["CI", "VITE_CI"]:
+                        if k in original_env:
+                            os.environ[k] = original_env[k]
+                        else:
+                            os.environ.pop(k, None)
 
                 env_failure = False
                 # Improved detection of command failures and environment issues

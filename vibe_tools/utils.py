@@ -656,7 +656,7 @@ class VerboseLogger:
         event_file.write_text(content)
         
         ref_msg = f"VERBOSE: {event_type.upper()} logged to {event_file.relative_to(VIBE_PROJECT_DIR)}"
-        logger.debug(ref_msg)
+        logger.info(ref_msg)
         return ref_msg
 
 
