@@ -1,7 +1,7 @@
 SYSTEM_CONTRACT:
   command: vibe implement
-  input_location: project/prds/prd_*.yaml
-  state_storage: project/implementation-state.json
+  input_location: implementation/prds/prd_*.yaml
+  state_storage: implementation/implementation-state.json
   engine: Ralph loop engine
   dependency_rules:
   - Process PRDs in dependency order
@@ -13,7 +13,7 @@ SYSTEM_CONTRACT:
 DOMAIN_MODEL:
   PRD:
     type: YAML file
-    location: project/prds/
+    location: implementation/prds/
     properties:
     - dependency declarations
     - requirements
@@ -26,7 +26,7 @@ DOMAIN_MODEL:
     - desired file (PRD YAML)
     - current file (actual implementation location)
   Implementation State:
-    location: project/implementation-state.json
+    location: implementation/implementation-state.json
     tracked_statuses:
     - completed
     - failed
@@ -34,7 +34,7 @@ DOMAIN_MODEL:
 CAPABILITIES:
   PRD Discovery:
     method: collect_prd_files()
-    description: finds all prd_*.yaml files in project/prds/
+    description: finds all prd_*.yaml files in implementation/prds/
   Dependency Resolution:
     method: check_plan_dependencies()
     operations:
@@ -53,7 +53,7 @@ CAPABILITIES:
     - Track success/failure
   State Tracking:
     operations:
-    - Saves state to project/implementation-state.json
+    - Saves state to implementation/implementation-state.json
     - Tracks completion status
     - Enables resumption of process
   Progress Reporting:
@@ -63,7 +63,7 @@ CAPABILITIES:
     - success/failure per PRD
     - final summary of all PRDs
 OUTPUT_TARGETS:
-  project/implementation-state.json: persistent implementation state
+  implementation/implementation-state.json: persistent implementation state
   CLI:
   - current PRD
   - iteration count

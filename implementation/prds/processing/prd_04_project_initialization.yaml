@@ -11,9 +11,9 @@ DOMAIN_MODEL:
   - D) Manual Setup: just initialize folders
   directories:
   - specs/
-  - project/prds/
-  - project/logs/
-  - project/costs/
+  - implementation/prds/
+  - implementation/logs/
+  - implementation/costs/
   - instructions/
   - prompts/
   files:
@@ -24,7 +24,7 @@ DOMAIN_MODEL:
 CAPABILITIES:
   interactive_scenario_selection: Present users with four scenarios
   basic_initialization:
-  - Create standard directories (specs/, project/prds/, project/logs/, project/costs/, instructions/)
+  - Create standard directories (specs/, implementation/prds/, implementation/logs/, implementation/costs/, instructions/)
   - Initialize template directory from package templates
   - Set up .gitignore entries
   - Validate git repository (warn if not a git repo)
@@ -36,9 +36,9 @@ CAPABILITIES:
 OUTPUT_TARGETS:
   directories:
   - specs/
-  - project/prds/
-  - project/logs/
-  - project/costs/
+  - implementation/prds/
+  - implementation/logs/
+  - implementation/costs/
   - instructions/
   - prompts/
   files:

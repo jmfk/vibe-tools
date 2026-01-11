@@ -6,8 +6,8 @@ SYSTEM_CONTRACT:
   - collect_prd_files()
   FILESYSTEM_STRUCTURE:
   - specs/*.md
-  - project/prds/*.yaml
-  - project/prds/{name}.yaml
+  - implementation/prds/*.yaml
+  - implementation/prds/{name}.yaml
   GLOBAL_TRUTH_SOURCES:
   - architecture.md
   - infrastructure.md
@@ -23,7 +23,7 @@ DOMAIN_MODEL:
   - Machine-readable PRDs (YAML)
   COMPONENTS:
   - specs/ directory
-  - project/prds/ directory
+  - implementation/prds/ directory
   - Agent prompt context
 CAPABILITIES:
 - Spec file organization
@@ -33,7 +33,7 @@ CAPABILITIES:
 - Workflow from specs to PRDs to implementation
 - Automatic conversion of global truths to YAML
 - Persistent system state provision to agents
-- collect_prd_files(): Find all prd_*.yaml in project/prds/ (excluding global truths, returning sorted list)
+- collect_prd_files(): Find all prd_*.yaml in implementation/prds/ (excluding global truths, returning sorted list)
 - Global Truth Injection: Loading YAML and including in agent prompt context
 - Version control of specs and PRDs
 - Manual editing of markdown specs

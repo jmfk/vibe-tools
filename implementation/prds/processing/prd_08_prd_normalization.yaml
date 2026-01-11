@@ -30,7 +30,7 @@ SYSTEM_CONTRACT:
   - Idempotency: Normalize same file twice, verify consistent output
 DOMAIN_MODEL:
   input: Markdown specification files (.md) in specs/ directory.
-  output: YAML PRD files (.yaml) in project/prds/ directory.
+  output: YAML PRD files (.yaml) in implementation/prds/ directory.
   prompt_template: prompts/pdr_normalization_prompt.txt
   ai_agent: Configured agent for conversion.
   global_truth_files:
@@ -49,7 +49,7 @@ CAPABILITIES:
   validation: Checks YAML syntax, verifies required fields, and warns on potential issues.
   cli_interface: vibe normalize command with progress output.
 OUTPUT_TARGETS:
-  destination: project/prds/
+  destination: implementation/prds/
   implementation_prds: prd_{stem}.yaml
   global_truths: '{stem}.yaml'
 _vibe_sync:

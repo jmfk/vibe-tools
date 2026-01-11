@@ -1,9 +1,9 @@
 SYSTEM_CONTRACT:
   interface: CLI interactive shell interface
   readline_support: true
-  session_storage: project/pm-session.json
-  history_storage: project/.pm_history
-  config_storage: project/pm-config.json
+  session_storage: implementation/pm-session.json
+  history_storage: implementation/.pm_history
+  config_storage: implementation/pm-config.json
   spec_files_location: specs/ directory
   slash_commands:
   - /send, /s: Dispatch prompt (includes focused PRD context if set)
@@ -52,9 +52,9 @@ CAPABILITIES:
 - Agent integration (includes focused PRD context, spec files, session memory, attached files in agent prompts)
 - Integration with vibe normalize and vibe implement
 OUTPUT_TARGETS:
-- project/pm-session.json
-- project/.pm_history
-- project/pm-config.json
+- implementation/pm-session.json
+- implementation/.pm_history
+- implementation/pm-config.json
 - specs/
 TITLE: 06 Pm Shell
 BRANCH: feature/prd_06_pm_shell

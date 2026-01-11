@@ -1,8 +1,8 @@
 SYSTEM_CONTRACT:
   INPUTS:
-  - PRD files in project/prds/
+  - PRD files in implementation/prds/
   - PRD files in vibe-tools-prds/ (legacy)
-  - project/state.json (completed_prds)
+  - implementation/state.json (completed_prds)
   - config.json (editor option)
   - Subcommand (all, inbox, backlog, history, trash)
   - PRD ID or partial name
