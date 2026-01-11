@@ -59,21 +59,22 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 # Core lifecycle files
 ARCHITECTURE = PRD_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
-ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
+ARCHITECTURE_SPEC = PRD_DIR / "architecture.md"
 OVERVIEW = PRD_DIR / "project_overview.yaml"
+OVERVIEW_SPEC = PRD_DIR / "project_overview.md"
 INFRA = PRD_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
-INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
+INFRA_SPEC = PRD_DIR / "infrastructure.md"
 CICD = PRD_DIR / "cicd.yaml"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
-CICD_SPEC = PLANNING_DIR / "cicd.md"
+CICD_SPEC = PRD_DIR / "cicd.md"
 TESTING_CONFIG = PRD_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
-TESTING_SPEC = PLANNING_DIR / "testing.md"
+TESTING_SPEC = PRD_DIR / "testing.md"
 DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
 DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
-DEV_SPEC = PLANNING_DIR / "dev_environment.md"
-SETUP_SPEC = PLANNING_DIR / "setup.md"
+DEV_SPEC = PRD_DIR / "dev_environment.md"
+SETUP_SPEC = PRD_DIR / "setup.md"
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
@@ -203,6 +204,13 @@ def migrate_to_project_dir():
         pathlib.Path("cicd-current.yaml"): CICD_CURRENT,
         pathlib.Path("testing.yaml"): TESTING_CONFIG,
         pathlib.Path("testing-current.yaml"): TESTING_CURRENT,
+        pathlib.Path("product/architecture.md"): ARCHITECTURE_SPEC,
+        pathlib.Path("product/infrastructure.md"): INFRA_SPEC,
+        pathlib.Path("product/cicd.md"): CICD_SPEC,
+        pathlib.Path("product/testing.md"): TESTING_SPEC,
+        pathlib.Path("product/dev_environment.md"): DEV_SPEC,
+        pathlib.Path("product/setup.md"): SETUP_SPEC,
+        pathlib.Path("product/project-overview.md"): OVERVIEW_SPEC,
         pathlib.Path("product/trash"): PLANNING_REJECTED_DIR,
         pathlib.Path("implementation/prds/trash"): REJECTED_DIR,
     }

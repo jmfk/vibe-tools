@@ -8,6 +8,7 @@ from vibe_tools.utils import (
     CICD_SPEC,
     DEV_SPEC,
     INFRA_SPEC,
+    OVERVIEW_SPEC,
     TESTING_SPEC,
     check_dependencies,
     load_project_state,
@@ -45,8 +46,8 @@ def register_normalize(cli):
             "testing": TESTING_SPEC,
             "build": DEV_SPEC,
             "dev_environment": DEV_SPEC,
-            "project-overview": pathlib.Path("product/project-overview.md"),
-            "project_overview": pathlib.Path("product/project-overview.md"),
+            "project-overview": OVERVIEW_SPEC,
+            "project_overview": OVERVIEW_SPEC,
         }
 
         # Process input files: map special names and resolve paths
