@@ -1,3 +1,4 @@
+import os
 import pathlib
 import re
 import subprocess
@@ -111,6 +112,51 @@ class ProjectTester:
         if not failed_targets:
             return "No targets failed."
         return f"Targets failed: {', '.join(failed_targets)}"
+
+    def parse_failures(self, output):
+        """Parses test output to extract individual failing test identifiers."""
+        failures = []
+
+        # Pytest failures usually look like:
+        # FAILED tests/test_file.py::test_function - AssertionError: ...
+        # Or in summary:
+        # _________________________ test_function __________________________
+        pytest_matches = re.findall(r"FAILED\s+(tests/[^\s:]+::[^\s]+)", output)
+        failures.extend([{"id": m, "type": "backend"} for m in pytest_matches])
+
+        # Vitest failures
+        # Example: ❯ tests/initial.test.ts > some test
+        # We might need a more robust regex for vitest if it's used
+        vitest_matches = re.findall(r"FAIL\s+(frontend/[^\s]+\.test\.[jt]s)\s+>\s+(.+)", output)
+        failures.extend([{"id": f"{m[0]} - {m[1]}", "file": m[0], "name": m[1], "type": "frontend"} for m in vitest_matches])
+
+        return failures
+
+    def run_single_test(self, failure, caffeinate=False):
+        """Runs a single failing test."""
+        if failure["type"] == "backend":
+            test_id = failure["id"]
+            logger.info(f"Running single backend test: {test_id}")
+            # Use PYTHONPATH=. pytest -v <test_id>
+            cmd = ["pytest", "-v", test_id]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = "."
+            # Since run_command doesn't take env, we'll prefix it if needed or just rely on current process env
+            # Actually run_command uses subprocess.run which inherits env.
+            # Let's use the same pattern as discover_backend_test_cmd but targeted.
+            output, code = run_command(["python3", "-m", "pytest", "-v", test_id], check=False, caffeinate=caffeinate)
+            return output, code == 0
+        elif failure["type"] == "frontend":
+            test_file = failure["file"]
+            test_name = failure["name"]
+            logger.info(f"Running single frontend test: {test_name} in {test_file}")
+            # cd frontend && npx vitest run <test_file> -t "<test_name>"
+            # We can use the prefix option for npm/npx
+            cmd = ["npx", "--prefix", str(self.frontend_root), "vitest", "run", test_file, "-t", test_name]
+            output, code = run_command(cmd, check=False, caffeinate=caffeinate)
+            return output, code == 0
+
+        return "Unknown test type", False
 
     def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=False):
         """Runs test and lint targets, optionally filtered by changed files."""
