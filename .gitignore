@@ -12,6 +12,8 @@ build/
 dist/
 prds/
 
+.vite/vitest/results.json
+
 . coverage/
 node_modules/
 
