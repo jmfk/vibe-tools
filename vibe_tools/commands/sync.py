@@ -247,7 +247,7 @@ def sync_prd_discussions(repo_owner, repo_name, repo_id, dry_run=False, relevant
     }
 
     # Also handle system files in product root
-    system_files = ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "build.md"]
+    system_files = ["architecture.md", "infrastructure.md", "cicd.md", "testing.md", "dev_environment.md"]
 
     # Ensure all labels exist
     repo = f"{repo_owner}/{repo_name}"
@@ -539,7 +539,7 @@ def sync_prd_issues(repo_owner, repo_name, repo_id, dry_run=False, relevant_file
     repo = f"{repo_owner}/{repo_name}"
 
     # System files to ignore for issues
-    system_files = ["architecture.yaml", "infrastructure.yaml", "cicd.yaml", "testing.yaml", "build.yaml"]
+    system_files = ["architecture.yaml", "infrastructure.yaml", "cicd.yaml", "testing.yaml", "dev_environment.yaml"]
 
     if not dry_run:
         # Ensure 'prd' label exists

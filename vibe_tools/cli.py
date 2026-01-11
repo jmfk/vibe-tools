@@ -80,9 +80,9 @@ from vibe_tools.utils import (
     ARCHITECTURE,
     ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
-    BUILD,
-    BUILD_CURRENT,
-    BUILD_SPEC,
+    DEV_ENV,
+    DEV_ENV_CURRENT,
+    DEV_SPEC,
     CICD_SPEC,
     COSTS_DIR,
     INFRA,
@@ -425,7 +425,7 @@ def normalize(ctx, input_files, yes, debug):
         "architecture": ARCHITECTURE_SPEC,
         "cicd": CICD_SPEC,
         "testing": TESTING_SPEC,
-        "build": BUILD_SPEC,
+        "build": DEV_SPEC,
         "project-overview": pathlib.Path("product/project-overview.md"),
         "project_overview": pathlib.Path("product/project-overview.md"),
     }
@@ -809,7 +809,7 @@ def implement(ctx):
     "--force",
     "-f",
     is_flag=True,
-    help="Force build even if build.yaml and build-current.yaml are identical.",
+    help="Force build even if dev_environment.yaml and dev_environment-current.yaml are identical.",
 )
 @click.pass_context
 def build(ctx, force):
@@ -820,24 +820,24 @@ def build(ctx, force):
 
 def _build_reconciliation(ctx, force):
     """Build the application and verify it runs."""
-    # Check if build.yaml exists - if not, scaffolding needs to be done first
-    if not BUILD.exists():
-        click.echo("❌ Build configuration not found.")
+    # Check if dev_environment.yaml exists - if not, scaffolding needs to be done first
+    if not DEV_ENV.exists():
+        click.echo("❌ Development environment configuration not found.")
         click.echo(
-            "   Please run 'vibe config scaffold' first to generate build scaffolding."
+            "   Please run 'vibe config scaffold' first to generate development environment scaffolding."
         )
         return
 
-    # Check if build.yaml and build-current.yaml are identical (skip if so, unless forced)
-    if not force and BUILD.exists() and BUILD_CURRENT.exists():
-        if get_file_hash(BUILD) == get_file_hash(BUILD_CURRENT):
-            click.echo("✅ Build files are identical. Skipping build.")
+    # Check if dev_environment.yaml and dev_environment-current.yaml are identical (skip if so, unless forced)
+    if not force and DEV_ENV.exists() and DEV_ENV_CURRENT.exists():
+        if get_file_hash(DEV_ENV) == get_file_hash(DEV_ENV_CURRENT):
+            click.echo("✅ Development environment files are identical. Skipping build.")
             click.echo("   Use --force to rebuild anyway.")
             return
 
     click.echo("\n--- Building Application ---")
 
-    # Run actual build commands from Makefile or build.yaml
+    # Run actual build commands from Makefile or dev_environment.yaml
     click.echo("Running build commands...")
 
     # Try to run make build if Makefile exists
@@ -873,11 +873,11 @@ def _build_reconciliation(ctx, force):
     if test_success:
         click.echo("✅ Build complete and application verified working.")
 
-        # Copy BUILD to BUILD_CURRENT to mark as successful
-        if BUILD.exists():
+        # Copy DEV_ENV to DEV_ENV_CURRENT to mark as successful
+        if DEV_ENV.exists():
             import shutil
 
-            shutil.copy(BUILD, BUILD_CURRENT)
+            shutil.copy(DEV_ENV, DEV_ENV_CURRENT)
 
         success = True
     else:
@@ -922,23 +922,23 @@ def _build_reconciliation(ctx, force):
                 "[ ] Start development services using the commands from your Makefile"
             )
     else:
-        click.echo("❌ Build system reconciliation failed.")
+        click.echo("❌ Development environment reconciliation failed.")
 
 
 @build.command(name="debug")
 @click.pass_context
 def build_debug(ctx):
-    """Debug the build scaffolding process."""
-    click.echo("🔍 Debugging build scaffolding...")
+    """Debug the development environment scaffolding process."""
+    click.echo("🔍 Debugging development environment scaffolding...")
 
     # Check build files
-    click.echo("\n📋 Build Files Status:")
+    click.echo("\n📋 Development Environment Files Status:")
     click.echo(
-        f"  BUILD_SPEC ({BUILD_SPEC}): {'✅ exists' if BUILD_SPEC.exists() else '❌ missing'}"
+        f"  DEV_SPEC ({DEV_SPEC}): {'✅ exists' if DEV_SPEC.exists() else '❌ missing'}"
     )
-    click.echo(f"  BUILD ({BUILD}): {'✅ exists' if BUILD.exists() else '❌ missing'}")
+    click.echo(f"  DEV_ENV ({DEV_ENV}): {'✅ exists' if DEV_ENV.exists() else '❌ missing'}")
     click.echo(
-        f"  BUILD_CURRENT ({BUILD_CURRENT}): {'✅ exists' if BUILD_CURRENT.exists() else '❌ missing'}"
+        f"  DEV_ENV_CURRENT ({DEV_ENV_CURRENT}): {'✅ exists' if DEV_ENV_CURRENT.exists() else '❌ missing'}"
     )
     click.echo(
         f"  ARCHITECTURE_SPEC ({ARCHITECTURE_SPEC}): {'✅ exists' if ARCHITECTURE_SPEC.exists() else '❌ missing'}"
@@ -994,9 +994,9 @@ def build_debug(ctx):
         click.echo("  ⚠️  Makefile not found, cannot check log targets")
 
     # Check for log aggregation services
-    if BUILD.exists() or BUILD_CURRENT.exists():
+    if DEV_ENV.exists() or DEV_ENV_CURRENT.exists():
         try:
-            build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+            build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
             build_config = yaml.safe_load(build_file.read_text())
             if build_config:
                 services = build_config.get("services", [])
@@ -1022,8 +1022,8 @@ def build_debug(ctx):
     click.echo("\n🔧 Build Tools:")
     _check_and_install_build_tools()
 
-    # Show services if build.yaml exists
-    if BUILD.exists() or BUILD_CURRENT.exists():
+    # Show services if dev_environment.yaml exists
+    if DEV_ENV.exists() or DEV_ENV_CURRENT.exists():
         click.echo("\n📦 Detected Services:")
         try:
             services = _get_services()
@@ -1040,11 +1040,11 @@ def build_debug(ctx):
         except Exception as e:
             click.echo(f"  ⚠️  Error detecting services: {e}")
 
-    # Show build.md content if it exists
-    if BUILD_SPEC.exists():
-        click.echo("\n📄 Build Specification Preview (first 20 lines):")
+    # Show dev_environment.md content if it exists
+    if DEV_SPEC.exists():
+        click.echo("\n📄 Development Environment Specification Preview (first 20 lines):")
         try:
-            content = BUILD_SPEC.read_text()
+            content = DEV_SPEC.read_text()
             lines = content.splitlines()[:20]
             for line in lines:
                 click.echo(f"  {line}")
@@ -1053,11 +1053,11 @@ def build_debug(ctx):
 
             # Check if logging section exists
             if "logging" in content.lower() or "log" in content.lower():
-                click.echo("\n  ✅ Logging section found in build specification")
+                click.echo("\n  ✅ Logging section found in development environment specification")
             else:
                 click.echo("\n  ⚠️  No logging section found in build specification")
         except Exception as e:
-            click.echo(f"  ⚠️  Error reading build.md: {e}")
+            click.echo(f"  ⚠️  Error reading dev_environment.md: {e}")
 
 
 @cli.command()
@@ -1226,9 +1226,9 @@ def devbug(ctx, output):
     # 5. File Contents
     files_to_check = {
         "Makefile": pathlib.Path("Makefile"),
-        "build.yaml": BUILD,
-        "build-current.yaml": BUILD_CURRENT,
-        "build.md": BUILD_SPEC,
+        "dev_environment.yaml": DEV_ENV,
+        "dev_environment-current.yaml": DEV_ENV_CURRENT,
+        "dev_environment.md": DEV_SPEC,
         "skaffold.yaml": pathlib.Path("skaffold.yaml"),
         "implementation/run-pids.json": _get_pid_file(),
     }
@@ -1365,7 +1365,7 @@ def devbug(ctx, output):
         click.echo(json.dumps(diagnostics, indent=2))
 
 
-# Run command group removed - use skaffold dev or commands from build.yaml directly
+# Run command group removed - use skaffold dev or commands from dev_environment.yaml directly
 
 
 def _check_and_install_build_tools():
@@ -1955,7 +1955,7 @@ def _replace_port_in_command(cmd, old_port, new_port):
 
 
 def _extract_services_from_build_config(build_config):
-    """Extract services from build.yaml config."""
+    """Extract services from dev_environment.yaml config."""
     services = build_config.get("services", [])
     if services:
         return services
@@ -2166,12 +2166,12 @@ def _check_url_responds(url):
         return False
 
 
-def _extract_urls_from_build():
-    """Extract URLs from build.yaml, build.md, or Makefile."""
+def _extract_urls_from_dev_env():
+    """Extract URLs from dev_environment.yaml, dev_environment.md, or Makefile."""
     urls = {}
 
-    # Try build.yaml first
-    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    # Try dev_environment.yaml first
+    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
     if build_file.exists():
         try:
             import yaml
@@ -2197,9 +2197,9 @@ def _extract_urls_from_build():
         except Exception:
             pass
 
-    # Try build.md
-    if BUILD_SPEC.exists():
-        build_md = BUILD_SPEC.read_text()
+    # Try dev_environment.md
+    if DEV_SPEC.exists():
+        build_md = DEV_SPEC.read_text()
         import re
 
         # Common port patterns
@@ -2272,13 +2272,13 @@ def _extract_urls_from_build():
     return urls
 
 
-def _extract_services_from_build_md():
-    """Extract services from build.md by parsing startup commands."""
-    if not BUILD_SPEC.exists():
+def _extract_services_from_dev_env_md():
+    """Extract services from dev_environment.md by parsing startup commands."""
+    if not DEV_SPEC.exists():
         return []
 
     services = []
-    build_md = BUILD_SPEC.read_text()
+    build_md = DEV_SPEC.read_text()
 
     # Look for startup commands section
     import re
@@ -2347,11 +2347,11 @@ def _uses_skaffold(services: List[Dict[str, Any]]) -> bool:
 
 
 def _get_services():
-    """Get services from build.yaml, build.md, or Makefile."""
+    """Get services from dev_environment.yaml, dev_environment.md, or Makefile."""
     services = []
 
-    # Try build.yaml first
-    build_file = BUILD_CURRENT if BUILD_CURRENT.exists() else BUILD
+    # Try dev_environment.yaml first
+    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
     if build_file.exists():
         try:
             import yaml
@@ -2369,8 +2369,8 @@ def _get_services():
     if services:
         return services
 
-    # Try build.md
-    services = _extract_services_from_build_md()
+    # Try dev_environment.md
+    services = _extract_services_from_dev_env_md()
     if services:
         return services
 
@@ -2388,7 +2388,7 @@ def _get_services():
     return []
 
 
-# Run commands removed - use skaffold dev or commands from build.yaml directly
+# Run commands removed - use skaffold dev or commands from dev_environment.yaml directly
 
 
 @cli.command()

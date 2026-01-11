@@ -36,7 +36,7 @@ Certain specifications represent persistent system state and are treated as "glo
 - **`product/infrastructure.md`**: Infrastructure configuration
 - **`product/cicd.md`**: CI/CD pipeline configuration
 - **`product/testing.md`**: Testing strategy and configuration
-- **`product/build.md`**: Build configuration
+- **`product/dev_environment.md`**: Development environment specification
 - **`product/project_overview.md`**: Project overview and context
 
 These files are:

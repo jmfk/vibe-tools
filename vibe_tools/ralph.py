@@ -14,8 +14,8 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.issues import FAILS_DIR, Issue, save_issue
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
-    BUILD,
-    BUILD_CURRENT,
+    DEV_ENV,
+    DEV_ENV_CURRENT,
     CICD_SPEC,
     INFRA_SPEC,
     PRD_DIR,
@@ -693,12 +693,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         passed_gates = False
 
             # Build step: verify build system works and software can start in dev environment
-            if passed_gates and BUILD.exists():
+            if passed_gates and DEV_ENV.exists():
                 logger.info("🔨 Running Build Verification...")
                 build_loop = RalphLoop(
                     name="Build",
-                    desired_file=BUILD,
-                    current_file=BUILD_CURRENT,
+                    desired_file=DEV_ENV,
+                    current_file=DEV_ENV_CURRENT,
                     agent=agent,
                     stream=stream,
                 )
