@@ -37,3 +37,6 @@ implementation/*
 !implementation/build.yaml
 stats/*
 reports/*
+
+implementation/costs/*
+implementation/logs/*
