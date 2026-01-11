@@ -20,7 +20,7 @@ SYSTEM_CONTRACT:
   - pip
   - setup.py
   - pyproject.toml
-  logging_storage: project/logs/
+  logging_storage: implementation/logs/
 DOMAIN_MODEL:
 - 'OrderedGroup: Custom Click class for logical command ordering'
 - 'Command: Registered via Click decorators'
@@ -28,7 +28,7 @@ DOMAIN_MODEL:
 - 'Configuration: Merged defaults and .vibe_config.json'
 - 'Logging System: Console and file handlers with per-command setup'
 - 'Cost Report: Session-based tracking finalized atexit'
-- 'Project Directory: Managed structure including project/ and project/logs/'
+- 'Project Directory: Managed structure including implementation/ and implementation/logs/'
 CAPABILITIES:
 - Command registration and discovery
 - Global option handling
@@ -41,7 +41,7 @@ CAPABILITIES:
 - Graceful degradation for missing configuration files
 OUTPUT_TARGETS:
 - CLI Console (help output, debug logs, verbose output)
-- Log files (stored in project/logs/)
+- Log files (stored in implementation/logs/)
 - Session cost reports (displayed at process exit)
 - .vibe_config.json (validation and usage)
 _vibe_sync:

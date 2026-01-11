@@ -50,9 +50,9 @@ CAPABILITIES:
 - readline_support: Command completion, multi-line support, and history persistence
 - editor_integration: Launching external editors for specification files and response code
 OUTPUT_TARGETS:
-- project/architect-session.json
-- project/.architect_history
-- project/architect-config.json
+- implementation/architect-session.json
+- implementation/.architect_history
+- implementation/architect-config.json
 - specs/architecture.md
 - specs/infrastructure.md
 TITLE: 05 Architect Shell

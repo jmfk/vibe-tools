@@ -5,11 +5,11 @@ SYSTEM_CONTRACT:
   - Global agent instructions (user-created)
   Output:
   - Standardized directory structure
-  - Machine-readable YAML PRDs (project/prds/*.yaml)
-  - Command-specific log files (project/logs/*.log)
-  - Cost tracking CSV files (project/costs/usage.csv)
-  - Session state files (project/*-session.json)
-  - Current state YAMLs (project/*-current.yaml)
+  - Machine-readable YAML PRDs (implementation/prds/*.yaml)
+  - Command-specific log files (implementation/logs/*.log)
+  - Cost tracking CSV files (implementation/costs/usage.csv)
+  - Session state files (implementation/*-session.json)
+  - Current state YAMLs (implementation/*-current.yaml)
   - Automatically updated .gitignore
   Constraints:
   - Standard POSIX file system
@@ -21,12 +21,12 @@ SYSTEM_CONTRACT:
 DOMAIN_MODEL:
   Standard Directories:
   - specs/: Human-written markdown specs (architecture.md, infrastructure.md, cicd.md, testing.md, prd_*.md)
-  - project/prds/: Machine-readable YAML PRDs (prd_*.yaml, global truths)
-  - project/logs/: Auto-created per-command log files
-  - project/costs/: Auto-created usage.csv
+  - implementation/prds/: Machine-readable YAML PRDs (prd_*.yaml, global truths)
+  - implementation/logs/: Auto-created per-command log files
+  - implementation/costs/: Auto-created usage.csv
   - prompts/: Prompt templates
   - instructions/: Global agent instructions
-  - project/: Session state (json) and current state (yaml)
+  - implementation/: Session state (json) and current state (yaml)
   Git Rules:
   - Exclude: logs, costs, state files
   - Include: specs, PRDs
@@ -39,15 +39,15 @@ CAPABILITIES:
 - Automatically manage session state files
 - Automatically update .gitignore based on directory rules
 - Initialize templates from package or project-specific versions
-- Migrate from legacy directory structures (e.g., prds/ to project/prds/)
+- Migrate from legacy directory structures (e.g., prds/ to implementation/prds/)
 OUTPUT_TARGETS:
 - specs/*.md
-- project/prds/prd_*.yaml
-- project/prds/*.yaml
-- project/logs/{command_name}.log
-- project/costs/usage.csv
-- project/{name}-session.json
-- project/{name}-current.yaml
+- implementation/prds/prd_*.yaml
+- implementation/prds/*.yaml
+- implementation/logs/{command_name}.log
+- implementation/costs/usage.csv
+- implementation/{name}-session.json
+- implementation/{name}-current.yaml
 - .gitignore
 _vibe_sync:
   issue_number: 69
