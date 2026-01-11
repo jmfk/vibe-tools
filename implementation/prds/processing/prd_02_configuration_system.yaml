@@ -1,0 +1,71 @@
+SYSTEM_CONTRACT:
+  file_format: JSON (.vibe_config.json)
+  location: project root
+  structure:
+    services: Map of service names to connection details
+    ralph: Ralph loop settings (review, tests, auto_merge)
+    caffeinate: Boolean flag for system sleep prevention
+    use_google_sheets: Boolean for cost logging
+    google_sheet_id: Google Sheet ID for cost tracking
+    verbose: Boolean for verbose output
+    default_budget: Max budget in USD for automated runs
+  service_schema:
+    host: Service hostname/IP
+    port: Service port
+    user: Username
+    password: Password
+    database: Database name
+    docker_container_name: Detected Docker container name
+    service_specific_fields:
+    - virtual_host
+    - region
+    - addressing_style
+    - etc.
+  environment_integration:
+    source: .env file via python-dotenv
+    behavior: Overrides config values via environment variables
+  extensibility: New services added via SERVICE_DEFINITIONS in setup.py
+  security: Passwords stored in plain text
+  validation: Schema validation, type checking, connection testing via vibe-setup test
+DOMAIN_MODEL:
+  Configuration:
+    services: Map[String, Service]
+    ralph: RalphSettings
+    caffeinate: Boolean
+    use_google_sheets: Boolean
+    google_sheet_id: String
+    verbose: Boolean
+    default_budget: Number
+  Service:
+    host: String
+    port: Integer
+    user: Optional[String]
+    password: Optional[String]
+    database: Optional[String]
+    docker_container_name: Optional[String]
+    specific_fields: Map
+  RalphSettings:
+    review: MISSING
+    tests: MISSING
+    auto_merge: MISSING
+CAPABILITIES:
+- Service configuration (Postgres, Redis, RabbitMQ, Elasticsearch, S3, imgproxy, etc.)
+- AI agent configuration (model selection, API keys)
+- Cost tracking settings (Google Sheets integration, budget limits)
+- Workflow preferences (caffeinate, verbose mode, auto-merge)
+- Docker container auto-detection via docker ps and docker inspect
+- Environment variable integration and overrides
+- Configuration loading with validation and default merging
+- Configuration saving with formatting and comment preservation
+- Schema validation and type checking
+- Connection testing via vibe-setup test
+OUTPUT_TARGETS:
+- .vibe_config.json
+- vibe-setup commands
+- load_config() function
+- save_config() function
+- SERVICE_DEFINITIONS in setup.py
+- vibe-setup test command
+TITLE: 02 Configuration System
+BRANCH: feature/prd_02_configuration_system
+PARENT_BRANCH: main

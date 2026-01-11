@@ -1,0 +1,75 @@
+SYSTEM_CONTRACT:
+  command: vibe implement
+  input_location: project/prds/prd_*.yaml
+  state_storage: project/implementation-state.json
+  engine: Ralph loop engine
+  dependency_rules:
+  - Process PRDs in dependency order
+  - Fail fast on circular dependencies
+  error_handling: Failed PRD does not stop entire process
+  integration:
+  - RalphLoop engine
+  - vibe implemented command
+DOMAIN_MODEL:
+  PRD:
+    type: YAML file
+    location: project/prds/
+    properties:
+    - dependency declarations
+    - requirements
+  Dependency Graph:
+    properties:
+    - validation for circular dependencies
+    - processing order
+  RalphLoop:
+    properties:
+    - desired file (PRD YAML)
+    - current file (actual implementation location)
+  Implementation State:
+    location: project/implementation-state.json
+    tracked_statuses:
+    - completed
+    - failed
+    - in progress
+CAPABILITIES:
+  PRD Discovery:
+    method: collect_prd_files()
+    description: finds all prd_*.yaml files in project/prds/
+  Dependency Resolution:
+    method: check_plan_dependencies()
+    operations:
+    - Reads PRD YAML files
+    - Extracts dependency declarations
+    - Builds dependency graph
+    - Validates no circular dependencies
+    - Returns processing order
+  Implementation Process:
+    steps:
+    - Resolve dependencies
+    - Create RalphLoop instance per PRD
+    - Set desired file to PRD YAML
+    - Set current file to implementation location
+    - Run reconciliation loop
+    - Track success/failure
+  State Tracking:
+    operations:
+    - Saves state to project/implementation-state.json
+    - Tracks completion status
+    - Enables resumption of process
+  Progress Reporting:
+    elements:
+    - current PRD being processed
+    - iteration count
+    - success/failure per PRD
+    - final summary of all PRDs
+OUTPUT_TARGETS:
+  project/implementation-state.json: persistent implementation state
+  CLI:
+  - current PRD
+  - iteration count
+  - success/failure status
+  - final summary
+  Codebase: implemented code based on PRDs
+TITLE: 11 Implementation Loop
+BRANCH: feature/prd_11_implementation_loop
+PARENT_BRANCH: main

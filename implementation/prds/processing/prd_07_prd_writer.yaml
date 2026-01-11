@@ -1,0 +1,30 @@
+SYSTEM_CONTRACT:
+- CLI interactive prompts and Q&A
+- DSPy library dependency
+- Configured AI agent (default: Gemini)
+- Configurable maximum interview rounds (default: 8)
+- specs/ directory storage
+- Deprecated in favor of vibe pm interactive shell
+DOMAIN_MODEL:
+- feature description
+- follow-up questions
+- accumulated context
+- conversation history
+- satisfaction signal
+- markdown PRD
+- spec file
+CAPABILITIES:
+- interactive Q&A interview process
+- question generation using DSPy
+- context accumulation across interview rounds
+- satisfaction detection
+- markdown PRD generation
+- spec file creation in specs/ directory
+- enforcement of maximum interview rounds
+OUTPUT_TARGETS:
+- markdown PRD file in specs/ directory
+_vibe_sync:
+  issue_number: 70
+TITLE: 07 Writer
+BRANCH: feature/prd_07_prd_writer
+PARENT_BRANCH: main

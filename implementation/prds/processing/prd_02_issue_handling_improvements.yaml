@@ -1,0 +1,89 @@
+SYSTEM_CONTRACT:
+  COMMANDS:
+  - vibe issue list
+  - vibe issue ls
+  - vibe issue add
+  ARGUMENTS_LIST:
+  - --status:
+    - backlog
+    - in_progress
+    - blocked
+    - done
+  - --severity:
+    - low
+    - medium
+    - high
+    - critical
+  - --service: service name
+  - search: positional argument or --search flag (title or body content)
+  - display: --full or -v
+  ARGUMENTS_ADD:
+  - prompt: positional string argument
+  - --title: explicitly set title
+  - --severity: explicitly set severity
+  - --service: explicitly set service
+  DATA_LOCATIONS:
+  - issues/backlog/
+  - issues/history/
+  COMPONENTS:
+  - vibe_tools/issues.py (Issue dataclass, load_index, save_issue)
+  - vibe_tools/commands/issue.py
+  - vibe_tools/commands/issue_list.py
+  - vibe_tools/commands/issue_add.py
+  - LLM/Agent logic
+  - issue_add_prompt.txt
+DOMAIN_MODEL:
+  ISSUE:
+    FIELDS:
+    - ID
+    - Title
+    - Status
+    - Severity
+    - Service
+    - Summary
+    - Body
+    STATUS_OPTIONS:
+    - backlog
+    - in_progress
+    - blocked
+    - done
+    SEVERITY_OPTIONS:
+    - low
+    - medium
+    - high
+    - critical
+CAPABILITIES:
+  LISTING:
+  - Show issues from local backlog and history directories
+  - Filter by status, severity, and service
+  - Search title or body content via regex or substring matching
+  - Display concise table view by default
+  - Display detailed view via optional flags
+  CREATION:
+  - Create issue from single string prompt
+  - AI-generation of title, summary, and severity from prompt
+  - Support manual overrides for title, severity, and service
+  - Direct save of valid Issue artifact to backlog
+  - Bypass log analysis and multiple interactive prompts
+OUTPUT_TARGETS:
+  FILESYSTEM:
+  - issues/backlog/ (Markdown Issue artifacts)
+  CLI:
+  - Table View:
+    - ID
+    - Title
+    - Status
+    - Severity
+    - Service
+  - Success Message:
+    - ID
+    - Title
+    - Location
+_vibe_sync:
+  issue_number: 10
+  last_synced_at: '2026-01-10T17:22:12.052571'
+  sync_hash: 7bc7558d47f915d2ca901d7f7007a8600a452518ab7cc9ae89601e6741b72fa0
+TITLE: 02 Issue Handling Improvements
+DEPENDS_ON: []
+BRANCH: staging
+PARENT_BRANCH: staging

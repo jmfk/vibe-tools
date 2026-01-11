@@ -1,0 +1,53 @@
+SYSTEM_CONTRACT:
+  CLI_COMMANDS:
+  - vibe normalize
+  - vibe implement
+  FUNCTIONS:
+  - collect_prd_files()
+  FILESYSTEM_STRUCTURE:
+  - specs/*.md
+  - project/prds/*.yaml
+  - project/prds/{name}.yaml
+  GLOBAL_TRUTH_SOURCES:
+  - architecture.md
+  - infrastructure.md
+  - cicd.md
+  - testing.md
+  - project_overview.md
+DOMAIN_MODEL:
+  SPEC_CATEGORIES:
+  - Global Truths: architecture, infrastructure, cicd, testing, project_overview
+  - Feature PRDs: prd_*.md, prd_*.yaml
+  FORMATS:
+  - Human-written specs (markdown)
+  - Machine-readable PRDs (YAML)
+  COMPONENTS:
+  - specs/ directory
+  - project/prds/ directory
+  - Agent prompt context
+CAPABILITIES:
+- Spec file organization
+- Global truth identification and injection
+- Spec discovery and listing
+- Context management for agents
+- Workflow from specs to PRDs to implementation
+- Automatic conversion of global truths to YAML
+- Persistent system state provision to agents
+- collect_prd_files(): Find all prd_*.yaml in project/prds/ (excluding global truths, returning sorted list)
+- Global Truth Injection: Loading YAML and including in agent prompt context
+- Version control of specs and PRDs
+- Manual editing of markdown specs
+- Automated generation of YAML PRDs
+OUTPUT_TARGETS:
+- architecture.yaml
+- infrastructure.yaml
+- cicd.yaml
+- testing.yaml
+- project_overview.yaml
+- prd_*.yaml
+- Agent prompt context
+_vibe_sync:
+  issue_number: 63
+TITLE: 09 Spec Management
+BRANCH: feature/prd_09_spec_management
+PARENT_BRANCH: main
