@@ -92,7 +92,9 @@ class RalphLoop:
 
         if self.prd_path and self.phase_id:
             if is_phase_completed(self.prd_path, self.phase_id):
-                logger.info(f"⏭️ Phase '{self.phase_id}' already completed for {self.name}. Skipping.")
+                logger.info(
+                    f"⏭️ Phase '{self.phase_id}' already completed for {self.name}. Skipping."
+                )
                 return True
 
         log_start(
@@ -132,6 +134,7 @@ class RalphLoop:
             logger.info(f"✅ {self.name} is already in sync.")
             if self.prd_path and self.phase_id:
                 from vibe_tools.utils import update_state_phase
+
                 update_state_phase(self.prd_path, self.phase_id, status="completed")
             return True
 
@@ -167,7 +170,7 @@ class RalphLoop:
         cmd = get_agent_command(self.agent, prompt)
         if verbose_logger:
             verbose_logger.log_event("prompt", prompt, f"{self.name}_reconciliation")
-        
+
         output, code = run_agent(cmd, caffeinate=self.caffeinate, stream=self.stream)
 
         if verbose_logger:
@@ -203,7 +206,6 @@ class RalphLoop:
             log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
             logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
             return False
-
 
 
 class QuickFixLoop:
@@ -265,20 +267,33 @@ class QuickFixLoop:
                 prompt = self.prompt_builder(iteration)
             except Exception as e:
                 logger.error(f"Error building prompt: {e}")
-                log_issue(self.name, iteration, self.max_iterations, f"Prompt build error: {e}")
+                log_issue(
+                    self.name,
+                    iteration,
+                    self.max_iterations,
+                    f"Prompt build error: {e}",
+                )
                 return False
 
             # Call LLM directly (no agent wrapper)
             try:
                 if verbose_logger:
-                    verbose_logger.log_event("prompt", prompt, f"{self.name}_quickfix_iteration_{iteration}")
-                
+                    verbose_logger.log_event(
+                        "prompt", prompt, f"{self.name}_quickfix_iteration_{iteration}"
+                    )
+
                 llm_output = run_llm(prompt, model=self.model, debug=self.debug)
-                
+
                 if verbose_logger:
-                    verbose_logger.log_event("reply", llm_output, f"{self.name}_quickfix_iteration_{iteration}")
-                
-                logger.debug(f"LLM output (iteration {iteration}): {llm_output[:500]}...")
+                    verbose_logger.log_event(
+                        "reply",
+                        llm_output,
+                        f"{self.name}_quickfix_iteration_{iteration}",
+                    )
+
+                logger.debug(
+                    f"LLM output (iteration {iteration}): {llm_output[:500]}..."
+                )
             except Exception as e:
                 logger.error(f"LLM call failed: {e}")
                 log_issue(
@@ -339,20 +354,23 @@ def generate_prd_plan() -> bool:
     """Analyzes PRDs and updates state if needed (though mostly derived from filesystem now)."""
     prds = collect_prd_files()
     if not prds:
-        logger.warning("No PRDs found in implementation/prds/processing/ to generate plan.")
+        logger.warning(
+            "No PRDs found in implementation/prds/processing/ to generate plan."
+        )
         return False
 
     state = load_project_state()
     # Plans are derived from filesystem in load_project_state()
     # This function now mostly ensures lineage is tracked in state.json
-    
+
     config = load_config()
     auto_merge = config.get("ralph", {}).get("auto_merge", False)
     base_branch = get_automerge_branch(config) if auto_merge else get_main_branch()
 
     last_completed_branch = base_branch
     completed_plans = [
-        p_id for p_id, p_info in state["plans"].items()
+        p_id
+        for p_id, p_info in state["plans"].items()
         if p_info.get("status") == "completed"
     ]
     if completed_plans:
@@ -361,11 +379,13 @@ def generate_prd_plan() -> bool:
 
     for prd_path in prds:
         prd_id = prd_path.stem
-        branch_name = get_automerge_branch(config) if auto_merge else f"feature/{prd_id}"
-        
+        branch_name = (
+            get_automerge_branch(config) if auto_merge else f"feature/{prd_id}"
+        )
+
         if branch_name not in state["branch_lineage"]:
             state["branch_lineage"][branch_name] = last_completed_branch
-        
+
         last_completed_branch = branch_name
 
     save_project_state(state)
@@ -403,8 +423,10 @@ def debugging_loop(
 
         # Check for coverage failure
         if tester.is_coverage_failure(test_output):
-            logger.warning("📉 Low coverage detected. Creating an issue and terminating debug loop.")
-            
+            logger.warning(
+                "📉 Low coverage detected. Creating an issue and terminating debug loop."
+            )
+
             issue_id = generate_issue_id()
             issue = Issue(
                 id=issue_id,
@@ -418,8 +440,8 @@ def debugging_loop(
                 body=IssueBody(
                     summary=f"The following test targets failed coverage requirements:\n{', '.join(targets)}",
                     evidence=test_output,
-                    acceptance_criteria="Reach the required coverage threshold."
-                )
+                    acceptance_criteria="Reach the required coverage threshold.",
+                ),
             )
             save_issue(issue)
             logger.info(f"📄 Created issue {issue_id} to track coverage improvement.")
@@ -429,11 +451,15 @@ def debugging_loop(
         failures = tester.parse_failures(test_output)
         clean_context = []
         if failures:
-            logger.info(f"🔍 Found {len(failures)} individual test failures. Gathering clean context...")
+            logger.info(
+                f"🔍 Found {len(failures)} individual test failures. Gathering clean context..."
+            )
             for failure in failures:
                 single_output, single_passed = tester.run_single_test(failure)
-                clean_context.append(f"--- CLEAN OUTPUT FOR TEST: {failure['id']} ---\n{single_output}")
-            
+                clean_context.append(
+                    f"--- CLEAN OUTPUT FOR TEST: {failure['id']} ---\n{single_output}"
+                )
+
             # Use clean context instead of the noisy full output if we have it
             agent_test_output = "\n\n".join(clean_context)
         else:
@@ -451,10 +477,10 @@ def debugging_loop(
 
         prompt = prompt_template.format(test_output=agent_test_output)
         cmd = get_agent_command(agent, prompt)
-        
+
         if verbose_logger:
             verbose_logger.log_event("prompt", prompt, f"debug_iteration_{i}")
-            
+
         agent_output, _ = run_agent(cmd, stream=stream)
 
         if verbose_logger:
@@ -622,9 +648,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     break
 
             if not plan_file_path:
-                logger.error(
-                    f"❌ Plan file for {plan_id} not found. Skipping."
-                )
+                logger.error(f"❌ Plan file for {plan_id} not found. Skipping.")
                 continue
 
         plan_yaml_path = plan_file_path
@@ -681,7 +705,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
         log_start("implement", f"Plan: {title} ({plan_id})")
 
-        # Status is now derived from file location. 
+        # Status is now derived from file location.
         # Plan is already in PRD_PROCESSING_DIR if we are here.
 
         _switch_to_branch(
@@ -709,14 +733,18 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     ),
                 )
                 cmd = get_agent_command(agent, prompt)
-                
+
                 if verbose_logger:
-                    verbose_logger.log_event("prompt", prompt, f"{plan_id}_iteration_{i}")
-                    
+                    verbose_logger.log_event(
+                        "prompt", prompt, f"{plan_id}_iteration_{i}"
+                    )
+
                 output, code = run_agent(cmd, stream=stream)
 
                 if verbose_logger:
-                    verbose_logger.log_event("reply", output, f"{plan_id}_iteration_{i}")
+                    verbose_logger.log_event(
+                        "reply", output, f"{plan_id}_iteration_{i}"
+                    )
 
                 if code != 0 or COMPLETION_PROMISE not in output:
                     if code != 0:
@@ -747,7 +775,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         f"vibe: implementation iteration {i} for plan '{plan_id}'",
                     )
                 else:
-                    update_state_phase(plan_yaml_path, impl_phase_id, status="completed")
+                    update_state_phase(
+                        plan_yaml_path, impl_phase_id, status="completed"
+                    )
             else:
                 logger.info(f"⏭️ Phase '{impl_phase_id}' already completed. Skipping.")
 
@@ -762,8 +792,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
                     tester = ProjectTester()
 
-                    be_targets = [t for t in test_targets if tester.is_backend_target(t)]
-                    fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
+                    be_targets = [
+                        t for t in test_targets if tester.is_backend_target(t)
+                    ]
+                    fe_targets = [
+                        t for t in test_targets if tester.is_frontend_target(t)
+                    ]
 
                     # Run Backend Debug Loop
                     if be_targets:
@@ -790,7 +824,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                             iterations=max_debug_iterations,
                         ):
                             passed_gates = False
-                    
+
                     if passed_gates:
                         if is_dirty():
                             commit_and_register_phase(
@@ -799,9 +833,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                                 f"vibe: tests passed for iteration {i} of plan '{plan_id}'",
                             )
                         else:
-                            update_state_phase(plan_yaml_path, tests_phase_id, status="completed")
+                            update_state_phase(
+                                plan_yaml_path, tests_phase_id, status="completed"
+                            )
                 else:
-                    logger.info(f"⏭️ Phase '{tests_phase_id}' already completed. Skipping.")
+                    logger.info(
+                        f"⏭️ Phase '{tests_phase_id}' already completed. Skipping."
+                    )
 
             # Build step: verify build system works and software can start in dev environment
             if passed_gates and DEV_ENV.exists():
@@ -833,7 +871,9 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         logger.error("❌ Build verification failed.")
                         passed_gates = False
                 else:
-                    logger.info(f"⏭️ Phase '{build_phase_id}' already completed. Skipping.")
+                    logger.info(
+                        f"⏭️ Phase '{build_phase_id}' already completed. Skipping."
+                    )
 
             if passed_gates and review:
                 review_phase_id = f"review_iteration_{i}"
@@ -855,15 +895,19 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         ),
                     )
                     review_cmd = get_agent_command(agent, review_prompt)
-                    
+
                     if verbose_logger:
-                        verbose_logger.log_event("prompt", review_prompt, f"{plan_id}_review_iteration_{i}")
-                        
+                        verbose_logger.log_event(
+                            "prompt", review_prompt, f"{plan_id}_review_iteration_{i}"
+                        )
+
                     review_output, _ = run_agent(review_cmd, stream=stream)
-                    
+
                     if verbose_logger:
-                        verbose_logger.log_event("reply", review_output, f"{plan_id}_review_iteration_{i}")
-                    
+                        verbose_logger.log_event(
+                            "reply", review_output, f"{plan_id}_review_iteration_{i}"
+                        )
+
                     if "<review>PASSED</review>" not in review_output:
                         log_issue(
                             "implement_review",
@@ -873,7 +917,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                         )
                         logger.error("❌ Agentic review failed.")
                         passed_gates = False
-                    
+
                     if passed_gates:
                         if is_dirty():
                             commit_and_register_phase(
@@ -882,9 +926,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                                 f"vibe: agentic review passed for iteration {i} of plan '{plan_id}'",
                             )
                         else:
-                            update_state_phase(plan_yaml_path, review_phase_id, status="completed")
+                            update_state_phase(
+                                plan_yaml_path, review_phase_id, status="completed"
+                            )
                 else:
-                    logger.info(f"⏭️ Phase '{review_phase_id}' already completed. Skipping.")
+                    logger.info(
+                        f"⏭️ Phase '{review_phase_id}' already completed. Skipping."
+                    )
 
             if passed_gates:
                 success = True
@@ -913,10 +961,10 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             # Commit changes via agent
             commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
             commit_cmd = get_agent_command(agent, commit_prompt)
-            
+
             if verbose_logger:
                 verbose_logger.log_event("prompt", commit_prompt, f"{plan_id}_commit")
-                
+
             commit_output, _ = run_agent(commit_cmd, stream=stream)
 
             if verbose_logger:
@@ -928,6 +976,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 if not target_path.exists():
                     logger.info(f"📦 Moving {plan_file_path.name} to done.")
                     import shutil
+
                     shutil.move(str(plan_file_path), str(target_path))
 
             # Move corresponding MD file to history if it exists
@@ -948,6 +997,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     target_md_path = target_md_dir / md_path.name
                     logger.info(f"📦 Moving {md_path.name} to history.")
                     import shutil
+
                     shutil.move(str(md_path), str(target_md_path))
 
             # Auto-merge if enabled
@@ -1005,6 +1055,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 if not target_path.exists():
                     logger.info(f"📦 Moving {plan_file_path.name} to failed.")
                     import shutil
+
                     shutil.move(str(plan_file_path), str(target_path))
 
             # Move corresponding MD file to rejected if it exists
@@ -1025,6 +1076,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     target_md_path = target_md_dir / md_path.name
                     logger.info(f"📦 Moving {md_path.name} to rejected.")
                     import shutil
+
                     shutil.move(str(md_path), str(target_md_path))
             return False
 
@@ -1091,10 +1143,10 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
                 issue_body=issue.body.to_markdown(),
             )
             cmd = get_agent_command(agent, prompt)
-            
+
             if verbose_logger:
                 verbose_logger.log_event("prompt", prompt, f"{issue.id}_iteration_{i}")
-                
+
             output, code = run_agent(cmd, stream=stream)
 
             if verbose_logger:
@@ -1143,18 +1195,24 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
 
                 if be_targets:
                     if not debugging_loop(
-                        agent, be_targets, stream=stream, iterations=max_debug_iterations
+                        agent,
+                        be_targets,
+                        stream=stream,
+                        iterations=max_debug_iterations,
                     ):
                         passed_gates = False
                         gate_details.append("Backend tests failed")
 
                 if passed_gates and fe_targets:
                     if not debugging_loop(
-                        agent, fe_targets, stream=stream, iterations=max_debug_iterations
+                        agent,
+                        fe_targets,
+                        stream=stream,
+                        iterations=max_debug_iterations,
                     ):
                         passed_gates = False
                         gate_details.append("Frontend tests failed")
-                
+
                 if passed_gates:
                     if is_dirty():
                         commit_and_register_phase(
@@ -1163,7 +1221,9 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
                             f"vibe: tests passed for iteration {i} of issue '{issue.id}'",
                         )
                     else:
-                        update_state_phase(issue_file_path, tests_phase_id, status="completed")
+                        update_state_phase(
+                            issue_file_path, tests_phase_id, status="completed"
+                        )
             else:
                 logger.info(f"⏭️ Phase '{tests_phase_id}' already completed. Skipping.")
 
@@ -1171,7 +1231,9 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
             review_phase_id = f"issue_review_iteration_{i}"
             if not is_phase_completed(issue_file_path, review_phase_id):
                 try:
-                    review_prompt_template = get_prompt("implementation_review_prompt.txt")
+                    review_prompt_template = get_prompt(
+                        "implementation_review_prompt.txt"
+                    )
                     review_prompt = review_prompt_template.format(
                         title=issue.title,
                         description=issue.body.summary,
@@ -1179,19 +1241,23 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
                         or "Resolve the issue as described.",
                     )
                     review_cmd = get_agent_command(agent, review_prompt)
-                    
+
                     if verbose_logger:
-                        verbose_logger.log_event("prompt", review_prompt, f"{issue.id}_review_iteration_{i}")
-                        
+                        verbose_logger.log_event(
+                            "prompt", review_prompt, f"{issue.id}_review_iteration_{i}"
+                        )
+
                     review_output, _ = run_agent(review_cmd, stream=stream)
-                    
+
                     if verbose_logger:
-                        verbose_logger.log_event("reply", review_output, f"{issue.id}_review_iteration_{i}")
-                    
+                        verbose_logger.log_event(
+                            "reply", review_output, f"{issue.id}_review_iteration_{i}"
+                        )
+
                     if "<review>PASSED</review>" not in review_output:
                         passed_gates = False
                         gate_details.append("Agentic review failed")
-                    
+
                     if passed_gates:
                         if is_dirty():
                             commit_and_register_phase(
@@ -1200,7 +1266,9 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
                                 f"vibe: agentic review passed for iteration {i} of issue '{issue.id}'",
                             )
                         else:
-                            update_state_phase(issue_file_path, review_phase_id, status="completed")
+                            update_state_phase(
+                                issue_file_path, review_phase_id, status="completed"
+                            )
                 except Exception as e:
                     logger.error(f"Review failed: {e}")
                     passed_gates = False
@@ -1218,7 +1286,6 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
             history.append(iteration_data)
             logger.info("🔄 Retrying issue solve to fix quality issues...")
 
-
     if success:
         log_success("issue_solve", f"Issue {issue.id} solved successfully.")
 
@@ -1231,7 +1298,13 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
         if is_dirty():
             run_command(["git", "add", "."], check=False)
             run_command(
-                ["git", "commit", "-m", f"vibe: final fix and status update for {issue.id}"], check=False
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    f"vibe: final fix and status update for {issue.id}",
+                ],
+                check=False,
             )
 
         # Merge if auto_merge is enabled
@@ -1325,10 +1398,10 @@ def _switch_to_branch(
             git_status=git_status,
         )
         cmd = get_agent_command(agent, prompt)
-        
+
         if verbose_logger:
             verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
-            
+
         output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
         if verbose_logger:

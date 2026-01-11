@@ -1,5 +1,6 @@
 import atexit
 import datetime
+import functools
 import hashlib
 import importlib.util
 import json
@@ -84,6 +85,7 @@ SPECS_DIR = PLANNING_DIR
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 
+@functools.lru_cache(maxsize=1)
 def is_git_repo():
     """Checks if the current directory is a git repository."""
     _, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
@@ -346,6 +348,7 @@ def migrate_to_project_dir():
                 logger.error(f"Failed to migrate {old_path} to {new_path}: {e}")
 
 
+@functools.lru_cache(maxsize=1)
 def get_project_name():
     """Returns the project name in snake_case based on git remote or directory name."""
     if is_git_repo():
@@ -1400,20 +1403,7 @@ def get_prompt(prompt_filename: str) -> str:
     )
 
 
-def is_git_repo():
-    try:
-        # Check if we are inside a git repository
-        result = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"],
-            capture_output=True,
-            text=True,
-        )
-        return result.returncode == 0
-    except FileNotFoundError:
-        # git command not found
-        return False
-
-
+@functools.lru_cache(maxsize=1)
 def get_main_branch():
     """Returns 'main' or 'master' depending on which one exists."""
     _, code = run_command(["git", "rev-parse", "--verify", "main"], check=False)
