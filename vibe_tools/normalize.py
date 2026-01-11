@@ -165,11 +165,8 @@ def normalize_prd(
 
         if clean_stem in global_truths:
             output_filename = f"{clean_stem}.yaml"
-            if clean_stem in ["build", "dev_environment"]:
-                output_path = VIBE_PROJECT_DIR / output_filename
-            else:
-                # Global truths stay in PRD_DIR (implementation/prds/)
-                output_path = PRD_DIR / output_filename
+            # Global truths go to VIBE_PROJECT_DIR (implementation/)
+            output_path = VIBE_PROJECT_DIR / output_filename
         else:
             # PRDs go to the calculated target base (implementation/prds/category/)
             target_prd_dir = target_base / rel_dir

@@ -87,7 +87,7 @@ def register_normalize(cli):
             )
 
         click.echo("\nNext Steps:")
-        click.echo("[ ] Review/Edit generated YAMLs in implementation/prds/")
+        click.echo("[ ] Review/Edit generated YAMLs in implementation/ and implementation/prds/")
         click.echo("[ ] Architecture Setup (vibe setup)")
         click.echo("[ ] Install Dependencies (vibe deps)")
         click.echo("[ ] Start Building (vibe implement)")
