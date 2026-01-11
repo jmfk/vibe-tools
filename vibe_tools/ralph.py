@@ -10,6 +10,7 @@ from typing import Callable, List
 
 import yaml
 
+from vibe_tools import utils
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.issues import FAILS_DIR, Issue, IssueBody, save_issue, generate_issue_id
 from vibe_tools.utils import (
@@ -48,7 +49,6 @@ from vibe_tools.utils import (
     safe_yaml_load,
     safe_yaml_dump,
     update_state_phase,
-    verbose_logger,
 )
 
 MAX_ITERATIONS = 10
@@ -168,13 +168,13 @@ class RalphLoop:
 
         # 3. Run Agent
         cmd = get_agent_command(self.agent, prompt)
-        if verbose_logger:
-            verbose_logger.log_event("prompt", prompt, f"{self.name}_reconciliation")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("prompt", prompt, f"{self.name}_reconciliation")
 
         output, code = run_agent(cmd, caffeinate=self.caffeinate, stream=self.stream)
 
-        if verbose_logger:
-            verbose_logger.log_event("reply", output, f"{self.name}_reconciliation")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("reply", output, f"{self.name}_reconciliation")
 
         if code == 0 and COMPLETION_PROMISE in output:
             log_success(self.name, "Reconciliation successful.")
@@ -277,15 +277,15 @@ class QuickFixLoop:
 
             # Call LLM directly (no agent wrapper)
             try:
-                if verbose_logger:
-                    verbose_logger.log_event(
+                if utils.verbose_logger:
+                    utils.verbose_logger.log_event(
                         "prompt", prompt, f"{self.name}_quickfix_iteration_{iteration}"
                     )
 
                 llm_output = run_llm(prompt, model=self.model, debug=self.debug)
 
-                if verbose_logger:
-                    verbose_logger.log_event(
+                if utils.verbose_logger:
+                    utils.verbose_logger.log_event(
                         "reply",
                         llm_output,
                         f"{self.name}_quickfix_iteration_{iteration}",
@@ -414,8 +414,8 @@ def debugging_loop(
             targets=targets, parallel=False
         )
 
-        if verbose_logger:
-            verbose_logger.log_event("test_output", test_output, f"debug_iteration_{i}")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("test_output", test_output, f"debug_iteration_{i}")
 
         if tests_passed:
             log_success("debug_loop", f"Targets {', '.join(targets)} passed!")
@@ -424,7 +424,7 @@ def debugging_loop(
         # Check for coverage failure
         if tester.is_coverage_failure(test_output):
             logger.warning(
-                "📉 Low coverage detected. Creating an issue and terminating debug loop."
+                "📉 Low coverage detected. Creating an issue and continuing."
             )
 
             issue_id = generate_issue_id()
@@ -445,7 +445,9 @@ def debugging_loop(
             )
             save_issue(issue)
             logger.info(f"📄 Created issue {issue_id} to track coverage improvement.")
-            return False
+            # We don't return False here anymore, we let it continue to see if other tests failed
+            if tests_passed:
+                return True
 
         # Parse individual failures and re-run to get clean output
         failures = tester.parse_failures(test_output)
@@ -478,13 +480,13 @@ def debugging_loop(
         prompt = prompt_template.format(test_output=agent_test_output)
         cmd = get_agent_command(agent, prompt)
 
-        if verbose_logger:
-            verbose_logger.log_event("prompt", prompt, f"debug_iteration_{i}")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("prompt", prompt, f"debug_iteration_{i}")
 
         agent_output, _ = run_agent(cmd, stream=stream)
 
-        if verbose_logger:
-            verbose_logger.log_event("reply", agent_output, f"debug_iteration_{i}")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("reply", agent_output, f"debug_iteration_{i}")
 
         # Log costs
 
@@ -734,15 +736,15 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 )
                 cmd = get_agent_command(agent, prompt)
 
-                if verbose_logger:
-                    verbose_logger.log_event(
+                if utils.verbose_logger:
+                    utils.verbose_logger.log_event(
                         "prompt", prompt, f"{plan_id}_iteration_{i}"
                     )
 
                 output, code = run_agent(cmd, stream=stream)
 
-                if verbose_logger:
-                    verbose_logger.log_event(
+                if utils.verbose_logger:
+                    utils.verbose_logger.log_event(
                         "reply", output, f"{plan_id}_iteration_{i}"
                     )
 
@@ -896,15 +898,15 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     )
                     review_cmd = get_agent_command(agent, review_prompt)
 
-                    if verbose_logger:
-                        verbose_logger.log_event(
+                    if utils.verbose_logger:
+                        utils.verbose_logger.log_event(
                             "prompt", review_prompt, f"{plan_id}_review_iteration_{i}"
                         )
 
                     review_output, _ = run_agent(review_cmd, stream=stream)
 
-                    if verbose_logger:
-                        verbose_logger.log_event(
+                    if utils.verbose_logger:
+                        utils.verbose_logger.log_event(
                             "reply", review_output, f"{plan_id}_review_iteration_{i}"
                         )
 
@@ -962,13 +964,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             commit_prompt = f"Commit changes for plan: {title}. Ensure all success criteria were met."
             commit_cmd = get_agent_command(agent, commit_prompt)
 
-            if verbose_logger:
-                verbose_logger.log_event("prompt", commit_prompt, f"{plan_id}_commit")
+            if utils.verbose_logger:
+                utils.verbose_logger.log_event("prompt", commit_prompt, f"{plan_id}_commit")
 
             commit_output, _ = run_agent(commit_cmd, stream=stream)
 
-            if verbose_logger:
-                verbose_logger.log_event("reply", commit_output, f"{plan_id}_commit")
+            if utils.verbose_logger:
+                utils.verbose_logger.log_event("reply", commit_output, f"{plan_id}_commit")
 
             # Update status by moving file to done directory
             if plan_file_path.parent != PRD_DONE_DIR:
@@ -1144,13 +1146,13 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
             )
             cmd = get_agent_command(agent, prompt)
 
-            if verbose_logger:
-                verbose_logger.log_event("prompt", prompt, f"{issue.id}_iteration_{i}")
+            if utils.verbose_logger:
+                utils.verbose_logger.log_event("prompt", prompt, f"{issue.id}_iteration_{i}")
 
             output, code = run_agent(cmd, stream=stream)
 
-            if verbose_logger:
-                verbose_logger.log_event("reply", output, f"{issue.id}_iteration_{i}")
+            if utils.verbose_logger:
+                utils.verbose_logger.log_event("reply", output, f"{issue.id}_iteration_{i}")
 
             if code != 0 or COMPLETION_PROMISE not in output:
                 reason = (
@@ -1242,15 +1244,15 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
                     )
                     review_cmd = get_agent_command(agent, review_prompt)
 
-                    if verbose_logger:
-                        verbose_logger.log_event(
+                    if utils.verbose_logger:
+                        utils.verbose_logger.log_event(
                             "prompt", review_prompt, f"{issue.id}_review_iteration_{i}"
                         )
 
                     review_output, _ = run_agent(review_cmd, stream=stream)
 
-                    if verbose_logger:
-                        verbose_logger.log_event(
+                    if utils.verbose_logger:
+                        utils.verbose_logger.log_event(
                             "reply", review_output, f"{issue.id}_review_iteration_{i}"
                         )
 
@@ -1399,13 +1401,13 @@ def _switch_to_branch(
         )
         cmd = get_agent_command(agent, prompt)
 
-        if verbose_logger:
-            verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
 
         output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
-        if verbose_logger:
-            verbose_logger.log_event("reply", output, f"{project_name}_git_fix")
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("reply", output, f"{project_name}_git_fix")
 
         # Final attempt after agent fix
         final_output, final_code = run_command(
