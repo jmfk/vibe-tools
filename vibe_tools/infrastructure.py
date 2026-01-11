@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from vibe_tools.utils import INFRA, logger
+from vibe_tools.utils import INFRA, logger, safe_yaml_load
 
 DEPLOYMENT_DIR = pathlib.Path("deployment")
 TERRAFORM_DIR = DEPLOYMENT_DIR / "terraform"
@@ -26,7 +26,7 @@ def load_infrastructure_spec() -> Dict[str, Any]:
         return {}
 
     try:
-        return yaml.safe_load(INFRA.read_text()) or {}
+        return safe_yaml_load(INFRA.read_text()) or {}
     except Exception as e:
         logger.error(f"Failed to load infrastructure spec: {e}")
         return {}

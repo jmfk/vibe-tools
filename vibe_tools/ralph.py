@@ -43,6 +43,8 @@ from vibe_tools.utils import (
     run_llm,
     save_project_state,
     switch_to_main,
+    safe_yaml_load,
+    safe_yaml_dump,
 )
 
 MAX_ITERATIONS = 10
@@ -547,7 +549,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             continue
 
         try:
-            plan_data = yaml.safe_load(plan_yaml_path.read_text())
+            plan_data = safe_yaml_load(plan_yaml_path.read_text())
         except Exception as e:
             logger.error(f"Failed to parse {plan_yaml_path}: {e}")
             continue
