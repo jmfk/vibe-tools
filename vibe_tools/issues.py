@@ -12,7 +12,6 @@ BACKLOG_DIR = ISSUES_DIR / "backlog"
 HISTORY_DIR = ISSUES_DIR / "history"
 FAILS_DIR = ISSUES_DIR / "fails"
 META_DIR = ISSUES_DIR / "meta"
-INDEX_FILE = META_DIR / "index.json"
 
 @dataclass
 class GitHubInfo:
@@ -197,21 +196,6 @@ def get_issue_hash(issue: Issue) -> str:
     }
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
-def load_index() -> Dict[str, Any]:
-    if not INDEX_FILE.exists():
-        return {}
-    try:
-        content = INDEX_FILE.read_text()
-        if not content.strip():
-            return {}
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return {}
-
-def save_index(index: Dict[str, Any]):
-    META_DIR.mkdir(parents=True, exist_ok=True)
-    INDEX_FILE.write_text(json.dumps(index, indent=2))
-
 def save_issue(issue: Issue):
     # Determine directory based on status
     target_dir = HISTORY_DIR if issue.status == "done" else BACKLOG_DIR
@@ -232,67 +216,45 @@ def save_issue(issue: Issue):
 
     file_path.write_text(issue.to_markdown())
 
-    # Update index
-    index = load_index()
-    index[issue.id] = {
-        "file": str(file_path),
-        "github_number": issue.github.number if issue.github else None,
-        "updated_at": issue.updated_at
-    }
-    save_index(index)
-
 def load_issue_by_id(issue_id: str) -> Optional[Issue]:
-    index = load_index()
-    if issue_id in index:
-        path = pathlib.Path(index[issue_id]["file"])
+    # Search in known directories
+    for directory in [BACKLOG_DIR, HISTORY_DIR]:
+        path = directory / f"{issue_id}.md"
         if path.exists():
             return Issue.from_markdown(path.read_text())
-
-    # Fallback to direct file search
-    for path in [BACKLOG_DIR / f"{issue_id}.md", HISTORY_DIR / f"{issue_id}.md"]:
-        if path.exists():
-            return Issue.from_markdown(path.read_text())
-
     return None
 
 def generate_issue_id() -> str:
     now = datetime.datetime.now()
     date_str = now.strftime("%Y-%m-%d")
-    index = load_index()
-
+    
     # Count issues for today across all directories
     today_count = 0
     prefix = f"ISSUE-{date_str}-"
-    for issue_id in index:
-        if issue_id.startswith(prefix):
-            try:
-                count = int(issue_id.replace(prefix, ""))
-                if count > today_count:
-                    today_count = count
-            except ValueError:
-                pass
+    
+    for directory in [BACKLOG_DIR, HISTORY_DIR]:
+        if directory.exists():
+            for file in directory.glob(f"{prefix}*.md"):
+                issue_id = file.stem
+                try:
+                    count = int(issue_id.replace(prefix, ""))
+                    if count > today_count:
+                        today_count = count
+                except ValueError:
+                    pass
 
     return f"{prefix}{today_count + 1:03d}"
 
 def load_all_issues() -> List[Issue]:
-    index = load_index()
     issues = []
-    for issue_id in sorted(index.keys()):
-        issue = load_issue_by_id(issue_id)
-        if issue:
-            issues.append(issue)
-
-    # Also check directories for any issues not in index
     for directory in [BACKLOG_DIR, HISTORY_DIR]:
         if directory.exists():
             for file in directory.glob("*.md"):
-                issue_id = file.stem
-                if issue_id not in index:
-                    try:
-                        issue = Issue.from_markdown(file.read_text())
-                        issues.append(issue)
-                    except Exception:
-                        continue
+                try:
+                    issue = Issue.from_markdown(file.read_text())
+                    issues.append(issue)
+                except Exception:
+                    continue
 
     # Sort by created_at, then by id for stability
     issues.sort(key=lambda x: (x.created_at, x.id))
