@@ -6,6 +6,18 @@ set -e
 
 echo "--- Installing Vibe-Tools ---"
 
+# Check for Git
+if ! command -v git &> /dev/null; then
+    echo "⚠️  Warning: git is not installed. Git is required for vibe-tools."
+    echo "   Please install Git: https://git-scm.com/"
+fi
+
+# Check for GitHub CLI
+if ! command -v gh &> /dev/null; then
+    echo "⚠️  Note: GitHub CLI (gh) is not installed. It is highly recommended for PR and issue integration."
+    echo "   Install it via Homebrew: brew install gh"
+fi
+
 # Check for basic Python/pip presence first
 if ! command -v python3 &> /dev/null; then
     echo "Error: python3 is not installed. Please install Python first."
