@@ -1,0 +1,1 @@
+When using DSPy, always use the 'dspy-ai' Python library directly rather than calling the 'dspy' CLI via subprocess. Use dspy.Signature and dspy.Predictor (or dspy.TypedPredictor) for structured interactions.

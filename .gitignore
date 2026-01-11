@@ -29,14 +29,6 @@ node_modules/
 
 vibe_data/*
 
-implementation/*
-!implementation/prds/
-!implementation/prds/**/*.yaml
-!implementation/state.json
-!implementation/config.json
-!implementation/build.yaml
 stats/*
 reports/*
-
-implementation/costs/*
 implementation/logs/*
