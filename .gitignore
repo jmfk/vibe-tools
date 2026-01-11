@@ -15,14 +15,6 @@ prds/
 . coverage/
 node_modules/
 
-.vibe_config.json
-.ralph_state.json
-.vibe_google_creds.json
-.vibe_google_token.json
-.vibe_client_secrets.json
-.vibe_authorized_user.json
-
-vibe_data/*
-stats/*
-reports/*
+reports/
+stats/
 implementation/logs/*

@@ -344,7 +344,6 @@ def _perform_basic_init():
     ensure_project_structure()
 
     ensure_dir(VIBE_PROJECT_DIR)
-    ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)

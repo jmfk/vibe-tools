@@ -393,8 +393,6 @@ def maybe_init_git():
             try:
                 subprocess.run(["git", "init"], check=True)
                 click.echo("✅ Initialized empty Git repository.")
-                ensure_gitignore(".vibe_config.json")
-                ensure_gitignore("logs/")
             except Exception as e:
                 click.echo(f"❌ Failed to initialize Git repository: {e}")
 
@@ -739,7 +737,6 @@ def ensure_infrastructure():
     if not VIBE_DATA_DIR.exists():
         click.echo(f"Creating storage directory: {VIBE_DATA_DIR}")
         VIBE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        ensure_gitignore(str(VIBE_DATA_DIR) + "/*")
 
 
 def install_deps():
@@ -789,11 +786,6 @@ def install_deps():
     if pathlib.Path("frontend/package.json").exists():
         click.echo("Found frontend/package.json. Installing npm dependencies...")
         run_command(["npm", "install", "--prefix", "frontend"], caffeinate=True)
-
-    # Update project state to mark deps as completed
-    state = load_project_state()
-    state["phases"]["deps"]["status"] = "completed"
-    save_project_state(state)
 
 
 @setup_cli.command()
@@ -893,23 +885,7 @@ def env(python_version):
     except Exception as e:
         click.echo(f"⚠️ Warning: Failed to install dependencies: {e}")
 
-    # 9. Record in config
-    config = load_config()
-    config["env"] = {
-        "type": "pyenv-virtualenv",
-        "python_version": python_version,
-        "venv_name": venv_name,
-        "path": str(pathlib.Path.cwd()),
-        "last_setup": datetime.datetime.now().isoformat(),
-    }
-    save_config(config)
-
-    # 9. Sync .env file
-    from vibe_tools.utils import sync_env_file
-
-    sync_env_file()
-
-    click.echo(f"\n✅ Environment setup complete and recorded in {CONFIG_FILE}")
+    click.echo(f"\n✅ Environment setup complete.")
     click.echo(f"Virtualenv: {venv_name}")
     click.echo(
         "\nTo ensure your shell is configured for pyenv, add these to your ~/.zshrc or ~/.bash_profile:"
