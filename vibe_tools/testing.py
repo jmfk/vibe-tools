@@ -107,6 +107,19 @@ class ProjectTester:
             return False
         return True
 
+    def is_coverage_failure(self, output):
+        """Checks if the output indicates a failure due to low coverage."""
+        # Common coverage failure patterns
+        patterns = [
+            r"Required test coverage of \d+% not reached",
+            r"FAIL Required coverage not met",
+            r"coverage: \d+\.\d+% is less than \d+%",
+        ]
+        for pattern in patterns:
+            if re.search(pattern, output, re.IGNORECASE):
+                return True
+        return False
+
     def get_summary(self, failed_targets):
         """Returns a concise summary string of failed targets."""
         if not failed_targets:
