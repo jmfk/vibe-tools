@@ -12,7 +12,7 @@ from vibe_tools.issues import (
     SyncInfo,
     generate_issue_id,
     get_issue_hash,
-    load_index,
+    load_all_issues,
     load_issue_by_id,
     save_issue,
 )
@@ -706,21 +706,19 @@ def pull_github_issues(repo: str, open_only: bool = True, since: Optional[str] =
         return
 
     gh_issues = json.loads(stdout)
-    index = load_index()
+    local_issues = load_all_issues()
 
-    # Map gh_number to local_id
-    gh_to_local = {v["github_number"]: k for k, v in index.items() if v.get("github_number")}
+    # Map gh_number to Issue
+    gh_to_local = {i.github.number: i for i in local_issues if i.github}
 
     for gh_issue in gh_issues:
         gh_number = gh_issue["number"]
         gh_updated_at = gh_issue["updatedAt"]
 
         if gh_number in gh_to_local:
-            local_id = gh_to_local[gh_number]
-            issue = load_issue_by_id(local_id)
-            if not issue:
-                continue
-
+            issue = gh_to_local[gh_number]
+            local_id = issue.id
+            
             current_hash = get_issue_hash(issue)
 
             # Conflict detection
@@ -818,18 +816,18 @@ def ensure_github_label(repo: str, label: str):
     ENSURED_LABELS.add(cache_key)
 
 def push_local_issues(repo: str, relevant_files=None):
-    index = load_index()
-    for local_id in index:
-        issue_path = index[local_id]["file"]
+    local_issues = load_all_issues()
+    for issue in local_issues:
+        issue_id = issue.id
+        # Simplified: derive path from status
+        from vibe_tools.issues import HISTORY_DIR, BACKLOG_DIR
+        issue_path = str((HISTORY_DIR if issue.status == "done" else BACKLOG_DIR) / f"{issue_id}.md")
+        
         if relevant_files is not None:
             # Issues in backlog are always relevant for status updates
             is_backlog = "issues/backlog" in issue_path
             if issue_path not in relevant_files and not is_backlog:
                 continue
-
-        issue = load_issue_by_id(local_id)
-        if not issue:
-            continue
 
         current_hash = get_issue_hash(issue)
         if issue.sync and issue.sync.sync_hash == current_hash:

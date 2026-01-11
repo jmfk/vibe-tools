@@ -14,13 +14,14 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.issues import FAILS_DIR, Issue, save_issue
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
-    BACKLOG_DIR,
     BUILD,
     BUILD_CURRENT,
     CICD_SPEC,
-    HISTORY_DIR,
     INFRA_SPEC,
     PRD_DIR,
+    PRD_DONE_DIR,
+    PRD_FAILED_DIR,
+    PRD_PROCESSING_DIR,
     TESTING_SPEC,
     check_plan_dependencies,
     collect_prd_files,
@@ -294,78 +295,40 @@ class QuickFixLoop:
 
 
 def generate_prd_plan() -> bool:
-    """Analyzes PRDs and updates project-state.json with plans."""
+    """Analyzes PRDs and updates state if needed (though mostly derived from filesystem now)."""
     prds = collect_prd_files()
     if not prds:
-        logger.warning("No PRDs found in implementation/prds/ to generate plan.")
+        logger.warning("No PRDs found in implementation/prds/processing/ to generate plan.")
         return False
 
     state = load_project_state()
+    # Plans are derived from filesystem in load_project_state()
+    # This function now mostly ensures lineage is tracked in state.json
+    
     config = load_config()
-
-    # Determine the starting point for the lineage
     auto_merge = config.get("ralph", {}).get("auto_merge", False)
-    if auto_merge:
-        base_branch = get_automerge_branch(config)
-    else:
-        base_branch = get_main_branch()
+    base_branch = get_automerge_branch(config) if auto_merge else get_main_branch()
 
-    # Track lineage and find parent branch
     last_completed_branch = base_branch
     completed_plans = [
-        p_id
-        for p_id, p_info in state["plans"].items()
+        p_id for p_id, p_info in state["plans"].items()
         if p_info.get("status") == "completed"
     ]
     if completed_plans:
-        # Sort by creation time if we had it, but for now we'll assume alphabetical order of PRDs if not specified
-        # or use the order in state["plans"] which is usually the implementation order.
         last_plan_id = completed_plans[-1]
         last_completed_branch = f"feature/{last_plan_id}"
 
     for prd_path in prds:
         prd_id = prd_path.stem
-        if auto_merge:
-            branch_name = get_automerge_branch(config)
-        else:
-            branch_name = f"feature/{prd_id}"
-
-        # Ensure it's in state["plans"]
-        if prd_id not in state["plans"]:
-            state["plans"][prd_id] = {
-                "status": "pending",
-                "depends_on": [],
-                "title": prd_id.replace("prd_", "").replace("_", " ").title(),
-                "file": str(prd_path),
-                "is_direct_prd": True,
-                "branch": branch_name,
-                "parent_branch": last_completed_branch,
-            }
+        branch_name = get_automerge_branch(config) if auto_merge else f"feature/{prd_id}"
+        
+        if branch_name not in state["branch_lineage"]:
             state["branch_lineage"][branch_name] = last_completed_branch
-        else:
-            # Update file path and ensure branch/parent_branch exist
-            state["plans"][prd_id]["file"] = str(prd_path)
-            state["plans"][prd_id]["is_direct_prd"] = True
-
-            # Always update branch if auto_merge is true, or if branch is missing
-            if auto_merge or "branch" not in state["plans"][prd_id]:
-                state["plans"][prd_id]["branch"] = branch_name
-
-            if "parent_branch" not in state["plans"][prd_id]:
-                # If it's already in state but missing parent_branch, try to find it
-                # or default to main
-                state["plans"][prd_id]["parent_branch"] = state["branch_lineage"].get(
-                    branch_name, get_main_branch()
-                )
-
-        # Update last_completed_branch for the next one in the loop if we want strict linear
-        # (Though we might want to only update it if the previous one was just added or is completed)
-        # For initialization, we'll assume linear based on the collected PRD order.
+        
         last_completed_branch = branch_name
 
     save_project_state(state)
-
-    logger.info("✅ Updated project state with plans from PRDs.")
+    logger.info("✅ Updated branch lineage in project state.")
     return True
 
 
@@ -556,24 +519,22 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 plan_file_path = None
 
         if not plan_file_path:
-            # Fallback search order: BACKLOG_DIR, PRD_DIR, HISTORY_DIR
+            # Fallback search order: PRD_PROCESSING_DIR, PRD_DONE_DIR, PRD_FAILED_DIR
             fallbacks = [
-                BACKLOG_DIR / f"{plan_id}.yaml",
+                PRD_PROCESSING_DIR / f"{plan_id}.yaml",
+                PRD_DONE_DIR / f"{plan_id}.yaml",
+                PRD_FAILED_DIR / f"{plan_id}.yaml",
                 PRD_DIR / f"{plan_id}.yaml",
-                HISTORY_DIR / f"{plan_id}.yaml",
             ]
             for fb in fallbacks:
                 if fb.is_file():
                     plan_file_path = fb
-                    # Update state with the correct path for next time
-                    state["plans"][plan_id]["file"] = str(fb)
-                    save_project_state(state)
-                    logger.info(f"📍 Found plan {plan_id} at {fb} and updated state.")
+                    logger.info(f"📍 Found plan {plan_id} at {fb}.")
                     break
 
             if not plan_file_path:
                 logger.error(
-                    f"❌ Plan file for {plan_id} not found (searched state path, {BACKLOG_DIR}, {PRD_DIR}, {HISTORY_DIR}). Skipping."
+                    f"❌ Plan file for {plan_id} not found. Skipping."
                 )
                 continue
 
@@ -631,19 +592,8 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         logger.info(f"🚀 Executing Plan: {title} ({plan_id})")
         log_start("implement", f"Plan: {title} ({plan_id})")
 
-        # Update status in project-state.json to in_progress
-        state = load_project_state()
-        if plan_id not in state["plans"]:
-            state["plans"][plan_id] = {}
-        state["plans"][plan_id]["status"] = "in_progress"
-
-        # Mark in started_prds
-        if plan_id not in state.get("started_prds", []):
-            if "started_prds" not in state:
-                state["started_prds"] = []
-            state["started_prds"].append(plan_id)
-        
-        save_project_state(state)
+        # Status is now derived from file location. 
+        # Plan is already in PRD_PROCESSING_DIR if we are here.
 
         _switch_to_branch(
             branch_name, agent, plan_id, parent_branch=parent_branch, stream=stream
@@ -826,27 +776,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             commit_cmd = get_agent_command(agent, commit_prompt)
             run_agent(commit_cmd, stream=stream)
 
-            # Update status in project-state.json
-            state = load_project_state()
-            if plan_id not in state["plans"]:
-                state["plans"][plan_id] = {}
-            state["plans"][plan_id]["status"] = "completed"
-
-            # Mark in completed_prds
-            if plan_id not in state.get("completed_prds", []):
-                state["completed_prds"].append(plan_id)
-
-            # Move file to history if it's in backlog
-            if plan_file_path.parent == BACKLOG_DIR:
-                target_path = HISTORY_DIR / plan_file_path.name
+            # Update status by moving file to done directory
+            if plan_file_path.parent != PRD_DONE_DIR:
+                target_path = PRD_DONE_DIR / plan_file_path.name
                 if not target_path.exists():
-                    logger.info(f"📦 Moving {plan_file_path.name} to history.")
+                    logger.info(f"📦 Moving {plan_file_path.name} to done.")
                     import shutil
                     shutil.move(str(plan_file_path), str(target_path))
-                    # Update the path in state if it was moved
-                    state["plans"][plan_id]["file"] = str(target_path)
-
-            save_project_state(state)
 
             # Auto-merge if enabled
             auto_merge = config.get("ralph", {}).get("auto_merge", False)
@@ -897,6 +833,13 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             logger.error(
                 f"❌ Failed to complete plan {plan_id} after {max_impl_iterations} iterations."
             )
+            # Move file to failed directory
+            if plan_file_path.parent != PRD_FAILED_DIR:
+                target_path = PRD_FAILED_DIR / plan_file_path.name
+                if not target_path.exists():
+                    logger.info(f"📦 Moving {plan_file_path.name} to failed.")
+                    import shutil
+                    shutil.move(str(plan_file_path), str(target_path))
             return False
 
     return True
