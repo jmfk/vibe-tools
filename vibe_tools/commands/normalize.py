@@ -12,6 +12,8 @@ from vibe_tools.utils import (
     TESTING_SPEC,
     check_dependencies,
     load_project_state,
+    get_prd_inconsistencies,
+    fix_prd_inconsistencies,
 )
 
 
@@ -29,6 +31,23 @@ def register_normalize(cli):
         """Phase 2: Normalize human-written PRDs from product/ into machine-consumable YAML in prds/."""
         maybe_init_git()
         state = load_project_state()
+
+        # Check for PRD location inconsistencies
+        inconsistencies = get_prd_inconsistencies()
+        if inconsistencies:
+            click.echo("⚠️  Found PRD location inconsistencies:")
+            for inc in inconsistencies:
+                click.echo(f"  - {inc['name']}: MD at {inc['md_path']}, YAML at {inc['yaml_path']}")
+            
+            if yes or click.confirm("Fix inconsistencies to synchronize MD and YAML locations?", default=True):
+                fix_prd_inconsistencies(inconsistencies, prefer_yaml=False)
+                click.echo("✅ Inconsistencies fixed.")
+                # Reload state after fixing
+                state = load_project_state()
+            else:
+                click.echo("❌ Aborted. Please fix inconsistencies manually.")
+                return
+
         missing = check_dependencies("normalize", state)
         if missing:
             click.echo(

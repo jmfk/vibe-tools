@@ -786,6 +786,26 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     import shutil
                     shutil.move(str(plan_file_path), str(target_path))
 
+            # Move corresponding MD file to history if it exists
+            md_path_str = plan_info.get("md_path")
+            if md_path_str:
+                md_path = pathlib.Path(md_path_str)
+                if md_path.exists() and PLANNING_HISTORY_DIR not in md_path.parents:
+                    # Maintain relative directory structure
+                    if PLANNING_BACKLOG_DIR in md_path.parents:
+                        rel_dir = md_path.parent.relative_to(PLANNING_BACKLOG_DIR)
+                    elif PLANNING_INBOX_DIR in md_path.parents:
+                        rel_dir = md_path.parent.relative_to(PLANNING_INBOX_DIR)
+                    else:
+                        rel_dir = md_path.parent.relative_to(PLANNING_DIR)
+
+                    target_md_dir = PLANNING_HISTORY_DIR / rel_dir
+                    target_md_dir.mkdir(parents=True, exist_ok=True)
+                    target_md_path = target_md_dir / md_path.name
+                    logger.info(f"📦 Moving {md_path.name} to history.")
+                    import shutil
+                    shutil.move(str(md_path), str(target_md_path))
+
             # Auto-merge if enabled
             auto_merge = config.get("ralph", {}).get("auto_merge", False)
             if auto_merge:
@@ -842,6 +862,26 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     logger.info(f"📦 Moving {plan_file_path.name} to failed.")
                     import shutil
                     shutil.move(str(plan_file_path), str(target_path))
+
+            # Move corresponding MD file to rejected if it exists
+            md_path_str = plan_info.get("md_path")
+            if md_path_str:
+                md_path = pathlib.Path(md_path_str)
+                if md_path.exists() and PLANNING_REJECTED_DIR not in md_path.parents:
+                    # Maintain relative directory structure
+                    if PLANNING_BACKLOG_DIR in md_path.parents:
+                        rel_dir = md_path.parent.relative_to(PLANNING_BACKLOG_DIR)
+                    elif PLANNING_INBOX_DIR in md_path.parents:
+                        rel_dir = md_path.parent.relative_to(PLANNING_INBOX_DIR)
+                    else:
+                        rel_dir = md_path.parent.relative_to(PLANNING_DIR)
+
+                    target_md_dir = PLANNING_REJECTED_DIR / rel_dir
+                    target_md_dir.mkdir(parents=True, exist_ok=True)
+                    target_md_path = target_md_dir / md_path.name
+                    logger.info(f"📦 Moving {md_path.name} to rejected.")
+                    import shutil
+                    shutil.move(str(md_path), str(target_md_path))
             return False
 
     return True
