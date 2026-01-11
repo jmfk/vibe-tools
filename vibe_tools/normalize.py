@@ -8,17 +8,17 @@ import yaml
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.ralph import _switch_to_branch
 from vibe_tools.utils import (
-    BACKLOG_DIR,
-    HISTORY_DIR,
-    INBOX_DIR,
     PLANNING_BACKLOG_DIR,
     PLANNING_HISTORY_DIR,
     PLANNING_INBOX_DIR,
     PLANNING_REJECTED_DIR,
     PRD_DIR,
-    REJECTED_DIR,
+    PRD_DONE_DIR,
+    PRD_FAILED_DIR,
+    PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
+    get_main_branch,
     get_prompt,
     is_dirty,
     load_project_state,
@@ -90,10 +90,10 @@ def normalize_prd(
     # Only prompt for global overwrite when normalizing all files (not specific files)
     overwrite_mode = "yes" if auto_overwrite else "ask"
     if not input_file:  # Only when normalizing all files
-        existing_prds = list(BACKLOG_DIR.rglob("prd_*.yaml"))
+        existing_prds = list(PRD_PROCESSING_DIR.rglob("prd_*.yaml"))
         if existing_prds and not auto_overwrite and sys.stdin.isatty():
             choice = click.prompt(
-                f"Found {len(existing_prds)} existing files in {BACKLOG_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
+                f"Found {len(existing_prds)} existing files in {PRD_PROCESSING_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
                 type=click.Choice(["y", "n", "a"], case_sensitive=False),
                 default="a",
             )
@@ -131,20 +131,20 @@ def normalize_prd(
 
         # Determine target PRD directory based on which product subdirectory it came from
         if PLANNING_BACKLOG_DIR in spec_path.parents or spec_path.parent == PLANNING_BACKLOG_DIR:
-            target_base = BACKLOG_DIR
+            target_base = PRD_PROCESSING_DIR
             rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
         elif PLANNING_HISTORY_DIR in spec_path.parents or spec_path.parent == PLANNING_HISTORY_DIR:
-            target_base = HISTORY_DIR
+            target_base = PRD_DONE_DIR
             rel_dir = spec_path.parent.relative_to(PLANNING_HISTORY_DIR)
         elif PLANNING_INBOX_DIR in spec_path.parents or spec_path.parent == PLANNING_INBOX_DIR:
-            target_base = INBOX_DIR
+            target_base = PRD_PROCESSING_DIR  # Normalized inbox PRDs go to processing
             rel_dir = spec_path.parent.relative_to(PLANNING_INBOX_DIR)
         elif PLANNING_REJECTED_DIR in spec_path.parents or spec_path.parent == PLANNING_REJECTED_DIR:
-            target_base = REJECTED_DIR
+            target_base = PRD_FAILED_DIR
             rel_dir = spec_path.parent.relative_to(PLANNING_REJECTED_DIR)
         else:
-            # Default to backlog if it's in the product root or elsewhere
-            target_base = BACKLOG_DIR
+            # Default to processing if it's in the product root or elsewhere
+            target_base = PRD_PROCESSING_DIR
             try:
                 rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
             except ValueError:
@@ -257,6 +257,13 @@ def normalize_prd(
                 if data is None or not isinstance(data, dict):
                     # If it's not a dict, it might have failed to extract correctly
                     raise yaml.YAMLError("Output is not a valid YAML dictionary")
+
+                # Inject plan metadata if it's a PRD
+                if clean_stem not in global_truths:
+                    data["TITLE"] = data.get("TITLE", clean_stem.replace("_", " ").title())
+                    data["DEPENDS_ON"] = data.get("DEPENDS_ON", [])
+                    data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
+                    data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
 
                 clean_output = yaml.safe_dump(
                     data, sort_keys=False, allow_unicode=True, width=1000

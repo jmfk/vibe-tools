@@ -21,22 +21,30 @@ VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
 
+# Issues
 ISSUES_DIR = pathlib.Path("issues")
 ISSUES_BACKLOG_DIR = ISSUES_DIR / "backlog"
 ISSUES_HISTORY_DIR = ISSUES_DIR / "history"
 ISSUES_FAILS_DIR = ISSUES_DIR / "fails"
 ISSUES_META_DIR = ISSUES_DIR / "meta"
 
+# Product Planning (Markdown)
 PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
 PLANNING_BACKLOG_DIR = PLANNING_DIR / "backlog"
 PLANNING_HISTORY_DIR = PLANNING_DIR / "history"
 PLANNING_REJECTED_DIR = PLANNING_DIR / "rejected"
 
+# Implementation PRDs (YAML)
 PRD_DIR = VIBE_PROJECT_DIR / "prds"
-INBOX_DIR = PRD_DIR / "inbox"
+PRD_PROCESSING_DIR = PRD_DIR / "processing"
+PRD_DONE_DIR = PRD_DIR / "done"
+PRD_FAILED_DIR = PRD_DIR / "failed"
+
+# Legacy - to be removed after migration
 BACKLOG_DIR = PRD_DIR / "backlog"
 HISTORY_DIR = PRD_DIR / "history"
 REJECTED_DIR = PRD_DIR / "rejected"
+INBOX_DIR = PRD_DIR / "inbox"
 
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
@@ -146,10 +154,9 @@ def ensure_project_structure():
     LOGS_DIR.mkdir(exist_ok=True)
     COSTS_DIR.mkdir(exist_ok=True)
     PRD_DIR.mkdir(exist_ok=True, parents=True)
-    INBOX_DIR.mkdir(exist_ok=True)
-    BACKLOG_DIR.mkdir(exist_ok=True)
-    HISTORY_DIR.mkdir(exist_ok=True)
-    REJECTED_DIR.mkdir(exist_ok=True)
+    PRD_PROCESSING_DIR.mkdir(exist_ok=True)
+    PRD_DONE_DIR.mkdir(exist_ok=True)
+    PRD_FAILED_DIR.mkdir(exist_ok=True)
 
     PLANNING_DIR.mkdir(exist_ok=True)
     PLANNING_INBOX_DIR.mkdir(exist_ok=True)
@@ -286,10 +293,7 @@ def save_config(config, global_scope=False):
 
 
 def load_project_state() -> Dict[str, Any]:
-    """Loads the project state, migrating from legacy if necessary."""
-    if not PROJECT_STATE_FILE.exists() and STATE_FILE.exists():
-        migrate_legacy_state()
-
+    """Loads the project state, deriving PRD and Issue info from filesystem."""
     state = {
         "project_name": get_project_name(),
         "phases": {
@@ -306,47 +310,85 @@ def load_project_state() -> Dict[str, Any]:
                 "depends_on": ["cicd"],
             },
         },
-        "plans": {},
         "branch_lineage": {},  # Maps branch -> parent_branch
-        "completed_prds": [],
-        "started_prds": [],
         "active_task": None,
-        "version": "1.1",
+        "version": "1.2",
     }
 
     if PROJECT_STATE_FILE.exists():
         try:
             stored_state = json.loads(PROJECT_STATE_FILE.read_text())
-            # Basic migration/merging
             if "project_name" in stored_state:
                 state["project_name"] = stored_state["project_name"]
             if "phases" in stored_state:
                 for phase_id, phase_data in stored_state["phases"].items():
                     if phase_id in state["phases"]:
                         state["phases"][phase_id].update(phase_data)
-                # Migrate dependencies: infra should depend on implement, testing on infra
-                if "infra" in state["phases"]:
-                    state["phases"]["infra"]["depends_on"] = ["implement"]
-                if "testing" in state["phases"]:
-                    state["phases"]["testing"]["depends_on"] = ["infra"]
-            if "plans" in stored_state:
-                state["plans"] = stored_state["plans"]
             if "branch_lineage" in stored_state:
                 state["branch_lineage"] = stored_state["branch_lineage"]
-            if "completed_prds" in stored_state:
-                state["completed_prds"] = stored_state["completed_prds"]
-            if "started_prds" in stored_state:
-                state["started_prds"] = stored_state["started_prds"]
             if "active_task" in stored_state:
                 state["active_task"] = stored_state["active_task"]
-            if "version" in stored_state:
-                # If we're loading an older version, we might want to trigger specific logic here
-                pass
-            return state
         except Exception as e:
             logger.error(f"Error loading project state: {e}")
 
+    # Derive plans, completed_prds, started_prds from filesystem
+    derived_info = _derive_plans_from_filesystem()
+    state["plans"] = derived_info["plans"]
+    state["completed_prds"] = derived_info["completed_prds"]
+    state["started_prds"] = derived_info["started_prds"]
+
     return state
+
+
+def _derive_plans_from_filesystem() -> Dict[str, Any]:
+    """Scans implementation/prds subdirectories to reconstruct plans and status."""
+    plans = {}
+    completed_prds = []
+    started_prds = []
+
+    # Map directories to statuses
+    status_map = {
+        PRD_PROCESSING_DIR: "in_progress",
+        PRD_DONE_DIR: "completed",
+        PRD_FAILED_DIR: "failed",
+        # Support legacy locations during transition
+        BACKLOG_DIR: "pending",
+        HISTORY_DIR: "completed",
+    }
+
+    for directory, status in status_map.items():
+        if directory.exists():
+            for yaml_file in directory.glob("prd_*.yaml"):
+                prd_id = yaml_file.stem
+                try:
+                    with open(yaml_file, "r") as f:
+                        data = yaml.safe_load(f) or {}
+                    
+                    # Plan metadata is now in the YAML itself
+                    plan_info = {
+                        "status": status,
+                        "file": str(yaml_file),
+                        "title": data.get("TITLE", prd_id.replace("prd_", "").replace("_", " ").title()),
+                        "depends_on": data.get("DEPENDS_ON", []),
+                        "branch": data.get("BRANCH", f"feature/{prd_id}"),
+                        "parent_branch": data.get("PARENT_BRANCH", get_main_branch()),
+                        "is_direct_prd": True
+                    }
+                    plans[prd_id] = plan_info
+                    
+                    if status == "completed":
+                        completed_prds.append(prd_id)
+                    elif status == "in_progress":
+                        started_prds.append(prd_id)
+                        
+                except Exception as e:
+                    logger.warning(f"Could not read metadata from {yaml_file}: {e}")
+
+    return {
+        "plans": plans,
+        "completed_prds": completed_prds,
+        "started_prds": started_prds
+    }
 
 
 def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
@@ -380,8 +422,17 @@ def check_plan_dependencies(plan_id: str, state: Dict[str, Any]) -> List[str]:
 
 
 def save_project_state(state: Dict[str, Any]):
-    """Saves the project state to project-state.json."""
-    PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
+    """Saves only the essential project state to project-state.json."""
+    # Create a copy to avoid modifying the original
+    state_to_save = state.copy()
+    
+    # Remove derived fields
+    fields_to_remove = ["plans", "completed_prds", "started_prds"]
+    for field in fields_to_remove:
+        if field in state_to_save:
+            del state_to_save[field]
+            
+    PROJECT_STATE_FILE.write_text(json.dumps(state_to_save, indent=2))
 
 
 def migrate_legacy_state():
@@ -393,18 +444,11 @@ def migrate_legacy_state():
         legacy_data = json.loads(STATE_FILE.read_text())
         new_state = load_project_state()
 
-        # Migrate completed and started PRDs
-        new_state["completed_prds"] = legacy_data.get("completed_prds", [])
-        new_state["started_prds"] = legacy_data.get("started_prds", [])
+        # Legacy migration: active_task is still stored in state.json
         new_state["active_task"] = legacy_data.get("active_task")
-
-        # Basic heuristic: if there are completed PRDs, maybe setup was done?
-        # But we'll stay conservative and let the user run setup.
 
         save_project_state(new_state)
         logger.info(f"✅ Migrated legacy state to {PROJECT_STATE_FILE}")
-        # We keep the old file for safety for now, or we could delete it.
-        # STATE_FILE.unlink()
     except Exception as e:
         logger.error(f"Failed to migrate legacy state: {e}")
 
@@ -1268,8 +1312,8 @@ def sync_env_file():
 
 
 def collect_prd_files():
-    """Returns all PRD files in BACKLOG_DIR starting with prd_."""
-    return sorted(list(BACKLOG_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
+    """Returns all PRD files in PRD_PROCESSING_DIR starting with prd_."""
+    return sorted(list(PRD_PROCESSING_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
 
 
 def collect_all_prd_info() -> List[Dict[str, Any]]:
@@ -1285,7 +1329,6 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
     if SPECS_DIR.exists():
         for md_file in SPECS_DIR.rglob("*.md"):
             # Exclude special global truth files if they are not meant to be listed as PRDs
-            # But the requirement says "if the prd has a .yaml or a .md"
             stem = md_file.stem
             clean_name = stem.lower()
             while True:
@@ -1344,31 +1387,18 @@ def reset_prd_state(project_name: str) -> List[str]:
     """
     messages = []
     state = load_project_state()
-    state_changed = False
+
+    # Handling state resets is now mostly handled by filesystem moves
+    # but we still clear active task and handle git branch.
 
     # 1. Clear active task
     active_task = state.get("active_task")
     if active_task and active_task.get("prd_name") == project_name:
         state["active_task"] = None
-        state_changed = True
+        save_project_state(state)
         messages.append(f"Cleared active task for {project_name}.")
 
-    # 2. Remove from completed_prds
-    if project_name in state.get("completed_prds", []):
-        state["completed_prds"].remove(project_name)
-        state_changed = True
-        messages.append(f"Removed {project_name} from completed PRDs.")
-
-    # 3. Remove from started_prds
-    if project_name in state.get("started_prds", []):
-        state["started_prds"].remove(project_name)
-        state_changed = True
-        messages.append(f"Removed {project_name} from started PRDs.")
-
-    if state_changed:
-        save_project_state(state)
-
-    # 4. Handle git branch
+    # 2. Handle git branch
     config = load_config()
     auto_merge = config.get("ralph", {}).get("auto_merge", False)
     if auto_merge:
@@ -1447,7 +1477,7 @@ def get_vibe_status_report():
 
     # 1. Project Info
     project_name = state.get("project_name", get_project_name())
-    version = state.get("version", "1.1")
+    version = state.get("version", "1.2")
     report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name} (v{version})")
     report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
 
@@ -1468,7 +1498,10 @@ def get_vibe_status_report():
         if (p.get("status") == "in_progress" or pid in started_prds)
         and not (p.get("status") == "completed" or pid in completed_prds_list)
     )
-    pending_prds = total_prds - completed_prds - in_progress_prds
+    pending_prds = sum(
+        1 for pid, p in all_plans.items()
+        if p.get("status") == "pending"
+    )
 
     from vibe_tools.issues import load_all_issues
 
@@ -1489,7 +1522,7 @@ def get_vibe_status_report():
     active_task = state.get("active_task")
     if active_task:
         report.append(
-            f"{click.style('ACTIVE TASK:', bold=True)} {click.style(active_task, fg='yellow')}"
+            f"{click.style('ACTIVE TASK:', bold=True)} {click.style(str(active_task), fg='yellow')}"
         )
 
     # 2. Lifecycle Progress
@@ -1521,15 +1554,10 @@ def get_vibe_status_report():
 
         # Dynamic status calculation for implementation phase
         if phase_id == "implement":
-            all_plans = state.get("plans", {})
-            if all_plans:
-                completed_count = sum(
-                    1 for p in all_plans.values() if p.get("status") == "completed"
-                )
-                total_count = len(all_plans)
-                if completed_count == total_count:
+            if total_prds > 0:
+                if completed_prds == total_prds:
                     status = "completed"
-                elif completed_count > 0:
+                elif completed_prds > 0 or in_progress_prds > 0:
                     status = "in_progress"
                 else:
                     status = "pending"
@@ -1589,16 +1617,15 @@ def get_vibe_status_report():
 
     # 4. Planning & Implementation
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
-    # Granular plans from project-state.json (Source of Truth)
-    state_plans = state.get("plans", {})
-    if state_plans:
-        # Sort plans by ID if possible, or just iterate
-        for plan_id, plan_info in state_plans.items():
+    if all_plans:
+        for plan_id, plan_info in all_plans.items():
             status = plan_info.get("status", "pending")
             if status == "completed":
                 status_display = click.style("✅ DONE", fg="green")
             elif status == "in_progress":
                 status_display = click.style("⏳ IN_PROGRESS", fg="blue")
+            elif status == "failed":
+                status_display = click.style("❌ FAILED", fg="red")
             else:
                 status_display = click.style("⚪ PENDING", fg="white", dim=True)
 
@@ -1656,20 +1683,15 @@ def get_vibe_status_report():
         report.append(f"  - Automerge: {click.style('DISABLED', fg='white', dim=True)}")
 
     next_plan_id = None
-    for phase_id in order:
-        if phase_id == "implement":
-            all_plans = state.get("plans", {})
-            if all_plans:
-                # Find the first pending plan
-                for pid, pinfo in all_plans.items():
-                    if pinfo.get("status") == "pending":
-                        next_plan_id = pid
-                        break
-        if next_plan_id:
-            break
+    if all_plans:
+        # Find the first pending plan
+        for pid, pinfo in all_plans.items():
+            if pinfo.get("status") == "pending":
+                next_plan_id = pid
+                break
 
     if next_plan_id:
-        plan_info = state["plans"][next_plan_id]
+        plan_info = all_plans[next_plan_id]
         branch = plan_info.get("branch", f"feature/{next_plan_id}")
         parent = plan_info.get("parent_branch", get_main_branch())
         report.append(f"  - Next:   {click.style(branch, fg='cyan')}")
