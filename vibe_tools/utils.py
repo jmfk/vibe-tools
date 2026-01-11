@@ -706,6 +706,8 @@ def set_console_level(level):
 
 # Flag to track if an agent was called
 _agent_called = False
+_agent_connection_retries = 0
+MAX_AGENT_CONNECTION_RETRIES = 25
 
 
 def _cleanup_log():
@@ -1084,7 +1086,7 @@ def fix_kubeconfig_api_version() -> bool:
 
 def run_agent(cmd, caffeinate=False, stream=False):
     """Runs an agent with a live progress indicator or streaming output."""
-    global _agent_called
+    global _agent_called, _agent_connection_retries
     _agent_called = True
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
@@ -1106,110 +1108,130 @@ def run_agent(cmd, caffeinate=False, stream=False):
             f"[Errno 2] No such file or directory: '{command_name}'"
         )
 
-    # Use logger.debug for the "Running agent" message
-    logger.debug(f"Running agent: {' '.join(cmd)}")
+    while True:
+        # Use logger.debug for the "Running agent" message
+        logger.debug(f"Running agent: {' '.join(cmd)}")
 
-    # Use process groups to ensure children are killed on interrupt (Unix only)
-    popen_kwargs: Dict[str, Any] = {
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
-        "text": True,
-        "bufsize": 1,
-    }
-    if os.name != "nt":
-        popen_kwargs["preexec_fn"] = os.setsid
-
-    process = subprocess.Popen(cmd, **popen_kwargs)
-    full_output, start_time = [], time.time()
-
-    assert process.stdout is not None
-    try:
-        for line in iter(process.stdout.readline, ""):
-            full_output.append(line)
-            elapsed = int(time.time() - start_time)
-            preview = line.strip()[:80]
-
-            if stream:
-                # Direct streaming to stdout
-                sys.stdout.write(line)
-                sys.stdout.flush()
-            else:
-                # Live progress to stdout (bypassing file log for spammy progress)
-                from vibe_tools.cost import get_total_cost
-
-                total_cost = get_total_cost()
-                sys.stdout.write(
-                    f"\r\033[K⏳ Agent working ({elapsed}s) | Cost: ${total_cost:.2f} | [CTRL-C] to stop | {preview}"
-                )
-                sys.stdout.flush()
-
-            # Also log to debug file immediately
-            logger.debug(f"AGENT_LIVE: {line.strip()}")
-    except KeyboardInterrupt:
-        logger.warning("\nInterrupted by user. Cleaning up agent process...")
+        # Use process groups to ensure children are killed on interrupt (Unix only)
+        popen_kwargs: Dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "bufsize": 1,
+        }
         if os.name != "nt":
-            try:
-                pgid = os.getpgid(process.pid)
-                os.killpg(pgid, signal.SIGTERM)
-                # Wait a bit for graceful exit then force kill if needed
-                time.sleep(0.5)
-                if process.poll() is None:
-                    os.killpg(pgid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        else:
-            process.terminate()
-        process.wait()
-        sys.stdout.write("\n")
-        raise
-    finally:
-        if process.stdout:
-            process.stdout.close()
-        process.wait()
+            popen_kwargs["preexec_fn"] = os.setsid
 
-    sys.stdout.write("\r\033[K")
-    sys.stdout.flush()
+        process = subprocess.Popen(cmd, **popen_kwargs)
+        full_output, start_time = [], time.time()
 
-    output = "".join(full_output)
-    logger.info(f"Agent finished with exit code: {process.returncode}")
+        assert process.stdout is not None
+        try:
+            for line in iter(process.stdout.readline, ""):
+                full_output.append(line)
+                elapsed = int(time.time() - start_time)
+                preview = line.strip()[:80]
 
-    # Log full agent output to debug level (which goes to file)
-    logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+                if stream:
+                    # Direct streaming to stdout
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                else:
+                    # Live progress to stdout (bypassing file log for spammy progress)
+                    from vibe_tools.cost import get_total_cost
 
-    # Detect architecture mismatch errors
-    if process.returncode != 0:
-        if (
-            "incompatible architecture" in output
-            or "mach-o file, but is an incompatible architecture" in output
-        ):
-            import platform
+                    total_cost = get_total_cost()
+                    sys.stdout.write(
+                        f"\r\033[K⏳ Agent working ({elapsed}s) | Cost: ${total_cost:.2f} | [CTRL-C] to stop | {preview}"
+                    )
+                    sys.stdout.flush()
 
-            node_arch = "unknown"
-            try:
-                node_result = run_command(["node", "-p", "process.arch"], check=False)
-                if node_result[1] == 0:
-                    node_arch = node_result[0].strip()
-            except Exception:
-                pass
+                # Also log to debug file immediately
+                logger.debug(f"AGENT_LIVE: {line.strip()}")
+        except KeyboardInterrupt:
+            logger.warning("\nInterrupted by user. Cleaning up agent process...")
+            if os.name != "nt":
+                try:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                    # Wait a bit for graceful exit then force kill if needed
+                    time.sleep(0.5)
+                    if process.poll() is None:
+                        os.killpg(pgid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                process.terminate()
+            process.wait()
+            sys.stdout.write("\n")
+            raise
+        finally:
+            if process.stdout:
+                process.stdout.close()
+            process.wait()
 
-            system_arch = platform.machine()
-            logger.error(
-                f"Architecture mismatch detected. Node.js arch: {node_arch}, System arch: {system_arch}"
-            )
-            print(
-                f"\n❌ Architecture mismatch error detected.\n"
-                f"   Node.js is running in a different architecture than cursor-agent expects.\n"
-                f"   System architecture: {system_arch}\n"
-                f"   Node.js architecture: {node_arch}\n\n"
-                f"   To fix this:\n"
-                f"   1. Check Node.js architecture: node -p 'process.arch'\n"
-                f"   2. If Node.js is x64/x86_64 but system is arm64, reinstall Node.js for arm64:\n"
-                f"      - Using Homebrew: arch -arm64 brew install node\n"
-                f"      - Or use nvm: nvm install --arch=arm64\n"
-                f"   3. If cursor-agent needs to be reinstalled, check cursor-agent documentation.\n"
-            )
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
 
-    return output, process.returncode
+        output = "".join(full_output)
+        logger.info(f"Agent finished with exit code: {process.returncode}")
+
+        # Log full agent output to debug level (which goes to file)
+        logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+
+        # Handle specific connection errors with retries
+        if process.returncode != 0 and "ConnectError: [unavailable] Error" in output:
+            _agent_connection_retries += 1
+            if _agent_connection_retries < MAX_AGENT_CONNECTION_RETRIES:
+                logger.warning(
+                    f"⚠️ Agent connection failed (Retrying {_agent_connection_retries}/{MAX_AGENT_CONNECTION_RETRIES} in 5s): {output.strip()}"
+                )
+                time.sleep(5)
+                continue
+            else:
+                logger.error(
+                    f"❌ Agent connection failed after {MAX_AGENT_CONNECTION_RETRIES} retries. Aborting."
+                )
+                break
+
+        # If we got here, it's either success or a non-connection error
+        if process.returncode == 0:
+            _agent_connection_retries = 0  # Reset on success
+        
+        # Detect architecture mismatch errors
+        if process.returncode != 0:
+            if (
+                "incompatible architecture" in output
+                or "mach-o file, but is an incompatible architecture" in output
+            ):
+                import platform
+
+                node_arch = "unknown"
+                try:
+                    node_result = run_command(["node", "-p", "process.arch"], check=False)
+                    if node_result[1] == 0:
+                        node_arch = node_result[0].strip()
+                except Exception:
+                    pass
+
+                system_arch = platform.machine()
+                logger.error(
+                    f"Architecture mismatch detected. Node.js arch: {node_arch}, System arch: {system_arch}"
+                )
+                print(
+                    f"\n❌ Architecture mismatch error detected.\n"
+                    f"   Node.js is running in a different architecture than cursor-agent expects.\n"
+                    f"   System architecture: {system_arch}\n"
+                    f"   Node.js architecture: {node_arch}\n\n"
+                    f"   To fix this:\n"
+                    f"   1. Check Node.js architecture: node -p 'process.arch'\n"
+                    f"   2. If Node.js is x64/x86_64 but system is arm64, reinstall Node.js for arm64:\n"
+                    f"      - Using Homebrew: arch -arm64 brew install node\n"
+                    f"      - Or use nvm: nvm install --arch=arm64\n"
+                    f"   3. If cursor-agent needs to be reinstalled, check cursor-agent documentation.\n"
+                )
+
+        return output, process.returncode
 
 
 def get_agent_processes() -> List[Dict[str, Any]]:
