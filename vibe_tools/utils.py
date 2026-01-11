@@ -125,7 +125,10 @@ def is_phase_completed(file_path: pathlib.Path, phase_id: str) -> bool:
 
 
 def update_state_phase(
-    file_path: pathlib.Path, phase_id: str, status: str = "completed", git_id: str = None
+    file_path: pathlib.Path,
+    phase_id: str,
+    status: str = "completed",
+    git_id: str = None,
 ):
     """Updates the PHASES section in the YAML or MD frontmatter."""
     if not file_path or not file_path.exists():
@@ -156,13 +159,15 @@ def update_state_phase(
                 }
                 if git_id:
                     frontmatter["PHASES"][phase_id]["git_id"] = git_id
-                
+
                 new_frontmatter = safe_yaml_dump(frontmatter)
                 new_content = f"---\n{new_frontmatter}---\n{parts[2]}"
                 file_path.write_text(new_content)
 
 
-def commit_and_register_phase(file_path: pathlib.Path, phase_id: str, commit_message: str):
+def commit_and_register_phase(
+    file_path: pathlib.Path, phase_id: str, commit_message: str
+):
     """Commits changes, registers the phase completion with the commit hash, and amends the commit."""
     if not is_dirty():
         # Even if not dirty, we might want to register the phase if it's the first time
@@ -172,13 +177,13 @@ def commit_and_register_phase(file_path: pathlib.Path, phase_id: str, commit_mes
     # 1. Add and commit changes
     run_command(["git", "add", "."], check=False)
     run_command(["git", "commit", "-m", commit_message], check=False)
-    
+
     # 2. Get commit hash
     git_id = get_last_commit_hash()
-    
+
     # 3. Update file with phase status and hash
     update_state_phase(file_path, phase_id, status="completed", git_id=git_id)
-    
+
     # 4. Amend the commit to include the updated YAML/MD
     run_command(["git", "add", str(file_path)], check=False)
     run_command(["git", "commit", "--amend", "--no-edit"], check=False)
@@ -490,7 +495,11 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
                     plan_info = {
                         "status": status,
                         "file": str(yaml_file),
-                        "md_path": str(md_files.get(clean_id)) if clean_id in md_files else None,
+                        "md_path": (
+                            str(md_files.get(clean_id))
+                            if clean_id in md_files
+                            else None
+                        ),
                         "title": data.get(
                             "TITLE",
                             prd_id.replace("prd_", "").replace("_", " ").title(),
@@ -645,16 +654,16 @@ class VerboseLogger:
         """Logs an event to a separate file and returns the reference string."""
         self._ensure_dir()
         self.step_count += 1
-        
+
         safe_name = "".join([c if c.isalnum() else "_" for c in name]).strip("_")
         if safe_name:
             filename = f"{self.step_count:03d}_{event_type}_{safe_name}.txt"
         else:
             filename = f"{self.step_count:03d}_{event_type}.txt"
-            
+
         event_file = self.verbose_dir / filename
         event_file.write_text(content)
-        
+
         ref_msg = f"VERBOSE: {event_type.upper()} logged to {event_file.relative_to(VIBE_PROJECT_DIR)}"
         logger.info(ref_msg)
         return ref_msg
@@ -1194,7 +1203,9 @@ def run_agent(cmd, caffeinate=False, stream=False):
         logger.info(f"Agent finished with exit code: {process.returncode}")
 
         # Log full agent output to debug level (which goes to file)
-        logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
+        logger.debug(
+            f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n"
+        )
 
         # Handle specific connection errors with retries
         if process.returncode != 0:
@@ -1214,7 +1225,7 @@ def run_agent(cmd, caffeinate=False, stream=False):
                         f"❌ Agent connection failed after {MAX_AGENT_CONNECTION_RETRIES} retries. Aborting."
                     )
                     break
-            
+
             if is_context_error:
                 _agent_context_retries += 1
                 if _agent_context_retries < MAX_AGENT_CONTEXT_RETRIES:
@@ -1232,8 +1243,8 @@ def run_agent(cmd, caffeinate=False, stream=False):
         # If we got here, it's either success or a non-retryable error
         if process.returncode == 0:
             _agent_connection_retries = 0  # Reset on success
-            _agent_context_retries = 0    # Reset on success
-        
+            _agent_context_retries = 0  # Reset on success
+
         # Detect architecture mismatch errors
         if process.returncode != 0:
             if (
@@ -1244,7 +1255,9 @@ def run_agent(cmd, caffeinate=False, stream=False):
 
                 node_arch = "unknown"
                 try:
-                    node_result = run_command(["node", "-p", "process.arch"], check=False)
+                    node_result = run_command(
+                        ["node", "-p", "process.arch"], check=False
+                    )
                     if node_result[1] == 0:
                         node_arch = node_result[0].strip()
                 except Exception:
@@ -1824,12 +1837,15 @@ def fix_prd_inconsistencies(inconsistencies: List[Dict[str, Any]], prefer_yaml=T
         yaml_path = inc["yaml_path"]
 
         # If MD is in a final state (history/rejected), it usually wins
-        md_is_final = (PLANNING_HISTORY_DIR in md_path.parents or 
-                       PLANNING_REJECTED_DIR in md_path.parents)
-        
+        md_is_final = (
+            PLANNING_HISTORY_DIR in md_path.parents
+            or PLANNING_REJECTED_DIR in md_path.parents
+        )
+
         # If YAML is in a final state (done/failed), it usually wins
-        yaml_is_final = (PRD_DONE_DIR in yaml_path.parents or 
-                         PRD_FAILED_DIR in yaml_path.parents)
+        yaml_is_final = (
+            PRD_DONE_DIR in yaml_path.parents or PRD_FAILED_DIR in yaml_path.parents
+        )
 
         if md_is_final and not yaml_is_final:
             # MD is final, move YAML to match
@@ -1849,7 +1865,9 @@ def fix_prd_inconsistencies(inconsistencies: List[Dict[str, Any]], prefer_yaml=T
             source = inc["yaml_path"]
 
         if source != target:
-            logger.info(f"Fixing inconsistency for {inc['name']}: Moving {source} -> {target}")
+            logger.info(
+                f"Fixing inconsistency for {inc['name']}: Moving {source} -> {target}"
+            )
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))
 

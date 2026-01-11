@@ -390,7 +390,9 @@ lint-frontend:
     "dummy_backend_test": """def test_dummy():
     assert True
 """,
-    "dummy_frontend_test": """describe('dummy test', () => {
+    "dummy_frontend_test": """import { describe, it, expect } from 'vitest';
+
+describe('dummy test', () => {
   it('should pass', () => {
     expect(true).toBe(true);
   });
