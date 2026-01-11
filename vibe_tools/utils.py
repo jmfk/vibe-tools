@@ -59,22 +59,22 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 # Core lifecycle files
 ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
-ARCHITECTURE_SPEC = PRD_DIR / "architecture.md"
+ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
 OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
-OVERVIEW_SPEC = PRD_DIR / "project_overview.md"
+OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
 INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
-INFRA_SPEC = PRD_DIR / "infrastructure.md"
+INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
 CICD = VIBE_PROJECT_DIR / "cicd.yaml"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
-CICD_SPEC = PRD_DIR / "cicd.md"
+CICD_SPEC = PLANNING_DIR / "cicd.md"
 TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
-TESTING_SPEC = PRD_DIR / "testing.md"
+TESTING_SPEC = PLANNING_DIR / "testing.md"
 DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
 DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
-DEV_SPEC = PRD_DIR / "dev_environment.md"
-SETUP_SPEC = PRD_DIR / "setup.md"
+DEV_SPEC = PLANNING_DIR / "dev_environment.md"
+SETUP_SPEC = PLANNING_DIR / "setup.md"
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
@@ -204,12 +204,6 @@ def migrate_to_project_dir():
         pathlib.Path("cicd-current.yaml"): CICD_CURRENT,
         pathlib.Path("testing.yaml"): TESTING_CONFIG,
         pathlib.Path("testing-current.yaml"): TESTING_CURRENT,
-        pathlib.Path("product/architecture.md"): ARCHITECTURE_SPEC,
-        pathlib.Path("product/infrastructure.md"): INFRA_SPEC,
-        pathlib.Path("product/cicd.md"): CICD_SPEC,
-        pathlib.Path("product/testing.md"): TESTING_SPEC,
-        pathlib.Path("product/dev_environment.md"): DEV_SPEC,
-        pathlib.Path("product/setup.md"): SETUP_SPEC,
         pathlib.Path("product/project-overview.md"): OVERVIEW_SPEC,
         pathlib.Path("product/trash"): PLANNING_REJECTED_DIR,
         pathlib.Path("implementation/prds/trash"): REJECTED_DIR,
@@ -375,31 +369,34 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
                 try:
                     with open(yaml_file, "r") as f:
                         data = safe_yaml_load(f.read()) or {}
-                    
+
                     # Plan metadata is now in the YAML itself
                     plan_info = {
                         "status": status,
                         "file": str(yaml_file),
-                        "title": data.get("TITLE", prd_id.replace("prd_", "").replace("_", " ").title()),
+                        "title": data.get(
+                            "TITLE",
+                            prd_id.replace("prd_", "").replace("_", " ").title(),
+                        ),
                         "depends_on": data.get("DEPENDS_ON", []),
                         "branch": data.get("BRANCH", f"feature/{prd_id}"),
                         "parent_branch": data.get("PARENT_BRANCH", get_main_branch()),
-                        "is_direct_prd": True
+                        "is_direct_prd": True,
                     }
                     plans[prd_id] = plan_info
-                    
+
                     if status == "completed":
                         completed_prds.append(prd_id)
                     elif status == "in_progress":
                         started_prds.append(prd_id)
-                        
+
                 except Exception as e:
                     logger.warning(f"Could not read metadata from {yaml_file}: {e}")
 
     return {
         "plans": plans,
         "completed_prds": completed_prds,
-        "started_prds": started_prds
+        "started_prds": started_prds,
     }
 
 
@@ -437,13 +434,13 @@ def save_project_state(state: Dict[str, Any]):
     """Saves only the essential project state to project-state.json."""
     # Create a copy to avoid modifying the original
     state_to_save = state.copy()
-    
+
     # Remove derived fields
     fields_to_remove = ["plans", "completed_prds", "started_prds"]
     for field in fields_to_remove:
         if field in state_to_save:
             del state_to_save[field]
-            
+
     PROJECT_STATE_FILE.write_text(json.dumps(state_to_save, indent=2))
 
 
@@ -702,7 +699,10 @@ def fix_yaml_content(content: str) -> str:
                 or trimmed_value.startswith("*")
                 or trimmed_value.startswith("?")
                 or trimmed_value.startswith("-")
-                or (trimmed_value.startswith(":") and not trimmed_value.startswith("://"))
+                or (
+                    trimmed_value.startswith(":")
+                    and not trimmed_value.startswith("://")
+                )
             ):
                 # Quote the value, escape existing double quotes
                 escaped_value = trimmed_value.replace('"', '\\"')
@@ -738,7 +738,10 @@ def fix_yaml_content(content: str) -> str:
                 or trimmed_value.startswith("*")
                 or trimmed_value.startswith("?")
                 or trimmed_value.startswith("-")
-                or (trimmed_value.startswith(":") and not trimmed_value.startswith("://"))
+                or (
+                    trimmed_value.startswith(":")
+                    and not trimmed_value.startswith("://")
+                )
             ):
                 escaped_value = trimmed_value.replace('"', '\\"')
                 fixed_lines.append(f'{indent}- "{escaped_value}"')
@@ -1473,7 +1476,9 @@ def sync_env_file():
 
 def collect_prd_files():
     """Returns all PRD files in PRD_PROCESSING_DIR starting with prd_."""
-    return sorted(list(PRD_PROCESSING_DIR.glob("prd_*.yaml")), key=lambda path: path.name)
+    return sorted(
+        list(PRD_PROCESSING_DIR.glob("prd_*.yaml")), key=lambda path: path.name
+    )
 
 
 def collect_all_prd_info() -> List[Dict[str, Any]]:
@@ -1659,8 +1664,7 @@ def get_vibe_status_report():
         and not (p.get("status") == "completed" or pid in completed_prds_list)
     )
     pending_prds = sum(
-        1 for pid, p in all_plans.items()
-        if p.get("status") == "pending"
+        1 for pid, p in all_plans.items() if p.get("status") == "pending"
     )
 
     from vibe_tools.issues import load_all_issues
