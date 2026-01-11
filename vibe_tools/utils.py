@@ -84,6 +84,104 @@ SPECS_DIR = PLANNING_DIR
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 
+def is_git_repo():
+    """Checks if the current directory is a git repository."""
+    _, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
+    return code == 0
+
+
+def get_last_commit_hash() -> Optional[str]:
+    """Retrieves the current HEAD commit hash."""
+    stdout, code = run_command(["git", "rev-parse", "HEAD"], check=False)
+    if code == 0:
+        return stdout.strip()
+    return None
+
+
+def is_phase_completed(file_path: pathlib.Path, phase_id: str) -> bool:
+    """Checks if a phase is already marked as completed in the file."""
+    if not file_path or not file_path.exists():
+        return False
+
+    content = file_path.read_text()
+    data = None
+    if file_path.suffix == ".yaml":
+        data = safe_yaml_load(content)
+    elif file_path.suffix == ".md":
+        # Basic frontmatter parsing for MD issues
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                data = safe_yaml_load(parts[1])
+
+    if not data:
+        return False
+
+    phases = data.get("PHASES", {})
+    phase = phases.get(phase_id, {})
+    return phase.get("status") == "completed"
+
+
+def update_state_phase(
+    file_path: pathlib.Path, phase_id: str, status: str = "completed", git_id: str = None
+):
+    """Updates the PHASES section in the YAML or MD frontmatter."""
+    if not file_path or not file_path.exists():
+        return
+
+    content = file_path.read_text()
+    if file_path.suffix == ".yaml":
+        data = safe_yaml_load(content) or {}
+        if "PHASES" not in data:
+            data["PHASES"] = {}
+        data["PHASES"][phase_id] = {
+            "status": status,
+            "updated_at": datetime.datetime.now().isoformat(),
+        }
+        if git_id:
+            data["PHASES"][phase_id]["git_id"] = git_id
+        file_path.write_text(safe_yaml_dump(data))
+    elif file_path.suffix == ".md":
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                frontmatter = safe_yaml_load(parts[1]) or {}
+                if "PHASES" not in frontmatter:
+                    frontmatter["PHASES"] = {}
+                frontmatter["PHASES"][phase_id] = {
+                    "status": status,
+                    "updated_at": datetime.datetime.now().isoformat(),
+                }
+                if git_id:
+                    frontmatter["PHASES"][phase_id]["git_id"] = git_id
+                
+                new_frontmatter = safe_yaml_dump(frontmatter)
+                new_content = f"---\n{new_frontmatter}---\n{parts[2]}"
+                file_path.write_text(new_content)
+
+
+def commit_and_register_phase(file_path: pathlib.Path, phase_id: str, commit_message: str):
+    """Commits changes, registers the phase completion with the commit hash, and amends the commit."""
+    if not is_dirty():
+        # Even if not dirty, we might want to register the phase if it's the first time
+        # but usually this is called after some work.
+        pass
+
+    # 1. Add and commit changes
+    run_command(["git", "add", "."], check=False)
+    run_command(["git", "commit", "-m", commit_message], check=False)
+    
+    # 2. Get commit hash
+    git_id = get_last_commit_hash()
+    
+    # 3. Update file with phase status and hash
+    update_state_phase(file_path, phase_id, status="completed", git_id=git_id)
+    
+    # 4. Amend the commit to include the updated YAML/MD
+    run_command(["git", "add", str(file_path)], check=False)
+    run_command(["git", "commit", "--amend", "--no-edit"], check=False)
+
+
 def is_tool_available(name: str) -> bool:
     """Checks if a command-line tool is available in the system PATH."""
     return shutil.which(name) is not None

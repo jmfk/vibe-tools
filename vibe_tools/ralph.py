@@ -25,6 +25,7 @@ from vibe_tools.utils import (
     TESTING_SPEC,
     check_plan_dependencies,
     collect_prd_files,
+    commit_and_register_phase,
     get_agent_command,
     get_automerge_branch,
     get_changed_files,
@@ -32,6 +33,7 @@ from vibe_tools.utils import (
     get_main_branch,
     get_prompt,
     is_dirty,
+    is_phase_completed,
     load_config,
     load_project_state,
     log_issue,
@@ -45,6 +47,7 @@ from vibe_tools.utils import (
     switch_to_main,
     safe_yaml_load,
     safe_yaml_dump,
+    update_state_phase,
     verbose_logger,
 )
 
@@ -64,6 +67,8 @@ class RalphLoop:
         stream: bool = False,
         caffeinate: bool = False,
         branch_name: str = None,
+        prd_path: pathlib.Path = None,
+        phase_id: str = None,
     ):
         self.name = name
         self.desired_file = desired_file
@@ -72,6 +77,8 @@ class RalphLoop:
         self.stream = stream
         self.caffeinate = caffeinate
         self.instructions = []
+        self.prd_path = prd_path
+        self.phase_id = phase_id
 
         config = load_config()
         if config.get("ralph", {}).get("auto_merge", False):
@@ -81,6 +88,13 @@ class RalphLoop:
 
     def run(self) -> bool:
         """Executes the reconciliation loop."""
+        from vibe_tools.utils import is_phase_completed, commit_and_register_phase
+
+        if self.prd_path and self.phase_id:
+            if is_phase_completed(self.prd_path, self.phase_id):
+                logger.info(f"⏭️ Phase '{self.phase_id}' already completed for {self.name}. Skipping.")
+                return True
+
         log_start(
             self.name,
             f"Reconciling {self.desired_file.name} vs {self.current_file.name}",
@@ -116,6 +130,9 @@ class RalphLoop:
             self.current_file
         ):
             logger.info(f"✅ {self.name} is already in sync.")
+            if self.prd_path and self.phase_id:
+                from vibe_tools.utils import update_state_phase
+                update_state_phase(self.prd_path, self.phase_id, status="completed")
             return True
 
         mode = "MIGRATION" if current_content else "INITIALIZATION"
@@ -162,23 +179,31 @@ class RalphLoop:
 
             # Commit changes if dirty
             if is_dirty():
-                logger.info(f"💾 Committing changes on {self.branch_name}...")
-                run_command(["git", "add", "."], check=False)
-                run_command(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        f"vibe: reconciliation step '{self.name}' complete",
-                    ],
-                    check=False,
-                )
+                if self.prd_path and self.phase_id:
+                    commit_and_register_phase(
+                        self.prd_path,
+                        self.phase_id,
+                        f"vibe: reconciliation step '{self.name}' complete for {self.phase_id}",
+                    )
+                else:
+                    logger.info(f"💾 Committing changes on {self.branch_name}...")
+                    run_command(["git", "add", "."], check=False)
+                    run_command(
+                        [
+                            "git",
+                            "commit",
+                            "-m",
+                            f"vibe: reconciliation step '{self.name}' complete",
+                        ],
+                        check=False,
+                    )
 
             return True
         else:
             log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
             logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
             return False
+
 
 
 class QuickFixLoop:
@@ -668,163 +693,198 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
 
             # 1. Implementation
-            try:
-                prompt_template = get_prompt("implementation_prompt.txt")
-            except FileNotFoundError as e:
-                logger.error(f"Error: {e}")
-                return False
-
-            prompt = prompt_template.format(
-                title=title,
-                description=description,
-                success_criteria=chr(10).join(
-                    ["- " + str(c) for c in success_criteria]
-                ),
-            )
-            cmd = get_agent_command(agent, prompt)
-            
-            if verbose_logger:
-                verbose_logger.log_event("prompt", prompt, f"{plan_id}_iteration_{i}")
-                
-            output, code = run_agent(cmd, stream=stream)
-
-            if verbose_logger:
-                verbose_logger.log_event("reply", output, f"{plan_id}_iteration_{i}")
-
-            if code != 0 or COMPLETION_PROMISE not in output:
-                if code != 0:
-                    log_issue(
-                        "implement",
-                        i,
-                        max_impl_iterations,
-                        f"Agent failed with exit code {code}",
-                    )
-                else:
-                    log_issue(
-                        "implement",
-                        i,
-                        max_impl_iterations,
-                        "Agent did not provide completion promise",
-                    )
-                logger.warning(f"⏳ Implementation in progress for {plan_id}...")
-                continue
-
-            # Commit iteration changes if dirty
-            if is_dirty():
-                logger.info(
-                    f"💾 Committing iteration {i} changes for {plan_id} on {branch_name}..."
-                )
-                run_command(["git", "add", "."], check=False)
-                run_command(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        f"vibe: implementation iteration {i} for plan '{plan_id}'",
-                    ],
-                    check=False,
-                )
-
-            # 2. Quality Gates
-            logger.info("🧪 Running Quality Gates...")
-            passed_gates = True
-
-            if tests:
-                from vibe_tools.testing import ProjectTester
-
-                tester = ProjectTester()
-
-                be_targets = [t for t in test_targets if tester.is_backend_target(t)]
-                fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
-
-                # Run Backend Debug Loop
-                if be_targets:
-                    logger.info(
-                        f"🧬 Starting Backend Debug Loop for: {', '.join(be_targets)}"
-                    )
-                    if not debugging_loop(
-                        agent,
-                        be_targets,
-                        stream=stream,
-                        iterations=max_debug_iterations,
-                    ):
-                        passed_gates = False
-
-                # Run Frontend Debug Loop
-                if passed_gates and fe_targets:
-                    logger.info(
-                        f"🎨 Starting Frontend Debug Loop for: {', '.join(fe_targets)}"
-                    )
-                    if not debugging_loop(
-                        agent,
-                        fe_targets,
-                        stream=stream,
-                        iterations=max_debug_iterations,
-                    ):
-                        passed_gates = False
-
-            # Build step: verify build system works and software can start in dev environment
-            if passed_gates and DEV_ENV.exists():
-                logger.info("🔨 Running Build Verification...")
-                build_loop = RalphLoop(
-                    name="Build",
-                    desired_file=DEV_ENV,
-                    current_file=DEV_ENV_CURRENT,
-                    agent=agent,
-                    stream=stream,
-                )
-                build_loop.instructions = [
-                    "Ensure the build system successfully builds all application parts.",
-                    "Verify that the built software can be started in the development environment.",
-                    "Check that all build dependencies are correctly configured.",
-                    "Ensure build artifacts are generated correctly.",
-                ]
-                if not build_loop.run():
-                    log_issue(
-                        "implement_build",
-                        i,
-                        max_impl_iterations,
-                        "Build verification failed",
-                    )
-                    logger.error("❌ Build verification failed.")
-                    passed_gates = False
-
-            if passed_gates and review:
-                logger.info("🔎 Running Agentic Review...")
+            impl_phase_id = f"implementation_iteration_{i}"
+            if not is_phase_completed(plan_yaml_path, impl_phase_id):
                 try:
-                    review_prompt_template = get_prompt(
-                        "implementation_review_prompt.txt"
-                    )
+                    prompt_template = get_prompt("implementation_prompt.txt")
                 except FileNotFoundError as e:
                     logger.error(f"Error: {e}")
                     return False
 
-                review_prompt = review_prompt_template.format(
+                prompt = prompt_template.format(
                     title=title,
                     description=description,
                     success_criteria=chr(10).join(
                         ["- " + str(c) for c in success_criteria]
                     ),
                 )
-                review_cmd = get_agent_command(agent, review_prompt)
+                cmd = get_agent_command(agent, prompt)
                 
                 if verbose_logger:
-                    verbose_logger.log_event("prompt", review_prompt, f"{plan_id}_review_iteration_{i}")
+                    verbose_logger.log_event("prompt", prompt, f"{plan_id}_iteration_{i}")
                     
-                review_output, _ = run_agent(review_cmd, stream=stream)
-                
+                output, code = run_agent(cmd, stream=stream)
+
                 if verbose_logger:
-                    verbose_logger.log_event("reply", review_output, f"{plan_id}_review_iteration_{i}")
-                
-                if "<review>PASSED</review>" not in review_output:
-                    log_issue(
-                        "implement_review",
-                        i,
-                        max_impl_iterations,
-                        "Agentic review failed",
+                    verbose_logger.log_event("reply", output, f"{plan_id}_iteration_{i}")
+
+                if code != 0 or COMPLETION_PROMISE not in output:
+                    if code != 0:
+                        log_issue(
+                            "implement",
+                            i,
+                            max_impl_iterations,
+                            f"Agent failed with exit code {code}",
+                        )
+                    else:
+                        log_issue(
+                            "implement",
+                            i,
+                            max_impl_iterations,
+                            "Agent did not provide completion promise",
+                        )
+                    logger.warning(f"⏳ Implementation in progress for {plan_id}...")
+                    continue
+
+                # Commit iteration changes if dirty
+                if is_dirty():
+                    logger.info(
+                        f"💾 Committing iteration {i} changes for {plan_id} on {branch_name}..."
                     )
-                    logger.error("❌ Agentic review failed.")
-                    passed_gates = False
+                    commit_and_register_phase(
+                        plan_yaml_path,
+                        impl_phase_id,
+                        f"vibe: implementation iteration {i} for plan '{plan_id}'",
+                    )
+                else:
+                    update_state_phase(plan_yaml_path, impl_phase_id, status="completed")
+            else:
+                logger.info(f"⏭️ Phase '{impl_phase_id}' already completed. Skipping.")
+
+            # 2. Quality Gates
+            logger.info("🧪 Running Quality Gates...")
+            passed_gates = True
+
+            if tests:
+                tests_phase_id = f"tests_iteration_{i}"
+                if not is_phase_completed(plan_yaml_path, tests_phase_id):
+                    from vibe_tools.testing import ProjectTester
+
+                    tester = ProjectTester()
+
+                    be_targets = [t for t in test_targets if tester.is_backend_target(t)]
+                    fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
+
+                    # Run Backend Debug Loop
+                    if be_targets:
+                        logger.info(
+                            f"🧬 Starting Backend Debug Loop for: {', '.join(be_targets)}"
+                        )
+                        if not debugging_loop(
+                            agent,
+                            be_targets,
+                            stream=stream,
+                            iterations=max_debug_iterations,
+                        ):
+                            passed_gates = False
+
+                    # Run Frontend Debug Loop
+                    if passed_gates and fe_targets:
+                        logger.info(
+                            f"🎨 Starting Frontend Debug Loop for: {', '.join(fe_targets)}"
+                        )
+                        if not debugging_loop(
+                            agent,
+                            fe_targets,
+                            stream=stream,
+                            iterations=max_debug_iterations,
+                        ):
+                            passed_gates = False
+                    
+                    if passed_gates:
+                        if is_dirty():
+                            commit_and_register_phase(
+                                plan_yaml_path,
+                                tests_phase_id,
+                                f"vibe: tests passed for iteration {i} of plan '{plan_id}'",
+                            )
+                        else:
+                            update_state_phase(plan_yaml_path, tests_phase_id, status="completed")
+                else:
+                    logger.info(f"⏭️ Phase '{tests_phase_id}' already completed. Skipping.")
+
+            # Build step: verify build system works and software can start in dev environment
+            if passed_gates and DEV_ENV.exists():
+                build_phase_id = f"build_iteration_{i}"
+                if not is_phase_completed(plan_yaml_path, build_phase_id):
+                    logger.info("🔨 Running Build Verification...")
+                    build_loop = RalphLoop(
+                        name="Build",
+                        desired_file=DEV_ENV,
+                        current_file=DEV_ENV_CURRENT,
+                        agent=agent,
+                        stream=stream,
+                        prd_path=plan_yaml_path,
+                        phase_id=build_phase_id,
+                    )
+                    build_loop.instructions = [
+                        "Ensure the build system successfully builds all application parts.",
+                        "Verify that the built software can be started in the development environment.",
+                        "Check that all build dependencies are correctly configured.",
+                        "Ensure build artifacts are generated correctly.",
+                    ]
+                    if not build_loop.run():
+                        log_issue(
+                            "implement_build",
+                            i,
+                            max_impl_iterations,
+                            "Build verification failed",
+                        )
+                        logger.error("❌ Build verification failed.")
+                        passed_gates = False
+                else:
+                    logger.info(f"⏭️ Phase '{build_phase_id}' already completed. Skipping.")
+
+            if passed_gates and review:
+                review_phase_id = f"review_iteration_{i}"
+                if not is_phase_completed(plan_yaml_path, review_phase_id):
+                    logger.info("🔎 Running Agentic Review...")
+                    try:
+                        review_prompt_template = get_prompt(
+                            "implementation_review_prompt.txt"
+                        )
+                    except FileNotFoundError as e:
+                        logger.error(f"Error: {e}")
+                        return False
+
+                    review_prompt = review_prompt_template.format(
+                        title=title,
+                        description=description,
+                        success_criteria=chr(10).join(
+                            ["- " + str(c) for c in success_criteria]
+                        ),
+                    )
+                    review_cmd = get_agent_command(agent, review_prompt)
+                    
+                    if verbose_logger:
+                        verbose_logger.log_event("prompt", review_prompt, f"{plan_id}_review_iteration_{i}")
+                        
+                    review_output, _ = run_agent(review_cmd, stream=stream)
+                    
+                    if verbose_logger:
+                        verbose_logger.log_event("reply", review_output, f"{plan_id}_review_iteration_{i}")
+                    
+                    if "<review>PASSED</review>" not in review_output:
+                        log_issue(
+                            "implement_review",
+                            i,
+                            max_impl_iterations,
+                            "Agentic review failed",
+                        )
+                        logger.error("❌ Agentic review failed.")
+                        passed_gates = False
+                    
+                    if passed_gates:
+                        if is_dirty():
+                            commit_and_register_phase(
+                                plan_yaml_path,
+                                review_phase_id,
+                                f"vibe: agentic review passed for iteration {i} of plan '{plan_id}'",
+                            )
+                        else:
+                            update_state_phase(plan_yaml_path, review_phase_id, status="completed")
+                else:
+                    logger.info(f"⏭️ Phase '{review_phase_id}' already completed. Skipping.")
 
             if passed_gates:
                 success = True
@@ -1004,6 +1064,11 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
         branch_name, agent, issue.id, parent_branch=parent_branch, stream=stream
     )
 
+    # Determine issue file path for phase tracking
+    issue_file_path = BACKLOG_DIR / f"{issue.id}.md"
+    if not issue_file_path.exists():
+        issue_file_path = HISTORY_DIR / f"{issue.id}.md"
+
     history = []
     success = False
 
@@ -1012,107 +1077,136 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
         iteration_data = {"iteration": i, "outcome": "failed", "details": ""}
 
         # 1. Implementation
-        try:
-            prompt_template = get_prompt("issue_solve_prompt.txt")
-        except FileNotFoundError as e:
-            logger.error(f"Error: {e}")
-            return False
+        impl_phase_id = f"issue_implementation_iteration_{i}"
+        if not is_phase_completed(issue_file_path, impl_phase_id):
+            try:
+                prompt_template = get_prompt("issue_solve_prompt.txt")
+            except FileNotFoundError as e:
+                logger.error(f"Error: {e}")
+                return False
 
-        prompt = prompt_template.format(
-            issue_id=issue.id,
-            issue_title=issue.title,
-            issue_body=issue.body.to_markdown(),
-        )
-        cmd = get_agent_command(agent, prompt)
-        
-        if verbose_logger:
-            verbose_logger.log_event("prompt", prompt, f"{issue.id}_iteration_{i}")
+            prompt = prompt_template.format(
+                issue_id=issue.id,
+                issue_title=issue.title,
+                issue_body=issue.body.to_markdown(),
+            )
+            cmd = get_agent_command(agent, prompt)
             
-        output, code = run_agent(cmd, stream=stream)
+            if verbose_logger:
+                verbose_logger.log_event("prompt", prompt, f"{issue.id}_iteration_{i}")
+                
+            output, code = run_agent(cmd, stream=stream)
 
-        if verbose_logger:
-            verbose_logger.log_event("reply", output, f"{issue.id}_iteration_{i}")
+            if verbose_logger:
+                verbose_logger.log_event("reply", output, f"{issue.id}_iteration_{i}")
 
-        if code != 0 or COMPLETION_PROMISE not in output:
-            reason = (
-                f"Agent failed with exit code {code}"
-                if code != 0
-                else "Agent did not provide completion promise"
-            )
-            log_issue("issue_solve", i, max_impl_iterations, reason)
-            iteration_data["details"] = reason
-            history.append(iteration_data)
-            continue
+            if code != 0 or COMPLETION_PROMISE not in output:
+                reason = (
+                    f"Agent failed with exit code {code}"
+                    if code != 0
+                    else "Agent did not provide completion promise"
+                )
+                log_issue("issue_solve", i, max_impl_iterations, reason)
+                iteration_data["details"] = reason
+                history.append(iteration_data)
+                continue
 
-        # Commit iteration changes
-        if is_dirty():
-            logger.info(f"💾 Committing iteration {i} changes for {issue.id}...")
-            run_command(["git", "add", "."], check=False)
-            run_command(
-                [
-                    "git",
-                    "commit",
-                    "-m",
+            # Commit iteration changes
+            if is_dirty():
+                logger.info(f"💾 Committing iteration {i} changes for {issue.id}...")
+                commit_and_register_phase(
+                    issue_file_path,
+                    impl_phase_id,
                     f"vibe: issue solve iteration {i} for {issue.id}",
-                ],
-                check=False,
-            )
+                )
+            else:
+                update_state_phase(issue_file_path, impl_phase_id, status="completed")
+        else:
+            logger.info(f"⏭️ Phase '{impl_phase_id}' already completed. Skipping.")
 
         # 2. Quality Gates
         passed_gates = True
         gate_details = []
 
         if tests:
-            from vibe_tools.testing import ProjectTester
+            tests_phase_id = f"issue_tests_iteration_{i}"
+            if not is_phase_completed(issue_file_path, tests_phase_id):
+                from vibe_tools.testing import ProjectTester
 
-            tester = ProjectTester()
-            # For issues, we might want to run all tests or a subset.
-            # Defaulting to all 'test' targets for now.
-            test_targets = ["test"]
+                tester = ProjectTester()
+                # For issues, we might want to run all tests or a subset.
+                # Defaulting to all 'test' targets for now.
+                test_targets = ["test"]
 
-            be_targets = [t for t in test_targets if tester.is_backend_target(t)]
-            fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
+                be_targets = [t for t in test_targets if tester.is_backend_target(t)]
+                fe_targets = [t for t in test_targets if tester.is_frontend_target(t)]
 
-            if be_targets:
-                if not debugging_loop(
-                    agent, be_targets, stream=stream, iterations=max_debug_iterations
-                ):
-                    passed_gates = False
-                    gate_details.append("Backend tests failed")
+                if be_targets:
+                    if not debugging_loop(
+                        agent, be_targets, stream=stream, iterations=max_debug_iterations
+                    ):
+                        passed_gates = False
+                        gate_details.append("Backend tests failed")
 
-            if passed_gates and fe_targets:
-                if not debugging_loop(
-                    agent, fe_targets, stream=stream, iterations=max_debug_iterations
-                ):
-                    passed_gates = False
-                    gate_details.append("Frontend tests failed")
+                if passed_gates and fe_targets:
+                    if not debugging_loop(
+                        agent, fe_targets, stream=stream, iterations=max_debug_iterations
+                    ):
+                        passed_gates = False
+                        gate_details.append("Frontend tests failed")
+                
+                if passed_gates:
+                    if is_dirty():
+                        commit_and_register_phase(
+                            issue_file_path,
+                            tests_phase_id,
+                            f"vibe: tests passed for iteration {i} of issue '{issue.id}'",
+                        )
+                    else:
+                        update_state_phase(issue_file_path, tests_phase_id, status="completed")
+            else:
+                logger.info(f"⏭️ Phase '{tests_phase_id}' already completed. Skipping.")
 
         if passed_gates and review:
-            try:
-                review_prompt_template = get_prompt("implementation_review_prompt.txt")
-                review_prompt = review_prompt_template.format(
-                    title=issue.title,
-                    description=issue.body.summary,
-                    success_criteria=issue.body.acceptance_criteria
-                    or "Resolve the issue as described.",
-                )
-                review_cmd = get_agent_command(agent, review_prompt)
-                
-                if verbose_logger:
-                    verbose_logger.log_event("prompt", review_prompt, f"{issue.id}_review_iteration_{i}")
+            review_phase_id = f"issue_review_iteration_{i}"
+            if not is_phase_completed(issue_file_path, review_phase_id):
+                try:
+                    review_prompt_template = get_prompt("implementation_review_prompt.txt")
+                    review_prompt = review_prompt_template.format(
+                        title=issue.title,
+                        description=issue.body.summary,
+                        success_criteria=issue.body.acceptance_criteria
+                        or "Resolve the issue as described.",
+                    )
+                    review_cmd = get_agent_command(agent, review_prompt)
                     
-                review_output, _ = run_agent(review_cmd, stream=stream)
-                
-                if verbose_logger:
-                    verbose_logger.log_event("reply", review_output, f"{issue.id}_review_iteration_{i}")
-                
-                if "<review>PASSED</review>" not in review_output:
+                    if verbose_logger:
+                        verbose_logger.log_event("prompt", review_prompt, f"{issue.id}_review_iteration_{i}")
+                        
+                    review_output, _ = run_agent(review_cmd, stream=stream)
+                    
+                    if verbose_logger:
+                        verbose_logger.log_event("reply", review_output, f"{issue.id}_review_iteration_{i}")
+                    
+                    if "<review>PASSED</review>" not in review_output:
+                        passed_gates = False
+                        gate_details.append("Agentic review failed")
+                    
+                    if passed_gates:
+                        if is_dirty():
+                            commit_and_register_phase(
+                                issue_file_path,
+                                review_phase_id,
+                                f"vibe: agentic review passed for iteration {i} of issue '{issue.id}'",
+                            )
+                        else:
+                            update_state_phase(issue_file_path, review_phase_id, status="completed")
+                except Exception as e:
+                    logger.error(f"Review failed: {e}")
                     passed_gates = False
-                    gate_details.append("Agentic review failed")
-            except Exception as e:
-                logger.error(f"Review failed: {e}")
-                passed_gates = False
-                gate_details.append(f"Review error: {e}")
+                    gate_details.append(f"Review error: {e}")
+            else:
+                logger.info(f"⏭️ Phase '{review_phase_id}' already completed. Skipping.")
 
         if passed_gates:
             success = True
@@ -1123,6 +1217,7 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
             iteration_data["details"] = "; ".join(gate_details)
             history.append(iteration_data)
             logger.info("🔄 Retrying issue solve to fix quality issues...")
+
 
     if success:
         log_success("issue_solve", f"Issue {issue.id} solved successfully.")
