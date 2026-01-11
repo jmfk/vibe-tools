@@ -54,14 +54,14 @@ def run_tests(caffeinate=False, fast=False):
 def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream=False):
     from vibe_tools.cli import load_config
 
-    logger.info("--- Starting Test and Fix Loop ---")
+    logger.info("--- Starting Optimized Test and Fix Loop ---")
 
     config = load_config()
     iterations_config = config.get("iterations", {})
     max_iterations = iterations_config.get("test_fix", MAX_ITERATIONS)
     cost_logger = CostLogger(config)
 
-    log_start("test_fix", "Starting full test and fix cycle")
+    log_start("test_fix", "Starting optimized test and fix cycle")
 
     saved_state = load_state()
     start_iteration = saved_state["iteration"] if saved_state else 1
@@ -69,8 +69,10 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
     if saved_state:
         logger.info(f"[RESTART] Resuming Test and Fix loop at iteration {start_iteration}")
 
+    tester = ProjectTester()
+
     for i in range(start_iteration, max_iterations + 1):
-        logger.info(f"\n[TEST_FIX LOOP] [PHASE: test] (Iteration {i}/{max_iterations})")
+        logger.info(f"\n[TEST_FIX LOOP] [PHASE: test-all] (Iteration {i}/{max_iterations})")
 
         test_output, tests_passed, env_failures, failed_targets = run_tests(caffeinate=caffeinate, fast=fast)
 
@@ -88,32 +90,77 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
             clear_state()
             break
 
-        tester = ProjectTester()
-        summary = tester.get_summary(failed_targets)
-        log_issue("test_fix", i, max_iterations, summary)
-        logger.info(f"❌ Tests or linting failed. [PHASE: fix] Asking {agent} to fix...")
+        # Identify specific failing tests
+        failures = tester.parse_failures(test_output)
+        num_failures = len(failures)
 
-        try:
-            prompt_base = get_prompt("test_fix_prompt.txt")
-        except FileNotFoundError as e:
-            print(f"Error: {e}")
-            sys.exit(1)
+        if num_failures > 0:
+            logger.info(f"❌ {num_failures} individual test failures detected. Fixing them one by one...")
 
-        prompt = prompt_base.replace("{test_output}", test_output)
+            for idx, failure in enumerate(failures, 1):
+                test_id = failure["id"]
+                logger.info(f"\n[FIX {idx}/{num_failures}] Working on: {test_id}")
 
-        cmd = get_agent_command(agent, prompt)
-        agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+                # Ask agent to fix this specific test
+                try:
+                    prompt_base = get_prompt("test_fix_prompt.txt")
+                except FileNotFoundError:
+                    logger.error("Prompt template 'test_fix_prompt.txt' not found.")
+                    sys.exit(1)
 
-        cost_logger.log_run(
-            agent=agent,
-            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
-            prompt=prompt,
-            output=agent_output,
-            prd_name="N/A",
-            iteration=i,
-            phase="test_fix",
-            purpose="fixing_test_failures",
-        )
+                # Get the relevant output for just this test if possible, or use full output
+                # For now, we'll provide the specific test we want fixed
+                specific_prompt = f"SPECIFIC TARGET: Fix failing test '{test_id}'\n\n{prompt_base}"
+                prompt = specific_prompt.replace("{test_output}", test_output)
+
+                cmd = get_agent_command(agent, prompt)
+                agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+
+                cost_logger.log_run(
+                    agent=agent,
+                    model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+                    prompt=prompt,
+                    output=agent_output,
+                    prd_name="N/A",
+                    iteration=i,
+                    phase="test_fix",
+                    purpose=f"fixing_test_{test_id}",
+                )
+
+                # Verify this specific test
+                verify_output, fixed = tester.run_single_test(failure, caffeinate=caffeinate)
+                if fixed:
+                    logger.info(f"✅ Test fixed: {test_id}")
+                else:
+                    logger.warning(f"⚠️ Test STILL failing: {test_id}")
+                    # We continue to the next one anyway, or we could retry?
+                    # The plan says "repeat until the whole list of failing tests are fixed"
+                    # which implies we might loop again in the next iteration.
+        else:
+            # No specific test failures parsed (maybe linting or generic error)
+            summary = tester.get_summary(failed_targets)
+            log_issue("test_fix", i, max_iterations, summary)
+            logger.info(f"❌ Targets failed but no specific tests parsed. [PHASE: fix] Asking {agent} to fix all...")
+
+            try:
+                prompt_base = get_prompt("test_fix_prompt.txt")
+            except FileNotFoundError:
+                sys.exit(1)
+
+            prompt = prompt_base.replace("{test_output}", test_output)
+            cmd = get_agent_command(agent, prompt)
+            agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+
+            cost_logger.log_run(
+                agent=agent,
+                model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+                prompt=prompt,
+                output=agent_output,
+                prd_name="N/A",
+                iteration=i,
+                phase="test_fix",
+                purpose="fixing_generic_failures",
+            )
 
         save_state(i + 1, test_output)
 
