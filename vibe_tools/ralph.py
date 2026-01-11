@@ -11,7 +11,7 @@ from typing import Callable, List
 import yaml
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.issues import FAILS_DIR, Issue, save_issue
+from vibe_tools.issues import FAILS_DIR, Issue, IssueBody, save_issue, generate_issue_id
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
     DEV_ENV,
@@ -376,6 +376,44 @@ def debugging_loop(
             log_success("debug_loop", f"Targets {', '.join(targets)} passed!")
             return True
 
+        # Check for coverage failure
+        if tester.is_coverage_failure(test_output):
+            logger.warning("📉 Low coverage detected. Creating an issue and terminating debug loop.")
+            
+            issue_id = generate_issue_id()
+            issue = Issue(
+                id=issue_id,
+                title=f"Improve test coverage for {', '.join(targets)}",
+                status="backlog",
+                severity="medium",
+                service="testing",
+                summary=f"Automated coverage check failed for targets: {', '.join(targets)}",
+                created_at=datetime.datetime.now().isoformat(),
+                updated_at=datetime.datetime.now().isoformat(),
+                body=IssueBody(
+                    summary=f"The following test targets failed coverage requirements:\n{', '.join(targets)}",
+                    evidence=test_output,
+                    acceptance_criteria="Reach the required coverage threshold."
+                )
+            )
+            save_issue(issue)
+            logger.info(f"📄 Created issue {issue_id} to track coverage improvement.")
+            return False
+
+        # Parse individual failures and re-run to get clean output
+        failures = tester.parse_failures(test_output)
+        clean_context = []
+        if failures:
+            logger.info(f"🔍 Found {len(failures)} individual test failures. Gathering clean context...")
+            for failure in failures:
+                single_output, single_passed = tester.run_single_test(failure)
+                clean_context.append(f"--- CLEAN OUTPUT FOR TEST: {failure['id']} ---\n{single_output}")
+            
+            # Use clean context instead of the noisy full output if we have it
+            agent_test_output = "\n\n".join(clean_context)
+        else:
+            agent_test_output = test_output
+
         summary = tester.get_summary(failed_targets)
         log_issue("debug_loop", i, iterations, summary)
         logger.warning(f"❌ Targets failed. Asking {agent} to fix...")
@@ -386,7 +424,7 @@ def debugging_loop(
             logger.error(f"Error: {e}")
             return False
 
-        prompt = prompt_template.format(test_output=test_output)
+        prompt = prompt_template.format(test_output=agent_test_output)
         cmd = get_agent_command(agent, prompt)
         
         if verbose_logger:
