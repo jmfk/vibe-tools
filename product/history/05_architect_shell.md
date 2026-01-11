@@ -44,7 +44,7 @@ N/A - CLI interactive shell interface.
   - `/kill [all]`: Kill agent processes
   - `/help`, `/h`: Show help
   - `/exit`, `/q`: Exit shell
-- **Session Persistence**: Saves to `project/architect-session.json`:
+- **Session Persistence**: Saves to `implementation/architect-session.json`:
   - History (conversation log)
   - Pending prompt (multi-line input being built)
   - Session memory (persistent instructions)
@@ -55,9 +55,9 @@ N/A - CLI interactive shell interface.
 - **Editor Integration**: Configurable external editors for markdown (specs) and code (response files).
 
 ## Infrastructure
-- **Session Storage**: JSON file in `project/architect-session.json`.
-- **History Storage**: Readline history in `project/.architect_history`.
-- **Config Storage**: Editor preferences in `project/architect-config.json`.
+- **Session Storage**: JSON file in `implementation/architect-session.json`.
+- **History Storage**: Readline history in `implementation/.architect_history`.
+- **Config Storage**: Editor preferences in `implementation/architect-config.json`.
 - **Spec Files**: Reads/writes `specs/architecture.md` and `specs/infrastructure.md`.
 
 ## Architecture and Constraints

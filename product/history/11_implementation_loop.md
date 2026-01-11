@@ -13,7 +13,7 @@ sync_hash: f023ff5483efcb3b56a87e69dfaba1d840a0ae00760c013c0c84a76c0f2f5f10
 - **Success criteria**: Implementation loop successfully processes all PRDs, handles dependencies correctly, tracks progress, and produces working implementations.
 
 ## Feature Inspiration
-The `vibe implement` command runs the implementation loop, which processes all `prd_*.yaml` files in `project/prds/` using the Ralph loop engine. It handles PRD dependencies, processes them in order, tracks implementation status, and provides comprehensive progress reporting.
+The `vibe implement` command runs the implementation loop, which processes all `prd_*.yaml` files in `implementation/prds/` using the Ralph loop engine. It handles PRD dependencies, processes them in order, tracks implementation status, and provides comprehensive progress reporting.
 
 **Key capabilities**:
 - PRD discovery and processing
@@ -27,7 +27,7 @@ The `vibe implement` command runs the implementation loop, which processes all `
 N/A - CLI command with progress output.
 
 ## Backend
-- **PRD Discovery**: `collect_prd_files()` finds all `prd_*.yaml` files in `project/prds/`.
+- **PRD Discovery**: `collect_prd_files()` finds all `prd_*.yaml` files in `implementation/prds/`.
 - **Dependency Resolution**: `check_plan_dependencies()` analyzes PRD dependencies:
   - Reads PRD YAML files
   - Extracts dependency declarations
@@ -45,7 +45,7 @@ N/A - CLI command with progress output.
      - Track success/failure
   4. Report final status
 - **State Tracking**: 
-  - Saves implementation state to `project/implementation-state.json`
+  - Saves implementation state to `implementation/state.json`
   - Tracks which PRDs completed, failed, in progress
   - Used by `vibe implemented` command
 - **Progress Reporting**: 
@@ -55,8 +55,8 @@ N/A - CLI command with progress output.
   - Final summary of all PRDs
 
 ## Infrastructure
-- **PRD Storage**: `project/prds/prd_*.yaml` files.
-- **State Storage**: `project/implementation-state.json`.
+- **PRD Storage**: `implementation/prds/prd_*.yaml` files.
+- **State Storage**: `implementation/state.json`.
 - **Implementation Locations**: Determined by PRD (codebase structure).
 
 ## Architecture and Constraints

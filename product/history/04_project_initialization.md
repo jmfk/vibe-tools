@@ -33,7 +33,7 @@ N/A - CLI interactive prompts.
   - **C) Architecture Ready**: Assumes `architecture.yaml` exists, initializes structure
   - **D) Manual Setup**: Just creates directories and templates
 - **Basic Initialization** (`_perform_basic_init()`):
-  - Creates standard directories (`specs/`, `project/prds/`, `project/logs/`, `project/costs/`, `instructions/`)
+  - Creates standard directories (`specs/`, `implementation/prds/`, `implementation/logs/`, `implementation/costs/`, `instructions/`)
   - Initializes template directory from package templates
   - Sets up `.gitignore` entries
   - Validates git repository (warns if not a git repo)

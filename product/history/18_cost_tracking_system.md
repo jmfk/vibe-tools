@@ -44,7 +44,7 @@ N/A - CLI command for cost reporting.
   - Output cost: `(output_tokens / 1_000_000) * pricing["output"]`
   - Total: input + output
 - **Logging**: 
-  - Logs to CSV: `project/costs/usage.csv`
+  - Logs to CSV: `implementation/costs/usage.csv`
   - Columns: Timestamp, PRD, Phase, Iteration, Agent, Model, Input Tokens, Output Tokens, Cost (USD), Purpose
   - Appends to existing file
 - **Session Tracking**: 
@@ -53,7 +53,7 @@ N/A - CLI command for cost reporting.
   - `finalize_cost_report()` called on exit
 
 ## Infrastructure
-- **CSV Storage**: `project/costs/usage.csv` file.
+- **CSV Storage**: `implementation/costs/usage.csv` file.
 - **Pricing Data**: Hardcoded pricing dictionary (updated manually).
 - **Integration**: Integrated with all agent operations via `CostLogger`.
 

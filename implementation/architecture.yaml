@@ -7,7 +7,7 @@ SYSTEM_CONTRACT:
   - vibe_tools/
   - specs/
   - prompts/
-  - project/
+  - implementation/
   - tests/
 DOMAIN_MODEL:
 - Vibe Tools (vibe)

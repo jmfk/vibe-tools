@@ -49,16 +49,16 @@ N/A - CLI interactive shell interface.
   - `/list`, `/ls [memory|specs]`: List memory or specs
   - `/show specs`: Show spec list
   - `/history`, `/ps`, `/kill`, `/help`, `/exit`: Standard commands
-- **Session Persistence**: Saves to `project/pm-session.json`:
+- **Session Persistence**: Saves to `implementation/pm-session.json`:
   - History, pending prompt, session memory, additional files, mode (like architect)
   - `focused_prd`: Currently focused PRD ID
 - **Agent Integration**: Includes focused PRD context, spec files, session memory, attached files in agent prompts.
 - **Implementation Tracking**: `/implemented` command shows which PRDs are implemented, links to implementation status.
 
 ## Infrastructure
-- **Session Storage**: JSON file in `project/pm-session.json`.
-- **History Storage**: Readline history in `project/.pm_history`.
-- **Config Storage**: Editor preferences in `project/pm-config.json`.
+- **Session Storage**: JSON file in `implementation/pm-session.json`.
+- **History Storage**: Readline history in `implementation/.pm_history`.
+- **Config Storage**: Editor preferences in `implementation/pm-config.json`.
 - **Spec Files**: Manages files in `specs/` directory.
 
 ## Architecture and Constraints

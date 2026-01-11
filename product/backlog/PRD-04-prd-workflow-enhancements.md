@@ -8,7 +8,7 @@ sync_hash: 0fa521c979f3acf83315274ad7106b570ff40066842cf938058ac40ec2ba39eb
 # PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History
 
 ## Problem
-Currently, PRDs are stored in a single folder (`project/prds/`) and their status (implemented or not) is tracked in a monolithic `state.json` file. This makes it hard to manage a growing list of PRDs, see what's planned, and organize suggestions. There is no native support for "triaging" new ideas or "parking" dismissed ones.
+Currently, PRDs are stored in a single folder (`implementation/prds/`) and their status (implemented or not) is tracked in a monolithic `state.json` file. This makes it hard to manage a growing list of PRDs, see what's planned, and organize suggestions. There is no native support for "triaging" new ideas or "parking" dismissed ones.
 
 ## Goals
 *   Establish a folder-based PRD status management system.
@@ -20,7 +20,7 @@ Currently, PRDs are stored in a single folder (`project/prds/`) and their status
 ## Proposed Changes
 
 ### 1. New Directory Structure
-The primary location for PRDs will change from `project/prds/` to `product/`.
+The primary location for PRDs will change from `implementation/prds/` to `product/`.
 Within `product/`, the following subdirectories will exist:
 *   `inbox/`: For new, un-triaged PRDs or suggestions.
 *   `backlog/`: For PRDs planned for implementation. The implementation loop will process these in alphabetical order (supporting numeric prefixes like `01_...`).
@@ -31,8 +31,8 @@ Within `product/`, the following subdirectories will exist:
 A new command `vibe migrate` will be introduced to transition existing projects to this structure.
 *   **Behavior**:
     *   Creates the `product/{inbox,backlog,history,trash}` directories.
-    *   Reads `project/state.json` to identify `completed_prds` and moves corresponding files from `project/prds/` to `product/history/`.
-    *   Moves all other PRDs from `project/prds/` to `product/backlog/`.
+    *   Reads `implementation/state.json` to identify `completed_prds` and moves corresponding files from `implementation/prds/` to `product/history/`.
+    *   Moves all other PRDs from `implementation/prds/` to `product/backlog/`.
     *   If `vibe-tools-prds/` exists (legacy), it should also be considered during migration.
 *   **Idempotency**: The command should be safe to run multiple times. It should skip files already in the target directories.
 

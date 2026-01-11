@@ -1229,6 +1229,45 @@ def switch_to_main():
         logger.error(f"Failed to switch to {main_branch}: {stdout}")
 
 
+def setup_project_gitignore():
+    """Ensures a comprehensive .gitignore for a Vibe project."""
+    patterns = [
+        # Vibe local state and credentials
+        ".vibe_config.json",
+        ".ralph_state.json",
+        ".vibe_google_creds.json",
+        ".vibe_google_token.json",
+        ".vibe_client_secrets.json",
+        ".vibe_authorized_user.json",
+        "implementation/pm-session.json",
+        "implementation/pm-config.json",
+        "implementation/architect-session.json",
+        "implementation/architect-config.json",
+        # Environment files
+        ".env",
+        ".env.local",
+        "*.env",
+        # Generated data and logs
+        "vibe_data/*",
+        "stats/*",
+        "reports/*",
+        "implementation/logs/*",
+        "implementation/costs/*",
+        "implementation/instructions/*",
+        "implementation/data/*",
+        # Current state files (machine-readable global truths)
+        "implementation/*-current.yaml",
+        # Python/Node defaults (if not already present)
+        "__pycache__/",
+        "*.py[cod]",
+        ".venv/",
+        "venv/",
+        "node_modules/",
+    ]
+    for pattern in patterns:
+        ensure_gitignore(pattern)
+
+
 def ensure_gitignore(entry: str):
     """Ensures that a specific entry exists in .gitignore."""
     gitignore = pathlib.Path(".gitignore")
@@ -1239,8 +1278,13 @@ def ensure_gitignore(entry: str):
 
     content = gitignore.read_text()
     if entry not in content.splitlines():
+        # Ensure we don't just append to a line that doesn't end in a newline
+        if content and not content.endswith("\n"):
+            content += "\n"
         with gitignore.open("a") as f:
-            f.write(f"\n{entry}\n")
+            if not content.endswith("\n\n") and content.strip():
+                f.write("\n")
+            f.write(f"{entry}\n")
         logger.info(f"Added {entry} to .gitignore")
 
 

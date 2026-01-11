@@ -22,7 +22,7 @@ def _perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
     maybe_init_git()
 
-    # First, migrate any existing files from root to project/
+    # First, migrate any existing files from root to implementation/
     migrate_to_project_dir()
 
     # Ensure structure exists

@@ -13,7 +13,7 @@ sync_hash: 92885216f2e838d28e7f00b5668af61d1e92e58b3572c40729d9185e66224e9b
 - **Success criteria**: Normalization successfully converts all spec types, handles edge cases, validates output, supports overwrite protection, and produces correct YAML structure.
 
 ## Feature Inspiration
-The `vibe normalize` command converts markdown specification files in `specs/` into YAML PRD files in `project/prds/`. It uses an AI agent to perform the conversion, ensuring the YAML structure matches the expected format. The process supports both individual file conversion and batch processing of all specs.
+The `vibe normalize` command converts markdown specification files in `specs/` into YAML PRD files in `implementation/prds/`. It uses an AI agent to perform the conversion, ensuring the YAML structure matches the expected format. The process supports both individual file conversion and batch processing of all specs.
 
 **Key capabilities**:
 - Markdown to YAML conversion
@@ -35,7 +35,7 @@ N/A - CLI command with progress output.
   - Calls AI agent with spec content and prompt
   - Agent generates YAML PRD
   - Validates YAML structure
-  - Saves to `project/prds/` directory
+  - Saves to `implementation/prds/` directory
 - **Naming Convention**:
   - Implementation PRDs: `prd_{stem}.yaml` (from `specs/prd_*.md` or `specs/*.md`)
   - Global truths: `{stem}.yaml` (architecture.yaml, infrastructure.yaml, etc.)
@@ -54,7 +54,7 @@ N/A - CLI command with progress output.
 
 ## Infrastructure
 - **Input**: Markdown files in `specs/` directory.
-- **Output**: YAML files in `project/prds/` directory.
+- **Output**: YAML files in `implementation/prds/` directory.
 - **Prompt Templates**: Normalization prompt in `prompts/pdr_normalization_prompt.txt`.
 - **AI Agent**: Uses configured agent for conversion.
 
