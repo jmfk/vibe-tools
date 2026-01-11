@@ -1,0 +1,51 @@
+SYSTEM_CONTRACT:
+  entry_point: vibe
+  framework: Click
+  global_options:
+  - '--debug: Enable debug logging to console'
+  - '--verbose/--no-verbose: Control verbose output (default: True)'
+  - '--stream/--no-stream: Stream agent output in real-time'
+  - '--agent: Select agent backend (cursor-agent, claude, antigravity)'
+  - '--caffeinate: Prevent system sleep during long tasks'
+  dependencies:
+  - Click
+  - python-dotenv
+  - logging
+  - pathlib
+  - atexit
+  configuration:
+    file: .vibe_config.json
+    location: project root
+  deployment:
+  - pip
+  - setup.py
+  - pyproject.toml
+  logging_storage: project/logs/
+DOMAIN_MODEL:
+- 'OrderedGroup: Custom Click class for logical command ordering'
+- 'Command: Registered via Click decorators'
+- 'Global Options: Context-level flags (debug, verbose, stream, agent, caffeinate)'
+- 'Configuration: Merged defaults and .vibe_config.json'
+- 'Logging System: Console and file handlers with per-command setup'
+- 'Cost Report: Session-based tracking finalized atexit'
+- 'Project Directory: Managed structure including project/ and project/logs/'
+CAPABILITIES:
+- Command registration and discovery
+- Global option handling
+- Configuration loading and validation
+- Logging initialization per command
+- Session cost tracking and reporting
+- Project directory migration and setup
+- Agent selection abstraction
+- Ordered help output display
+- Graceful degradation for missing configuration files
+OUTPUT_TARGETS:
+- CLI Console (help output, debug logs, verbose output)
+- Log files (stored in project/logs/)
+- Session cost reports (displayed at process exit)
+- .vibe_config.json (validation and usage)
+_vibe_sync:
+  issue_number: 65
+TITLE: 01 Core Cli Framework
+BRANCH: feature/prd_01_core_cli_framework
+PARENT_BRANCH: main

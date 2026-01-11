@@ -1,0 +1,67 @@
+SYSTEM_CONTRACT:
+  command: vibe test-fix
+  flags:
+    --fast: Skips frontend tests (backend only)
+  artifacts:
+    state_file: .test_fix_state.json
+    prompt_file: test_fix_prompt.txt
+  dependencies:
+  - ProjectTester
+  - make test
+  - pytest
+  - npm test
+  - AI agent
+  constraints:
+  - Max iterations: MISSING
+  - Correctness: Avoid masking issues
+  - Quality: Maintain code quality and follow project patterns
+DOMAIN_MODEL:
+  state:
+  - current iteration
+  - last error
+  test_suite:
+  - backend
+  - frontend
+  failure_info:
+  - exit code
+  - error messages
+  - failing tests
+  - error details
+  fix:
+  - agent suggested code changes
+  error_types:
+  - syntax
+  - logic
+  - import
+CAPABILITIES:
+  test_management:
+  - Discover test command (make test, pytest, npm test)
+  - Run tests for backend, frontend, or both
+  - Capture output and exit code
+  failure_detection:
+  - Identify failures via exit code (!= 0)
+  - Parse test output for error messages
+  - Identify specific failing tests
+  - Extract error details
+  fix_loop:
+  - Execute test suite
+  - Extract failure information
+  - Build fix prompt with errors and codebase context
+  - Call AI agent for fixes
+  - Apply suggested code changes
+  - Verify changes applied correctly
+  - Re-run tests iteratively until all pass or max iterations
+  persistence:
+  - Save state to .test_fix_state.json
+  - Resume from last error/iteration after interruption
+  fast_mode:
+  - Skip frontend tests
+OUTPUT_TARGETS:
+  CLI: progress output
+  Codebase: applied code fixes
+  Storage: .test_fix_state.json
+_vibe_sync:
+  issue_number: 68
+TITLE: 13 Test Fix Loop
+BRANCH: feature/prd_13_test_fix_loop
+PARENT_BRANCH: main

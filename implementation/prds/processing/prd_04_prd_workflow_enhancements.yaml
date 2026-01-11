@@ -1,0 +1,50 @@
+SYSTEM_CONTRACT:
+  INPUTS:
+  - PRD files in project/prds/
+  - PRD files in vibe-tools-prds/ (legacy)
+  - project/state.json (completed_prds)
+  - config.json (editor option)
+  - Subcommand (all, inbox, backlog, history, trash)
+  - PRD ID or partial name
+  - Search term
+  - Target folder
+  OUTPUTS:
+  - product/inbox/ directory
+  - product/backlog/ directory
+  - product/history/ directory
+  - product/trash/ directory
+  - Moved PRD files
+  - CLI list output (paged in batches of 10)
+  - Filtered CLI list output
+  - External editor process
+  CONSTRAINTS:
+  - Migration command must be idempotent.
+  - Implementation loop processes backlog in alphabetical order (supporting numeric prefixes).
+  - vibe i defaults to backlog if no subcommand provided.
+DOMAIN_MODEL:
+  PRD_STATUSES:
+  - inbox: New, un-triaged PRDs or suggestions.
+  - backlog: PRDs planned for implementation.
+  - history: Successfully implemented PRDs.
+  - trash: Dismissed or irrelevant PRDs.
+  CONFIGURATION_OPTIONS:
+  - editor: cursor, typora, code, vim, etc.
+CAPABILITIES:
+- Migration: Create product/ status directories and relocate existing PRDs based on state.json and legacy directory existence.
+- Viewing: List PRDs in status folders with batch paging (10 items) and filename search filtering.
+- Status Management: Move PRDs between status folders by ID/partial name; specialized dismiss shortcut for trash.
+- Editing: Open PRD file in configured external editor process.
+- Implementation Integration: implementation loop reads from product/backlog/ and moves files to product/history/ upon success.
+OUTPUT_TARGETS:
+- product/inbox/
+- product/backlog/
+- product/history/
+- product/trash/
+- vibe_tools configuration (config.json)
+_vibe_sync:
+  issue_number: 62
+  last_synced_at: '2026-01-10T17:22:14.346714'
+  sync_hash: 3b8fceffa5f863cc511f52c22ff6ade1e512a79da7ebf0335458ba50c8986706
+TITLE: 04 Workflow Enhancements
+BRANCH: feature/prd_04_prd_workflow_enhancements
+PARENT_BRANCH: main

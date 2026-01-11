@@ -1,0 +1,54 @@
+SYSTEM_CONTRACT:
+  idempotency: Running vibe init multiple times should be safe (doesn't overwrite existing files)
+  backward_compatibility: Supports projects already using vibe-tools (doesn't break existing structure)
+  minimal_dependencies: Basic init requires only file system operations, no external services
+  user_control: Users can choose scenario, skip steps, or do manual setup
+DOMAIN_MODEL:
+  scenarios:
+  - A) Human Specs: user has markdown specs ready
+  - B) Adoption: existing codebase to discover
+  - C) Architecture Ready: has architecture.yaml
+  - D) Manual Setup: just initialize folders
+  directories:
+  - specs/
+  - project/prds/
+  - project/logs/
+  - project/costs/
+  - instructions/
+  - prompts/
+  files:
+  - architecture.yaml
+  - .gitignore
+  git_repository: Checked and optionally initialized
+  package_templates: Prompt templates stored in package
+CAPABILITIES:
+  interactive_scenario_selection: Present users with four scenarios
+  basic_initialization:
+  - Create standard directories (specs/, project/prds/, project/logs/, project/costs/, instructions/)
+  - Initialize template directory from package templates
+  - Set up .gitignore entries
+  - Validate git repository (warn if not a git repo)
+  - Create initial specs/ structure if needed
+  codebase_discovery: For scenario B, invoke vibe setup --import-code to analyze existing codebase and generate initial specs
+  template_initialization: Copy prompt templates from package to prompts/ directory (if not exists), allow project-specific overrides
+  git_integration: Check for git repository, initialize if needed (optional), update .gitignore
+  next_steps_guidance: Provide clear next steps message
+OUTPUT_TARGETS:
+  directories:
+  - specs/
+  - project/prds/
+  - project/logs/
+  - project/costs/
+  - instructions/
+  - prompts/
+  files:
+  - prompt templates in prompts/
+  - updated .gitignore
+  - initial specs/ structure
+  cli:
+  - interactive scenario selection prompt
+  - git repository warnings
+  - next steps guidance message
+TITLE: 04 Project Initialization
+BRANCH: feature/prd_04_project_initialization
+PARENT_BRANCH: main

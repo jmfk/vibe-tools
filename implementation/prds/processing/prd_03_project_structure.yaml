@@ -1,0 +1,56 @@
+SYSTEM_CONTRACT:
+  Input:
+  - Human-written markdown specifications (specs/*.md)
+  - AI prompt templates (package or project-specific)
+  - Global agent instructions (user-created)
+  Output:
+  - Standardized directory structure
+  - Machine-readable YAML PRDs (project/prds/*.yaml)
+  - Command-specific log files (project/logs/*.log)
+  - Cost tracking CSV files (project/costs/usage.csv)
+  - Session state files (project/*-session.json)
+  - Current state YAMLs (project/*-current.yaml)
+  - Automatically updated .gitignore
+  Constraints:
+  - Standard POSIX file system
+  - Supports symlinks for templates
+  - Directory permissions typically 755
+  - Pathlib support for cross-platform (Unix, macOS, Windows)
+  - Git integration
+  - Backward compatibility for legacy directory structures
+DOMAIN_MODEL:
+  Standard Directories:
+  - specs/: Human-written markdown specs (architecture.md, infrastructure.md, cicd.md, testing.md, prd_*.md)
+  - project/prds/: Machine-readable YAML PRDs (prd_*.yaml, global truths)
+  - project/logs/: Auto-created per-command log files
+  - project/costs/: Auto-created usage.csv
+  - prompts/: Prompt templates
+  - instructions/: Global agent instructions
+  - project/: Session state (json) and current state (yaml)
+  Git Rules:
+  - Exclude: logs, costs, state files
+  - Include: specs, PRDs
+CAPABILITIES:
+- Automatically create standard directory structure on vibe init
+- Create directories with proper permissions and handle existing directories via ensure_dir()
+- Generate YAML PRDs from markdown specifications
+- Automatically create command-specific log files
+- Automatically create and track costs in CSV files
+- Automatically manage session state files
+- Automatically update .gitignore based on directory rules
+- Initialize templates from package or project-specific versions
+- Migrate from legacy directory structures (e.g., prds/ to project/prds/)
+OUTPUT_TARGETS:
+- specs/*.md
+- project/prds/prd_*.yaml
+- project/prds/*.yaml
+- project/logs/{command_name}.log
+- project/costs/usage.csv
+- project/{name}-session.json
+- project/{name}-current.yaml
+- .gitignore
+_vibe_sync:
+  issue_number: 69
+TITLE: 03 Project Structure
+BRANCH: feature/prd_03_project_structure
+PARENT_BRANCH: main

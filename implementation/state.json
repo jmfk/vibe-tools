@@ -1,0 +1,68 @@
+{
+  "project_name": "vibe_tools",
+  "phases": {
+    "normalize": {
+      "status": "completed",
+      "hash": null,
+      "depends_on": []
+    },
+    "setup": {
+      "status": "completed",
+      "hash": "d3ad8272fc833ac912146400b96e2adc97c99588701597cb2eacc9ca52afb7f4",
+      "depends_on": [
+        "normalize"
+      ]
+    },
+    "deps": {
+      "status": "completed",
+      "hash": null,
+      "depends_on": [
+        "setup"
+      ]
+    },
+    "implement": {
+      "status": "completed",
+      "hash": null,
+      "depends_on": [
+        "deps"
+      ]
+    },
+    "infra": {
+      "status": "pending",
+      "hash": null,
+      "depends_on": [
+        "implement"
+      ]
+    },
+    "testing": {
+      "status": "pending",
+      "hash": null,
+      "depends_on": [
+        "infra"
+      ]
+    },
+    "cicd": {
+      "status": "pending",
+      "hash": null,
+      "depends_on": [
+        "infra"
+      ]
+    },
+    "deploy": {
+      "status": "pending",
+      "hash": null,
+      "depends_on": [
+        "infra",
+        "cicd",
+        "testing"
+      ]
+    }
+  },
+  "branch_lineage": {
+    "staging": "issue/ISSUE-2026-01-10-001",
+    "issue/ISSUE-2026-01-10-001": "issue/ISSUE-2026-01-10-002",
+    "issue/ISSUE-2026-01-10-002": "main"
+  },
+  "active_task": null,
+  "version": "1.2"
+}
