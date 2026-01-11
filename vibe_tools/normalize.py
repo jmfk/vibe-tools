@@ -142,8 +142,8 @@ def normalize_prd(
             target_base = PRD_PROCESSING_DIR  # Normalized inbox PRDs go to processing
             rel_dir = spec_path.parent.relative_to(PLANNING_INBOX_DIR)
         elif PLANNING_REJECTED_DIR in spec_path.parents or spec_path.parent == PLANNING_REJECTED_DIR:
-            target_base = PRD_FAILED_DIR
-            rel_dir = spec_path.parent.relative_to(PLANNING_REJECTED_DIR)
+            print(f"⏩ Skipping {spec_path.name} (rejected PRDs are not normalized)")
+            continue
         else:
             # Default to processing if it's in the product root or elsewhere
             target_base = PRD_PROCESSING_DIR

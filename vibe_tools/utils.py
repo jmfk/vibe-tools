@@ -362,10 +362,25 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
         HISTORY_DIR: "completed",
     }
 
+    # Pre-collect all MD files for faster lookup
+    md_files = {}
+    if SPECS_DIR.exists():
+        for md_file in SPECS_DIR.rglob("*.md"):
+            stem = md_file.stem
+            clean_name = stem.lower()
+            while True:
+                new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
+                if new_name == clean_name:
+                    break
+                clean_name = new_name
+            clean_name = re.sub(r"[- ]", "_", clean_name)
+            md_files[clean_name] = md_file
+
     for directory, status in status_map.items():
         if directory.exists():
             for yaml_file in directory.glob("prd_*.yaml"):
                 prd_id = yaml_file.stem
+                clean_id = prd_id.replace("prd_", "")
                 try:
                     with open(yaml_file, "r") as f:
                         data = safe_yaml_load(f.read()) or {}
@@ -374,6 +389,7 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
                     plan_info = {
                         "status": status,
                         "file": str(yaml_file),
+                        "md_path": str(md_files.get(clean_id)) if clean_id in md_files else None,
                         "title": data.get(
                             "TITLE",
                             prd_id.replace("prd_", "").replace("_", " ").title(),
@@ -1543,6 +1559,118 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
 
     # Sort by name
     return sorted(prd_info.values(), key=lambda x: x["name"])
+
+
+def get_prd_inconsistencies() -> List[Dict[str, Any]]:
+    """
+    Detects mismatches between the locations of .md files and .yaml files.
+    Returns a list of inconsistencies with suggested fixes.
+    """
+    all_info = collect_all_prd_info()
+    inconsistencies = []
+
+    for info in all_info:
+        md_path = info.get("md_path")
+        yaml_path = info.get("yaml_path")
+
+        if not md_path or not yaml_path:
+            continue
+
+        # Determine relative directory from the base
+        if PLANNING_HISTORY_DIR in md_path.parents:
+            md_base = PLANNING_HISTORY_DIR
+            expected_yaml_base = PRD_DONE_DIR
+        elif PLANNING_REJECTED_DIR in md_path.parents:
+            md_base = PLANNING_REJECTED_DIR
+            expected_yaml_base = PRD_FAILED_DIR
+        elif PLANNING_INBOX_DIR in md_path.parents:
+            md_base = PLANNING_INBOX_DIR
+            expected_yaml_base = PRD_PROCESSING_DIR
+        elif PLANNING_BACKLOG_DIR in md_path.parents:
+            md_base = PLANNING_BACKLOG_DIR
+            expected_yaml_base = PRD_PROCESSING_DIR
+        else:
+            # Root or elsewhere
+            md_base = PRODUCT_DIR
+            expected_yaml_base = PRD_PROCESSING_DIR
+
+        rel_dir = md_path.parent.relative_to(md_base)
+        expected_yaml_path = expected_yaml_base / rel_dir / f"prd_{info['name']}.yaml"
+
+        # Determine relative directory from the YAML base
+        if PRD_DONE_DIR in yaml_path.parents:
+            yaml_base = PRD_DONE_DIR
+            expected_md_base = PLANNING_HISTORY_DIR
+        elif PRD_FAILED_DIR in yaml_path.parents:
+            yaml_base = PRD_FAILED_DIR
+            expected_md_base = PLANNING_REJECTED_DIR
+        else:
+            yaml_base = PRD_PROCESSING_DIR
+            expected_md_base = PLANNING_BACKLOG_DIR
+
+        yaml_rel_dir = yaml_path.parent.relative_to(yaml_base)
+        expected_md_path = expected_md_base / yaml_rel_dir / f"{md_path.name}"
+
+        # Check if they are in sync
+        is_yaml_correct = yaml_path == expected_yaml_path
+        is_md_correct = md_path == expected_md_path
+
+        if not is_yaml_correct or not is_md_correct:
+            inconsistencies.append(
+                {
+                    "name": info["name"],
+                    "md_path": md_path,
+                    "yaml_path": yaml_path,
+                    "is_yaml_correct": is_yaml_correct,
+                    "is_md_correct": is_md_correct,
+                    "expected_yaml_path": expected_yaml_path,
+                    "expected_md_path": expected_md_path,
+                }
+            )
+
+    return inconsistencies
+
+
+def fix_prd_inconsistencies(inconsistencies: List[Dict[str, Any]], prefer_yaml=True):
+    """
+    Fixes detected inconsistencies by moving files.
+    If prefer_yaml is True, moves MD to match YAML location.
+    If False, moves YAML to match MD location.
+    Special case: If MD is in rejected or history, it often takes precedence.
+    """
+    for inc in inconsistencies:
+        md_path = inc["md_path"]
+        yaml_path = inc["yaml_path"]
+
+        # If MD is in a final state (history/rejected), it usually wins
+        md_is_final = (PLANNING_HISTORY_DIR in md_path.parents or 
+                       PLANNING_REJECTED_DIR in md_path.parents)
+        
+        # If YAML is in a final state (done/failed), it usually wins
+        yaml_is_final = (PRD_DONE_DIR in yaml_path.parents or 
+                         PRD_FAILED_DIR in yaml_path.parents)
+
+        if md_is_final and not yaml_is_final:
+            # MD is final, move YAML to match
+            target = inc["expected_yaml_path"]
+            source = inc["yaml_path"]
+        elif yaml_is_final and not md_is_final:
+            # YAML is final, move MD to match
+            target = inc["expected_md_path"]
+            source = inc["md_path"]
+        elif prefer_yaml:
+            # Use preference
+            target = inc["expected_md_path"]
+            source = inc["md_path"]
+        else:
+            # Use preference
+            target = inc["expected_yaml_path"]
+            source = inc["yaml_path"]
+
+        if source != target:
+            logger.info(f"Fixing inconsistency for {inc['name']}: Moving {source} -> {target}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(target))
 
 
 def reset_prd_state(project_name: str) -> List[str]:
