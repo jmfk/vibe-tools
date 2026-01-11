@@ -12,9 +12,9 @@ from vibe_tools.utils import (
     VIBE_DATA_DIR,
     VIBE_PROJECT_DIR,
     ensure_dir,
-    ensure_gitignore,
     ensure_project_structure,
     migrate_to_project_dir,
+    setup_project_gitignore,
 )
 
 
@@ -22,14 +22,15 @@ def _perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
     maybe_init_git()
 
-    # First, migrate any existing files from root to implementation/
+    # First, migrate any existing files from root to project/
     migrate_to_project_dir()
 
     # Ensure structure exists
     ensure_project_structure()
-
     ensure_dir(VIBE_PROJECT_DIR)
-    ensure_gitignore(str(VIBE_PROJECT_DIR) + "/")
+
+    # Setup gitignore with specific patterns
+    setup_project_gitignore()
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
