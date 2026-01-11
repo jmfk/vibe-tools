@@ -528,15 +528,47 @@ def save_cursor_api_key(key):
 logger = logging.getLogger("vibe")
 logger.setLevel(logging.DEBUG)
 
+
+class VerboseLogger:
+    """Handles structured verbose logging into a subdirectory."""
+
+    def __init__(self, log_file: pathlib.Path):
+        self.log_file = log_file
+        self.verbose_dir = log_file.parent / log_file.stem
+        self.step_count = 0
+
+    def _ensure_dir(self):
+        self.verbose_dir.mkdir(parents=True, exist_ok=True)
+
+    def log_event(self, event_type: str, content: str, name: str = "") -> str:
+        """Logs an event to a separate file and returns the reference string."""
+        self._ensure_dir()
+        self.step_count += 1
+        
+        safe_name = "".join([c if c.isalnum() else "_" for c in name]).strip("_")
+        if safe_name:
+            filename = f"{self.step_count:03d}_{event_type}_{safe_name}.txt"
+        else:
+            filename = f"{self.step_count:03d}_{event_type}.txt"
+            
+        event_file = self.verbose_dir / filename
+        event_file.write_text(content)
+        
+        ref_msg = f"VERBOSE: {event_type.upper()} logged to {event_file.relative_to(VIBE_PROJECT_DIR)}"
+        logger.debug(ref_msg)
+        return ref_msg
+
+
 # Globals to be initialized by setup_logging
 LOG_FILE = None
 file_handler = None
 stream_handler = None
+verbose_logger: Optional[VerboseLogger] = None
 
 
 def setup_logging(command_name):
     """Initializes logging for a specific command run."""
-    global LOG_FILE, file_handler, stream_handler
+    global LOG_FILE, file_handler, stream_handler, verbose_logger
 
     # Ensure LOGS_DIR exists before creating the log file
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -558,6 +590,9 @@ def setup_logging(command_name):
     stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(stream_handler)
+
+    # Initialize verbose logger
+    verbose_logger = VerboseLogger(LOG_FILE)
 
     return LOG_FILE
 
