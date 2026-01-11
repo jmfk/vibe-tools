@@ -1,5 +1,6 @@
 import datetime
 import pathlib
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -395,6 +396,110 @@ def maybe_init_git():
                 ensure_gitignore("logs/")
             except Exception as e:
                 click.echo(f"❌ Failed to initialize Git repository: {e}")
+
+
+def check_prerequisites() -> Dict[str, Dict[str, Any]]:
+    """Checks for all system prerequisites and returns a status map."""
+    from vibe_tools.utils import run_command
+
+    results = {
+        "git": {"status": False, "message": "Not installed"},
+        "gh": {"status": False, "message": "Not installed"},
+        "gemini": {"status": False, "message": "API Key missing"},
+        "agent": {"status": False, "message": "No agent found (cursor-agent or claude)"},
+    }
+
+    # 1. Check Git
+    git_path = shutil.which("git")
+    if git_path:
+        name, _ = run_command(["git", "config", "user.name"], check=False)
+        email, _ = run_command(["git", "config", "user.email"], check=False)
+        if name.strip() and email.strip():
+            results["git"] = {"status": True, "message": f"Found ({name.strip()})"}
+        else:
+            results["git"] = {"status": False, "message": "Git installed but not configured (user.name/email)"}
+    
+    # 2. Check GitHub CLI
+    gh_path = shutil.which("gh")
+    if gh_path:
+        stdout, code = run_command(["gh", "auth", "status"], check=False)
+        if code == 0 and "Logged in" in stdout:
+            results["gh"] = {"status": True, "message": "Logged in"}
+        else:
+            results["gh"] = {"status": False, "message": "Installed but not authenticated"}
+
+    # 3. Check Gemini API Key
+    api_key = get_google_api_key()
+    if api_key:
+        results["gemini"] = {"status": True, "message": "API Key configured"}
+
+    # 4. Check Agents
+    agents = []
+    if shutil.which("cursor-agent"):
+        agents.append("cursor-agent")
+    if shutil.which("claude"):
+        agents.append("claude")
+    
+    if agents:
+        results["agent"] = {"status": True, "message": f"Found: {', '.join(agents)}"}
+
+    return results
+
+
+def guide_setup():
+    """Interactively guides the user to set up missing prerequisites."""
+    click.echo(click.style("\n🔍 Checking system prerequisites...", fg="cyan"))
+    
+    while True:
+        prereqs = check_prerequisites()
+        all_pass = True
+        
+        click.echo("")
+        for key, info in prereqs.items():
+            icon = click.style("✅", fg="green") if info["status"] else click.style("❌", fg="red")
+            click.echo(f"  {icon} {key.upper():<10} : {info['message']}")
+            if not info["status"]:
+                all_pass = False
+
+        if all_pass:
+            click.echo(click.style("\n✨ All prerequisites met!", fg="green", bold=True))
+            return True
+
+        click.echo(click.style("\n⚠️  Some prerequisites are missing or misconfigured.", fg="yellow"))
+        
+        if not prereqs["git"]["status"]:
+            if prereqs["git"]["message"] == "Not installed":
+                click.echo("  - Git is required. Please install it: https://git-scm.com/")
+            else:
+                if click.confirm("  - Configure Git user name and email now?", default=True):
+                    name = click.prompt("    Enter your name")
+                    email = click.prompt("    Enter your email")
+                    run_command(["git", "config", "--global", "user.name", name])
+                    run_command(["git", "config", "--global", "user.email", email])
+                    continue
+
+        if not prereqs["gh"]["status"]:
+            if prereqs["gh"]["message"] == "Not installed":
+                click.echo("  - GitHub CLI is recommended. Install it: brew install gh")
+            else:
+                if click.confirm("  - Login to GitHub now?", default=True):
+                    subprocess.run(["gh", "auth", "login"])
+                    continue
+
+        if not prereqs["gemini"]["status"]:
+            if click.confirm("  - Configure Google Gemini API Key now?", default=True):
+                api_key = click.prompt("    Enter Gemini API Key", hide_input=True)
+                if api_key:
+                    save_google_api_key(api_key)
+                    continue
+
+        if not prereqs["agent"]["status"]:
+            click.echo("  - An AI agent is required for most features.")
+            click.echo("    Install cursor-agent: npm install -g @cursor-agent/cli")
+            click.echo("    Or Claude Code: npm install -g @anthropic-ai/claude-code")
+
+        if not click.confirm("\nPrerequisites are still missing. Try again after fixing?", default=True):
+            return False
 
 
 @click.group()
@@ -902,15 +1007,15 @@ def eject_prompts():
 @setup_cli.command()
 @click.pass_context
 def scaffold(ctx):
-    """Generate build scaffolding (build.md, build.yaml, Makefile, Dockerfiles, etc.)."""
+    """Generate development environment scaffolding (dev_environment.md, dev_environment.yaml, Makefile, Dockerfiles, etc.)."""
     from vibe_tools.normalize import normalize_prd
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
-        BUILD,
-        BUILD_SPEC,
+        DEV_ENV,
+        DEV_SPEC,
     )
 
-    click.echo("\n--- Build Scaffolding Setup ---")
+    click.echo("\n--- Development Environment Scaffolding Setup ---")
 
     # Ensure project structure
     ensure_infrastructure()
@@ -920,41 +1025,41 @@ def scaffold(ctx):
     stream = getattr(ctx.obj, "stream", False) if ctx.obj else False
     caffeinate = getattr(ctx.obj, "caffeinate", False) if ctx.obj else False
 
-    # Check if build.md already exists
-    if BUILD_SPEC.exists():
-        click.echo(f"✅ {BUILD_SPEC} already exists.")
-        if not click.confirm("Regenerate build.md?", default=False):
-            click.echo("Skipping build.md generation.")
+    # Check if dev_environment.md already exists
+    if DEV_SPEC.exists():
+        click.echo(f"✅ {DEV_SPEC} already exists.")
+        if not click.confirm("Regenerate dev_environment.md?", default=False):
+            click.echo("Skipping dev_environment.md generation.")
         else:
             # Regenerate
-            _generate_build_spec(agent, stream)
+            _generate_dev_spec(agent, stream)
     else:
-        # Generate build.md from architecture
+        # Generate dev_environment.md from architecture
         if not ARCHITECTURE_SPEC.exists():
             click.echo(
                 f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
             )
             return
 
-        _generate_build_spec(agent, stream)
+        _generate_dev_spec(agent, stream)
 
-    # Normalize build.md to build.yaml if needed
-    if BUILD_SPEC.exists() and not BUILD.exists():
-        click.echo("🔄 Normalizing build.md to build.yaml...")
+    # Normalize dev_environment.md to dev_environment.yaml if needed
+    if DEV_SPEC.exists() and not DEV_ENV.exists():
+        click.echo("🔄 Normalizing dev_environment.md to dev_environment.yaml...")
 
         normalize_prd(
             agent=agent,
-            input_file=str(BUILD_SPEC),
+            input_file=str(DEV_SPEC),
             auto_overwrite=True,
             caffeinate=caffeinate,
             stream=stream,
         )
 
-        if BUILD.exists():
-            click.echo("✅ Build specification normalized successfully.")
+        if DEV_ENV.exists():
+            click.echo("✅ Development environment specification normalized successfully.")
         else:
             click.echo(
-                "❌ Normalization failed. Please review and fix build.md, then run 'vibe normalize' manually."
+                "❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually."
             )
             return
 
@@ -971,17 +1076,17 @@ def scaffold(ctx):
         click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
         click.echo("   Continuing with scaffold, but logging may not be fully configured.")
 
-    click.echo("\n✅ Build scaffolding complete.")
+    click.echo("\n✅ Development environment scaffolding complete.")
     click.echo("Next steps:")
-    click.echo("  - Review product/build.md and implementation/build.yaml")
+    click.echo(f"  - Review {DEV_SPEC} and {DEV_ENV}")
     click.echo("  - Run 'vibe build' to build and test the application")
 
 
-def _generate_build_spec(agent, stream):
-    """Generate build.md from architecture.md."""
+def _generate_dev_spec(agent, stream):
+    """Generate dev_environment.md from architecture.md."""
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
-        BUILD_SPEC,
+        DEV_SPEC,
         ensure_dir,
     )
 
@@ -991,15 +1096,15 @@ def _generate_build_spec(agent, stream):
         )
         return
 
-    click.echo("📋 Generating build.md from architecture.md...")
+    click.echo("📋 Generating dev_environment.md from architecture.md...")
 
     # Read architecture.md
     arch_content = ARCHITECTURE_SPEC.read_text()
 
-    # Generate build.md using agent
-    prompt = f"""You are generating a build specification based on the architecture.
+    # Generate dev_environment.md using agent
+    prompt = f"""You are generating a development environment specification based on the architecture.
 
-Analyze the architecture and create a comprehensive build.md file that specifies:
+Analyze the architecture and create a comprehensive dev_environment.md file that specifies:
 - How to build each application part (backend, frontend, etc.)
 - Build dependencies and requirements
 - Build commands and scripts
@@ -1030,8 +1135,8 @@ IMPORTANT REQUIREMENTS:
      * Install: `brew install stern` (macOS) or download binary for Linux
      * Usage: `stern .` to tail logs from all running pods
      * This provides minimum-friction log streaming for developers
-     * Document in build.md under "Logging" → "Quick Log Streaming"
-     * Include in build.yaml under `logging.local.quickstream`:
+     * Document in dev_environment.md under "Logging" → "Quick Log Streaming"
+     * Include in dev_environment.yaml under `logging.local.quickstream`:
        - tool: stern
        - install: "brew install stern" (or Linux equivalent)
        - usage: "stern ."
@@ -1043,14 +1148,14 @@ IMPORTANT REQUIREMENTS:
      * Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
      * Grafana credentials: Retrieved during setup (default: admin/admin for local dev)
      * Log retention: 24-72 hours (configurable for local development)
-     * Document in build.md under "Logging" → "Centralized Log Aggregation"
+     * Document in dev_environment.md under "Logging" → "Centralized Log Aggregation"
    
    - **AI-Queryable Logs**: Ensure logs can be queried programmatically:
      * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
      * Authentication: Basic auth (username/password from setup) or API token
      * Example query: `{{namespace!="kube-system"}}`
-     * Document in build.md under "Logging" → "AI-Queryable Logs"
-     * Include in build.yaml under `observability.logs`:
+     * Document in dev_environment.md under "Logging" → "AI-Queryable Logs"
+     * Include in dev_environment.yaml under `observability.logs`:
        - provider: grafana-loki
        - access: http-api
        - grafana:
@@ -1067,7 +1172,7 @@ IMPORTANT REQUIREMENTS:
    - **Issue Handling**: Logs are essential for debugging and issue handling:
      * Mention that `product/issues.md` (to be created) will guide issue handling workflows
      * Issue handling command (to be built) will rely on logging infrastructure and Skaffold
-     * Document in build.md under "Logging" → "Issue Handling"
+     * Document in dev_environment.md under "Logging" → "Issue Handling"
    
    - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
    - **Log Management**: Add Makefile targets for log management:
@@ -1088,12 +1193,12 @@ The architecture specification is in product/architecture.md:
 
 {arch_content}
 
-Generate a complete build.md file following this structure:
+Generate a complete dev_environment.md file following this structure:
 
-# Build Specification
+# Development Environment Specification
 
 ## 1. Overview
-[High-level overview of the build system and how different parts are built. Mention if using Skaffold/Helm for Kubernetes-based development.]
+[High-level overview of the development environment and build system. Mention if using Skaffold/Helm for Kubernetes-based development.]
 
 ## 2. Build Components
 [For each component (backend, frontend, etc.), specify:
@@ -1118,7 +1223,7 @@ Generate a complete build.md file following this structure:
 #### Quick Log Streaming (Stern)
 - Install: `brew install stern` (macOS) or download binary (Linux)
 - Usage: `stern .` to tail logs from all pods
-- See `build.yaml` → `logging.local.quickstream` for details
+- See `dev_environment.yaml` → `logging.local.quickstream` for details
 
 #### Centralized Log Aggregation (Loki + Grafana)
 - **Loki**: Log aggregation service running in Kubernetes
@@ -1132,7 +1237,7 @@ Generate a complete build.md file following this structure:
 - Grafana HTTP API: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
 - Authentication: Basic auth or API token (credentials from setup)
 - Example query: `{{namespace!="kube-system"}}`
-- See `build.yaml` → `observability.logs` for API details
+- See `dev_environment.yaml` → `observability.logs` for API details
 
 #### Issue Handling
 - Logs are essential for debugging and issue handling
@@ -1173,7 +1278,7 @@ Generate a complete build.md file following this structure:
 ### 4.4 CI/CD Build Steps
 [CI/CD pipeline steps and automation]
 
-Output ONLY the markdown content for build.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+Output ONLY the markdown content for dev_environment.md, starting with the title and ending with the last section. Do not include code fences or explanations.
 """
 
     cmd = get_agent_command(agent, prompt)
@@ -1181,7 +1286,7 @@ Output ONLY the markdown content for build.md, starting with the title and endin
 
     if code != 0 or not output.strip():
         click.echo(
-            "❌ Failed to generate build.md. Please create it manually using 'vibe architect'."
+            "❌ Failed to generate dev_environment.md. Please create it manually using 'vibe architect'."
         )
         return
 
@@ -1195,10 +1300,10 @@ Output ONLY the markdown content for build.md, starting with the title and endin
             lines = lines[:-1]
         clean_output = "\n".join(lines).strip()
 
-    # Write build.md
-    ensure_dir(BUILD_SPEC.parent)
-    BUILD_SPEC.write_text(clean_output)
-    click.echo(f"✅ Generated {BUILD_SPEC}")
+    # Write dev_environment.md
+    ensure_dir(DEV_SPEC.parent)
+    DEV_SPEC.write_text(clean_output)
+    click.echo(f"✅ Generated {DEV_SPEC}")
 
 
 def _check_and_install_build_tools():

@@ -5,8 +5,8 @@ import click
 from vibe_tools.setup import maybe_init_git
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
-    BUILD_SPEC,
     CICD_SPEC,
+    DEV_SPEC,
     INFRA_SPEC,
     TESTING_SPEC,
     check_dependencies,
@@ -43,7 +43,8 @@ def register_normalize(cli):
             "architecture": ARCHITECTURE_SPEC,
             "cicd": CICD_SPEC,
             "testing": TESTING_SPEC,
-            "build": BUILD_SPEC,
+            "build": DEV_SPEC,
+            "dev_environment": DEV_SPEC,
             "project-overview": pathlib.Path("product/project-overview.md"),
             "project_overview": pathlib.Path("product/project-overview.md"),
         }
