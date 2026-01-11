@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from vibe_tools.utils import safe_yaml_load, safe_yaml_dump
+
 
 class PRDMetadata:
     def __init__(self, path: pathlib.Path):
@@ -21,7 +23,7 @@ class PRDMetadata:
         raw_content = self.path.read_text()
         if self.is_yaml:
             try:
-                self.data = yaml.safe_load(raw_content) or {}
+                self.data = safe_yaml_load(raw_content) or {}
                 self.sync_info = self.data.get('_vibe_sync', {})
             except yaml.YAMLError:
                 self.data = {}
@@ -31,7 +33,7 @@ class PRDMetadata:
                 parts = raw_content.split('---', 2)
                 if len(parts) >= 3:
                     try:
-                        self.sync_info = yaml.safe_load(parts[1]) or {}
+                        self.sync_info = safe_yaml_load(parts[1]) or {}
                         self.content = parts[2].strip()
                     except yaml.YAMLError:
                         self.content = raw_content.strip()
@@ -47,11 +49,11 @@ class PRDMetadata:
             elif '_vibe_sync' in self.data:
                 del self.data['_vibe_sync']
 
-            content = yaml.dump(self.data, sort_keys=False, default_flow_style=False)
+            content = safe_yaml_dump(self.data)
             self.path.write_text(content)
         else:
             if self.sync_info:
-                frontmatter = yaml.dump(self.sync_info, sort_keys=False, default_flow_style=False)
+                frontmatter = safe_yaml_dump(self.sync_info)
                 new_content = f"---\n{frontmatter}---\n\n{self.content}"
             else:
                 new_content = self.content

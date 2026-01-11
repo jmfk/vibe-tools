@@ -12,6 +12,7 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     load_config,
     run_command,
+    safe_yaml_dump,
 )
 
 STAGING_DIR = VIBE_PROJECT_DIR / "staging"
@@ -790,7 +791,7 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
         name = manifest.get("metadata", {}).get("name", f"resource{i}")
         filename = f"{kind}-{name}.yaml"
         filepath = K8S_MANIFESTS_DIR / filename
-        filepath.write_text(yaml.dump(manifest, default_flow_style=False))
+        filepath.write_text(safe_yaml_dump(manifest))
 
     # Create namespace
     click.echo(f"Creating namespace: {namespace}")
@@ -850,7 +851,7 @@ def _setup_docker_compose_staging(services: Dict[str, Any], app_services: List[D
 
     # Generate docker-compose.yml
     compose = generate_docker_compose(services, app_services, isolated)
-    DOCKER_COMPOSE_FILE.write_text(yaml.dump(compose, default_flow_style=False))
+    DOCKER_COMPOSE_FILE.write_text(safe_yaml_dump(compose))
 
     click.echo("Starting Docker Compose services...")
     compose_cmd = get_docker_compose_cmd()

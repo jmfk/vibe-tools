@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from vibe_tools.utils import safe_yaml_dump, safe_yaml_load
+
+
 ISSUES_DIR = pathlib.Path("issues")
 BACKLOG_DIR = ISSUES_DIR / "backlog"
 HISTORY_DIR = ISSUES_DIR / "history"
@@ -137,7 +140,7 @@ class Issue:
 
     def to_markdown(self) -> str:
         frontmatter = self.to_dict()
-        yaml_content = yaml.dump(frontmatter, sort_keys=False, default_flow_style=False)
+        yaml_content = safe_yaml_dump(frontmatter)
         body_text = self.body.to_markdown()
         # If body has summary, it might be redundant, but IssueBody.to_markdown handles it.
         # We'll keep them separate for now as per PRD.
@@ -155,7 +158,7 @@ class Issue:
         if len(parts) < 3:
             raise ValueError("Invalid issue format: missing frontmatter or body")
 
-        frontmatter = yaml.safe_load(parts[1])
+        frontmatter = safe_yaml_load(parts[1])
         rest = parts[2].strip()
 
         comments = ""

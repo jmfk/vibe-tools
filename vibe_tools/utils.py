@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -365,7 +366,7 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
                 prd_id = yaml_file.stem
                 try:
                     with open(yaml_file, "r") as f:
-                        data = yaml.safe_load(f) or {}
+                        data = safe_yaml_load(f.read()) or {}
                     
                     # Plan metadata is now in the YAML itself
                     plan_info = {
@@ -641,6 +642,143 @@ def run_llm(
     return result
 
 
+def fix_yaml_content(content: str) -> str:
+    """
+    Attempts to fix common YAML formatting issues in a string.
+    Specifically, it looks for unquoted values containing colons or other
+    problematic characters and quotes them.
+    """
+    lines = content.splitlines()
+    fixed_lines = []
+
+    # Regex to match a YAML key-value pair
+    # Group 1: indentation, Group 2: key, Group 3: separator, Group 4: value
+    kv_pattern = re.compile(r"^(\s*)([A-Za-z0-9_-]+):\s*(.*)$")
+
+    # Regex to match a YAML list item
+    # Group 1: indentation, Group 2: value
+    list_pattern = re.compile(r"^(\s*)-\s*(.*)$")
+
+    for line in lines:
+        # Skip empty lines or comments
+        if not line.strip() or line.strip().startswith("#"):
+            fixed_lines.append(line)
+            continue
+
+        kv_match = kv_pattern.match(line)
+        if kv_match:
+            indent, key, value = kv_match.groups()
+            trimmed_value = value.strip()
+
+            # If value is already quoted or looks like a block starter, leave it
+            if (
+                (trimmed_value.startswith('"') and trimmed_value.endswith('"'))
+                or (trimmed_value.startswith("'") and trimmed_value.endswith("'"))
+                or trimmed_value in ["|", ">", "|+", ">-", "|-"]
+            ):
+                fixed_lines.append(line)
+                continue
+
+            # If value contains colons, brackets, quotes or other special characters, quote it
+            if (
+                ": " in trimmed_value
+                or "{" in trimmed_value
+                or "}" in trimmed_value
+                or "[" in trimmed_value
+                or "]" in trimmed_value
+                or '"' in trimmed_value
+                or "'" in trimmed_value
+                or trimmed_value.startswith("#")
+                or trimmed_value.startswith("!")
+                or trimmed_value.startswith("&")
+                or trimmed_value.startswith("*")
+                or trimmed_value.startswith("?")
+                or trimmed_value.startswith("-")
+                or (trimmed_value.startswith(":") and not trimmed_value.startswith("://"))
+            ):
+                # Quote the value, escape existing double quotes
+                escaped_value = trimmed_value.replace('"', '\\"')
+                fixed_lines.append(f'{indent}{key}: "{escaped_value}"')
+                continue
+
+        list_match = list_pattern.match(line)
+        if list_match:
+            indent, value = list_match.groups()
+            trimmed_value = value.strip()
+
+            # If value is already quoted or looks like a block starter, leave it
+            if (
+                (trimmed_value.startswith('"') and trimmed_value.endswith('"'))
+                or (trimmed_value.startswith("'") and trimmed_value.endswith("'"))
+                or trimmed_value in ["|", ">", "|+", ">-", "|-"]
+            ):
+                fixed_lines.append(line)
+                continue
+
+            # If value contains colons, etc., quote it
+            if (
+                ": " in trimmed_value
+                or "{" in trimmed_value
+                or "}" in trimmed_value
+                or "[" in trimmed_value
+                or "]" in trimmed_value
+                or '"' in trimmed_value
+                or "'" in trimmed_value
+                or trimmed_value.startswith("#")
+                or trimmed_value.startswith("!")
+                or trimmed_value.startswith("&")
+                or trimmed_value.startswith("*")
+                or trimmed_value.startswith("?")
+                or trimmed_value.startswith("-")
+                or (trimmed_value.startswith(":") and not trimmed_value.startswith("://"))
+            ):
+                escaped_value = trimmed_value.replace('"', '\\"')
+                fixed_lines.append(f'{indent}- "{escaped_value}"')
+                continue
+
+        fixed_lines.append(line)
+
+    return "\n".join(fixed_lines)
+
+
+def safe_yaml_load(content: str) -> Any:
+    """Loads YAML content, attempting to fix it if it's invalid."""
+    try:
+        return yaml.safe_load(content)
+    except yaml.YAMLError:
+        try:
+            fixed_content = fix_yaml_content(content)
+            return yaml.safe_load(fixed_content)
+        except Exception:
+            # If fixing fails, re-raise the original load to show the YAML error
+            return yaml.safe_load(content)
+
+
+def safe_yaml_dump(data: Any, stream=None, **kwargs) -> Optional[str]:
+    """Dumps data to YAML, ensuring problematic strings are quoted."""
+
+    class QuotedDumper(yaml.SafeDumper):
+        def represent_scalar(self, tag, value, style=None):
+            if tag == "tag:yaml.org,2002:str" and isinstance(value, str):
+                # Force quotes if it contains problematic characters or is a boolean-like string
+                special_chars = ":{}[],&*#?|>-<>=!%@`"
+                if (
+                    any(c in value for c in special_chars)
+                    or (value and value[0] in "-?@")
+                    or value.lower() in ["yes", "no", "true", "false", "null"]
+                    or "\n" in value
+                ):
+                    style = '"'
+            return super().represent_scalar(tag, value, style)
+
+    kwargs.setdefault("allow_unicode", True)
+    kwargs.setdefault("sort_keys", False)
+    kwargs.setdefault("default_flow_style", False)
+    kwargs.setdefault("width", 1000)
+
+    return yaml.dump(data, stream, Dumper=QuotedDumper, **kwargs)
+
+
 def run_command(cmd, check=True, caffeinate=False):
     """Utility to run a command and return its output."""
     if caffeinate:
@@ -704,7 +842,7 @@ def fix_kubeconfig_api_version() -> bool:
         try:
             # Read and parse kubeconfig
             with open(kubeconfig_path) as f:
-                config = yaml.safe_load(f)
+                config = safe_yaml_load(f.read())
 
             if not config or not isinstance(config, dict):
                 logger.debug(f"Invalid kubeconfig format: {kubeconfig_path}")
@@ -754,7 +892,7 @@ def fix_kubeconfig_api_version() -> bool:
                 # Write updated config
                 try:
                     with open(kubeconfig_path, "w") as f:
-                        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+                        f.write(safe_yaml_dump(config))
                     changes_made = True
                     logger.info(f"Successfully updated kubeconfig: {kubeconfig_path}")
                 except Exception as e:

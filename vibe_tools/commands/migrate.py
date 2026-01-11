@@ -25,6 +25,8 @@ from vibe_tools.utils import (
     save_project_state,
     run_command,
     get_main_branch,
+    safe_yaml_load,
+    safe_yaml_dump,
 )
 
 def run_reconciliation(quiet=False):
@@ -119,7 +121,7 @@ def run_reconciliation(quiet=False):
             
             try:
                 content = yaml_file.read_text()
-                data = yaml.safe_load(content) or {}
+                data = safe_yaml_load(content) or {}
                 
                 # Determine status from old state or current folder
                 status = "pending"
@@ -143,7 +145,7 @@ def run_reconciliation(quiet=False):
                     data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
 
                 # Write enriched YAML
-                yaml_file.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=1000))
+                yaml_file.write_text(safe_yaml_dump(data))
 
                 # Move to correct destination
                 target_dir = PRD_PROCESSING_DIR

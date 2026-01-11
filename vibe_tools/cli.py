@@ -116,6 +116,8 @@ from vibe_tools.utils import (
     save_config,
     save_project_state,
     setup_logging,
+    safe_yaml_load,
+    safe_yaml_dump,
 )
 
 # Load environment variables from .env file at startup
@@ -996,7 +998,7 @@ def build_debug(ctx):
     if DEV_ENV.exists() or DEV_ENV_CURRENT.exists():
         try:
             build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
-            build_config = yaml.safe_load(build_file.read_text())
+            build_config = safe_yaml_load(build_file.read_text())
             if build_config:
                 services = build_config.get("services", [])
                 log_services = [
@@ -2175,7 +2177,7 @@ def _extract_urls_from_dev_env():
         try:
             import yaml
 
-            build_config = yaml.safe_load(build_file.read_text())
+            build_config = safe_yaml_load(build_file.read_text())
             if build_config:
                 # Look for URLs in config
                 if "urls" in build_config:
@@ -2355,7 +2357,7 @@ def _get_services():
         try:
             import yaml
 
-            build_config = yaml.safe_load(build_file.read_text())
+            build_config = safe_yaml_load(build_file.read_text())
             if build_config:
                 services = _extract_services_from_build_config(build_config)
                 if services:

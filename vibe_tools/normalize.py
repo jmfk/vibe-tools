@@ -27,6 +27,8 @@ from vibe_tools.utils import (
     run_command,
     save_project_state,
     switch_to_main,
+    safe_yaml_load,
+    safe_yaml_dump,
 )
 
 DEFAULT_SPECS_DIR = pathlib.Path("product")
@@ -254,7 +256,7 @@ def normalize_prd(
 
             try:
                 # Validate and re-dump to ensure valid YAML formatting and proper quoting
-                data = yaml.safe_load(clean_output)
+                data = safe_yaml_load(clean_output)
                 if data is None or not isinstance(data, dict):
                     # If it's not a dict, it might have failed to extract correctly
                     raise yaml.YAMLError("Output is not a valid YAML dictionary")
@@ -266,9 +268,7 @@ def normalize_prd(
                     data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
                     data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
 
-                clean_output = yaml.safe_dump(
-                    data, sort_keys=False, allow_unicode=True, width=1000
-                )
+                clean_output = safe_yaml_dump(data)
             except yaml.YAMLError as e:
                 logger.warning(f"⚠️ Invalid YAML generated for {spec_path.name}: {e}")
                 print(f"🔄 Attempting to fix YAML for {spec_path.name} using Gemini...")
@@ -322,7 +322,7 @@ Ensure all string values with special characters are properly quoted.
                         fixed_output = "\n".join(lines).strip()
 
                     # Try to validate again
-                    data = yaml.safe_load(fixed_output)
+                    data = safe_yaml_load(fixed_output)
                     if data is None:
                         if debug:
                             print("DEBUG: Fixed output parsed as None")
@@ -333,9 +333,7 @@ Ensure all string values with special characters are properly quoted.
                         print(data)
                         print("--- END DEBUG ---\n")
 
-                    clean_output = yaml.safe_dump(
-                        data, sort_keys=False, allow_unicode=True, width=1000
-                    )
+                    clean_output = safe_yaml_dump(data)
                     print(f"✅ Successfully fixed YAML for {spec_path.name}")
                 except Exception as fix_err:
                     logger.error(f"❌ Failed to fix YAML: {fix_err}")

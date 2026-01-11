@@ -32,6 +32,7 @@ from vibe_tools.utils import (
     save_config,
     save_google_api_key,
     save_project_state,
+    safe_yaml_dump,
 )
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
@@ -1582,7 +1583,7 @@ def _deploy_loki_stack() -> bool:
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.dump(loki_values, f)
+        f.write(safe_yaml_dump(loki_values))
         loki_values_file = f.name
 
     try:
@@ -1642,7 +1643,7 @@ def _deploy_loki_stack() -> bool:
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.dump(promtail_values, f)
+        f.write(safe_yaml_dump(promtail_values))
         promtail_values_file = f.name
 
     try:
@@ -1695,7 +1696,7 @@ def _deploy_loki_stack() -> bool:
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.dump(grafana_values, f)
+        f.write(safe_yaml_dump(grafana_values))
         grafana_values_file = f.name
 
     try:
