@@ -708,6 +708,8 @@ def set_console_level(level):
 _agent_called = False
 _agent_connection_retries = 0
 MAX_AGENT_CONNECTION_RETRIES = 25
+_agent_context_retries = 0
+MAX_AGENT_CONTEXT_RETRIES = 3
 
 
 def _cleanup_log():
@@ -1086,7 +1088,7 @@ def fix_kubeconfig_api_version() -> bool:
 
 def run_agent(cmd, caffeinate=False, stream=False):
     """Runs an agent with a live progress indicator or streaming output."""
-    global _agent_called, _agent_connection_retries
+    global _agent_called, _agent_connection_retries, _agent_context_retries
     _agent_called = True
     if caffeinate:
         cmd = ["caffeinate", "-dimsu"] + cmd
@@ -1107,6 +1109,21 @@ def run_agent(cmd, caffeinate=False, stream=False):
         raise FileNotFoundError(
             f"[Errno 2] No such file or directory: '{command_name}'"
         )
+
+    # Error indicators
+    CONNECTION_ERROR_STRINGS = [
+        "ConnectError: [unavailable] Error",
+        "ConnectError: [aborted] read ECONNRESET",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ETIMEDOUT",
+    ]
+    CONTEXT_ERROR_STRINGS = [
+        "context window is full",
+        "too many tokens",
+        "maximum context length",
+        "context_length_exceeded",
+    ]
 
     while True:
         # Use logger.debug for the "Running agent" message
@@ -1180,23 +1197,42 @@ def run_agent(cmd, caffeinate=False, stream=False):
         logger.debug(f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n")
 
         # Handle specific connection errors with retries
-        if process.returncode != 0 and "ConnectError: [unavailable] Error" in output:
-            _agent_connection_retries += 1
-            if _agent_connection_retries < MAX_AGENT_CONNECTION_RETRIES:
-                logger.warning(
-                    f"⚠️ Agent connection failed (Retrying {_agent_connection_retries}/{MAX_AGENT_CONNECTION_RETRIES} in 5s): {output.strip()}"
-                )
-                time.sleep(5)
-                continue
-            else:
-                logger.error(
-                    f"❌ Agent connection failed after {MAX_AGENT_CONNECTION_RETRIES} retries. Aborting."
-                )
-                break
+        if process.returncode != 0:
+            is_connection_error = any(s in output for s in CONNECTION_ERROR_STRINGS)
+            is_context_error = any(s in output for s in CONTEXT_ERROR_STRINGS)
 
-        # If we got here, it's either success or a non-connection error
+            if is_connection_error:
+                _agent_connection_retries += 1
+                if _agent_connection_retries < MAX_AGENT_CONNECTION_RETRIES:
+                    logger.warning(
+                        f"⚠️ Agent connection failed (Retrying {_agent_connection_retries}/{MAX_AGENT_CONNECTION_RETRIES} in 5s): {output.strip()}"
+                    )
+                    time.sleep(5)
+                    continue
+                else:
+                    logger.error(
+                        f"❌ Agent connection failed after {MAX_AGENT_CONNECTION_RETRIES} retries. Aborting."
+                    )
+                    break
+            
+            if is_context_error:
+                _agent_context_retries += 1
+                if _agent_context_retries < MAX_AGENT_CONTEXT_RETRIES:
+                    logger.warning(
+                        f"⚠️ Agent context window exceeded (Retrying {_agent_context_retries}/{MAX_AGENT_CONTEXT_RETRIES} in 5s): {output.strip()}"
+                    )
+                    time.sleep(5)
+                    continue
+                else:
+                    logger.error(
+                        f"❌ Agent context window exceeded after {MAX_AGENT_CONTEXT_RETRIES} retries. Aborting."
+                    )
+                    break
+
+        # If we got here, it's either success or a non-retryable error
         if process.returncode == 0:
             _agent_connection_retries = 0  # Reset on success
+            _agent_context_retries = 0    # Reset on success
         
         # Detect architecture mismatch errors
         if process.returncode != 0:
