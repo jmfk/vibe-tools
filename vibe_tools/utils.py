@@ -82,6 +82,11 @@ SPECS_DIR = PLANNING_DIR
 GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 
 
+def is_tool_available(name: str) -> bool:
+    """Checks if a command-line tool is available in the system PATH."""
+    return shutil.which(name) is not None
+
+
 def open_in_editor(file_path: pathlib.Path):
     """Opens a file in the configured editor (Cursor, Typora, VS Code, etc.)."""
     config = load_config()

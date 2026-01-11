@@ -2,7 +2,7 @@ import pathlib
 
 import click
 
-from vibe_tools.setup import maybe_init_git
+from vibe_tools.setup import guide_setup, maybe_init_git
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
     COSTS_DIR,
@@ -54,6 +54,10 @@ def register_init(cli):
     @click.pass_context
     def init(ctx):
         """Interactive guided project initialization."""
+        if not guide_setup():
+            click.echo(click.style("\n❌ Initialization aborted due to missing prerequisites.", fg="red"))
+            return
+
         click.echo(
             click.style("\n=== VIBE PROJECT INITIALIZATION ===", fg="cyan", bold=True)
         )

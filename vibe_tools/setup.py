@@ -24,6 +24,7 @@ from vibe_tools.utils import (
     get_google_api_key,
     get_main_branch,
     get_project_name,
+    is_tool_available,
     load_config,
     load_project_state,
     run_agent,
@@ -410,8 +411,7 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
     }
 
     # 1. Check Git
-    git_path = shutil.which("git")
-    if git_path:
+    if is_tool_available("git"):
         name, _ = run_command(["git", "config", "user.name"], check=False)
         email, _ = run_command(["git", "config", "user.email"], check=False)
         if name.strip() and email.strip():
@@ -420,8 +420,7 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
             results["git"] = {"status": False, "message": "Git installed but not configured (user.name/email)"}
     
     # 2. Check GitHub CLI
-    gh_path = shutil.which("gh")
-    if gh_path:
+    if is_tool_available("gh"):
         stdout, code = run_command(["gh", "auth", "status"], check=False)
         if code == 0 and "Logged in" in stdout:
             results["gh"] = {"status": True, "message": "Logged in"}
@@ -435,9 +434,9 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
 
     # 4. Check Agents
     agents = []
-    if shutil.which("cursor-agent"):
+    if is_tool_available("cursor-agent"):
         agents.append("cursor-agent")
-    if shutil.which("claude"):
+    if is_tool_available("claude"):
         agents.append("claude")
     
     if agents:
