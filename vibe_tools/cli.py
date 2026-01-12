@@ -550,7 +550,9 @@ def stop(ctx):
         for service_type, bg_pid in background_services.items():
             try:
                 run_command(["kill", str(bg_pid)], check=False)
-                click.echo(f"Stopped background service {service_name} ({service_type})")
+                click.echo(
+                    f"Stopped background service {service_name} ({service_type})"
+                )
             except Exception:
                 pass
 

@@ -1,0 +1,61 @@
+name: Tag on Merge
+
+on:
+  push:
+    branches:
+      - main  # or 'master' — change to match your default branch
+
+jobs:
+  create-tag:
+    if: github.event.head_commit.message != ''  # Optional safeguard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history including tags
+
+      - name: Set up Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Get highest version tag
+        id: get_tag
+        run: |
+          # Get all tags, filter for semantic version format, and find the highest one
+          HIGHEST_TAG=$(git tag -l "v*.*.*" | sort -V | tail -n 1)
+          if [ -z "$HIGHEST_TAG" ]; then
+            HIGHEST_TAG="v0.0.0"
+          fi
+          echo "latest_tag=$HIGHEST_TAG" >> $GITHUB_OUTPUT
+          echo "Found highest version tag: $HIGHEST_TAG"
+
+      - name: Bump patch version
+        id: bump_version
+        run: |
+          OLD=${{ steps.get_tag.outputs.latest_tag }}
+          echo "Current highest version: $OLD"
+          
+          # Remove 'v' prefix and split version
+          OLD=${OLD#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD"
+          
+          # Increment patch version (lowest version number)
+          PATCH=$((PATCH + 1))
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "Next version will be: $NEW_TAG"
+           
+      - name: Push tag with PAT
+        run: |
+          git tag ${{ steps.bump_version.outputs.new_tag }}
+          echo "🔐 Using PAT to push tag"
+          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
+          git push --force origin ${{ steps.bump_version.outputs.new_tag }}
+        env:
+            TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: write

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibe-tools"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Global commands for Cursor Ralph loop and coverage improvement"
 requires-python = ">=3.9"
 dependencies = [
@@ -27,6 +27,9 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["vibe_tools"]
+
+[tool.setuptools.dynamic]
+version = {attr = "vibe_tools.version.__version__"}
 
 [project.scripts]
 vibe = "vibe_tools.cli:cli"
