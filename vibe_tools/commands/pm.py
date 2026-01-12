@@ -14,3 +14,5 @@ def register_pm(cli):
             stream=ctx.obj.get("stream", True),
         )
         pm_tool.run(query)
+
+    cli.add_command(pm)

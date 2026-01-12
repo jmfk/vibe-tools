@@ -29,3 +29,5 @@ def register_kill(cli):
             click.echo(f"✅ Killed processes for: {', '.join(killed)}")
         else:
             click.echo("No processes were killed.")
+
+    cli.add_command(kill)

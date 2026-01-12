@@ -14,3 +14,5 @@ def register_architect(cli):
             stream=ctx.obj.get("stream", True),
         )
         architect_tool.run_loop(query)
+
+    cli.add_command(architect)

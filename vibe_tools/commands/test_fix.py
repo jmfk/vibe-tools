@@ -20,3 +20,5 @@ def register_test_fix(cli):
             fast=fast,
             stream=ctx.obj.get("stream", False),
         )
+
+    cli.add_command(test_fix, name="test-fix")

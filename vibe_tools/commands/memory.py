@@ -64,3 +64,5 @@ def register_memory(cli):
             filepath = INSTRUCTIONS_DIR / filename
             filepath.write_text(text)
             click.echo(f"✅ Memory saved to {filepath}")
+
+    cli.add_command(memory)

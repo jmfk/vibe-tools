@@ -121,3 +121,5 @@ def register_setup(cli):
             click.echo("2. Start Building (vibe implement)")
         else:
             click.echo("❌ Architecture setup failed.")
+
+    cli.add_command(setup)

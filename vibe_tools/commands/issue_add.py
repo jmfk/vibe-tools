@@ -97,3 +97,5 @@ def register_issue_add(issue_group):
         click.echo(f"ID:       {issue.id}")
         click.echo(f"Title:    {issue.title}")
         click.echo(f"Location: {BACKLOG_DIR}/{issue.id}.md")
+
+    issue_group.add_command(add_issue)
