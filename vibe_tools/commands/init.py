@@ -1,3 +1,4 @@
+import json
 import pathlib
 
 import click
@@ -5,6 +6,7 @@ import click
 from vibe_tools.setup import guide_setup, maybe_init_git
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
+    CONFIG_FILE,
     COSTS_DIR,
     INSTRUCTIONS_DIR,
     LOGS_DIR,
@@ -28,6 +30,20 @@ def _perform_basic_init():
     # Ensure structure exists
     ensure_project_structure()
     ensure_dir(VIBE_PROJECT_DIR)
+
+    # Create config.json if it doesn't exist
+    if not CONFIG_FILE.exists():
+        default_config = {
+            "ralph": {"review": True, "tests": True, "auto_merge": False},
+            "default_budget": 5.0,
+            "caffeinate": True,
+            "verbose": False,
+            "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
+        }
+        CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
+        click.echo(f"✅ Created default configuration: {CONFIG_FILE}")
+    else:
+        click.echo(f"✅ Configuration already exists: {CONFIG_FILE}")
 
     # Setup gitignore with specific patterns
     setup_project_gitignore()
@@ -56,13 +72,20 @@ def register_init(cli):
     def init(ctx):
         """Interactive guided project initialization."""
         if not guide_setup():
-            click.echo(click.style("\n❌ Initialization aborted due to missing prerequisites.", fg="red"))
+            click.echo(
+                click.style(
+                    "\n❌ Initialization aborted due to missing prerequisites.",
+                    fg="red",
+                )
+            )
             return
 
         click.echo(
             click.style("\n=== VIBE PROJECT INITIALIZATION ===", fg="cyan", bold=True)
         )
-        click.echo("Welcome! Let's get your project set up for automated development.\n")
+        click.echo(
+            "Welcome! Let's get your project set up for automated development.\n"
+        )
 
         click.echo("Please select your starting scenario:")
         click.echo(
@@ -102,7 +125,9 @@ def register_init(cli):
             if setup_cmd:
                 ctx.invoke(setup_cmd, import_code=True)
         elif choice == "C":
-            click.echo("\n🏗️  Basic initialization complete. 'architecture.yaml' is ready.")
+            click.echo(
+                "\n🏗️  Basic initialization complete. 'architecture.yaml' is ready."
+            )
         else:
             click.echo("\n✅ Basic initialization complete.")
 
