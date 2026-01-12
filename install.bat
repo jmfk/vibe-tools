@@ -1,6 +1,8 @@
 @echo off
 REM Vibe-Tools Installation Script for Windows
 
+set VERSION=0.1.0
+
 echo --- Installing Vibe-Tools ---
 
 REM Check for Python

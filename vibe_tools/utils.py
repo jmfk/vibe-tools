@@ -100,7 +100,9 @@ def get_last_commit_hash() -> Optional[str]:
     return None
 
 
-def run_command(command: List[str], cwd: Optional[str] = None, check: bool = True) -> (str, int):
+def run_command(
+    command: List[str], cwd: Optional[str] = None, check: bool = True
+) -> (str, int):
     """Runs a shell command and returns its stdout and exit code."""
     try:
         result = subprocess.run(
@@ -301,7 +303,9 @@ def get_agent_command(agent: str, prompt: str) -> List[str]:
     return ["echo", "UNKNOWN_AGENT", prompt]
 
 
-def run_agent(command: List[str], caffeinate: bool = False, stream: bool = False) -> (str, int):
+def run_agent(
+    command: List[str], caffeinate: bool = False, stream: bool = False
+) -> (str, int):
     """Runs an agent command, optionally preventing sleep and streaming output."""
     if caffeinate:
         command = ["caffeinate", "-i"] + command
@@ -367,7 +371,9 @@ def reset_prd_state(project_name: str) -> List[str]:
         # 3. Delete the implementation branch if it exists
         branch_name = plans[project_name].get("branch")
         if branch_name:
-            stdout, code = run_command(["git", "branch", "-D", branch_name], check=False)
+            stdout, code = run_command(
+                ["git", "branch", "-D", branch_name], check=False
+            )
             if code == 0:
                 messages.append(f"Deleted local branch '{branch_name}'.")
             # Also try to delete remote branch if tracking is set up (optional/safe)
@@ -428,7 +434,9 @@ def migrate_to_project_dir():
                 logger.info(f"Migrating {f} to {new_path}")
                 shutil.move(old_path, new_path)
             else:
-                logger.warning(f"Cannot migrate {f}: {new_path} already exists. Deleting legacy file.")
+                logger.warning(
+                    f"Cannot migrate {f}: {new_path} already exists. Deleting legacy file."
+                )
                 old_path.unlink()
 
 
@@ -443,11 +451,13 @@ def get_agent_processes() -> List[Dict[str, Any]]:
     for pid in stdout.strip().splitlines():
         # Get more info about the process
         info_out, _ = run_command(["ps", "-p", pid, "-o", "args="], check=False)
-        processes.append({
-            "pid": pid,
-            "command": info_out.strip(),
-            "target": "unknown"  # Would need to parse command to find target PRD/Phase
-        })
+        processes.append(
+            {
+                "pid": pid,
+                "command": info_out.strip(),
+                "target": "unknown",  # Would need to parse command to find target PRD/Phase
+            }
+        )
     return processes
 
 
@@ -476,7 +486,15 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
     if PLANNING_DIR.exists():
         for f in PLANNING_DIR.rglob("*.md"):
             name = f.stem
-            if name in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "project-overview", "project_overview"]:
+            if name in [
+                "architecture",
+                "infrastructure",
+                "cicd",
+                "testing",
+                "dev_environment",
+                "project-overview",
+                "project_overview",
+            ]:
                 continue
             prds[name] = {
                 "name": name,
@@ -566,7 +584,9 @@ def get_vibe_status_report() -> str:
 
         for info in prd_info:
             name = info["name"]
-            prd_stem = info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+            prd_stem = (
+                info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+            )
 
             if prd_stem in completed_prds or name in completed_prds:
                 done_count += 1
@@ -578,7 +598,9 @@ def get_vibe_status_report() -> str:
         report.append("  Recent PRDs:")
         for info in prd_info[-5:]:
             name = info["name"]
-            prd_stem = info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+            prd_stem = (
+                info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+            )
 
             if prd_stem in completed_prds or name in completed_prds:
                 status = click.style("✅", fg="green")
@@ -718,7 +740,7 @@ def fix_kubeconfig_api_version() -> bool:
         if "client.authentication.k8s.io/v1alpha1" in content:
             new_content = content.replace(
                 "client.authentication.k8s.io/v1alpha1",
-                "client.authentication.k8s.io/v1beta1"
+                "client.authentication.k8s.io/v1beta1",
             )
             kubeconfig_path.write_text(new_content)
             return True
@@ -731,6 +753,7 @@ def fix_kubeconfig_api_version() -> bool:
 def maybe_init_git():
     """Checks if the current directory is a git repository and offers to initialize it if not."""
     import click
+
     if not is_git_repo():
         if click.confirm(
             "\nNo git repository found. Would you like to initialize one?", default=True

@@ -2,6 +2,8 @@
 
 # Vibe-Tools Installation Script for macOS/Linux
 
+VERSION="0.1.0"
+
 set -e
 
 echo "--- Installing Vibe-Tools ---"
