@@ -1,30 +1,3 @@
-SYSTEM_CONTRACT:
-  Philosophy: CLI-First
-  Language: Python 3.9+
-  CLI_Framework: Click
-  Project_Structure:
-  - /
-  - vibe_tools/
-  - specs/
-  - prompts/
-  - implementation/
-  - tests/
-DOMAIN_MODEL:
-- Vibe Tools (vibe)
-- Prompts
-- PRD
-- Plans
-- Architecture definitions
-- Infrastructure definitions
-CAPABILITIES:
-- PRD generation
-- Test coverage improvement
-- Infrastructure management
-- AI-assisted tooling
-- CLI-First workflow
-- PRD-Driven Development
-OUTPUT_TARGETS:
-- Markdown PRDs
-- Plans
-- YAML architecture and infrastructure definitions
-- Comprehensive test suite
+METADATA:
+  SOURCE_HASH: 7c9e9cf80ee47adbf2b05be3c6f05da4ee2122a40c2f610aaa0d8586ae541b9f
+  NORMALIZED_AT: '2026-01-12T16:40:38.489875'
