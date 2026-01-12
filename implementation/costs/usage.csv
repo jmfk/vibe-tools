@@ -107,3 +107,12 @@ Timestamp,PRD,Phase,Iteration,Agent,Model,Input Tokens,Output Tokens,Cost (USD),
 2026-01-12 16:40:41,setup,normalize,1,cursor-agent,gemini-3-flash,202,208,0.000103,normalizing_prd
 2026-01-12 16:42:30,setup,normalize,1,cursor-agent,gemini-3-flash,202,208,0.000103,normalizing_prd
 2026-01-12 16:42:37,PRD-02-issue-handling-improvements,normalize,1,cursor-agent,gemini-3-flash,1188,1194,0.000596,normalizing_prd
+2026-01-12 16:42:40,PRD-01-local-first-issue-workflow-with-github-sync,normalize,1,cursor-agent,gemini-3-flash,1848,1854,0.000926,normalizing_prd
+2026-01-12 16:51:28,architecture,normalize,1,cursor-agent,gemini-3-flash,1126,1132,0.000565,normalizing_prd
+2026-01-12 16:51:59,architecture,normalize,1,cursor-agent,gemini-3-flash,1126,1132,0.000565,normalizing_prd
+2026-01-12 16:58:49,architecture,normalize,1,cursor-agent,gemini-3-flash,1126,620,0.000361,normalizing_prd
+2026-01-12 16:58:55,infrastructure,normalize,1,cursor-agent,gemini-3-flash,222,23,0.000031,normalizing_prd
+2026-01-12 16:58:55,cicd,normalize,1,cursor-agent,gemini-3-flash,221,26,0.000033,normalizing_prd
+2026-01-12 16:58:56,testing,normalize,1,cursor-agent,gemini-3-flash,203,23,0.000030,normalizing_prd
+2026-01-12 16:58:57,dev_environment,normalize,1,cursor-agent,gemini-3-flash,204,23,0.000030,normalizing_prd
+2026-01-12 16:58:58,setup,normalize,1,cursor-agent,gemini-3-flash,226,47,0.000041,normalizing_prd

@@ -307,14 +307,13 @@ def get_prompt(filename: str) -> str:
 def get_agent_command(agent: str, prompt: str) -> List[str]:
     """Constructs the command to invoke the specified AI agent."""
     if agent == "cursor-agent":
-        # Cursor agent doesn't have a direct CLI invocation like this.
-        # This is a placeholder for how we might interface with it if possible,
-        # or it represents internal logic to trigger a Cursor-based action.
         return ["echo", "CURSOR_AGENT_INVOCATION", prompt]
     elif agent == "claude":
         return ["claude", "-p", prompt]
     elif agent == "antigravity":
         return ["antigravity", "-p", prompt]
+    elif agent == "gemini":
+        return ["echo", "GEMINI_AGENT_INVOCATION", prompt]
     return ["echo", "UNKNOWN_AGENT", prompt]
 
 
@@ -1509,9 +1508,40 @@ def log_success(message):
     logger.info(f"SUCCESS: {message}")
 
 
-def run_llm(prompt):
-    """Placeholder for running an LLM call."""
-    return "READY"
+def run_llm(prompt, model="gemini-3-flash", debug=False):
+    """Runs an LLM call using the google-genai library."""
+    try:
+        from google import genai
+        api_key = get_google_api_key()
+        if not api_key:
+            logger.error("GOOGLE_API_KEY not found. Please run `vibe config api`.")
+            return None
+
+        # Map aliases
+        if model == "gemini-3-flash":
+            model = "gemini-2.0-flash-exp"
+
+        client = genai.Client(api_key=api_key)
+        
+        if debug:
+            print(f"\n--- DEBUG: LLM PROMPT ({model}) ---")
+            print(prompt)
+            print("--- END DEBUG ---\n")
+
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+        )
+        
+        if debug:
+            print("\n--- DEBUG: LLM RESPONSE ---")
+            print(response.text)
+            print("--- END DEBUG ---\n")
+            
+        return response.text
+    except Exception as e:
+        logger.error(f"Error in run_llm: {e}")
+        return None
 
 
 def switch_to_main():

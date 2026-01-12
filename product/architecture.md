@@ -8,7 +8,7 @@ sync_hash: a5866fdaf779618c765476d0466873864573ca7a28386ae8ec4e4e9633f86e6b
 # Architecture Specification
 
 ## 1. Core Philosophy
-The project follows a **CLI-First** philosophy. We prioritize terminal interactions and automated developer workflows. The goal is to maximize development velocity using AI-assisted tooling that operates directly on the codebase.
+The project follows a **CLI-First** philosophy. We prioritize terminal interactions and automated developer workflows. The goal is to maximize development velocity using AI-assisted tooling that operates directly on the codebase. Small change.
 
 ## 2. Tech Stack
 

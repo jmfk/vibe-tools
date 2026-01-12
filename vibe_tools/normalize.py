@@ -50,29 +50,37 @@ def _run_normalization_agent(
     debug=False,
 ):
     """Internal helper to run agent and handle YAML extraction/fixing."""
-    cmd = get_agent_command(agent, prompt)
-    output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+    from vibe_tools.utils import run_llm
+
+    # If it's a direct LLM agent, run it directly
+    if agent in ["cursor-agent", "gemini"]:
+        output = run_llm(prompt, model="gemini-3-flash", debug=debug)
+        code = 0 if output else -1
+    else:
+        cmd = get_agent_command(agent, prompt)
+        output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
 
     if debug:
         print("\n--- DEBUG: AGENT OUTPUT ---")
         print(output)
         print("--- END DEBUG ---\n")
 
-    cost_logger.log_run(
-        agent=agent,
-        model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
-        prompt=prompt,
-        output=output,
-        prd_name=stem,
-        iteration=1,
-        phase=phase,
-        purpose="normalizing_prd",
-    )
+    if output:
+        cost_logger.log_run(
+            agent=agent,
+            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+            prompt=prompt,
+            output=output,
+            prd_name=stem,
+            iteration=1,
+            phase=phase,
+            purpose="normalizing_prd",
+        )
 
     if code != 0:
         return None, code
 
-    if not output.strip():
+    if not output or not output.strip():
         return None, -1
 
     # Strip markdown code fences if present
@@ -90,6 +98,11 @@ def _run_normalization_agent(
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         clean_output = "\n".join(lines).strip()
+
+    # If it's the placeholder, we shouldn't try to parse it as YAML
+    if "CURSOR_AGENT_INVOCATION" in clean_output:
+        logger.warning("⚠️  Cursor agent placeholder detected. Normalization not performed.")
+        return {"METADATA": {"STATUS": "placeholder"}}, 0
 
     data = None
     try:
@@ -110,8 +123,6 @@ Please fix the YAML formatting issues and return ONLY the valid YAML content.
 Ensure all string values with special characters are properly quoted.
 """
         try:
-            from vibe_tools.utils import run_llm
-
             fixed_output = run_llm(fix_prompt, model="gemini-3-flash", debug=debug)
             if not fixed_output:
                 raise ValueError("Fixed output from LLM is empty.")
@@ -146,6 +157,7 @@ def normalize_system_file(
     caffeinate=False,
     stream=False,
     debug=False,
+    force=False,
 ):
     """Normalize core project system files (architecture, infrastructure, etc.)."""
     from vibe_tools.cli import load_config
@@ -161,8 +173,7 @@ def normalize_system_file(
 
     path = pathlib.Path(input_file)
     if not path.exists():
-        print(f"Error: File {input_file} not found.")
-        return
+        return auto_overwrite
 
     stem = path.stem
     clean_stem = re.sub(r"[- ]", "_", stem.lower())
@@ -173,20 +184,38 @@ def normalize_system_file(
     md_hash = get_file_hash(path)
 
     # Check if needs update
-    if output_path.exists():
+    if output_path.exists() and not force:
         try:
             existing_data = safe_yaml_load(output_path.read_text())
             if existing_data and isinstance(existing_data, dict):
                 old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
                 if old_hash == md_hash:
-                    print(f"⏩ Skipping {path.name} (already up-to-date)")
-                    return
-                if not auto_overwrite and sys.stdin.isatty():
-                    if not click.confirm(
-                        f"⚠️  {path.name} has changed. Update {output_path.name}?",
-                        default=True,
-                    ):
-                        return
+                    if auto_overwrite == "ask":
+                         if not click.confirm(
+                            f"⚠️  {path.name} is up-to-date. Reprocess anyway?",
+                            default=False,
+                        ):
+                             return auto_overwrite
+                    else:
+                        print(f"⏩ Skipping {path.name} (already up-to-date)")
+                        return auto_overwrite
+                
+                if auto_overwrite is True or auto_overwrite == "yes":
+                    pass # Continue to normalization
+                elif auto_overwrite == "no":
+                    return auto_overwrite
+                elif sys.stdin.isatty():
+                    choice = click.prompt(
+                        f"⚠️  {path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
+                        type=click.Choice(["y", "n", "a", "N"], case_sensitive=False),
+                        default="y",
+                    )
+                    if choice.lower() == "a":
+                        auto_overwrite = True
+                    elif choice.lower() == "n":
+                        return auto_overwrite
+                    elif choice.lower() == "N":
+                        return "no"
         except Exception as e:
             logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
@@ -216,6 +245,8 @@ def normalize_system_file(
         print(f"✅ Saved: {output_path}")
     else:
         print(f"❌ Failed to normalize {path.name}")
+    
+    return auto_overwrite
 
 
 def normalize_prd(
@@ -284,10 +315,14 @@ def normalize_prd(
             print(f"❌ No PRDs found to normalize.")
             return
 
-    overwrite_mode = "yes" if auto_overwrite else "ask"
+    if isinstance(auto_overwrite, str):
+        overwrite_mode = auto_overwrite
+    else:
+        overwrite_mode = "yes" if auto_overwrite else "ask"
+
     if not input_file:
         existing_prds = list(PRD_PROCESSING_DIR.rglob("v*-*_*.yaml"))
-        if existing_prds and not auto_overwrite and sys.stdin.isatty():
+        if existing_prds and overwrite_mode == "ask" and sys.stdin.isatty():
             choice = click.prompt(
                 f"Found {len(existing_prds)} existing PRDs. Overwrite? [y]es, [n]o, [a]sk per file",
                 type=click.Choice(["y", "n", "a"], case_sensitive=False),
@@ -396,11 +431,26 @@ def normalize_prd(
                         print(f"⏩ Skipping {spec_path.name} (already up-to-date)")
                         switch_to_main()
                         continue
-                    if not auto_overwrite and sys.stdin.isatty():
-                        if not click.confirm(
-                            f"⚠️  {spec_path.name} has changed. Update {output_path.name}?",
-                            default=True,
-                        ):
+                    
+                    if overwrite_mode == "yes":
+                        pass
+                    elif overwrite_mode == "no":
+                        print(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
+                        switch_to_main()
+                        continue
+                    elif sys.stdin.isatty():
+                        choice = click.prompt(
+                            f"⚠️  {spec_path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
+                            type=click.Choice(["y", "n", "a", "N"], case_sensitive=False),
+                            default="y",
+                        )
+                        if choice.lower() == "a":
+                            overwrite_mode = "yes"
+                        elif choice.lower() == "n":
+                            switch_to_main()
+                            continue
+                        elif choice.lower() == "N":
+                            overwrite_mode = "no"
                             switch_to_main()
                             continue
             except Exception as e:
