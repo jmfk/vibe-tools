@@ -104,11 +104,6 @@ These commands represent the main development lifecycle phases.
 - Display comprehensive system status report
 - Shows: costs, PRDs, servers, logs, configuration
 
-**`vibe monitor [--interval SECONDS]`**
-- Monitor progress of automated generation
-- Options:
-  - `--interval`: Monitoring interval in seconds (default: 60)
-
 **`vibe history`**
 - List the status of all PRDs
 - Shows PRD state, branches, and implementation status
@@ -235,7 +230,7 @@ These commands represent the main development lifecycle phases.
 Commands are displayed in a specific order in help output:
 
 1. Phase commands (architect, pm, normalize, setup, deps, implement, build, run, start, stop, run-status, infra, testing, cicd, deploy)
-2. Supporting tools (history, status, cost, stats, docs, memory, monitor, rerun, implemented, ps, kill, test-fix, coverage, branch, branches, branch-resolve, billing-groups, demo-data, init)
+2. Supporting tools (history, status, cost, stats, docs, memory, rerun, implemented, ps, kill, test-fix, coverage, branch, branches, branch-resolve, billing-groups, demo-data, init)
 
 ## Command Dependencies
 
@@ -284,13 +279,6 @@ vibe pm                     # Refine PRD
 vibe normalize              # Update YAML
 vibe implement              # Re-implement
 vibe test-fix               # Fix any test failures
-```
-
-**Monitoring:**
-```bash
-vibe monitor                # Watch implementation progress
-vibe status                 # Check overall status
-vibe cost                   # View costs
 ```
 
 **Cleanup:**

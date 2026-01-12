@@ -86,10 +86,6 @@ vibe implement
 vibe coverage
 ```
 
-**Monitor running processes:**
-```bash
-vibe monitor
-```
 
 ## Project Structure
 

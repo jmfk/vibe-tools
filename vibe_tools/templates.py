@@ -229,23 +229,6 @@ RULES:
 
 Output code only. No extra text.
 """,
-    "monitor_prompt.txt": """You are a PROGRESS INSPECTOR for an automated code generation loop.
-Current Time: {timestamp}
-Current Branch: {current_branch}
-
-GIT STATUS (short):
-{git_status}
-
-RECENT DIFFS (backend/):
-{last_diff}
-
-TASK:
-1. Identify which PRD is likely being processed (look at branch name).
-2. Summarize the progress in 'backend/'.
-3. Detect any "BLOCKER" messages in files or signs of failure/stalling.
-4. Provide a HEALTH STATUS: [HEALTHY], [STALLED], or [FAILED].
-5. Keep it very concise (max 10 lines).
-""",
     "implementation_prompt.txt": """You are the Implementation Agent. Your task is to execute a specific plan.
 
 PLAN TO EXECUTE:
@@ -675,12 +658,5 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 4. **Global Agent Instructions.** Use `vibe memory` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
 5. **Understand the Ralph loop.** [DEPRECATED] `vibe ralph` reads the `prds/` directory, loads the global truth context files, and sequentially processes `prd_*.yaml` files. It prompts the agent until it emits `<promise>DONE</promise>` before moving on to quality gates.
 
-## Development
-
-Monitor the status of loops using `vibe monitor`:
-
-```bash
-vibe monitor
-```
 """,
 }

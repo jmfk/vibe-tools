@@ -198,9 +198,4 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 ## Development
 
-Monitor the status of loops using `vibe monitor`:
-
-```bash
-vibe monitor
-```
 
