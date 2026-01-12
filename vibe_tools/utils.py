@@ -1586,6 +1586,9 @@ def log_success(tag, *args):
         logger.info(f"SUCCESS: {tag}")
 
 
+verbose_logger = None
+
+
 def run_llm(prompt, model="gemini-3-flash", debug=False):
     """Runs an LLM call using the google-genai library."""
     try:
