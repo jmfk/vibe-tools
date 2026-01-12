@@ -172,7 +172,7 @@ Produce a Markdown PRD with the following structure and cover all sections:
 - List scenarios or checks that prove the feature works.
 - Include happy path plus key edge cases when possible.
 
-Always keep the output limited to Markdown. If the QA log is empty, use \"No follow-up questions were needed.\"""",
+Always keep the output limited to Markdown. If the QA log is empty, use "No follow-up questions were needed." """,
     "prd_questions_prompt.txt": """You are an expert product analyst. Your task is to analyze the current state of a PRD discussion and generate follow-up questions to clarify requirements.
 
 Current State:
