@@ -416,7 +416,8 @@ def run_agent(
                                     flush=True,
                                 )
                             else:
-                                print(f"🚫 Tool Call Error: {data}", flush=True)
+                                print(f"🚫 Tool Call Error:", flush=True)
+                                print(json.dumps(data, indent=2), flush=True)
                         else:
                             tool_call = data.get("tool_call", {})
                             if "readToolCall" in tool_call:
@@ -433,7 +434,8 @@ def run_agent(
                                     flush=True,
                                 )
                             else:
-                                print(f"🚫 Tool Call Error: {data}", flush=True)
+                                print(f"🚫 Tool Call Done Error:", flush=True)
+                                print(json.dumps(data, indent=2), flush=True)
 
                     elif event_type == "thinking":
                         text = data.get("text", None)
