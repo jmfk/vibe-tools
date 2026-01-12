@@ -1009,7 +1009,7 @@ def scaffold(ctx):
 
     # Normalize dev_environment.md to dev_environment.yaml if needed
     if DEV_SPEC.exists() and not DEV_ENV.exists():
-        click.echo(\"🔄 Normalizing dev_environment.md to dev_environment.yaml...\")
+        click.echo("🔄 Normalizing dev_environment.md to dev_environment.yaml...")
 
         normalize_prd(
             agent=agent,
@@ -1020,10 +1020,10 @@ def scaffold(ctx):
         )
 
         if DEV_ENV.exists():
-            click.echo(\"✅ Development environment specification normalized successfully.\")
+            click.echo("✅ Development environment specification normalized successfully.")
         else:
             click.echo(
-                \"❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually.\"
+                "❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually."
             )
             return
 
