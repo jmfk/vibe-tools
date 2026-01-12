@@ -57,9 +57,8 @@ The `vibe-setup deps` command (called automatically by `vibe-setup env`):
    - `mypy` (type checking)
 
 2. **Installs project Python dependencies**:
-   - If `pyproject.toml` exists: `pip install -e .` (editable install)
-   - If `backend/requirements.txt` exists: `pip install -r backend/requirements.txt`
-   - If `requirements.txt` exists: `pip install -r requirements.txt`
+    - If `pyproject.toml` exists: `pip install -e .` (editable install)
+    - If `requirements.txt` exists: `pip install -r requirements.txt`
 
 3. **Installs frontend dependencies**:
    - If `frontend/package.json` exists: `npm install --prefix frontend`

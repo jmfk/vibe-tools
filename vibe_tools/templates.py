@@ -359,7 +359,7 @@ test: test-backend test-frontend test-infra test-integration test-regression lin
 
 test-backend:
 	@echo "Running backend tests..."
-	pytest backend/tests/
+	pytest tests/
 
 test-frontend:
 	@echo "Running frontend tests..."
@@ -367,21 +367,21 @@ test-frontend:
 
 test-infra:
 	@echo "Running infra tests..."
-	pytest backend/tests/test_infra.py
+	pytest tests/test_infra.py
 
 test-integration:
 	@echo "Running integration tests..."
-	pytest backend/tests/integration/
+	pytest tests/integration/
 
 test-regression:
 	@echo "Running regression tests..."
-	pytest backend/tests/regression/
+	pytest tests/regression/
 
 lint: lint-backend lint-frontend
 
 lint-backend:
 	@echo "Running backend linting..."
-	ruff check backend/
+	ruff check vibe_tools/
 
 lint-frontend:
 	@echo "Running frontend linting..."
