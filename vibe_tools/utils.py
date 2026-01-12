@@ -98,8 +98,14 @@ GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 @functools.lru_cache(maxsize=1)
 def is_git_repo():
     """Checks if the current directory is a git repository."""
-    _, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
-    return code == 0
+    try:
+        curr = pathlib.Path.cwd()
+        for parent in [curr] + list(curr.parents):
+            if (parent / ".git").exists():
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def get_last_commit_hash() -> Optional[str]:
@@ -131,7 +137,7 @@ def run_command(
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
         return (e.stdout or "") + (e.stderr or ""), e.returncode
-    except FileNotFoundError as e:
+    except (FileNotFoundError, OSError) as e:
         return str(e), 127
 
 
@@ -300,6 +306,11 @@ def set_console_level(level: int):
             if isinstance(handler, logging.StreamHandler):
                 handler.setLevel(level)
 
+    # Also ensure the logger itself allows this level
+    logger = logging.getLogger("vibe_tools")
+    if logger.level > level:
+        logger.setLevel(level)
+
 
 def enable_console_debug():
     """Enables DEBUG level logging for the console handler."""
@@ -307,6 +318,7 @@ def enable_console_debug():
 
 
 logger = logging.getLogger("vibe_tools")
+LOG_FILE = LOGS_DIR / "vibe.log"
 
 
 def get_prompt(filename: str) -> str:
@@ -358,8 +370,8 @@ def run_agent(
     command: List[str], caffeinate: bool = False, stream: bool = False
 ) -> (str, int):
     """Runs an agent command, optionally preventing sleep and streaming output."""
-    if caffeinate:
-        command = ["caffeinate", "-i"] + command
+    # if caffeinate:
+    #     command = ["caffeinate", "-i"] + command
 
     is_cursor_agent = command[0] == "agent" or (
         len(command) > 2 and command[2] == "agent"
@@ -374,104 +386,231 @@ def run_agent(
             bufsize=1,
             universal_newlines=True,
         )
-        output = []
-        accumulated_assistant_text = []
+        try:
+            output = []
+            accumulated_assistant_text = []
 
-        for line in process.stdout:
-            line = line.strip()
-            if not line:
-                continue
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue
 
-            if is_cursor_agent:
-                try:
-                    data = json.loads(line)
-                    event_type = data.get("type")
-                    subtype = data.get("subtype")
+                if is_cursor_agent:
+                    try:
+                        data = json.loads(line)
+                        event_type = data.get("type")
+                        subtype = data.get("subtype")
 
-                    if event_type == "assistant":
-                        # Extract partial text if available, otherwise complete message
-                        message = data.get("message", {})
-                        content_list = message.get("content", [])
-                        for content in content_list:
-                            if content.get("type") == "text":
-                                text = content.get("text", "")
-                                if text:
-                                    print(f"💬 {text}", flush=True)
-                                    accumulated_assistant_text.append(text)
+                        if event_type == "assistant":
+                            # Extract partial text if available, otherwise complete message
+                            message = data.get("message", {})
+                            content_list = message.get("content", [])
+                            for content in content_list:
+                                if content.get("type") == "text":
+                                    text = content.get("text", "")
+                                    if text:
+                                        print(f"💬 {text}", flush=True)
+                                        accumulated_assistant_text.append(text)
 
-                    elif event_type == "tool_call":
-                        if subtype == "started":
-                            tool_call = data.get("tool_call", {})
-                            if "readToolCall" in tool_call:
-                                path = tool_call["readToolCall"]["args"].get("path")
-                                print(f"📖 Reading: {path}", flush=True)
-                            elif "writeToolCall" in tool_call:
-                                path = tool_call["writeToolCall"]["args"].get("path")
-                                print(f"🔧 Writing: {path}", flush=True)
-                            elif "function" in tool_call:
-                                name = tool_call["function"].get("name")
-                                arguments = tool_call["function"].get("arguments")
-                                print(
-                                    f"🛠️ Calling tool: {name} ({arguments})",
-                                    flush=True,
-                                )
+                        elif event_type == "tool_call":
+                            if subtype == "started":
+                                tool_call = data.get("tool_call", {})
+                                if "readToolCall" in tool_call:
+                                    path = tool_call["readToolCall"]["args"].get("path")
+                                    print(f"📖 Reading: {path}", flush=True)
+                                elif "writeToolCall" in tool_call:
+                                    path = tool_call["writeToolCall"]["args"].get(
+                                        "path"
+                                    )
+                                    print(f"🔧 Writing: {path}", flush=True)
+                                elif "editToolCall" in tool_call:
+                                    path = tool_call["editToolCall"]["args"].get("path")
+                                    print(f"🔧 Editing: {path}", flush=True)
+
+                                elif "lsToolCall" in tool_call:
+                                    path = tool_call["lsToolCall"]["args"].get("path")
+                                    print(f"🔧 List Directory: {path}", flush=True)
+                                elif "shellToolCall" in tool_call:
+                                    commandText = tool_call["shellToolCall"][
+                                        "args"
+                                    ].get("command")
+                                    print(f"🔧 Command: {commandText}", flush=True)
+                                elif "globToolCall" in tool_call:
+                                    globPattern = tool_call["globToolCall"]["args"].get(
+                                        "globPattern"
+                                    )
+                                    print(f"🔧 globToolCall: {globPattern}", flush=True)
+                                elif "updateTodosToolCall" in tool_call:
+                                    todos = tool_call["updateTodosToolCall"][
+                                        "args"
+                                    ].get("todos", [])
+
+                                    def getTodoText(todo):
+                                        status = (
+                                            todo.get("status", "")
+                                            .split("_")[-1]
+                                            .lower()
+                                        )
+                                        return (
+                                            status
+                                            + ": "
+                                            + todo.get("content", "")[:20]
+                                            + "..."
+                                        )
+
+                                    todosText = ", ".join(
+                                        [getTodoText(t) for t in todos]
+                                    )
+                                    print(f"🔧 todos: {todosText}", flush=True)
+                                elif "function" in tool_call:
+                                    name = tool_call["function"].get("name")
+                                    arguments = tool_call["function"].get("arguments")
+                                    print(
+                                        f"🛠️ Calling tool: {name} ({arguments})",
+                                        flush=True,
+                                    )
+                                else:
+                                    print(f"🚫 Tool Call:", flush=True)
+                                    print(json.dumps(data, indent=2), flush=True)
                             else:
-                                print(f"🚫 Tool Call Error: {data}", flush=True)
-                        else:
-                            tool_call = data.get("tool_call", {})
-                            if "readToolCall" in tool_call:
-                                result = tool_call.get("result", {})
-                                print(f"📖 Reading Done: {result}", flush=True)
-                            elif "writeToolCall" in tool_call:
-                                result = tool_call.get("result", {})
-                                print(f"🔧 Writingg Done: {result}", flush=True)
-                            elif "function" in tool_call:
-                                name = tool_call["function"].get("name")
-                                result = tool_call.get("result", {})
-                                print(
-                                    f"🛠️ Calling tool Done: {result}",
-                                    flush=True,
-                                )
+                                tool_call = data.get("tool_call", {})
+                                if "readToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", None)
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"📖 Reading Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Reading Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "writeToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"🔧 Writing Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Writing Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "editToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"🔧 Editing Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Editing Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "lsToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        directoryTreeRoot = success.get(
+                                            "directoryTreeRoot", {}
+                                        )
+                                        numFiles = directoryTreeRoot.get("numFiles", {})
+                                        print(
+                                            f"🔧 List Directory Done: {numFiles} files found",
+                                            flush=True,
+                                        )
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 List Directory Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "shellToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        commandText = result.get("success", "")
+                                        executionTime = result.get("executionTime", "")
+                                        print(
+                                            f"🔧 Command Done: {commandText} in {executionTime} ms",
+                                            flush=True,
+                                        )
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Command Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "updateTodosToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                elif "globToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        totalFiles = success.get("totalFiles", 0)
+                                        print(
+                                            f"🚫 globToolCall Success: {totalFiles} totalFiles",
+                                            flush=True,
+                                        )
+                                elif "function" in tool_call:
+                                    name = tool_call["function"].get("name")
+                                    result = tool_call.get("result", {})
+                                    print(
+                                        f"🛠️ Calling tool Done: {result}",
+                                        flush=True,
+                                    )
+                                else:
+                                    print(f"🚫 Tool Call Done Error:", flush=True)
+                                    print(json.dumps(data, indent=2), flush=True)
+
+                        elif event_type == "thinking":
+                            text = data.get("text", None)
+                            if text:
+                                print(f"🤔 Thinking:\n{text}", flush=True)
                             else:
-                                print(f"🚫 Tool Call Error: {data}", flush=True)
+                                print("...", flush=True)
 
-                    elif event_type == "thinking":
-                        text = data.get("text", None)
-                        if text:
-                            print(f"🤔 Thinking:\n{text}", flush=True)
+                        elif event_type == "result":
+                            if subtype == "success":
+                                # The 'result' field in success event contains the full concatenated text
+                                full_result = data.get("result", "")
+                                # We don't print it again as we've been streaming deltas
+                                # but we return it as the final output
+                                output = [full_result]
                         else:
-                            print("...", flush=True)
+                            print(
+                                f"🚫 Unknown event type: {event_type}, Subtype: {subtype}",
+                                flush=True,
+                            )
 
-                    elif event_type == "result":
-                        if subtype == "success":
-                            # The 'result' field in success event contains the full concatenated text
-                            full_result = data.get("result", "")
-                            # We don't print it again as we've been streaming deltas
-                            # but we return it as the final output
-                            output = [full_result]
-                    else:
-                        print(
-                            f"🚫 Unknown event type: {event_type}, Subtype: {subtype}",
-                            flush=True,
-                        )
-
-                except json.JSONDecodeError:
-                    # Not JSON, might be raw output or error
-                    print("json.JSONDecodeError", flush=True)
+                    except json.JSONDecodeError:
+                        # Not JSON, might be raw output or error
+                        print("json.JSONDecodeError", flush=True)
+                        output.append(line + "\n")
+                else:
+                    # Regular non-JSON streaming
+                    # print(line)
                     output.append(line + "\n")
-            else:
-                # Regular non-JSON streaming
-                # print(line)
-                output.append(line + "\n")
 
-        print(f"WAIT FOR END OF PROCESS", flush=True)
-        process.wait()
-        final_output = (
-            "".join(output)
-            if not is_cursor_agent
-            else (output[0] if output else "".join(accumulated_assistant_text))
-        )
-        return final_output, process.returncode
+            print(f"WAIT FOR END OF PROCESS", flush=True)
+            process.wait()
+            final_output = (
+                "".join(output)
+                if not is_cursor_agent
+                else (output[0] if output else "".join(accumulated_assistant_text))
+            )
+            return final_output, process.returncode
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
     else:
         return run_command(command, check=False)
 
@@ -589,29 +728,53 @@ def migrate_to_project_dir():
 
 def get_agent_processes() -> List[Dict[str, Any]]:
     """Lists all active agent-related processes (using pgrep)."""
-    # This is a simple implementation; real-world might need more robust process discovery
-    stdout, code = run_command(["pgrep", "-f", "vibe"], check=False)
-    if code != 0 or not stdout.strip():
-        return []
+    # Look for both vibe and agent processes
+    stdout_vibe, _ = run_command(["pgrep", "-f", "vibe"], check=False)
+    stdout_agent, _ = run_command(["pgrep", "-f", "agent"], check=False)
+
+    pids = set()
+    if stdout_vibe.strip():
+        pids.update(stdout_vibe.strip().splitlines())
+    if stdout_agent.strip():
+        pids.update(stdout_agent.strip().splitlines())
 
     processes = []
-    for pid in stdout.strip().splitlines():
+    my_pid = str(os.getpid())
+
+    for pid in pids:
+        if pid == my_pid:
+            continue
+
         # Get more info about the process
         info_out, _ = run_command(["ps", "-p", pid, "-o", "args="], check=False)
-        processes.append(
-            {
-                "pid": pid,
-                "command": info_out.strip(),
-                "target": "unknown",  # Would need to parse command to find target PRD/Phase
-            }
-        )
+        cmd_line = info_out.strip()
+
+        # Filter to make sure it's actually one of ours and not some other 'agent' or 'vibe'
+        if "vibe" in cmd_line or "agent" in cmd_line:
+            processes.append(
+                {
+                    "pid": pid,
+                    "command": cmd_line,
+                    "target": "unknown",
+                }
+            )
     return processes
 
 
 def cleanup_stale_processes() -> List[str]:
     """Kills processes that are tracked as active but are no longer relevant."""
+    processes = get_agent_processes()
     killed = []
-    # logic to identify and kill processes
+    for p in processes:
+        pid = int(p["pid"])
+        try:
+            os.kill(pid, signal.SIGTERM)
+            killed.append(f"{p['pid']} ({p['command'][:50]}...)")
+        except ProcessLookupError:
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to kill process {pid}: {e}")
+
     return killed
 
 
