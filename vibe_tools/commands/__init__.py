@@ -22,7 +22,6 @@ def register_all_commands(cli):
         kill,
         memory,
         migrate,
-        monitor,
         normalize,
         pm,
         ps,
@@ -74,7 +73,6 @@ def register_all_commands(cli):
     demo_data.register_demo_data(cli)
     investigate.register_investigate(cli)
     solve.register_solve(cli)
-    monitor.register_monitor(cli)
 
     from vibe_tools.servers import servers_cli
 

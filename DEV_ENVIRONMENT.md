@@ -174,7 +174,6 @@ After setup, the following commands are available:
 - `make frontend-install`: Install frontend dependencies
 - `make frontend-build`: Build frontend for production
 - `make frontend-test`: Run frontend tests
-- `make monitor`: Run progress monitor
 - `make cleanup`: Clean up stale processes
 
 ### 8. Environment Verification

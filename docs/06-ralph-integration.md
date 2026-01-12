@@ -203,20 +203,6 @@ All agent executions are tracked for cost:
 
 See [Cost Tracking](10-cost-tracking.md) for details.
 
-## Loop Monitoring
-
-Monitor running loops:
-
-```bash
-vibe monitor
-```
-
-Shows:
-- Active agent processes
-- Current iteration
-- Progress status
-- Cost accumulation
-
 ## Debugging Loops
 
 ### Debug Mode
@@ -307,9 +293,8 @@ In `implementation/config.json`:
 
 ### Monitoring
 
-1. **Monitor long-running loops**: Use `vibe monitor`
-2. **Check costs regularly**: Use `vibe cost`
-3. **Review logs**: Check `implementation/logs/` for details
+1. **Check costs regularly**: Use `vibe cost`
+2. **Review logs**: Check `implementation/logs/` for details
 
 ## Advanced Usage
 

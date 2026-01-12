@@ -159,12 +159,6 @@ Budget is checked before automated runs:
 
 ### Cost Monitoring
 
-**During execution:**
-```bash
-vibe monitor
-# Shows cost accumulation in real-time
-```
-
 **After execution:**
 ```bash
 vibe cost
@@ -229,9 +223,7 @@ Useful for:
    }
    ```
 
-3. **Monitor during runs**: Use `vibe monitor`
-
-4. **Review costs regularly**: Check `vibe cost` after major operations
+3. **Review costs regularly**: Check `vibe cost` after major operations
 
 5. **Use fast mode**: `--fast` for test-fix reduces test execution
 

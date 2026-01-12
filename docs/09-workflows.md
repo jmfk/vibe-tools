@@ -45,9 +45,6 @@ Iteratively improve test coverage using AI assistance:
 # Start coverage improvement loop
 vibe coverage
 
-# Monitor progress
-vibe monitor
-
 # Check current coverage
 vibe status
 ```
@@ -177,9 +174,6 @@ vibe implement --caffeinate
 ### Monitoring
 
 ```bash
-# In another terminal
-vibe monitor
-
 # Check status
 vibe status
 
@@ -272,10 +266,6 @@ Track and analyze LLM costs:
 ```bash
 # View current costs
 vibe cost
-
-# Check during implementation
-vibe monitor
-# Shows cost accumulation in real-time
 
 # View detailed stats
 vibe stats
@@ -399,9 +389,8 @@ vibe status
 ### Cost Management
 
 1. **Set budgets**: Configure `default_budget` in config
-2. **Monitor during runs**: Use `vibe monitor`
-3. **Review costs**: Check `vibe cost` after major operations
-4. **Use cheaper agents**: Consider `cursor-agent` for routine tasks
+2. **Review costs**: Check `vibe cost` after major operations
+3. **Use cheaper agents**: Consider `cursor-agent` for routine tasks
 
 ### Branch Management
 
