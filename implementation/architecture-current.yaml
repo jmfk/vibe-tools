@@ -1,27 +1,54 @@
+---
 SYSTEM_CONTRACT:
-  Language: Python 3.9+
-  CLI: Click
-  Philosophy: CLI-First
-  AI_Prompts: Version-controlled in prompts/
-
+  Core Philosophy: CLI-First
+  Tech Stack Backend:
+    Language: Python 3.11
+    CLI: Click
+    AI Orchestration: google-genai
+  AI & Tooling:
+    Vibe CLI: Unified command-line interface (`vibe`)
+    Prompts: Version-controlled AI prompts in `prompts/`
+  Development Lifecycle (8-Phase):
+    1: Normalize
+    2: Setup
+    3: Deps
+    4: Implement
+    5: Infra
+    6: Testing
+    7: CICD
+    8: Deploy
+  Key Design Patterns:
+  - CLI-First Workflow
+  - PRD-Driven Development
+  - Agentic Loops
+  - Tiered Configuration
 DOMAIN_MODEL:
-  vibe_tools: Core automation logic and CLI
-  specs: Markdown PRDs and specifications
-  prompts: AI prompt templates
-  project: Architecture and infrastructure definitions (YAML)
-  tests: Comprehensive test suite
-
+  Project Structure:
+    /: MISSING
+    vibe_tools/: Core automation logic and CLI implementation
+    product/: Markdown PRDs and high-level specifications
+    implementation/: Machine-readable state, logs, and normalized PRDs
+    issues/: Local-first issue tracking and management
+    prompts/: AI prompt templates
+    tests/: Comprehensive test suite
+    docs/: User and developer documentation
+    frontend/: Frontend implementation (where applicable)
 CAPABILITIES:
-  vibe_command:
-    - PRD generation
-    - Test coverage improvement
-    - Infrastructure management
-    - Drive all infrastructure and common tasks
-  Workflow:
-    - CLI-First workflow
-    - PRD-Driven Development (PRDs in specs/ normalized into plans)
-
-OUTPUT_TARGETS:
-  - Markdown PRDs (specs/)
-  - Architecture and infrastructure definitions (YAML in project/)
-  - Plans
+  Project Management:
+  - vibe architect: Generate or update core specifications
+  - vibe pm: Interactive session for managing PRDs and project backlog
+  - vibe status: Comprehensive report of project progress and system health
+  - vibe sync: Synchronize local issues and PRDs with GitHub
+  - vibe init: Initialize a new vibe-tools project structure
+  Development Support:
+  - vibe issue: Local-first issue management (add, list, close, investigate, solve)
+  - vibe history: View the development history and completed PRDs
+  - vibe memory: Access and manage the project's long-term memory
+  - vibe cost: Report estimated LLM and infrastructure costs
+  - vibe monitor: Real-time monitoring of active agents and processes
+  - vibe config: Configure API keys and global service settings
+  - vibe servers: Manage local development servers via Docker
+OUTPUT_TARGETS: MISSING
+METADATA:
+  SOURCE_HASH: c12ea94af190e9978cc5b16f92fd3433d42070092607d0ec39d41549107c96d6
+  NORMALIZED_AT: '2026-01-12T17:26:45.953004'

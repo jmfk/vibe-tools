@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "vibe-tools"
 dynamic = ["version"]
 description = "Global commands for Cursor Ralph loop and coverage improvement"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "click",
     "gspread",
@@ -60,7 +60,7 @@ ignore = [
 "vibe_tools/*" = ["E501"] # Some long f-strings are better kept on one line for readability in CLI
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.11"
 strict = false
 ignore_missing_imports = true
 explicit_package_bases = true

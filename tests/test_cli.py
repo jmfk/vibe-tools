@@ -37,12 +37,13 @@ def test_load_save_config(tmp_path):
 
 
 def test_init_command(runner, tmp_path):
-    with patch("vibe_tools.cli.maybe_init_git"):
-        with patch("vibe_tools.cli._perform_basic_init") as mock_basic:
-            # Provide 'D' for manual setup
-            result = runner.invoke(cli, ["init"], input="D\n")
-            assert result.exit_code == 0
-            mock_basic.assert_called_once()
+    with patch("vibe_tools.setup.maybe_init_git"):
+        with patch("vibe_tools.commands.init.perform_basic_init") as mock_basic:
+            with patch("vibe_tools.commands.init.guide_setup", return_value=True):
+                # Provide 'D' for manual setup
+                result = runner.invoke(cli, ["init"], input="D\n")
+                assert result.exit_code == 0
+                mock_basic.assert_called_once()
 
 
 def test_monitor_command(runner):

@@ -21,3 +21,9 @@ reports/
 stats/
 implementation/logs/*
 vibe_tools/_version.py
+*.pyc
+*.log
+.vibe_config.json
+implementation/run-pids.json
+implementation/logs/
+implementation/costs/usage.csv
