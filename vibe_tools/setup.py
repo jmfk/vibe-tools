@@ -33,6 +33,8 @@ from vibe_tools.utils import (
     save_google_api_key,
     save_project_state,
     safe_yaml_dump,
+    maybe_init_git,
+    check_and_install_build_tools,
 )
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
@@ -382,20 +384,6 @@ def configure_service(service_key: str):
     from vibe_tools.utils import sync_env_file
 
     sync_env_file()
-
-
-def maybe_init_git():
-    from vibe_tools.utils import is_git_repo
-
-    if not is_git_repo():
-        if click.confirm(
-            "\nNo git repository found. Would you like to initialize one?", default=True
-        ):
-            try:
-                subprocess.run(["git", "init"], check=True)
-                click.echo("✅ Initialized empty Git repository.")
-            except Exception as e:
-                click.echo(f"❌ Failed to initialize Git repository: {e}")
 
 
 def check_prerequisites() -> Dict[str, Dict[str, Any]]:
@@ -1021,7 +1009,7 @@ def scaffold(ctx):
 
     # Normalize dev_environment.md to dev_environment.yaml if needed
     if DEV_SPEC.exists() and not DEV_ENV.exists():
-        click.echo("🔄 Normalizing dev_environment.md to dev_environment.yaml...")
+        click.echo(\"🔄 Normalizing dev_environment.md to dev_environment.yaml...\")
 
         normalize_prd(
             agent=agent,
@@ -1032,15 +1020,15 @@ def scaffold(ctx):
         )
 
         if DEV_ENV.exists():
-            click.echo("✅ Development environment specification normalized successfully.")
+            click.echo(\"✅ Development environment specification normalized successfully.\")
         else:
             click.echo(
-                "❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually."
+                \"❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually.\"
             )
             return
 
     # Check and install build tools
-    _check_and_install_build_tools()
+    check_and_install_build_tools()
 
     # Setup logging infrastructure if Kubernetes is available
     try:
@@ -1282,123 +1270,6 @@ Output ONLY the markdown content for dev_environment.md, starting with the title
     ensure_dir(DEV_SPEC.parent)
     DEV_SPEC.write_text(clean_output)
     click.echo(f"✅ Generated {DEV_SPEC}")
-
-
-def _check_and_install_build_tools():
-    """Check for required build tools (skaffold, helm) and install if missing."""
-    import platform
-    import shutil
-
-    from vibe_tools.utils import run_command
-
-    required_tools = {}
-
-    # Check if skaffold.yaml exists
-    skaffold_yaml = pathlib.Path("skaffold.yaml")
-    if skaffold_yaml.exists():
-        required_tools["skaffold"] = {
-            "check_cmd": ["skaffold", "version"],
-            "install_cmd_brew": ["brew", "install", "skaffold"],
-            "install_cmd_linux": [
-                "curl",
-                "-Lo",
-                "skaffold",
-                "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64",
-                "&&",
-                "sudo",
-                "install",
-                "skaffold",
-                "/usr/local/bin/",
-            ],
-            "description": "Skaffold (Kubernetes development tool)",
-        }
-
-    # Check if helm charts exist
-    helm_paths = [
-        pathlib.Path("deployment/helm"),
-        pathlib.Path("helm"),
-        pathlib.Path("charts"),
-    ]
-    has_helm = any(p.exists() for p in helm_paths)
-
-    if has_helm:
-        required_tools["helm"] = {
-            "check_cmd": ["helm", "version"],
-            "install_cmd_brew": ["brew", "install", "helm"],
-            "install_cmd_linux": [
-                "curl",
-                "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
-                "|",
-                "bash",
-            ],
-            "description": "Helm (Kubernetes package manager)",
-        }
-
-    if not required_tools:
-        return
-
-    click.echo("🔍 Checking for required build tools...")
-
-    for tool_name, tool_info in required_tools.items():
-        # Check if tool is installed
-        try:
-            result = run_command(tool_info["check_cmd"], check=False)
-            if result[1] == 0:
-                click.echo(f"  ✅ {tool_info['description']} is installed")
-                continue
-        except Exception:
-            pass
-
-        # Tool is not installed
-        click.echo(f"  ⚠️  {tool_info['description']} is not installed")
-
-        # Determine OS and install method
-        system = platform.system().lower()
-        is_macos = system == "darwin"
-
-        if is_macos:
-            # Try brew first
-            if shutil.which("brew"):
-                click.echo(f"  📦 Installing {tool_name} using Homebrew...")
-                try:
-                    install_cmd = tool_info["install_cmd_brew"]
-                    result = run_command(install_cmd, check=False)
-                    if result[1] == 0:
-                        click.echo(f"  ✅ {tool_name} installed successfully")
-                        continue
-                    else:
-                        click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
-                except Exception as e:
-                    click.echo(f"  ⚠️  Installation error: {e}")
-            else:
-                click.echo(f"  💡 Install {tool_name} manually:")
-                click.echo(f"     brew install {tool_name}")
-        else:
-            # Linux - provide manual instructions
-            click.echo(f"  💡 Install {tool_name} manually:")
-            if tool_name == "skaffold":
-                click.echo(
-                    "     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64"
-                )
-                click.echo("     sudo install skaffold /usr/local/bin/")
-            elif tool_name == "helm":
-                click.echo(
-                    "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
-                )
-
-        # Verify installation
-        click.echo(f"  🔍 Verifying {tool_name} installation...")
-        try:
-            result = run_command(tool_info["check_cmd"], check=False)
-            if result[1] == 0:
-                click.echo(f"  ✅ {tool_name} is now available")
-            else:
-                click.echo(f"  ⚠️  {tool_name} installation verification failed")
-                click.echo(
-                    "     Please install it manually and run 'vibe config scaffold' again"
-                )
-        except Exception:
-            click.echo(f"  ⚠️  Could not verify {tool_name} installation")
 
 
 def _install_stern() -> bool:
