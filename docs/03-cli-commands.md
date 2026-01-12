@@ -155,9 +155,6 @@ These commands represent the main development lifecycle phases.
   vibe memory --list
   ```
 
-**`vibe remember [text] [--list]`**
-- Alias for `vibe memory`
-
 #### PRD Management
 
 **`vibe rerun <prd_id>`**
@@ -238,7 +235,7 @@ These commands represent the main development lifecycle phases.
 Commands are displayed in a specific order in help output:
 
 1. Phase commands (architect, pm, normalize, setup, deps, implement, build, run, start, stop, run-status, infra, testing, cicd, deploy)
-2. Supporting tools (history, status, cost, stats, docs, memory, remember, monitor, rerun, implemented, ps, kill, test-fix, coverage, branch, branches, branch-resolve, billing-groups, demo-data, init)
+2. Supporting tools (history, status, cost, stats, docs, memory, monitor, rerun, implemented, ps, kill, test-fix, coverage, branch, branches, branch-resolve, billing-groups, demo-data, init)
 
 ## Command Dependencies
 

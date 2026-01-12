@@ -80,20 +80,6 @@ def test_memory_command_saves_file(runner, tmp_path, monkeypatch):
     assert files[0].read_text() == "Test instruction"
 
 
-def test_remember_alias_works(runner, tmp_path, monkeypatch):
-    instructions_dir = tmp_path / "instructions"
-    instructions_dir.mkdir()
-    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
-
-    result = runner.invoke(cli, ["remember", "Alias test"])
-
-    assert result.exit_code == 0
-    assert "Memory saved" in result.output
-    files = list(instructions_dir.glob("memory_*_alias_test.txt"))
-    assert len(files) == 1
-    assert files[0].read_text() == "Alias test"
-
-
 def test_memory_list_command(runner, tmp_path, monkeypatch):
     instructions_dir = tmp_path / "instructions"
     instructions_dir.mkdir()

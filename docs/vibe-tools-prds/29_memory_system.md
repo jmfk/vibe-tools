@@ -6,7 +6,7 @@
 - **Success criteria**: Memory system successfully stores and retrieves memories, injects them into all agent prompts, and provides easy management commands.
 
 ## Feature Inspiration
-The `vibe memory` and `vibe remember` commands manage global agent instructions (memories). Memories are stored in `instructions/` directory, loaded automatically, and injected into every agent prompt to ensure consistent behavior.
+The `vibe memory` command manages global agent instructions (memories). Memories are stored in `instructions/` directory, loaded automatically, and injected into every agent prompt to ensure consistent behavior.
 
 **Key capabilities**:
 - Memory storage (text files in instructions/)
@@ -28,7 +28,7 @@ N/A - CLI commands.
   - `vibe memory --list`: List all memories
   - `vibe memory --delete <idx>`: Delete memory by index
   - `vibe memory --clear`: Clear all memories
-  - `vibe remember`: Alias for `vibe memory`
+  - `vibe memory`: Save a global instruction.
 - **Memory Injection**: 
   - `get_instructions_context()` loads all memory files
   - Injected into every agent prompt

@@ -3,6 +3,9 @@ def register_all_commands(cli):
     from vibe_tools.commands import (
         architect,
         billing_groups,
+        branch,
+        branch_resolve,
+        branches,
         cost,
         coverage,
         demo_data,
@@ -23,7 +26,6 @@ def register_all_commands(cli):
         pm,
         ps,
         quick_fix,
-        remember,
         rerun,
         setup,
         solve,
@@ -32,10 +34,12 @@ def register_all_commands(cli):
         sync,
         test_fix,
         testing,
+        view_implement,
     )
 
     init.register_init(cli)
     migrate.register_migrate(cli)
+    view_implement.register_view_implement(cli)
     issue.register_issue(cli)
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)
@@ -57,9 +61,11 @@ def register_all_commands(cli):
     testing.register_testing(cli)
     deploy.register_deploy(cli)
     memory.register_memory(cli)
-    remember.register_remember(cli)
     rerun.register_rerun(cli)
     implemented.register_implemented(cli)
+    branch.register_branch(cli)
+    branches.register_branches(cli)
+    branch_resolve.register_branch_resolve(cli)
     ps.register_ps(cli)
     kill.register_kill(cli)
     stats.register_stats(cli)
