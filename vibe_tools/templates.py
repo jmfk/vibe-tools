@@ -51,7 +51,7 @@ OUTPUT FORMAT:
 - No markdown.
 - The completion promise must appear on its own line, at the very end.
 """,
-    "pdr_normalization_prompt.txt": """🔒 PRD NORMALIZATION PROMPT
+    "prd_normalization_prompt.txt": """🔒 PRD NORMALIZATION PROMPT
 
 
 You are a PRD NORMALIZER.

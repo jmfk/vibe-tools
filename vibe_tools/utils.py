@@ -278,8 +278,12 @@ def get_prompt(filename: str) -> str:
     if project_prompt.exists():
         return project_prompt.read_text()
 
-    # 2. Check system-wide prompts directory (if applicable)
-    # 3. Fallback to package resources
+    # 2. Fallback to package TEMPLATES
+    from vibe_tools.templates import TEMPLATES
+    if filename in TEMPLATES:
+        return TEMPLATES[filename]
+
+    # 3. Fallback to package resources (deprecated/legacy check)
     try:
         import importlib.resources as pkg_resources
         from . import prompts

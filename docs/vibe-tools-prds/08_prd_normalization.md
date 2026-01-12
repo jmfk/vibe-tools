@@ -48,7 +48,7 @@ N/A - CLI command with progress output.
 ## Infrastructure
 - **Input**: Markdown files in `product/` directory.
 - **Output**: YAML files in `implementation/prds/` directory.
-- **Prompt Templates**: Normalization prompt in `prompts/pdr_normalization_prompt.txt`.
+- **Prompt Templates**: Normalization prompt in `prompts/prd_normalization_prompt.txt`.
 - **AI Agent**: Uses configured agent for conversion.
 
 ## Architecture and Constraints

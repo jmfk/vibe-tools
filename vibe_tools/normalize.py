@@ -50,7 +50,7 @@ def normalize_prd(
     cost_logger = CostLogger(config)
 
     try:
-        prompt_base = get_prompt("pdr_normalization_prompt.txt")
+        prompt_base = get_prompt("prd_normalization_prompt.txt")
     except FileNotFoundError as e:
         print(f"Error: {e}")
         sys.exit(1)
