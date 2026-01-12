@@ -1263,6 +1263,225 @@ def command_exists(cmd):
     return shutil.which(cmd) is not None
 
 
+def is_tool_available(tool: str) -> bool:
+    """Checks if a tool is available in the system PATH."""
+    return shutil.which(tool) is not None
+
+
+def get_project_name() -> str:
+    """Returns the project name based on the current directory or git remote."""
+    if is_git_repo():
+        stdout, code = run_command(["git", "remote", "get-url", "origin"], check=False)
+        if code == 0 and stdout.strip():
+            url = stdout.strip()
+            if url.endswith(".git"):
+                url = url[:-4]
+            return url.split("/")[-1].split(":")[-1].lower().replace("-", "_")
+    return pathlib.Path.cwd().name.lower().replace("-", "_")
+
+
+def save_google_api_key(api_key: str):
+    """Saves the Google API key to the .env file."""
+    env_file = find_dotenv() or ".env"
+    if not os.path.exists(env_file):
+        with open(env_file, "w") as f:
+            f.write("")
+    set_key(env_file, "GOOGLE_API_KEY", api_key)
+
+
+def sync_env_file():
+    """Syncs project configuration to the .env file."""
+    config = load_config()
+    env_file = find_dotenv() or ".env"
+
+    # This is a simplified version for now to satisfy imports
+    if not os.path.exists(env_file):
+        with open(env_file, "w") as f:
+            f.write("# Vibe-Tools Environment\n")
+
+    # Add logic if needed, but for now just ensure it exists
+    logger.info("Syncing .env file...")
+
+
+def get_instructions_context():
+    """Reads all files in INSTRUCTIONS_DIR and returns them as a formatted string."""
+    if not INSTRUCTIONS_DIR.exists():
+        return ""
+
+    sections = []
+    for f in sorted(INSTRUCTIONS_DIR.glob("*")):
+        if f.is_file():
+            content = f.read_text().strip()
+            if content:
+                sections.append(f"--- {f.name} ---\n{content}")
+
+    if not sections:
+        return ""
+
+    return "INSTRUCTIONS:\n" + "\n\n".join(sections)
+
+
+def get_latest_context_file(pattern):
+    """Finds the latest file matching the pattern in PRD_DIR recursively."""
+    # Handle the pattern to be more flexible (e.g. "infra_*.yaml" -> "prd_infra_*.yaml")
+    search_pattern = pattern
+    if not search_pattern.startswith("prd_") and not search_pattern.startswith("*"):
+        search_pattern = f"prd_{search_pattern}"
+
+    files = list(PRD_DIR.rglob(search_pattern))
+    if not files:
+        return "NOT FOUND"
+
+    # Sort by name (which includes the ## prefix)
+    latest = sorted(files)[-1]
+    return latest.read_text()
+
+
+def is_merged(branch_name):
+    """Checks if a branch is merged into main."""
+    _, code = run_command(
+        ["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False
+    )
+    return code == 0
+
+
+def get_changed_files(base_branch="main"):
+    """Returns files changed relative to the base branch."""
+    if not is_git_repo():
+        return []
+
+    stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
+    if code != 0:
+        merge_base = base_branch
+    else:
+        merge_base = stdout.strip() or base_branch
+
+    stdout, code = run_command(["git", "diff", "--name-only", merge_base], check=False)
+    if code != 0:
+        changed = []
+    else:
+        changed = stdout.strip().splitlines() if stdout.strip() else []
+
+    stdout, code = run_command(
+        ["git", "ls-files", "--others", "--exclude-standard"], check=False
+    )
+    if code == 0 and stdout.strip():
+        changed.extend(stdout.strip().splitlines())
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for path in changed:
+        if path and path not in seen:
+            seen.add(path)
+            unique.append(path)
+
+    return unique
+
+
+def is_dirty():
+    """Checks if the repository has uncommitted changes or untracked files."""
+    if not is_git_repo():
+        return False
+    # Check for tracked changes
+    _, code = run_command(["git", "diff", "--quiet"], check=False)
+    if code != 0:
+        return True
+    _, code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
+    if code != 0:
+        return True
+    # Check for untracked files
+    stdout, code = run_command(
+        ["git", "ls-files", "--others", "--exclude-standard"], check=False
+    )
+    return bool(stdout.strip())
+
+
+def load_global_servers() -> Dict[str, Any]:
+    """Loads server definitions from the global servers file."""
+    if GLOBAL_SERVERS_FILE.exists():
+        try:
+            return json.loads(GLOBAL_SERVERS_FILE.read_text())
+        except Exception as e:
+            logger.error(f"Error loading global servers: {e}")
+    return {}
+
+
+def save_global_servers(servers: Dict[str, Any]):
+    """Saves server definitions to the global servers file."""
+    GLOBAL_SERVERS_FILE.write_text(json.dumps(servers, indent=2))
+
+
+def get_prd_inconsistencies():
+    """Placeholder for getting PRD location inconsistencies."""
+    return []
+
+
+def fix_prd_inconsistencies(inconsistencies, prefer_yaml=True):
+    """Placeholder for fixing PRD location inconsistencies."""
+    pass
+
+
+def check_plan_dependencies(plan_id, all_plans):
+    """Placeholder for checking plan dependencies."""
+    return []
+
+
+def commit_and_register_phase(phase_id, project_name=None):
+    """Placeholder for committing and registering a phase."""
+    pass
+
+
+def is_phase_completed(phase_id, project_name=None):
+    """Placeholder for checking if a phase is completed."""
+    return False
+
+
+def log_issue(message):
+    """Placeholder for logging an issue."""
+    logger.error(message)
+
+
+def log_start(message):
+    """Placeholder for logging the start of an action."""
+    logger.info(f"START: {message}")
+
+
+def log_success(message):
+    """Placeholder for logging the success of an action."""
+    logger.info(f"SUCCESS: {message}")
+
+
+def run_llm(prompt):
+    """Placeholder for running an LLM call."""
+    return "READY"
+
+
+def switch_to_main():
+    """Placeholder for switching to the main branch."""
+    pass
+
+
+def update_state_phase(phase_id, status, project_name=None):
+    """Placeholder for updating the state phase."""
+    pass
+
+
+def parse_prd_filename(filename):
+    """Placeholder for parsing a PRD filename."""
+    return {"name": filename}
+
+
+def update_md_implementation_status(md_path, status):
+    """Placeholder for updating MD implementation status."""
+    pass
+
+
+def open_in_editor(path):
+    """Placeholder for opening a file in the editor."""
+    pass
+
+
 def is_port_available(port):
     """Check if a port is available."""
     import socket
