@@ -118,3 +118,4 @@ Timestamp,PRD,Phase,Iteration,Agent,Model,Input Tokens,Output Tokens,Cost (USD),
 2026-01-12 16:58:58,setup,normalize,1,cursor-agent,gemini-3-flash,226,47,0.000041,normalizing_prd
 2026-01-12 16:59:02,PRD-04-prd-workflow-enhancements,normalize,1,cursor-agent,gemini-3-flash,1168,589,0.000352,normalizing_prd
 2026-01-12 16:59:05,PRD-03-pm-llm-loop-refactor,normalize,1,cursor-agent,gemini-3-flash,1087,318,0.000236,normalizing_prd
+2026-01-12 16:59:15,PRD-01-local-first-issue-workflow-with-github-sync,normalize,1,cursor-agent,gemini-3-flash,1848,1548,0.000804,normalizing_prd
