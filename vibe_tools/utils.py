@@ -76,6 +76,16 @@ DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
 DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
 DEV_SPEC = PLANNING_DIR / "dev_environment.md"
 SETUP_SPEC = PLANNING_DIR / "setup.md"
+
+SYSTEM_FILES = [
+    "architecture",
+    "project_overview",
+    "infrastructure",
+    "cicd",
+    "testing",
+    "build",
+    "dev_environment",
+]
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
@@ -1519,9 +1529,48 @@ def parse_prd_filename(filename):
     return {"name": filename}
 
 
-def update_md_implementation_status(md_path, status):
-    """Placeholder for updating MD implementation status."""
-    pass
+def update_md_implementation_status(md_path, version, sequence, yaml_path):
+    """Updates the MD file with its normalized implementation status."""
+    if not md_path or not md_path.exists():
+        return
+
+    try:
+        content = md_path.read_text()
+
+        # Determine implementation ID and YAML name
+        implementation_id = f"v{version}-{sequence:03d}"
+        yaml_name = yaml_path.name if hasattr(yaml_path, "name") else str(yaml_path)
+
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            # Has existing frontmatter
+            frontmatter_str = parts[1]
+            body = parts[2]
+
+            frontmatter = safe_yaml_load(frontmatter_str) or {}
+            frontmatter["implementation_id"] = implementation_id
+            frontmatter["implementation_yaml"] = yaml_name
+            frontmatter["status"] = "normalized"
+
+            new_frontmatter = safe_yaml_dump(frontmatter)
+            # Ensure new_frontmatter ends with a newline and starts cleanly
+            new_frontmatter = new_frontmatter.strip() + "\n"
+            new_content = f"---\n{new_frontmatter}---{body}"
+            md_path.write_text(new_content)
+        else:
+            # No frontmatter
+            frontmatter = {
+                "implementation_id": implementation_id,
+                "implementation_yaml": yaml_name,
+                "status": "normalized",
+            }
+            new_frontmatter = safe_yaml_dump(frontmatter)
+            new_frontmatter = new_frontmatter.strip() + "\n"
+            new_content = f"---\n{new_frontmatter}---\n\n{content.strip()}\n"
+            md_path.write_text(new_content)
+
+    except Exception as e:
+        logger.warning(f"Could not update MD status for {md_path}: {e}")
 
 
 def open_in_editor(path):

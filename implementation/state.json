@@ -64,5 +64,6 @@
     "issue/ISSUE-2026-01-10-002": "main"
   },
   "active_task": null,
-  "version": "1.2"
+  "version": "1.2",
+  "next_sequence": 30
 }
