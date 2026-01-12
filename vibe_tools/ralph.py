@@ -12,7 +12,7 @@ import yaml
 
 from vibe_tools import utils
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
-from vibe_tools.issues import FAILS_DIR, Issue, IssueBody, save_issue, generate_issue_id
+from vibe_tools.issues import FAILS_DIR, Issue, IssueBody, save_issue, generate_issue_id, BACKLOG_DIR, HISTORY_DIR
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
     DEV_ENV,
@@ -24,6 +24,11 @@ from vibe_tools.utils import (
     PRD_FAILED_DIR,
     PRD_PROCESSING_DIR,
     TESTING_SPEC,
+    PLANNING_BACKLOG_DIR,
+    PLANNING_DIR,
+    PLANNING_HISTORY_DIR,
+    PLANNING_INBOX_DIR,
+    PLANNING_REJECTED_DIR,
     check_plan_dependencies,
     collect_prd_files,
     commit_and_register_phase,
