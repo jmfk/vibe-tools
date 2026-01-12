@@ -872,12 +872,13 @@ def env(python_version):
     click.echo(f"\n✅ Environment setup complete.")
     click.echo(f"Virtualenv: {venv_name}")
     click.echo(
-        "\nTo ensure your shell is configured for pyenv, add these to your ~/.zshrc or ~/.bash_profile:"
+        "\nTo ensure your shell is configured for pyenv (safer macOS config), add these to your ~/.zshrc:"
     )
     click.echo('  export PYENV_ROOT="$HOME/.pyenv"')
     click.echo('  [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"')
+    click.echo('  eval "$(pyenv init --path)"')
     click.echo('  eval "$(pyenv init -)"')
-    click.echo('  eval "$(pyenv virtualenv-init -)"')
+    click.echo('  # Note: Avoid "pyenv virtualenv-init" on macOS to prevent fork exhaustion.')
 
 
 @setup_cli.command()
