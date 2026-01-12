@@ -31,7 +31,7 @@ SYSTEM_CONTRACT:
 DOMAIN_MODEL:
   input: Markdown specification files (.md) in specs/ directory.
   output: YAML PRD files (.yaml) in implementation/prds/ directory.
-  prompt_template: prompts/pdr_normalization_prompt.txt
+  prompt_template: prompts/prd_normalization_prompt.txt
   ai_agent: Configured agent for conversion.
   global_truth_files:
   - architecture.md
