@@ -22,16 +22,16 @@ def register_history(cli):
 
         for info in prds:
             project_name = info["name"]
-
-            # We need the actual stem used in state.json (which is usually prd_name or the yaml stem)
-            # The project state stores names like '01_pm_prd_focus' or 'prd_01_pm_prd_focus'
-            # Let's check both the clean name and the prd_ prefixed name
-            prd_stem = project_name
+            display_name = project_name
+            
             if info["has_yaml"] and info["yaml_path"]:
                 prd_stem = info["yaml_path"].stem
+                if prd_stem.startswith("v"):
+                    display_name = prd_stem
             elif info["has_md"] and info["md_path"]:
-                # If only MD exists, it's definitely pending/started by its stem or clean name
                 prd_stem = info["md_path"].stem
+            else:
+                prd_stem = project_name
 
             md_status = "✅" if info["has_md"] else "❌"
             yaml_status = "✅" if info["has_yaml"] else "❌"
@@ -53,5 +53,5 @@ def register_history(cli):
             else:
                 status = click.style("⚪️ PENDING", fg="white", dim=True)
 
-            click.echo(f"{project_name:<40} {md_status:<5} {yaml_status:<5} {status:<15}")
+            click.echo(f"{display_name:<40} {md_status:<5} {yaml_status:<5} {status:<15}")
     cli.add_command(history)

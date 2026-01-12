@@ -27,6 +27,9 @@ from vibe_tools.utils import (
     get_main_branch,
     safe_yaml_load,
     safe_yaml_dump,
+    parse_prd_filename,
+    update_md_implementation_status,
+    collect_all_prd_info,
 )
 
 def run_reconciliation(quiet=False):
@@ -166,6 +169,93 @@ def run_reconciliation(quiet=False):
     if not quiet: click.echo("🧹 Cleaning up state files...")
     state = load_project_state()
     save_project_state(state) # This will strip redundant fields as per my new save_project_state
+
+    # 5. Versioned Scheduling Migration (New)
+    if not quiet: click.echo("📅 Migrating to versioned scheduling (vXX-XXX)...")
+    
+    version = state.get("current_version", "01")
+    
+    # Collect all PRDs (processing, done, failed) that are still in legacy prd_*.yaml format
+    all_legacy_prds = []
+    for d in [PRD_PROCESSING_DIR, PRD_DONE_DIR, PRD_FAILED_DIR]:
+        if d.exists():
+            all_legacy_prds.extend(list(d.glob("prd_*.yaml")))
+    
+    if all_legacy_prds:
+        # Build dependency graph
+        graph = {}
+        for prd_path in all_legacy_prds:
+            try:
+                data = safe_yaml_load(prd_path.read_text()) or {}
+                prd_id = prd_path.stem
+                deps = data.get("DEPENDS_ON", [])
+                # Clean up deps to match prd_id format for the graph
+                clean_deps = []
+                for dep in deps:
+                    if not dep.startswith("prd_"):
+                        clean_deps.append(f"prd_{dep}")
+                    else:
+                        clean_deps.append(dep)
+                graph[prd_id] = {"path": prd_path, "deps": clean_deps, "data": data}
+            except Exception:
+                continue
+        
+        # Simple topological sort
+        sorted_ids = []
+        visited = set()
+        temp_visited = set()
+
+        def visit(n):
+            if n in temp_visited:
+                return # Cycle detected
+            if n not in visited:
+                temp_visited.add(n)
+                if n in graph:
+                    for m in graph[n]["deps"]:
+                        visit(m)
+                temp_visited.remove(n)
+                visited.add(n)
+                sorted_ids.append(n)
+
+        for pid in sorted(graph.keys()):
+            visit(pid)
+        
+        # Rename files based on sorted order
+        seq = 10
+        all_info = collect_all_prd_info()
+        for pid in sorted_ids:
+            if pid not in graph: continue
+            
+            info = graph[pid]
+            prd_path = info["path"]
+            clean_name = pid.replace("prd_", "")
+            
+            new_filename = f"v{version}-{seq:03d}_{clean_name}.yaml"
+            new_path = prd_path.parent / new_filename
+            
+            if not quiet: click.echo(f"  🏷️  Renaming {pid} -> {new_filename}")
+            shutil.move(str(prd_path), str(new_path))
+            
+            # Find MD path for this PRD
+            md_path = None
+            for item in all_info:
+                if item["name"] == clean_name:
+                    md_path = item["md_path"]
+                    break
+            
+            if md_path:
+                update_md_implementation_status(
+                    pathlib.Path(md_path),
+                    version,
+                    seq,
+                    new_path
+                )
+            
+            seq += 10
+        
+        # Update state with next sequence
+        state["next_sequence"] = seq
+        save_project_state(state)
 
     # 6. Legacy folder cleanup
     legacy_prd_dirs = ["backlog", "history", "inbox", "rejected"]

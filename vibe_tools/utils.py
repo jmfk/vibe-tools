@@ -165,6 +165,68 @@ def update_state_phase(
                 file_path.write_text(new_content)
 
 
+def update_md_implementation_status(
+    md_path: pathlib.Path,
+    version: str,
+    sequence: int,
+    yaml_path: pathlib.Path,
+    status: str = "processing",
+):
+    """Updates the implementation section in the MD frontmatter."""
+    if not md_path or not md_path.exists():
+        return
+
+    content = md_path.read_text()
+    frontmatter = {}
+    body = content
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            frontmatter = safe_yaml_load(parts[1]) or {}
+            body = parts[2]
+
+    if "implementation" not in frontmatter:
+        frontmatter["implementation"] = {}
+
+    frontmatter["implementation"].update(
+        {
+            "id": f"v{version}-{sequence:03d}",
+            "status": status,
+            "yaml": str(yaml_path),
+            "updated_at": datetime.datetime.now().isoformat(),
+        }
+    )
+
+    new_frontmatter = safe_yaml_dump(frontmatter)
+    new_content = f"---\n{new_frontmatter}---\n{body}"
+    md_path.write_text(new_content)
+
+
+def parse_prd_filename(filename: str) -> Dict[str, Any]:
+    """Parses vXX-XXX_name.yaml or prd_name.yaml into its components."""
+    # Try new format first: v01-010_name.yaml
+    match = re.match(r"v(\d+)-(\d+)_(.*)\.yaml", filename)
+    if match:
+        return {
+            "version": match.group(1),
+            "sequence": int(match.group(2)),
+            "name": match.group(3),
+            "format": "versioned",
+        }
+
+    # Try old format: prd_name.yaml
+    if filename.startswith("prd_") and filename.endswith(".yaml"):
+        return {
+            "version": None,
+            "sequence": None,
+            "name": filename[4:-5],
+            "format": "legacy",
+        }
+
+    return {"version": None, "sequence": None, "name": filename, "format": "unknown"}
+
+
 def commit_and_register_phase(
     file_path: pathlib.Path, phase_id: str, commit_message: str
 ):
@@ -424,6 +486,8 @@ def load_project_state() -> Dict[str, Any]:
         },
         "branch_lineage": {},  # Maps branch -> parent_branch
         "active_task": None,
+        "current_version": "01",
+        "next_sequence": 10,
         "version": "1.2",
     }
 
@@ -440,6 +504,10 @@ def load_project_state() -> Dict[str, Any]:
                 state["branch_lineage"] = stored_state["branch_lineage"]
             if "active_task" in stored_state:
                 state["active_task"] = stored_state["active_task"]
+            if "current_version" in stored_state:
+                state["current_version"] = stored_state["current_version"]
+            if "next_sequence" in stored_state:
+                state["next_sequence"] = stored_state["next_sequence"]
         except Exception as e:
             logger.error(f"Error loading project state: {e}")
 
@@ -484,9 +552,21 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
 
     for directory, status in status_map.items():
         if directory.exists():
-            for yaml_file in directory.glob("prd_*.yaml"):
+            # Support both old prd_*.yaml and new vXX-XXX_*.yaml
+            files = list(directory.glob("prd_*.yaml")) + list(directory.glob("v*-*_*.yaml"))
+            for yaml_file in files:
                 prd_id = yaml_file.stem
-                clean_id = prd_id.replace("prd_", "")
+                
+                # Determine clean_id for MD lookup
+                clean_id = prd_id
+                if clean_id.startswith("prd_"):
+                    clean_id = clean_id.replace("prd_", "")
+                else:
+                    # New format: v01-010_name
+                    match = re.match(r"v\d+-\d+_(.*)", clean_id)
+                    if match:
+                        clean_id = match.group(1)
+
                 try:
                     with open(yaml_file, "r") as f:
                         data = safe_yaml_load(f.read()) or {}
@@ -502,7 +582,7 @@ def _derive_plans_from_filesystem() -> Dict[str, Any]:
                         ),
                         "title": data.get(
                             "TITLE",
-                            prd_id.replace("prd_", "").replace("_", " ").title(),
+                            clean_id.replace("_", " ").title(),
                         ),
                         "depends_on": data.get("DEPENDS_ON", []),
                         "branch": data.get("BRANCH", f"feature/{prd_id}"),
@@ -1685,10 +1765,9 @@ def sync_env_file():
 
 
 def collect_prd_files():
-    """Returns all PRD files in PRD_PROCESSING_DIR starting with prd_."""
-    return sorted(
-        list(PRD_PROCESSING_DIR.glob("prd_*.yaml")), key=lambda path: path.name
-    )
+    """Returns all PRD files in PRD_PROCESSING_DIR starting with prd_ or vXX-XXX_."""
+    files = list(PRD_PROCESSING_DIR.glob("prd_*.yaml")) + list(PRD_PROCESSING_DIR.glob("v*-*_*.yaml"))
+    return sorted(files, key=lambda path: path.name)
 
 
 def collect_all_prd_info() -> List[Dict[str, Any]]:
@@ -1730,13 +1809,18 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
         for yaml_file in PRD_DIR.rglob("*.yaml"):
             stem = yaml_file.stem
             clean_name = stem.lower()
-            # If it's a prd_*.yaml, clean the prefix
+            # If it's a prd_*.yaml or vXX-XXX_*.yaml, clean the prefix
             if clean_name.startswith("prd_"):
                 while True:
                     new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
                     if new_name == clean_name:
                         break
                     clean_name = new_name
+            else:
+                match = re.match(r"v\d+-\d+_(.*)", clean_name)
+                if match:
+                    clean_name = match.group(1)
+            
             clean_name = re.sub(r"[- ]", "_", clean_name)
 
             if clean_name not in prd_info:
