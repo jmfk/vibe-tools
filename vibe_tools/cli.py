@@ -756,7 +756,6 @@ def implement(ctx):
         )
         return
 
-
     if not collect_prd_files():
         click.echo("❌ No machine-readable PRD YAMLs found in implementation/prds/.")
         click.echo(
@@ -807,7 +806,9 @@ def _build_reconciliation(ctx, force):
     # Check if dev_environment.yaml and dev_environment-current.yaml are identical (skip if so, unless forced)
     if not force and DEV_ENV.exists() and DEV_ENV_CURRENT.exists():
         if get_file_hash(DEV_ENV) == get_file_hash(DEV_ENV_CURRENT):
-            click.echo("✅ Development environment files are identical. Skipping build.")
+            click.echo(
+                "✅ Development environment files are identical. Skipping build."
+            )
             click.echo("   Use --force to rebuild anyway.")
             return
 
@@ -912,7 +913,9 @@ def build_debug(ctx):
     click.echo(
         f"  DEV_SPEC ({DEV_SPEC}): {'✅ exists' if DEV_SPEC.exists() else '❌ missing'}"
     )
-    click.echo(f"  DEV_ENV ({DEV_ENV}): {'✅ exists' if DEV_ENV.exists() else '❌ missing'}")
+    click.echo(
+        f"  DEV_ENV ({DEV_ENV}): {'✅ exists' if DEV_ENV.exists() else '❌ missing'}"
+    )
     click.echo(
         f"  DEV_ENV_CURRENT ({DEV_ENV_CURRENT}): {'✅ exists' if DEV_ENV_CURRENT.exists() else '❌ missing'}"
     )
@@ -1018,7 +1021,9 @@ def build_debug(ctx):
 
     # Show dev_environment.md content if it exists
     if DEV_SPEC.exists():
-        click.echo("\n📄 Development Environment Specification Preview (first 20 lines):")
+        click.echo(
+            "\n📄 Development Environment Specification Preview (first 20 lines):"
+        )
         try:
             content = DEV_SPEC.read_text()
             lines = content.splitlines()[:20]
@@ -1029,7 +1034,9 @@ def build_debug(ctx):
 
             # Check if logging section exists
             if "logging" in content.lower() or "log" in content.lower():
-                click.echo("\n  ✅ Logging section found in development environment specification")
+                click.echo(
+                    "\n  ✅ Logging section found in development environment specification"
+                )
             else:
                 click.echo("\n  ⚠️  No logging section found in build specification")
         except Exception as e:
@@ -1146,9 +1153,7 @@ def _check_and_install_build_tools():
                 click.echo(f"  ✅ {tool_name} is now available")
             else:
                 click.echo(f"  ⚠️  {tool_name} installation verification failed")
-                click.echo(
-                    "     Please install it manually and run 'vibe build' again"
-                )
+                click.echo("     Please install it manually and run 'vibe build' again")
         except Exception:
             click.echo(f"  ⚠️  Could not verify {tool_name} installation")
 
@@ -2311,12 +2316,6 @@ def implemented():
     click.echo("Done.")
 
 
-
-
-
-
-
-
 @cli.command()
 def ps():
     """List active agent processes."""
@@ -2712,7 +2711,9 @@ def setup_demo_data(ctx, clean):
 
     demodata_path = SPECS_DIR / "demodata.md"
     if not demodata_path.exists():
-        click.echo("❌ product/demodata.md not found. Run 'vibe demo-data design' first.")
+        click.echo(
+            "❌ product/demodata.md not found. Run 'vibe demo-data design' first."
+        )
         return
 
     # Check staging is running

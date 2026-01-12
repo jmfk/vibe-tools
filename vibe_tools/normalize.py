@@ -69,14 +69,15 @@ def normalize_prd(
     # Ensure prds directory exists
     PRD_DIR.mkdir(exist_ok=True)
 
-    # Get files to process
+    # Get files to process and pre-read their content and stats to avoid FileNotFoundError after branch switching
+    # and to preserve mtime for skip logic.
     files_to_process = []
     if input_file:
         path = pathlib.Path(input_file)
         if not path.exists():
             print(f"Error: File {input_file} not found.")
             sys.exit(1)
-        files_to_process = [path]
+        files_to_process = [(path, path.read_text(), path.stat().st_mtime)]
     else:
         # ONLY normalize from the backlog directory
         if not PLANNING_BACKLOG_DIR.exists():
@@ -85,7 +86,12 @@ def normalize_prd(
             return
 
         # Find all markdown files in backlog and subdirectories
-        files_to_process = list(PLANNING_BACKLOG_DIR.rglob("*.md"))
+        for path in PLANNING_BACKLOG_DIR.rglob("*.md"):
+            try:
+                files_to_process.append((path, path.read_text(), path.stat().st_mtime))
+            except Exception as e:
+                print(f"⚠️  Warning: Could not read {path}: {e}")
+
         if not files_to_process:
             print(f"❌ No markdown specs found in {PLANNING_BACKLOG_DIR}/.")
             return
@@ -108,7 +114,7 @@ def normalize_prd(
             else:
                 overwrite_mode = "ask"
 
-    for spec_path in files_to_process:
+    for spec_path, pre_read_content, pre_read_mtime in files_to_process:
         stem = spec_path.stem
 
         # Clean the stem by stripping ANY leading 'prd' markers (repeatedly if needed)
@@ -132,6 +138,11 @@ def normalize_prd(
             branch_name = f"vibe/normalize/{clean_stem}"
 
         _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
+
+        # Ensure the MD file exists on the branch (it might have been deleted by switch_to_main/checkout)
+        if not spec_path.exists():
+            spec_path.parent.mkdir(parents=True, exist_ok=True)
+            spec_path.write_text(pre_read_content)
 
         # Determine target PRD directory based on which product subdirectory it came from
         if PLANNING_BACKLOG_DIR in spec_path.parents or spec_path.parent == PLANNING_BACKLOG_DIR:
@@ -175,7 +186,7 @@ def normalize_prd(
             target_prd_dir.mkdir(parents=True, exist_ok=True)
             
             # Check if MD already has an implementation ID
-            md_content = spec_path.read_text()
+            md_content = pre_read_content
             implementation_id = None
             if md_content.startswith("---"):
                 parts = md_content.split("---", 2)
@@ -218,7 +229,7 @@ def normalize_prd(
                 continue
 
             if overwrite_mode != "yes":
-                md_mtime = spec_path.stat().st_mtime
+                md_mtime = pre_read_mtime
                 yaml_mtime = output_path.stat().st_mtime
                 if yaml_mtime > md_mtime:
                     print(
@@ -236,7 +247,7 @@ def normalize_prd(
             f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using {agent}..."
         )
 
-        human_prd = spec_path.read_text()
+        human_prd = pre_read_content
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", human_prd)
 
         if debug:
