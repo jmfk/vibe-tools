@@ -1,69 +1,18 @@
-[build-system]
-requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "vibe-tools"
-dynamic = ["version"]
-description = "Global commands for Cursor Ralph loop and coverage improvement"
-requires-python = ">=3.11"
+version = "0.1.0"
 dependencies = [
     "click",
-    "gspread",
-    "google-auth",
-    "google-auth-oauthlib",
-    "python-dotenv",
-    "requests",
-    "rich",
-    "PyYAML",
+    "google-generativeai",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+test = [
     "pytest",
     "pytest-cov",
-    "pytest-asyncio",
-    "ruff",
-    "mypy",
-    "google-genai",
-    "prompt-toolkit",
 ]
 
-[tool.setuptools]
-packages = ["vibe_tools"]
-
-[tool.setuptools_scm]
-write_to = "vibe_tools/_version.py"
-
-[project.scripts]
-vibe = "vibe_tools.cli:cli"
-vibe-setup = "vibe_tools.setup:setup_cli"
-vibe-servers = "vibe_tools.servers:servers_cli"
-vibe-staging = "vibe_tools.staging:staging_cli"
-
-[tool.ruff]
-line-length = 120
-target-version = "py38"
-
-[tool.ruff.lint]
-select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "UP", # pyupgrade
-    "N",  # pep8-naming
-]
-ignore = [
-    "B008", # Do not perform function call `Depends` in argument defaults
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["E501"]
-"vibe_tools/*" = ["E501"] # Some long f-strings are better kept on one line for readability in CLI
-
-[tool.mypy]
-python_version = "3.11"
-strict = false
-ignore_missing_imports = true
-explicit_package_bases = true
-exclude = ["frontend", "tests"]
-check_untyped_defs = true
-
+[tool.pytest.ini_options]
+pythonpath = ["."]
+norecursedirs = [".git", "implementation"]

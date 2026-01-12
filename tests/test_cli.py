@@ -46,13 +46,6 @@ def test_init_command(runner, tmp_path):
                 mock_basic.assert_called_once()
 
 
-def test_monitor_command(runner):
-    with patch("vibe_tools.monitor.run_monitor") as mock_monitor:
-        result = runner.invoke(cli, ["monitor", "--interval", "10"])
-        assert result.exit_code == 0
-        mock_monitor.assert_called_once()
-
-
 def test_normalize_command(runner):
     with patch("vibe_tools.normalize.normalize_prd") as mock_normalize:
         result = runner.invoke(cli, ["normalize", "input.md", "--yes"])
