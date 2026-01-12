@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 from dotenv import find_dotenv, load_dotenv, set_key
@@ -121,7 +121,7 @@ def run_command(
     cwd: Optional[str] = None,
     check: bool = True,
     caffeinate: bool = False,
-) -> (str, int):
+) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
     if caffeinate and sys.platform == "darwin":
         command = ["caffeinate", "-i"] + command
@@ -308,7 +308,7 @@ def set_console_level(level: int):
 
     # Also ensure the logger itself allows this level
     logger = logging.getLogger("vibe_tools")
-    if logger.level > level:
+    if logger.level > level or logger.level == logging.NOTSET:
         logger.setLevel(level)
 
 
@@ -346,273 +346,19 @@ def get_prompt(filename: str) -> str:
 
 def get_agent_command(agent: str, prompt: str) -> List[str]:
     """Constructs the command to invoke the specified AI agent."""
-    if agent == "cursor-agent":
-        config = load_config()
-        agent_config = config.get("agent", {})
-        force = agent_config.get("force", True)
+    from .agent import get_agent_command as _get_agent_command
 
-        cmd = ["agent", "-p"]
-        if force:
-            cmd.append("--force")
-
-        cmd.extend(
-            ["--output-format", "stream-json", "--stream-partial-output", prompt]
-        )
-        return cmd
-    elif agent == "claude":
-        return ["claude", "-p", prompt]
-    elif agent == "antigravity":
-        return ["antigravity", "-p", prompt]
-    return ["echo", "UNKNOWN_AGENT", prompt]
+    return _get_agent_command(agent, prompt)
 
 
 def run_agent(
     command: List[str], caffeinate: bool = False, stream: bool = False
-) -> (str, int):
+) -> Tuple[str, int]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
-    # if caffeinate:
-    #     command = ["caffeinate", "-i"] + command
+    from .agent import run_agent as _run_agent
 
-    is_cursor_agent = command[0] == "agent" or (
-        len(command) > 2 and command[2] == "agent"
-    )
-    # print(f"Running agent command: {command}")
-    if stream or is_cursor_agent:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-        )
-        try:
-            output = []
-            accumulated_assistant_text = []
-
-            for line in process.stdout:
-                line = line.strip()
-                if not line:
-                    continue
-
-                if is_cursor_agent:
-                    try:
-                        data = json.loads(line)
-                        event_type = data.get("type")
-                        subtype = data.get("subtype")
-
-                        if event_type == "assistant":
-                            # Extract partial text if available, otherwise complete message
-                            message = data.get("message", {})
-                            content_list = message.get("content", [])
-                            for content in content_list:
-                                if content.get("type") == "text":
-                                    text = content.get("text", "")
-                                    if text:
-                                        print(f"💬 {text}", flush=True)
-                                        accumulated_assistant_text.append(text)
-
-                        elif event_type == "tool_call":
-                            if subtype == "started":
-                                tool_call = data.get("tool_call", {})
-                                if "readToolCall" in tool_call:
-                                    path = tool_call["readToolCall"]["args"].get("path")
-                                    print(f"📖 Reading: {path}", flush=True)
-                                elif "writeToolCall" in tool_call:
-                                    path = tool_call["writeToolCall"]["args"].get(
-                                        "path"
-                                    )
-                                    print(f"🔧 Writing: {path}", flush=True)
-                                elif "editToolCall" in tool_call:
-                                    path = tool_call["editToolCall"]["args"].get("path")
-                                    print(f"🔧 Editing: {path}", flush=True)
-
-                                elif "lsToolCall" in tool_call:
-                                    path = tool_call["lsToolCall"]["args"].get("path")
-                                    print(f"🔧 List Directory: {path}", flush=True)
-                                elif "shellToolCall" in tool_call:
-                                    commandText = tool_call["shellToolCall"][
-                                        "args"
-                                    ].get("command")
-                                    print(f"🔧 Command: {commandText}", flush=True)
-                                elif "globToolCall" in tool_call:
-                                    globPattern = tool_call["globToolCall"]["args"].get(
-                                        "globPattern"
-                                    )
-                                    print(f"🔧 globToolCall: {globPattern}", flush=True)
-                                elif "updateTodosToolCall" in tool_call:
-                                    todos = tool_call["updateTodosToolCall"][
-                                        "args"
-                                    ].get("todos", [])
-
-                                    def getTodoText(todo):
-                                        status = (
-                                            todo.get("status", "")
-                                            .split("_")[-1]
-                                            .lower()
-                                        )
-                                        return (
-                                            status
-                                            + ": "
-                                            + todo.get("content", "")[:20]
-                                            + "..."
-                                        )
-
-                                    todosText = ", ".join(
-                                        [getTodoText(t) for t in todos]
-                                    )
-                                    print(f"🔧 todos: {todosText}", flush=True)
-                                elif "function" in tool_call:
-                                    name = tool_call["function"].get("name")
-                                    arguments = tool_call["function"].get("arguments")
-                                    print(
-                                        f"🛠️ Calling tool: {name} ({arguments})",
-                                        flush=True,
-                                    )
-                                else:
-                                    print(f"🚫 Tool Call:", flush=True)
-                                    print(json.dumps(data, indent=2), flush=True)
-                            else:
-                                tool_call = data.get("tool_call", {})
-                                if "readToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", None)
-                                    if success:
-                                        message = success.get("message", "")
-                                        print(f"📖 Reading Done: {message}", flush=True)
-                                    else:
-                                        # failure = result.get("failure", {})
-                                        print(
-                                            f"🚫 Reading Error: {json.dumps(result, indent=2)}",
-                                            flush=True,
-                                        )
-                                elif "writeToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                    if success:
-                                        message = success.get("message", "")
-                                        print(f"🔧 Writing Done: {message}", flush=True)
-                                    else:
-                                        # failure = result.get("failure", {})
-                                        print(
-                                            f"🚫 Writing Error: {json.dumps(result, indent=2)}",
-                                            flush=True,
-                                        )
-                                elif "editToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                    if success:
-                                        message = success.get("message", "")
-                                        print(f"🔧 Editing Done: {message}", flush=True)
-                                    else:
-                                        # failure = result.get("failure", {})
-                                        print(
-                                            f"🚫 Editing Error: {json.dumps(result, indent=2)}",
-                                            flush=True,
-                                        )
-                                elif "lsToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                    if success:
-                                        directoryTreeRoot = success.get(
-                                            "directoryTreeRoot", {}
-                                        )
-                                        numFiles = directoryTreeRoot.get("numFiles", {})
-                                        print(
-                                            f"🔧 List Directory Done: {numFiles} files found",
-                                            flush=True,
-                                        )
-                                    else:
-                                        failure = result.get("failure", {})
-                                        print(
-                                            f"🚫 List Directory Error: {json.dumps(failure, indent=2)}",
-                                            flush=True,
-                                        )
-                                elif "shellToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                    if success:
-                                        commandText = result.get("success", "")
-                                        executionTime = result.get("executionTime", "")
-                                        print(
-                                            f"🔧 Command Done: {commandText} in {executionTime} ms",
-                                            flush=True,
-                                        )
-                                    else:
-                                        failure = result.get("failure", {})
-                                        print(
-                                            f"🚫 Command Error: {json.dumps(failure, indent=2)}",
-                                            flush=True,
-                                        )
-                                elif "updateTodosToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                elif "globToolCall" in tool_call:
-                                    result = tool_call.get("result", {})
-                                    success = result.get("success", {})
-                                    if success:
-                                        totalFiles = success.get("totalFiles", 0)
-                                        print(
-                                            f"🚫 globToolCall Success: {totalFiles} totalFiles",
-                                            flush=True,
-                                        )
-                                elif "function" in tool_call:
-                                    name = tool_call["function"].get("name")
-                                    result = tool_call.get("result", {})
-                                    print(
-                                        f"🛠️ Calling tool Done: {result}",
-                                        flush=True,
-                                    )
-                                else:
-                                    print(f"🚫 Tool Call Done Error:", flush=True)
-                                    print(json.dumps(data, indent=2), flush=True)
-
-                        elif event_type == "thinking":
-                            text = data.get("text", None)
-                            if text:
-                                print(f"🤔 Thinking:\n{text}", flush=True)
-                            else:
-                                print("...", flush=True)
-
-                        elif event_type == "result":
-                            if subtype == "success":
-                                # The 'result' field in success event contains the full concatenated text
-                                full_result = data.get("result", "")
-                                # We don't print it again as we've been streaming deltas
-                                # but we return it as the final output
-                                output = [full_result]
-                        else:
-                            print(
-                                f"🚫 Unknown event type: {event_type}, Subtype: {subtype}",
-                                flush=True,
-                            )
-
-                    except json.JSONDecodeError:
-                        # Not JSON, might be raw output or error
-                        print("json.JSONDecodeError", flush=True)
-                        output.append(line + "\n")
-                else:
-                    # Regular non-JSON streaming
-                    # print(line)
-                    output.append(line + "\n")
-
-            print(f"WAIT FOR END OF PROCESS", flush=True)
-            process.wait()
-            final_output = (
-                "".join(output)
-                if not is_cursor_agent
-                else (output[0] if output else "".join(accumulated_assistant_text))
-            )
-            return final_output, process.returncode
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-    else:
-        return run_command(command, check=False)
+    output, code, _ = _run_agent(command, caffeinate=caffeinate, stream=stream)
+    return output, code
 
 
 def safe_yaml_load(content: str) -> Any:
@@ -727,55 +473,17 @@ def migrate_to_project_dir():
 
 
 def get_agent_processes() -> List[Dict[str, Any]]:
-    """Lists all active agent-related processes (using pgrep)."""
-    # Look for both vibe and agent processes
-    stdout_vibe, _ = run_command(["pgrep", "-f", "vibe"], check=False)
-    stdout_agent, _ = run_command(["pgrep", "-f", "agent"], check=False)
+    """Lists all active agent-related processes."""
+    from .agent import get_agent_processes as _get_agent_processes
 
-    pids = set()
-    if stdout_vibe.strip():
-        pids.update(stdout_vibe.strip().splitlines())
-    if stdout_agent.strip():
-        pids.update(stdout_agent.strip().splitlines())
-
-    processes = []
-    my_pid = str(os.getpid())
-
-    for pid in pids:
-        if pid == my_pid:
-            continue
-
-        # Get more info about the process
-        info_out, _ = run_command(["ps", "-p", pid, "-o", "args="], check=False)
-        cmd_line = info_out.strip()
-
-        # Filter to make sure it's actually one of ours and not some other 'agent' or 'vibe'
-        if "vibe" in cmd_line or "agent" in cmd_line:
-            processes.append(
-                {
-                    "pid": pid,
-                    "command": cmd_line,
-                    "target": "unknown",
-                }
-            )
-    return processes
+    return _get_agent_processes()
 
 
 def cleanup_stale_processes() -> List[str]:
-    """Kills processes that are tracked as active but are no longer relevant."""
-    processes = get_agent_processes()
-    killed = []
-    for p in processes:
-        pid = int(p["pid"])
-        try:
-            os.kill(pid, signal.SIGTERM)
-            killed.append(f"{p['pid']} ({p['command'][:50]}...)")
-        except ProcessLookupError:
-            pass
-        except Exception as e:
-            logger.warning(f"Failed to kill process {pid}: {e}")
+    """Kills tracked and floating agent processes."""
+    from .agent import cleanup_stale_processes as _cleanup_stale_processes
 
-    return killed
+    return _cleanup_stale_processes()
 
 
 def get_google_api_key() -> Optional[str]:

@@ -26,6 +26,7 @@ from vibe_tools.utils import (
     load_project_state,
     logger,
 )
+from vibe_tools.agent import get_agent_command, run_agent
 
 
 class MessageQueue:
@@ -149,6 +150,7 @@ class InteractivePM:
         self.config = self._load_config()
         self.mode = "ASK"
         self.focused_prd: Optional[str] = None
+        self.chat_id: Optional[str] = None
         self.mq = MessageQueue()
         self.llm = StreamingLLM(model_name=model_name)
         self._load_session()
@@ -213,6 +215,7 @@ class InteractivePM:
                 self.history = data.get("history", [])
                 self.pending_prompt = data.get("pending_prompt", "")
                 self.session_memory = data.get("session_memory", "")
+                self.chat_id = data.get("chat_id")
                 self.additional_files = [pathlib.Path(f) for f in data.get("additional_files", [])]
                 self.mode = data.get("mode", "ASK")
                 self.focused_prd = data.get("focused_prd")
@@ -226,6 +229,7 @@ class InteractivePM:
             "history": self.history,
             "pending_prompt": self.pending_prompt,
             "session_memory": self.session_memory,
+            "chat_id": self.chat_id,
             "additional_files": [str(f) for f in self.additional_files],
             "mode": self.mode,
             "focused_prd": self.focused_prd,
@@ -312,10 +316,22 @@ class InteractivePM:
 
         full_response = ""
         try:
-            async for chunk in self.llm.stream(full_prompt):
-                click.echo(chunk, nl=False)
-                full_response += chunk
-            click.echo("\n")
+            if self.agent_type == "cursor-agent":
+                command = get_agent_command(self.agent_type, full_prompt, chat_id=self.chat_id)
+                loop = asyncio.get_running_loop()
+                # Run the synchronous run_agent in an executor
+                full_response, exit_code, chat_id = await loop.run_in_executor(
+                    None, lambda: run_agent(command, stream=self.stream)
+                )
+                if chat_id:
+                    self.chat_id = chat_id
+                if exit_code != 0:
+                    click.echo(click.style(f"\n❌ Agent failed with exit code {exit_code}", fg="red"))
+            else:
+                async for chunk in self.llm.stream(full_prompt):
+                    click.echo(chunk, nl=False)
+                    full_response += chunk
+                click.echo("\n")
         except asyncio.CancelledError:
             click.echo(click.style("\n[INTERRUPTED]", fg="red"))
             return

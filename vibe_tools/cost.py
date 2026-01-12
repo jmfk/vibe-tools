@@ -1,7 +1,7 @@
 import csv
 import datetime
 import pathlib
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from vibe_tools.utils import COSTS_DIR, logger
 

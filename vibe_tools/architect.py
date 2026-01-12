@@ -18,13 +18,12 @@ from vibe_tools.utils import (
     VIBE_PROJECT_DIR,
     cleanup_stale_processes,
     ensure_dir,
-    get_agent_command,
     get_agent_processes,
     get_instructions_context,
     get_prompt,
     logger,
-    run_agent,
 )
+from vibe_tools.agent import get_agent_command, run_agent
 
 
 class ArchitectCompleter:
@@ -105,6 +104,7 @@ class InteractiveArchitect:
         self.history: List[Dict[str, str]] = []
         self.pending_prompt: str = ""
         self.session_memory: str = ""
+        self.chat_id: Optional[str] = None
         self.additional_files: List[pathlib.Path] = []
         self.config = self._load_config()
         self.mode = "ASK"  # Default mode
@@ -176,6 +176,7 @@ class InteractiveArchitect:
                 self.history = data.get("history", [])
                 self.pending_prompt = data.get("pending_prompt", "")
                 self.session_memory = data.get("session_memory", "")
+                self.chat_id = data.get("chat_id")
                 self.additional_files = [
                     pathlib.Path(f) for f in data.get("additional_files", [])
                 ]
@@ -191,6 +192,7 @@ class InteractiveArchitect:
             "history": self.history,
             "pending_prompt": self.pending_prompt,
             "session_memory": self.session_memory,
+            "chat_id": self.chat_id,
             "additional_files": [str(f) for f in self.additional_files],
             "mode": self.mode,
         }
@@ -643,7 +645,7 @@ class InteractiveArchitect:
         query = self.pending_prompt
 
         click.echo("⏳ Architect is thinking... (Ctrl-C to cancel)")
-        command = get_agent_command(self.agent_type, prompt)
+        command = get_agent_command(self.agent_type, prompt, chat_id=self.chat_id)
 
         # If streaming, show mode prefix before output
         if self.stream:
@@ -653,7 +655,9 @@ class InteractiveArchitect:
             click.echo(f"{mode_prefix} 🤖 ", nl=False)
 
         try:
-            output, exit_code = run_agent(command, stream=self.stream)
+            output, exit_code, chat_id = run_agent(command, stream=self.stream)
+            if chat_id:
+                self.chat_id = chat_id
         except KeyboardInterrupt:
             click.echo("\n🛑 Agent cancelled.")
             return
