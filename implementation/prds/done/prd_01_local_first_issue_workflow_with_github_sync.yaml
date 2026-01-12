@@ -1,131 +1,204 @@
 SYSTEM_CONTRACT:
-- LOCAL_FIRST_ISSUE_MANAGEMENT: true
-- FILE_BASED_ARTIFACTS: true
-- GITHUB_SYNCHRONIZATION_TARGET: true
-- DETERMINISTIC_RECONCILIATION: true
-- AGENT_CONSUMABLE: true
-- NO_SILENT_MERGES: true
-- CANONICAL_LOCAL_IDENTITY: true
-DOMAIN_MODEL:
-  Issue:
-    id: STRING (ISSUE-YYYY-MM-DD-XXX)
-    title: STRING
-    status:
-    - backlog
-    - in_progress
-    - blocked
-    - done
-    severity:
-    - low
-    - medium
-    - high
-    - critical
-    service: STRING
-    created_at: TIMESTAMP
-    updated_at: TIMESTAMP
-    github:
-      repo: STRING
-      number: INTEGER
-      url: STRING
-    sync:
-      last_synced_at: TIMESTAMP
-      sync_hash: STRING
-    body:
-      summary: STRING
-      reproduction_steps: STRING
-      expected_behavior: STRING
-      actual_behavior: STRING
-      evidence: STRING
-      acceptance_criteria: STRING
-      investigation_notes: STRING
-      solution_notes: STRING
-  SyncState:
-    mappings: MAP
-    metadata: MAP
-  StatusMapping:
-    backlog:
-      github_state: open
-      label: []
-    in_progress:
-      github_state: open
-      label: in-progress
-    blocked:
-      github_state: open
-      label: blocked
-    done:
-      github_state: closed
-      label: resolved
-CAPABILITIES:
-  vibe_issue_sync:
-    description: Synchronize local issues with GitHub.
-    options:
-    - --dry-run
-    - --full
-    - --since
-    - --open-only
-    - --label
-    actions:
-    - pull_new_issues
-    - push_local_changes
-    - update_metadata
-    - detect_conflicts
+  Purpose & Motivation: 'The goal of this feature is to introduce a **local-first,
+    file-based issue management system** that integrates seamlessly with GitHub Issues
+    while remaining usable without GitHub.
+
+
+    The system should:
+
+
+    - Treat issues as **versioned artifacts**, not ephemeral UI objects.
+
+    - Allow **AI agents** to reason about, investigate, and solve issues.
+
+    - Maintain **deterministic reconciliation** between local files and GitHub.
+
+    - Fit naturally into the existing vibe-tools workflow and CLI mental model.
+
+
+    This is **not** a replacement for GitHub Issues. It is a **canonical local representation**
+    with controlled synchronization.'
+  Core Principles:
+  - Local files are the primary working surface
+  - GitHub is a synchronization target, not the source of truth
+  - Every issue has a stable local identity
+  - Sync must be deterministic and conflict-safe
+  - Agents must be able to read, write, and reason over issues
+  - No silent merges. Ever.
+  Directory Structure:
+    description: MISSING
+    folders:
+    - name: backlog/
+      semantics: Active, open, or unresolved issues.
+    - name: history/
+      semantics: Resolved issues. Moving an issue here is a **state transition**,
+        not just archival.
+    - name: meta/index.json
+      semantics: Machine-managed sync state and mappings. Never edited manually.
+  Issue File Format:
+    format: single Markdown file with YAML frontmatter
+    frontmatter:
+      required_fields:
+      - id
+      - title
+      - status
+      - severity
+      - service
+      - created_at
+      - updated_at
+      - github
+      - sync
+    markdown_body:
+      recommended_sections:
+      - Summary
+      - Reproduction Steps
+      - Expected Behavior
+      - Actual Behavior
+      - Evidence (logs, traces, screenshots)
+      - Acceptance Criteria
+      - Investigation Notes
+      - Solution Notes
+      agent_rules:
+      - Agents are allowed to add sections, but must not remove required ones.
+  GitHub Sync Model:
+    mapping_rules:
+    - "One local issue \u2194 one GitHub Issue"
+    - Local `id` is canonical
+    - GitHub issue number is a foreign key
+    source_of_truth:
+      Title: Local
+      Body / Description: Local
+      Status: Local
+      Labels (vibe-managed): Local
+      Comments by vibe-bot: Local
+      External comments: GitHub (read-only)
+      Reactions / mentions: GitHub
+    status_mapping:
+      backlog:
+        GitHub State: open
+        Labels: "\u2014"
+      in_progress:
+        GitHub State: open
+        Labels: in-progress
+      blocked:
+        GitHub State: open
+        Labels: blocked
+      done:
+        GitHub State: closed
+        Labels: resolved
+    history_transition_must:
+    - close the GitHub issue
+    - add a resolution label
+  Sync Behavior (`vibe issue sync`):
+    responsibilities:
+    - Pull new GitHub issues into `backlog/`
+    - Push local changes to GitHub
+    - Update metadata and hashes
+    - Detect conflicts
+    conflict_definition: 'A conflict exists if:
+
+
+      - Local file changed since last sync **and**
+
+      - GitHub issue changed since last sync'
     conflict_handling:
-    - mark_blocked
-    - create_conflict_note
-    - require_human_resolution
-  vibe_issue_investigate:
-    description: Create issues via guided investigation.
-    actions:
-    - read_logs
-    - cluster_errors
-    - propose_issues
-    - generate_issue_files
-    - create_github_issues
+    - No auto-merge
+    - Create a conflict note in the issue file
+    - Mark issue as `status: blocked`
+    - Require human resolution before next sync
+    sync_modes:
+    - Incremental by default
+    - Full reindex via `--full`
+    - Preview via `--dry-run`
+  CLI Interface:
+    vibe_issue: Root command for issue management.
+    vibe_issue_sync:
+      description: Synchronize local issues with GitHub.
+      options:
+      - --dry-run
+      - --full
+      - --since <date>
+      - --open-only (default true)
+      - --label vibe-managed
+    vibe_issue_investigate:
+      command: vibe issue investigate (`inv`)
+      behavior:
+      - Read configured log sources
+      - Cluster errors by signature
+      - Propose candidate issues
+      - Ask clarifying questions
+      - Generate structured issue files
+      - Optionally create GitHub issues
+      rules:
+      - One issue per distinct problem
+      - User confirmation required before creation
+      - Logs must be redacted by default
+    vibe_issue_solve:
+      description: Attempt to resolve an issue using an agent-driven loop.
+      modes:
+      - Investigate mode (default)
+      - Solve mode (after hypothesis convergence)
+      capabilities:
+      - Read issue file
+      - Inspect codebase
+      - Run tests
+      - Modify code
+      - Update issue notes
+      - Transition status
+      - Close issue when acceptance criteria are met
+      loop: 'The command alternates between modes until:
+
+
+        - Issue is resolved
+
+        - Issue is blocked
+
+        - User aborts'
+  Agent Interaction Contract:
     rules:
-    - user_confirmation_required
-    - redacted_logs
-  vibe_issue_solve:
-    description: Resolve issue via agent-driven loop.
-    modes:
-    - investigate
-    - solve
-    actions:
-    - read_issue
-    - inspect_codebase
-    - run_tests
-    - modify_code
-    - update_notes
-    - transition_status
-    - close_issue
-  agent_interaction:
-    requirements:
-    - update_updated_at
-    - update_status
-    - append_notes
-    - preserve_evidence
-    - preserve_severity_scope
+    - Treat issue files as canonical context
+    - Update `updated_at` and `status`
+    - Append investigation and solution notes
+    - Never delete evidence
+    - Never silently change severity or scope
+  Security & Safety:
+  - Secrets must be redacted from logs
+  - Uploading logs to GitHub is opt-in
+  - GitHub tokens must be fine-scoped
+  - No auto-closing without acceptance criteria satisfied
+  Non-Goals:
+  - Replacing GitHub Issues UI
+  - Full bidirectional comment editing
+  - Project management features (boards, sprints)
+  - SLA or alerting systems
+  Success Criteria:
+  - Issues can be worked on fully offline
+  - Sync is deterministic and repeatable
+  - Conflicts are explicit and visible
+  - Agents can reliably investigate and solve issues
+  - No accidental issue loss or silent overwrites
+  Open Questions:
+  - Should issue templates be configurable per project?
+  - Should issues be allowed outside GitHub-backed repos?
+  - Should solved issues be squashed into changelogs automatically?
+DOMAIN_MODEL: MISSING
+CAPABILITIES:
+- Read issue file
+- Inspect codebase
+- Run tests
+- Modify code
+- Update issue notes
+- Transition status
+- Close issue when acceptance criteria are met
 OUTPUT_TARGETS:
-  directory_structure:
-    issues/backlog/: Active issues
-    issues/history/: Resolved issues
-    issues/meta/index.json: Machine-managed sync state
-  file_format: Markdown with YAML frontmatter
-  github_sync:
-    authority_local:
-    - Title
-    - Body
-    - Status
-    - Labels
-    - vibe-bot comments
-    authority_github:
-    - External comments
-    - Reactions
-    - Mentions
-_vibe_sync:
-  issue_number: 9
-  last_synced_at: '2026-01-10T17:22:10.075058'
-  sync_hash: 0039da81b9b5075b458dce380519c3849642e9cb3286c1c887544766cb96541f
+- issues/
+- backlog/
+- history/
+- meta/index.json
+METADATA:
+  SOURCE_HASH: 8defae0b2870f952840398d57bd382a01b62f9fae3589e16b21e78b1ff42c366
+  NORMALIZED_AT: '2026-01-12T16:59:15.883859'
 TITLE: 01 Local First Issue Workflow With Github Sync
 DEPENDS_ON: []
-BRANCH: staging
-PARENT_BRANCH: staging
+BRANCH: feature/01_local_first_issue_workflow_with_github_sync
+PARENT_BRANCH: main
