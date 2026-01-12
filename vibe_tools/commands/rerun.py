@@ -37,3 +37,5 @@ def register_rerun(cli):
             click.echo(f"✅ {msg}")
 
         click.echo(f"\nReady to rerun: {project_name} state has been reset.")
+
+    cli.add_command(rerun)

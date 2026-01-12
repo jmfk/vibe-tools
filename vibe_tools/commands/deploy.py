@@ -21,3 +21,5 @@ def register_deploy(cli):
         state["phases"]["deploy"]["status"] = "completed"
         save_project_state(state)
         click.echo("\n✨ Project fully deployed! All lifecycle phases completed.")
+
+    cli.add_command(deploy)

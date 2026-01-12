@@ -59,3 +59,5 @@ def register_testing(cli):
             click.echo("[ ] Setup CI/CD (vibe cicd)")
         else:
             click.echo("❌ Testing reconciliation failed.")
+
+    cli.add_command(testing)

@@ -248,7 +248,6 @@ def register_quick_fix(cli):
             else:
                 log_issue("Quick Fix", iteration, max_iterations, "Fix failed after all iterations")
                 logger.error(f"❌ Quick fix failed after {max_iterations} iterations.")
-                click.echo(f"\n❌ Quick fix failed after {max_iterations} iterations.")
-                return 1
-
         return 1
+
+    cli.add_command(quick_fix, name="quick-fix")

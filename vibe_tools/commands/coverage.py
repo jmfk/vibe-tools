@@ -13,3 +13,5 @@ def register_coverage(cli):
             caffeinate=ctx.obj.get("caffeinate", False),
             stream=ctx.obj.get("stream", False),
         )
+
+    cli.add_command(coverage)

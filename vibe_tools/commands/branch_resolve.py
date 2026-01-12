@@ -52,3 +52,5 @@ def register_branch_resolve(cli):
             click.echo("✅ Git resolution attempt completed.")
         else:
             click.echo(f"❌ Git resolution failed (exit code {code}).")
+
+    cli.add_command(branch_resolve)

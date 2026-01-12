@@ -80,3 +80,5 @@ def register_infra(cli):
             stream=ctx.obj.get("stream", False),
         )
         loop.run()
+
+    cli.add_command(infra)

@@ -9,3 +9,5 @@ def register_branches(cli):
     def branches(ctx):
         """List all local branches and their dependencies."""
         display_branches_table()
+
+    cli.add_command(branches)

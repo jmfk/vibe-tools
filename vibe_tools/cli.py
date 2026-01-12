@@ -115,6 +115,7 @@ class OrderedGroup(click.Group):
             "sync",
             "investigate",
             "solve",
+            "monitor",
         ]
 
         # Get the actual commands available

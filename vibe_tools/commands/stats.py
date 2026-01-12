@@ -147,3 +147,5 @@ def register_stats(cli):
         except Exception as e:
             click.echo(f"❌ Error generating report: {e}")
             traceback.print_exc()
+
+    cli.add_command(stats)
