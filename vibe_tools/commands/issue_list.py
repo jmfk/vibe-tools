@@ -86,3 +86,6 @@ def register_issue_list(issue_group):
     def ls_issues(**kwargs):
         """Alias for 'vibe issue list'."""
         list_issues_impl(**kwargs)
+
+    issue_group.add_command(list_issues)
+    issue_group.add_command(ls_issues)

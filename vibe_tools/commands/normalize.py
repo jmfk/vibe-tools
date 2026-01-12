@@ -110,3 +110,5 @@ def register_normalize(cli):
         click.echo("[ ] Architecture Setup (vibe setup)")
         click.echo("[ ] Install Dependencies (vibe deps)")
         click.echo("[ ] Start Building (vibe implement)")
+
+    cli.add_command(normalize)

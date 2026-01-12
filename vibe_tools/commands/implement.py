@@ -61,3 +61,5 @@ def register_implement(cli):
             click.echo("[ ] Run Tests & Reconciliation (vibe testing)")
         else:
             click.echo("❌ Implementation failed.")
+
+    cli.add_command(implement)

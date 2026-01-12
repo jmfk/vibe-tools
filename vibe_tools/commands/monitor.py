@@ -19,3 +19,5 @@ def register_monitor(cli):
             interval=interval,
             stream=ctx.obj.get("stream", False),
         )
+
+    cli.add_command(monitor)

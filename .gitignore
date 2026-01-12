@@ -20,3 +20,4 @@ node_modules/
 reports/
 stats/
 implementation/logs/*
+vibe_tools/_version.py
