@@ -60,35 +60,85 @@ def register_normalize(cli):
             return
 
         from vibe_tools.normalize import normalize_prd, normalize_system_file
+        from vibe_tools.utils import get_file_hash, safe_yaml_load, VIBE_PROJECT_DIR
+        import re
 
-        # Map special file names to their spec paths
-        special_files = {
-            "infrastructure": INFRA_SPEC,
-            "architecture": ARCHITECTURE_SPEC,
-            "cicd": CICD_SPEC,
-            "testing": TESTING_SPEC,
-            "build": DEV_SPEC,
-            "dev_environment": DEV_SPEC,
-            "project-overview": OVERVIEW_SPEC,
-            "project_overview": OVERVIEW_SPEC,
-        }
+        # Unique system specs to normalize
+        system_specs = [
+            ARCHITECTURE_SPEC,
+            OVERVIEW_SPEC,
+            INFRA_SPEC,
+            CICD_SPEC,
+            TESTING_SPEC,
+            DEV_SPEC,
+        ]
 
-        click.echo("🔄 Normalizing system files...")
-        for file_to_normalize in special_files:
-            normalize_system_file(
-                agent=ctx.obj["agent"],
-                input_file=special_files[file_to_normalize],
-                auto_overwrite=yes,
-                caffeinate=ctx.obj.get("caffeinate", False),
-                stream=ctx.obj.get("stream", False),
-                debug=debug,
+        # Pre-check system files status
+        to_normalize = []
+        already_up_to_date = []
+        for spec_path in system_specs:
+            if not spec_path.exists():
+                continue
+            
+            stem = spec_path.stem
+            clean_stem = re.sub(r"[- ]", "_", stem.lower())
+            output_path = VIBE_PROJECT_DIR / f"{clean_stem}.yaml"
+            
+            if not output_path.exists():
+                to_normalize.append(spec_path)
+                continue
+                
+            md_hash = get_file_hash(spec_path)
+            try:
+                existing_data = safe_yaml_load(output_path.read_text())
+                if existing_data and isinstance(existing_data, dict):
+                    old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
+                    if old_hash == md_hash:
+                        already_up_to_date.append(spec_path)
+                    else:
+                        to_normalize.append(spec_path)
+                else:
+                    to_normalize.append(spec_path)
+            except Exception:
+                to_normalize.append(spec_path)
+
+        overwrite_mode = yes
+        if not to_normalize and already_up_to_date and not yes:
+            choice = click.prompt(
+                f"All {len(already_up_to_date)} system files are up-to-date. Reprocess? [y]es, [n]o, [a]sk per file",
+                type=click.Choice(["y", "n", "a"], case_sensitive=False),
+                default="n",
             )
+            if choice.lower() == "y":
+                to_normalize = already_up_to_date
+                overwrite_mode = True
+            elif choice.lower() == "a":
+                to_normalize = already_up_to_date
+                overwrite_mode = "ask"
+            else:
+                to_normalize = []
+
+        if to_normalize:
+            click.echo("🔄 Normalizing system files...")
+            for spec_path in to_normalize:
+                overwrite_mode = normalize_system_file(
+                    agent=ctx.obj["agent"],
+                    input_file=spec_path,
+                    auto_overwrite=overwrite_mode,
+                    caffeinate=ctx.obj.get("caffeinate", False),
+                    stream=ctx.obj.get("stream", False),
+                    debug=debug,
+                    force=True if (overwrite_mode is True or overwrite_mode == "yes") else False
+                )
+        else:
+            click.echo("✅ System files are up-to-date.")
+
         # No files specified, normalize all files in product/
         click.echo("🔄 Normalizing PRDs...")
         normalize_prd(
             agent=ctx.obj["agent"],
             input_file=None,
-            auto_overwrite=yes,
+            auto_overwrite=overwrite_mode,
             caffeinate=ctx.obj.get("caffeinate", False),
             stream=ctx.obj.get("stream", False),
             debug=debug,

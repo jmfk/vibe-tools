@@ -148,7 +148,7 @@ class OrderedGroup(click.Group):
 )
 @click.option(
     "--agent",
-    type=click.Choice(["cursor-agent", "claude", "antigravity"]),
+    type=click.Choice(["cursor-agent", "claude", "antigravity", "gemini"]),
     default="cursor-agent",
     help="Select the agent to use.",
 )
