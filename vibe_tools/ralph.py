@@ -54,6 +54,8 @@ from vibe_tools.utils import (
     safe_yaml_load,
     safe_yaml_dump,
     update_state_phase,
+    parse_prd_filename,
+    update_md_implementation_status,
 )
 
 MAX_ITERATIONS = 10
@@ -618,9 +620,16 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     review = ralph_config.get("review", True)
     tests = ralph_config.get("tests", True)
 
+    # Sort plans by their filename to respect the sequence
+    sorted_plan_ids = sorted(
+        plans_to_run.keys(),
+        key=lambda pid: pathlib.Path(plans_to_run[pid].get("file", pid)).name
+    )
+
     logger.info("📍 Starting Implementation Phase")
 
-    for plan_id, plan_info in plans_to_run.items():
+    for plan_id in sorted_plan_ids:
+        plan_info = plans_to_run[plan_id]
         # Check plan-level status and dependencies
         if plan_info.get("status") == "completed":
             continue
@@ -674,6 +683,60 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
         if plan_data is None:
             plan_data = {}
+
+        # RESCHEDULING LOGIC
+        dependencies = plan_data.get("DEPENDS_ON", [])
+        plan_filename = plan_yaml_path.name
+        parsed_current = parse_prd_filename(plan_filename)
+        
+        if parsed_current["format"] == "versioned":
+            max_later_dep_seq = 0
+            later_dep_id = None
+            
+            # Check if any dependencies are later in the backlog
+            current_idx = sorted_plan_ids.index(plan_id)
+            for later_plan_id in sorted_plan_ids[current_idx + 1:]:
+                # If this later plan is a dependency of the current one
+                if later_plan_id in dependencies or later_plan_id.replace("prd_", "") in dependencies:
+                    later_info = plans_to_run[later_plan_id]
+                    later_filename = pathlib.Path(later_info["file"]).name
+                    parsed_later = parse_prd_filename(later_filename)
+                    if parsed_later["sequence"]:
+                        if parsed_later["sequence"] > max_later_dep_seq:
+                            max_later_dep_seq = parsed_later["sequence"]
+                            later_dep_id = later_plan_id
+
+            if later_dep_id:
+                import shutil
+                # Dependency found LATER in the queue! We must reschedule.
+                new_seq = max_later_dep_seq + 5
+                version = parsed_current["version"]
+                clean_name = parsed_current["name"]
+                new_filename = f"v{version}-{new_seq:03d}_{clean_name}.yaml"
+                new_path = plan_yaml_path.parent / new_filename
+                
+                logger.warning(
+                    f"🔄 Rescheduling {plan_id} (seq {parsed_current['sequence']}) "
+                    f"because it depends on {later_dep_id} (seq {max_later_dep_seq}). "
+                    f"New sequence: {new_seq}"
+                )
+                
+                # Rename the file
+                shutil.move(str(plan_yaml_path), str(new_path))
+                
+                # Update MD frontmatter
+                md_path_str = plan_info.get("md_path")
+                if md_path_str:
+                    update_md_implementation_status(
+                        pathlib.Path(md_path_str),
+                        version,
+                        new_seq,
+                        new_path
+                    )
+                
+                # Reload state and restart the implementation loop to reflect changes
+                logger.info("♻️ Restarting implementation loop after rescheduling...")
+                return implementation_loop(agent, stream=stream)
 
         title = plan_info.get(
             "title", plan_id.replace("prd_", "").replace("_", " ").title()

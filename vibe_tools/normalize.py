@@ -29,6 +29,8 @@ from vibe_tools.utils import (
     switch_to_main,
     safe_yaml_load,
     safe_yaml_dump,
+    parse_prd_filename,
+    update_md_implementation_status,
 )
 
 DEFAULT_SPECS_DIR = pathlib.Path("product")
@@ -92,7 +94,7 @@ def normalize_prd(
     # Only prompt for global overwrite when normalizing all files (not specific files)
     overwrite_mode = "yes" if auto_overwrite else "ask"
     if not input_file:  # Only when normalizing all files
-        existing_prds = list(PRD_PROCESSING_DIR.rglob("prd_*.yaml"))
+        existing_prds = list(PRD_PROCESSING_DIR.rglob("prd_*.yaml")) + list(PRD_PROCESSING_DIR.rglob("v*-*_*.yaml"))
         if existing_prds and not auto_overwrite and sys.stdin.isatty():
             choice = click.prompt(
                 f"Found {len(existing_prds)} existing files in {PRD_PROCESSING_DIR}/. Overwrite? [y]es, [n]o, [a]sk per file",
@@ -171,11 +173,46 @@ def normalize_prd(
             # PRDs go to the calculated target base (implementation/prds/category/)
             target_prd_dir = target_base / rel_dir
             target_prd_dir.mkdir(parents=True, exist_ok=True)
-            output_filename = f"prd_{clean_stem}.yaml"
-            output_path = target_prd_dir / output_filename
+            
+            # Check if MD already has an implementation ID
+            md_content = spec_path.read_text()
+            implementation_id = None
+            if md_content.startswith("---"):
+                parts = md_content.split("---", 2)
+                if len(parts) >= 3:
+                    fm = safe_yaml_load(parts[1]) or {}
+                    implementation_id = fm.get("implementation", {}).get("id")
+
+            # Search for existing YAML file with this clean_stem (legacy or versioned)
+            existing_yaml = None
+            search_dirs = [PRD_PROCESSING_DIR, PRD_DONE_DIR, PRD_FAILED_DIR]
+            for sd in search_dirs:
+                if not sd.exists(): continue
+                # Legacy check
+                leg = sd / f"prd_{clean_stem}.yaml"
+                if leg.exists():
+                    existing_yaml = leg
+                    break
+                # Versioned check
+                ver_files = list(sd.glob(f"v*-*_{clean_stem}.yaml"))
+                if ver_files:
+                    existing_yaml = ver_files[0]
+                    break
+
+            if existing_yaml:
+                output_path = existing_yaml
+                output_filename = existing_yaml.name
+            elif implementation_id:
+                # Use ID from frontmatter if YAML missing
+                output_filename = f"{implementation_id}_{clean_stem}.yaml"
+                output_path = target_prd_dir / output_filename
+            else:
+                # Truly new PRD
+                output_filename = f"PENDING_{clean_stem}.yaml"
+                output_path = target_prd_dir / output_filename
 
         # Optimization: Skip if YAML is newer than the source MD
-        if output_path.exists():
+        if output_path.exists() and not output_filename.startswith("PENDING_"):
             if overwrite_mode == "no":
                 print(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
                 continue
@@ -264,6 +301,49 @@ def normalize_prd(
                     data["DEPENDS_ON"] = data.get("DEPENDS_ON", [])
                     data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
                     data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
+
+                    # SCHEDULING LOGIC
+                    if output_filename.startswith("PENDING_"):
+                        state = load_project_state()
+                        version = state.get("current_version", "01")
+                        
+                        # Calculate sequence based on dependencies
+                        dependencies = data.get("DEPENDS_ON", [])
+                        max_dep_seq = 0
+                        
+                        # Look up dependency sequences in existing plans
+                        plans = state.get("plans", {})
+                        for dep_id in dependencies:
+                            # dep_id could be 'prd_name' or 'vXX-XXX_name' or just 'name'
+                            dep_info = plans.get(dep_id)
+                            if not dep_info:
+                                # Try with prd_ prefix
+                                dep_info = plans.get(f"prd_{dep_id}")
+                            
+                            if dep_info:
+                                dep_filename = pathlib.Path(dep_info["file"]).name
+                                parsed = parse_prd_filename(dep_filename)
+                                if parsed["sequence"]:
+                                    max_dep_seq = max(max_dep_seq, parsed["sequence"])
+                        
+                        # New sequence is either max(deps) + 10 or next_sequence
+                        next_seq = max(max_dep_seq + 10, state.get("next_sequence", 10))
+                        
+                        # Update state
+                        state["next_sequence"] = next_seq + 10
+                        save_project_state(state)
+                        
+                        # Set final filename
+                        output_filename = f"v{version}-{next_seq:03d}_{clean_stem}.yaml"
+                        output_path = target_prd_dir / output_filename
+                        
+                        # Update MD frontmatter
+                        update_md_implementation_status(
+                            spec_path, 
+                            version, 
+                            next_seq, 
+                            output_path
+                        )
 
                 clean_output = safe_yaml_dump(data)
             except yaml.YAMLError as e:
