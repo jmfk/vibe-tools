@@ -1,3 +1,4 @@
+import datetime
 import pathlib
 import re
 import sys
@@ -18,6 +19,7 @@ from vibe_tools.utils import (
     PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
     get_agent_command,
+    get_file_hash,
     get_main_branch,
     get_prompt,
     is_dirty,
@@ -79,21 +81,27 @@ def normalize_prd(
             sys.exit(1)
         files_to_process = [(path, path.read_text(), path.stat().st_mtime)]
     else:
-        # ONLY normalize from the backlog directory
-        if not PLANNING_BACKLOG_DIR.exists():
-            print(f"❌ Backlog directory not found: {PLANNING_BACKLOG_DIR}/.")
-            print("   Run 'vibe pm' or 'vibe architect' to create PRDs first.")
-            return
+        # Collect from product root first (system files)
+        if specs_dir.exists():
+            for path in specs_dir.glob("*.md"):
+                try:
+                    files_to_process.append((path, path.read_text(), path.stat().st_mtime))
+                except Exception as e:
+                    print(f"⚠️  Warning: Could not read {path}: {e}")
 
-        # Find all markdown files in backlog and subdirectories
-        for path in PLANNING_BACKLOG_DIR.rglob("*.md"):
-            try:
-                files_to_process.append((path, path.read_text(), path.stat().st_mtime))
-            except Exception as e:
-                print(f"⚠️  Warning: Could not read {path}: {e}")
+        # Then collect from backlog
+        if PLANNING_BACKLOG_DIR.exists():
+            for path in PLANNING_BACKLOG_DIR.rglob("*.md"):
+                try:
+                    # Avoid duplicates if root and backlog overlap
+                    if any(p[0] == path for p in files_to_process):
+                        continue
+                    files_to_process.append((path, path.read_text(), path.stat().st_mtime))
+                except Exception as e:
+                    print(f"⚠️  Warning: Could not read {path}: {e}")
 
         if not files_to_process:
-            print(f"❌ No markdown specs found in {PLANNING_BACKLOG_DIR}/.")
+            print(f"❌ No markdown specs found in {specs_dir}/ or {PLANNING_BACKLOG_DIR}/.")
             return
 
     # Check for existing normalized files
@@ -222,6 +230,20 @@ def normalize_prd(
                 output_filename = f"PENDING_{clean_stem}.yaml"
                 output_path = target_prd_dir / output_filename
 
+        # Hashing and Change Detection
+        md_hash = get_file_hash(spec_path)
+        if output_path.exists():
+            try:
+                existing_data = safe_yaml_load(output_path.read_text())
+                if existing_data and isinstance(existing_data, dict):
+                    old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
+                    if old_hash and old_hash != md_hash:
+                        if not auto_overwrite and sys.stdin.isatty():
+                            if not click.confirm(f"⚠️  {spec_path.name} has changed. Update {output_path.name}?", default=True):
+                                continue
+            except Exception as e:
+                logger.warning(f"Could not read existing hash from {output_path}: {e}")
+
         # Optimization: Skip if YAML is newer than the source MD
         if output_path.exists() and not output_filename.startswith("PENDING_"):
             if overwrite_mode == "no":
@@ -299,64 +321,13 @@ def normalize_prd(
                     lines = lines[:-1]
                 clean_output = "\n".join(lines).strip()
 
+            data = None
             try:
                 # Validate and re-dump to ensure valid YAML formatting and proper quoting
                 data = safe_yaml_load(clean_output)
                 if data is None or not isinstance(data, dict):
                     # If it's not a dict, it might have failed to extract correctly
                     raise yaml.YAMLError("Output is not a valid YAML dictionary")
-
-                # Inject plan metadata if it's a PRD
-                if clean_stem not in global_truths:
-                    data["TITLE"] = data.get("TITLE", clean_stem.replace("_", " ").title())
-                    data["DEPENDS_ON"] = data.get("DEPENDS_ON", [])
-                    data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
-                    data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
-
-                    # SCHEDULING LOGIC
-                    if output_filename.startswith("PENDING_"):
-                        state = load_project_state()
-                        version = state.get("current_version", "01")
-                        
-                        # Calculate sequence based on dependencies
-                        dependencies = data.get("DEPENDS_ON", [])
-                        max_dep_seq = 0
-                        
-                        # Look up dependency sequences in existing plans
-                        plans = state.get("plans", {})
-                        for dep_id in dependencies:
-                            # dep_id could be 'prd_name' or 'vXX-XXX_name' or just 'name'
-                            dep_info = plans.get(dep_id)
-                            if not dep_info:
-                                # Try with prd_ prefix
-                                dep_info = plans.get(f"prd_{dep_id}")
-                            
-                            if dep_info:
-                                dep_filename = pathlib.Path(dep_info["file"]).name
-                                parsed = parse_prd_filename(dep_filename)
-                                if parsed["sequence"]:
-                                    max_dep_seq = max(max_dep_seq, parsed["sequence"])
-                        
-                        # New sequence is either max(deps) + 10 or next_sequence
-                        next_seq = max(max_dep_seq + 10, state.get("next_sequence", 10))
-                        
-                        # Update state
-                        state["next_sequence"] = next_seq + 10
-                        save_project_state(state)
-                        
-                        # Set final filename
-                        output_filename = f"v{version}-{next_seq:03d}_{clean_stem}.yaml"
-                        output_path = target_prd_dir / output_filename
-                        
-                        # Update MD frontmatter
-                        update_md_implementation_status(
-                            spec_path, 
-                            version, 
-                            next_seq, 
-                            output_path
-                        )
-
-                clean_output = safe_yaml_dump(data)
             except yaml.YAMLError as e:
                 logger.warning(f"⚠️ Invalid YAML generated for {spec_path.name}: {e}")
                 print(f"🔄 Attempting to fix YAML for {spec_path.name} using Gemini...")
@@ -421,13 +392,74 @@ Ensure all string values with special characters are properly quoted.
                         print(data)
                         print("--- END DEBUG ---\n")
 
-                    clean_output = safe_yaml_dump(data)
                     print(f"✅ Successfully fixed YAML for {spec_path.name}")
                 except Exception as fix_err:
                     logger.error(f"❌ Failed to fix YAML: {fix_err}")
                     print(
                         f"⚠️ Warning: Generated YAML for {spec_path.name} is still invalid. Saving as-is for manual fix."
                     )
+                    # We'll try to save whatever we have
+                    data = safe_yaml_load(clean_output) or {}
+
+            # Inject metadata and perform scheduling
+            if data is not None and isinstance(data, dict):
+                # Inject metadata
+                if "METADATA" not in data:
+                    data["METADATA"] = {}
+                data["METADATA"]["SOURCE_HASH"] = md_hash
+                data["METADATA"]["NORMALIZED_AT"] = datetime.datetime.now().isoformat()
+
+                # Inject plan metadata if it's a PRD
+                if clean_stem not in global_truths:
+                    data["TITLE"] = data.get("TITLE", clean_stem.replace("_", " ").title())
+                    data["DEPENDS_ON"] = data.get("DEPENDS_ON", [])
+                    data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
+                    data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
+
+                    # SCHEDULING LOGIC
+                    if output_filename.startswith("PENDING_"):
+                        state = load_project_state()
+                        version = state.get("current_version", "01")
+                        
+                        # Calculate sequence based on dependencies
+                        dependencies = data.get("DEPENDS_ON", [])
+                        max_dep_seq = 0
+                        
+                        # Look up dependency sequences in existing plans
+                        plans = state.get("plans", {})
+                        for dep_id in dependencies:
+                            # dep_id could be 'prd_name' or 'vXX-XXX_name' or just 'name'
+                            dep_info = plans.get(dep_id)
+                            if not dep_info:
+                                # Try with prd_ prefix
+                                dep_info = plans.get(f"prd_{dep_id}")
+                            
+                            if dep_info:
+                                dep_filename = pathlib.Path(dep_info["file"]).name
+                                parsed = parse_prd_filename(dep_filename)
+                                if parsed["sequence"]:
+                                    max_dep_seq = max(max_dep_seq, parsed["sequence"])
+                        
+                        # New sequence is either max(deps) + 10 or next_sequence
+                        next_seq = max(max_dep_seq + 10, state.get("next_sequence", 10))
+                        
+                        # Update state
+                        state["next_sequence"] = next_seq + 10
+                        save_project_state(state)
+                        
+                        # Set final filename
+                        output_filename = f"v{version}-{next_seq:03d}_{clean_stem}.yaml"
+                        output_path = target_prd_dir / output_filename
+                        
+                        # Update MD frontmatter
+                        update_md_implementation_status(
+                            spec_path, 
+                            version, 
+                            next_seq, 
+                            output_path
+                        )
+
+                clean_output = safe_yaml_dump(data)
 
             output_path.write_text(clean_output)
             logger.info(f"✅ Saved normalized PRD to: {output_path}")
