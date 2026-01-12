@@ -280,6 +280,7 @@ def get_prompt(filename: str) -> str:
 
     # 2. Fallback to package TEMPLATES
     from vibe_tools.templates import TEMPLATES
+
     if filename in TEMPLATES:
         return TEMPLATES[filename]
 
@@ -752,7 +753,9 @@ def check_env_health() -> bool:
             continue
 
     if not package_found:
-        logger.warning("❌ No project package found (backend, src, or project_name). Project structure may be broken.")
+        logger.warning(
+            "❌ No project package found (backend, src, or project_name). Project structure may be broken."
+        )
         # We don't return False here yet as it might be a fresh project
     else:
         logger.debug("✅ Project package structure verified.")
@@ -763,7 +766,9 @@ def check_env_health() -> bool:
         if venv_name:
             current_prefix = sys.prefix
             if venv_name not in current_prefix:
-                logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
+                logger.warning(
+                    f"⚠️  Managed environment '{venv_name}' is configured but not active."
+                )
                 logger.warning(f"   Current environment: {current_prefix}")
                 return False
             logger.debug(f"✅ Running in managed environment: {venv_name}")
