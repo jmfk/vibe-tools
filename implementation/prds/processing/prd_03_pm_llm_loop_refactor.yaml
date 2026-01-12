@@ -1,39 +1,32 @@
-SYSTEM_CONTRACT:
-  PROBLEM_STATEMENT: The current vibe pm script relies on a standard agent call pattern that is slower and lacks real-time interactivity.
-  PERFORMANCE: LLM starts streaming responses within <1 second of command submission.
-  CONSTRAINTS:
-  - Async implementation using asyncio for non-blocking UI and background LLM processing
-  - StreamingLLM client returning async generator of chunks
-  - MessageQueue class tracking state (IDLE vs. BUSY)
-  - Signal handling for Ctrl-C to interrupt stream without exiting shell
-  - Use gemini-2.0-flash-exp (aliased as gemini-3-flash)
+SYSTEM_CONTRACT: MISSING
 DOMAIN_MODEL:
-  CLASSES:
-    InteractivePM: asyncio refactored class
-    StreamingLLM: async generator of chunks
-    MessageQueue: FIFO queue of prompts; manages IDLE vs. BUSY state
-  COMMANDS:
-  - 'Ctrl-C: Interrupt current LLM generation'
-  - 'Ctrl-Q: (Optional/Configurable) Clear the current queue'
-  - 'Stop: explicit command or key combo to stop current question/response'
-  - '/push: command or flag to stop current LLM task and start processing new one immediately'
-  - '/queue: view and remove items from pending queue'
+- message: A message to be processed by the LLM.
+- queue: A list of messages to be processed by the LLM in order.
 CAPABILITIES:
-- direct, high-performance LLM loop integration optimized for Gemini 3 Flash
-- real-time streaming of LLM responses in interactive shell while maintaining terminal styling
-- Ctrl commands to interrupt LLM
-- message queuing system for processing prompts in order
-- queuing messages while LLM is busy
-- canceling queued messages
-- pushing a message to replace current query immediately
-- sequential execution of queued messages
+- Direct LLM Loop Integration:
+  - Move from `cursor-agent` wrapper to a direct `run_llm` style loop optimized for
+    Gemini 3 Flash.
+  - Use `gemini-2.0-flash-exp` (aliased as `gemini-3-flash`) for the fastest possible
+    response times.
+- Streaming Response:
+  - The interactive shell should display characters as they are received from the
+    LLM.
+  - Maintain terminal styling while streaming.
+- Advanced Interaction Controls (Ctrl Commands):
+  - Ctrl-C: Interrupt current LLM generation.
+  - Ctrl-Q: (Optional/Configurable) Clear the current queue.
+  - Stop: Explicit command or key combo to stop the current question/response.
+- Message Queuing System:
+  - Interruption: If the LLM is busy, new messages are added to the queue by default.
+  - Push: A special command or flag (e.g., `/push` or a modifier) that stops the current
+      LLM task and starts processing the new one immediately.
+  - Cancellation: Ability to view and remove items from the pending queue.
 OUTPUT_TARGETS:
-- interactive shell
-_vibe_sync:
-  issue_number: 11
-  last_synced_at: '2026-01-10T17:22:16.395443'
-  sync_hash: 2ee8d27f79f3ac39abcb8e3816f85c67c9dfe0c23da70bb6d077bf3593624e61
-TITLE: 03 PM LLM Loop Refactor
+- The interactive shell should display characters as they are received from the LLM.
+METADATA:
+  SOURCE_HASH: 61b610c95676f50ec9b69465565bcda438c594f755ac83d75920d04595393e9f
+  NORMALIZED_AT: '2026-01-12T16:59:05.380531'
+TITLE: 03 Pm Llm Loop Refactor
 DEPENDS_ON: []
-BRANCH: staging
-PARENT_BRANCH: staging
+BRANCH: feature/03_pm_llm_loop_refactor
+PARENT_BRANCH: main
