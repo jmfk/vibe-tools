@@ -111,9 +111,15 @@ def get_last_commit_hash() -> Optional[str]:
 
 
 def run_command(
-    command: List[str], cwd: Optional[str] = None, check: bool = True
+    command: List[str],
+    cwd: Optional[str] = None,
+    check: bool = True,
+    caffeinate: bool = False,
 ) -> (str, int):
     """Runs a shell command and returns its stdout and exit code."""
+    if caffeinate and sys.platform == "darwin":
+        command = ["caffeinate", "-i"] + command
+
     try:
         result = subprocess.run(
             command,
@@ -124,7 +130,7 @@ def run_command(
         )
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
-        return e.stdout + e.stderr, e.returncode
+        return (e.stdout or "") + (e.stderr or ""), e.returncode
     except FileNotFoundError as e:
         return str(e), 127
 
@@ -382,7 +388,7 @@ def run_agent(
                     event_type = data.get("type")
                     subtype = data.get("subtype")
                     # print(f"Agent data: {json.dumps(data, indent=2)}")
-                    print(f"Event type: {event_type}, Subtype: {subtype}")
+                    # print(f"\nEvent type: {event_type}, Subtype: {subtype}", flush=True)
                     if event_type == "assistant":
                         # Extract partial text if available, otherwise complete message
                         message = data.get("message", {})
@@ -391,7 +397,7 @@ def run_agent(
                             if content.get("type") == "text":
                                 text = content.get("text", "")
                                 if text:
-                                    print(text, end="", flush=True)
+                                    print(text, flush=True)
                                     accumulated_assistant_text.append(text)
 
                     elif event_type == "tool_call":
@@ -399,28 +405,35 @@ def run_agent(
                             tool_call = data.get("tool_call", {})
                             if "readToolCall" in tool_call:
                                 path = tool_call["readToolCall"]["args"].get("path")
-                                print(f"\n📖 Reading: {path}", flush=True)
+                                print(f"📖 Reading: {path}", flush=True)
                             elif "writeToolCall" in tool_call:
                                 path = tool_call["writeToolCall"]["args"].get("path")
-                                print(f"\n🔧 Writing: {path}", flush=True)
+                                print(f"🔧 Writing: {path}", flush=True)
                             elif "function" in tool_call:
                                 name = tool_call["function"].get("name")
-                                print(f"\n🛠️ Calling tool: {name}", flush=True)
+                                arguments = tool_call["function"].get("arguments")
+                                print(
+                                    f"🛠️ Calling tool: {name} ({arguments})",
+                                    flush=True,
+                                )
 
                     elif event_type == "thinking":
                         text = data.get("text", "<no text>")
-                        print(f"Thinking:")
-                        print(f"{text}")
+                        print(f"🤔 Thinking:\n{text}", flush=True)
 
                     elif event_type == "result":
                         if subtype == "success":
                             # The 'result' field in success event contains the full concatenated text
                             full_result = data.get("result", "")
-                            print(f"Full result: {full_result}")
+                            print(f"Full result: {full_result}", flush=True)
                             # We don't print it again as we've been streaming deltas
                             # but we return it as the final output
                             output = [full_result]
-                    print("--------------------------------")
+                    else:
+                        print(
+                            f"🚫 Unknown event type: {event_type}, Subtype: {subtype}",
+                            flush=True,
+                        )
 
                 except json.JSONDecodeError:
                     # Not JSON, might be raw output or error
