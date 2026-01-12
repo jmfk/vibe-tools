@@ -98,8 +98,14 @@ GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
 @functools.lru_cache(maxsize=1)
 def is_git_repo():
     """Checks if the current directory is a git repository."""
-    _, code = run_command(["git", "rev-parse", "--is-inside-work-tree"], check=False)
-    return code == 0
+    try:
+        curr = pathlib.Path.cwd()
+        for parent in [curr] + list(curr.parents):
+            if (parent / ".git").exists():
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def get_last_commit_hash() -> Optional[str]:
@@ -131,7 +137,7 @@ def run_command(
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
         return (e.stdout or "") + (e.stderr or ""), e.returncode
-    except FileNotFoundError as e:
+    except (FileNotFoundError, OSError) as e:
         return str(e), 127
 
 
@@ -300,6 +306,11 @@ def set_console_level(level: int):
             if isinstance(handler, logging.StreamHandler):
                 handler.setLevel(level)
 
+    # Also ensure the logger itself allows this level
+    logger = logging.getLogger("vibe_tools")
+    if logger.level > level:
+        logger.setLevel(level)
+
 
 def enable_console_debug():
     """Enables DEBUG level logging for the console handler."""
@@ -307,6 +318,7 @@ def enable_console_debug():
 
 
 logger = logging.getLogger("vibe_tools")
+LOG_FILE = LOGS_DIR / "vibe.log"
 
 
 def get_prompt(filename: str) -> str:
@@ -411,10 +423,12 @@ def run_agent(
                                         "path"
                                     )
                                     print(f"🔧 Writing: {path}", flush=True)
+                                elif "editToolCall" in tool_call:
+                                    path = tool_call["editToolCall"]["args"].get("path")
+                                    print(f"🔧 Editing: {path}", flush=True)
+
                                 elif "lsToolCall" in tool_call:
-                                    commandText = tool_call["lsToolCall"]["args"].get(
-                                        "path"
-                                    )
+                                    path = tool_call["lsToolCall"]["args"].get("path")
                                     print(f"🔧 List Directory: {path}", flush=True)
                                 elif "shellToolCall" in tool_call:
                                     commandText = tool_call["shellToolCall"][
@@ -462,32 +476,72 @@ def run_agent(
                                 tool_call = data.get("tool_call", {})
                                 if "readToolCall" in tool_call:
                                     result = tool_call.get("result", {})
-                                    print(f"📖 Reading Done: {result}", flush=True)
+                                    success = result.get("success", None)
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"📖 Reading Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Reading Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
                                 elif "writeToolCall" in tool_call:
                                     result = tool_call.get("result", {})
-                                    print(f"🔧 Writing Done: {result}", flush=True)
+                                    success = result.get("success", {})
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"🔧 Writing Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Writing Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
+                                elif "editToolCall" in tool_call:
+                                    result = tool_call.get("result", {})
+                                    success = result.get("success", {})
+                                    if success:
+                                        message = success.get("message", "")
+                                        print(f"🔧 Editing Done: {message}", flush=True)
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Editing Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
                                 elif "lsToolCall" in tool_call:
                                     result = tool_call.get("result", {})
                                     success = result.get("success", {})
-                                    directoryTreeRoot = success.get(
-                                        "directoryTreeRoot", {}
-                                    )
-                                    numFiles = directoryTreeRoot.get("numFiles", {})
-                                    print(
-                                        f"🔧 List Directory Done: {numFiles} files found",
-                                        flush=True,
-                                    )
+                                    if success:
+                                        directoryTreeRoot = success.get(
+                                            "directoryTreeRoot", {}
+                                        )
+                                        numFiles = directoryTreeRoot.get("numFiles", {})
+                                        print(
+                                            f"🔧 List Directory Done: {numFiles} files found",
+                                            flush=True,
+                                        )
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 List Directory Error: {json.dumps(failure, indent=2)}",
+                                            flush=True,
+                                        )
                                 elif "shellToolCall" in tool_call:
                                     result = tool_call.get("result", {})
                                     success = result.get("success", {})
                                     if success:
                                         commandText = result.get("success", "")
                                         executionTime = result.get("executionTime", "")
-                                        # print(f"🔧 Command Done: {commandText} in {executionTime} ms", flush=True)
-                                    else:
-                                        commandText = result.get("error", "")
                                         print(
-                                            f"🚫 Command Error: {commandText}",
+                                            f"🔧 Command Done: {commandText} in {executionTime} ms",
+                                            flush=True,
+                                        )
+                                    else:
+                                        failure = result.get("failure", {})
+                                        print(
+                                            f"🚫 Command Error: {json.dumps(failure, indent=2)}",
                                             flush=True,
                                         )
                                 elif "updateTodosToolCall" in tool_call:
