@@ -358,7 +358,7 @@ def run_agent(
     is_cursor_agent = command[0] == "agent" or (
         len(command) > 2 and command[2] == "agent"
     )
-    print(f"Running agent command: {command}")
+    # print(f"Running agent command: {command}")
     if stream or is_cursor_agent:
         process = subprocess.Popen(
             command,
@@ -381,7 +381,8 @@ def run_agent(
                     data = json.loads(line)
                     event_type = data.get("type")
                     subtype = data.get("subtype")
-                    print(f"Agent data: {json.dumps(data, indent=2)}")
+                    # print(f"Agent data: {json.dumps(data, indent=2)}")
+                    print(f"Event type: {event_type}, Subtype: {subtype}")
                     if event_type == "assistant":
                         # Extract partial text if available, otherwise complete message
                         message = data.get("message", {})
@@ -406,13 +407,20 @@ def run_agent(
                                 name = tool_call["function"].get("name")
                                 print(f"\n🛠️ Calling tool: {name}", flush=True)
 
+                    elif event_type == "thinking":
+                        text = data.get("text", "<no text>")
+                        print(f"Thinking:")
+                        print(f"{text}")
+
                     elif event_type == "result":
                         if subtype == "success":
                             # The 'result' field in success event contains the full concatenated text
                             full_result = data.get("result", "")
+                            print(f"Full result: {full_result}")
                             # We don't print it again as we've been streaming deltas
                             # but we return it as the final output
                             output = [full_result]
+                    print("--------------------------------")
 
                 except json.JSONDecodeError:
                     # Not JSON, might be raw output or error
