@@ -307,13 +307,22 @@ def get_prompt(filename: str) -> str:
 def get_agent_command(agent: str, prompt: str) -> List[str]:
     """Constructs the command to invoke the specified AI agent."""
     if agent == "cursor-agent":
-        return ["echo", "CURSOR_AGENT_INVOCATION", prompt]
+        config = load_config()
+        agent_config = config.get("agent", {})
+        force = agent_config.get("force", True)
+
+        cmd = ["agent", "-p"]
+        if force:
+            cmd.append("--force")
+
+        cmd.extend(
+            ["--output-format", "stream-json", "--stream-partial-output", prompt]
+        )
+        return cmd
     elif agent == "claude":
         return ["claude", "-p", prompt]
     elif agent == "antigravity":
         return ["antigravity", "-p", prompt]
-    elif agent == "gemini":
-        return ["echo", "GEMINI_AGENT_INVOCATION", prompt]
     return ["echo", "UNKNOWN_AGENT", prompt]
 
 
@@ -324,7 +333,11 @@ def run_agent(
     if caffeinate:
         command = ["caffeinate", "-i"] + command
 
-    if stream:
+    is_cursor_agent = command[0] == "agent" or (
+        len(command) > 2 and command[2] == "agent"
+    )
+
+    if stream or is_cursor_agent:
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
@@ -334,11 +347,67 @@ def run_agent(
             universal_newlines=True,
         )
         output = []
+        accumulated_assistant_text = []
+
         for line in process.stdout:
-            print(line, end="")
-            output.append(line)
+            line = line.strip()
+            if not line:
+                continue
+
+            if is_cursor_agent:
+                try:
+                    data = json.loads(line)
+                    event_type = data.get("type")
+                    subtype = data.get("subtype")
+
+                    if event_type == "assistant":
+                        # Extract partial text if available, otherwise complete message
+                        message = data.get("message", {})
+                        content_list = message.get("content", [])
+                        for content in content_list:
+                            if content.get("type") == "text":
+                                text = content.get("text", "")
+                                if text:
+                                    print(text, end="", flush=True)
+                                    accumulated_assistant_text.append(text)
+
+                    elif event_type == "tool_call":
+                        if subtype == "started":
+                            tool_call = data.get("tool_call", {})
+                            if "readToolCall" in tool_call:
+                                path = tool_call["readToolCall"]["args"].get("path")
+                                print(f"\n📖 Reading: {path}", flush=True)
+                            elif "writeToolCall" in tool_call:
+                                path = tool_call["writeToolCall"]["args"].get("path")
+                                print(f"\n🔧 Writing: {path}", flush=True)
+                            elif "function" in tool_call:
+                                name = tool_call["function"].get("name")
+                                print(f"\n🛠️ Calling tool: {name}", flush=True)
+
+                    elif event_type == "result":
+                        if subtype == "success":
+                            # The 'result' field in success event contains the full concatenated text
+                            full_result = data.get("result", "")
+                            # We don't print it again as we've been streaming deltas
+                            # but we return it as the final output
+                            output = [full_result]
+
+                except json.JSONDecodeError:
+                    # Not JSON, might be raw output or error
+                    print(line)
+                    output.append(line + "\n")
+            else:
+                # Regular non-JSON streaming
+                print(line)
+                output.append(line + "\n")
+
         process.wait()
-        return "".join(output), process.returncode
+        final_output = (
+            "".join(output)
+            if not is_cursor_agent
+            else (output[0] if output else "".join(accumulated_assistant_text))
+        )
+        return final_output, process.returncode
     else:
         return run_command(command, check=False)
 
@@ -1512,6 +1581,7 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
     """Runs an LLM call using the google-genai library."""
     try:
         from google import genai
+
         api_key = get_google_api_key()
         if not api_key:
             logger.error("GOOGLE_API_KEY not found. Please run `vibe config api`.")
@@ -1522,7 +1592,7 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
             model = "gemini-2.0-flash-exp"
 
         client = genai.Client(api_key=api_key)
-        
+
         if debug:
             print(f"\n--- DEBUG: LLM PROMPT ({model}) ---")
             print(prompt)
@@ -1532,12 +1602,12 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
             model=model,
             contents=prompt,
         )
-        
+
         if debug:
             print("\n--- DEBUG: LLM RESPONSE ---")
             print(response.text)
             print("--- END DEBUG ---\n")
-            
+
         return response.text
     except Exception as e:
         logger.error(f"Error in run_llm: {e}")

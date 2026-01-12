@@ -1012,11 +1012,8 @@ def scaffold(ctx):
         click.echo("🔄 Normalizing dev_environment.md to dev_environment.yaml...")
 
         normalize_prd(
-            agent=agent,
             input_file=str(DEV_SPEC),
             auto_overwrite=True,
-            caffeinate=caffeinate,
-            stream=stream,
         )
 
         if DEV_ENV.exists():

@@ -38,11 +38,8 @@ def register_infra(cli):
                 # infrastructure.md exists but not normalized - auto-normalize it
                 click.echo(f"📝 {INFRA_SPEC} found but not normalized. Normalizing...")
                 normalize_prd(
-                    agent=ctx.obj.get("agent", "cursor-agent"),
                     input_file=str(INFRA_SPEC),
                     auto_overwrite=True,
-                    caffeinate=ctx.obj.get("caffeinate", False),
-                    stream=ctx.obj.get("stream", False),
                 )
                 if not INFRA.exists():
                     click.echo(
@@ -59,11 +56,8 @@ def register_infra(cli):
                 )
                 if INFRA_SPEC.exists():
                     normalize_prd(
-                        agent=ctx.obj.get("agent", "cursor-agent"),
                         input_file=str(INFRA_SPEC),
                         auto_overwrite=True,
-                        caffeinate=ctx.obj.get("caffeinate", False),
-                        stream=ctx.obj.get("stream", False),
                     )
                 else:
                     click.echo(
