@@ -101,7 +101,9 @@ def _run_normalization_agent(
 
     # If it's the placeholder, we shouldn't try to parse it as YAML
     if "CURSOR_AGENT_INVOCATION" in clean_output:
-        logger.warning("⚠️  Cursor agent placeholder detected. Normalization not performed.")
+        logger.warning(
+            "⚠️  Cursor agent placeholder detected. Normalization not performed."
+        )
         return {"METADATA": {"STATUS": "placeholder"}}, 0
 
     data = None
@@ -191,17 +193,17 @@ def normalize_system_file(
                 old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
                 if old_hash == md_hash:
                     if auto_overwrite == "ask":
-                         if not click.confirm(
+                        if not click.confirm(
                             f"⚠️  {path.name} is up-to-date. Reprocess anyway?",
                             default=False,
                         ):
-                             return auto_overwrite
+                            return auto_overwrite
                     else:
                         print(f"⏩ Skipping {path.name} (already up-to-date)")
                         return auto_overwrite
-                
+
                 if auto_overwrite is True or auto_overwrite == "yes":
-                    pass # Continue to normalization
+                    pass  # Continue to normalization
                 elif auto_overwrite == "no":
                     return auto_overwrite
                 elif sys.stdin.isatty():
@@ -245,7 +247,7 @@ def normalize_system_file(
         print(f"✅ Saved: {output_path}")
     else:
         print(f"❌ Failed to normalize {path.name}")
-    
+
     return auto_overwrite
 
 
@@ -431,7 +433,7 @@ def normalize_prd(
                         print(f"⏩ Skipping {spec_path.name} (already up-to-date)")
                         switch_to_main()
                         continue
-                    
+
                     if overwrite_mode == "yes":
                         pass
                     elif overwrite_mode == "no":
@@ -441,7 +443,9 @@ def normalize_prd(
                     elif sys.stdin.isatty():
                         choice = click.prompt(
                             f"⚠️  {spec_path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
-                            type=click.Choice(["y", "n", "a", "N"], case_sensitive=False),
+                            type=click.Choice(
+                                ["y", "n", "a", "N"], case_sensitive=False
+                            ),
                             default="y",
                         )
                         if choice.lower() == "a":
