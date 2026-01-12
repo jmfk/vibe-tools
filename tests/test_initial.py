@@ -1,4 +1,4 @@
 import pytest
 
 def test_initial():
-    assert True
+    assert 1 + 1 == 2
