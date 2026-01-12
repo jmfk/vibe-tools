@@ -762,11 +762,6 @@ def install_deps():
     if pathlib.Path("pyproject.toml").exists():
         click.echo("Found pyproject.toml. Installing in editable mode...")
         run_command(["pip", "install", "-e", "."], caffeinate=True)
-    elif pathlib.Path("backend/requirements.txt").exists():
-        click.echo("Found backend/requirements.txt. Installing...")
-        run_command(
-            ["pip", "install", "-r", "backend/requirements.txt"], caffeinate=True
-        )
     elif pathlib.Path("requirements.txt").exists():
         click.echo("Found requirements.txt. Installing...")
         run_command(["pip", "install", "-r", "requirements.txt"], caffeinate=True)

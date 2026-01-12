@@ -397,7 +397,7 @@ def run_agent(
                             if content.get("type") == "text":
                                 text = content.get("text", "")
                                 if text:
-                                    print(text, flush=True)
+                                    print(f"💬 {text}", flush=True)
                                     accumulated_assistant_text.append(text)
 
                     elif event_type == "tool_call":
@@ -418,14 +418,16 @@ def run_agent(
                                 )
 
                     elif event_type == "thinking":
-                        text = data.get("text", "<no text>")
-                        print(f"🤔 Thinking:\n{text}", flush=True)
+                        text = data.get("text", None)
+                        if text:
+                            print(f"🤔 Thinking:\n{text}", flush=True)
+                        else:
+                            print("...", flush=True)
 
                     elif event_type == "result":
                         if subtype == "success":
                             # The 'result' field in success event contains the full concatenated text
                             full_result = data.get("result", "")
-                            print(f"Full result: {full_result}", flush=True)
                             # We don't print it again as we've been streaming deltas
                             # but we return it as the final output
                             output = [full_result]
@@ -437,7 +439,7 @@ def run_agent(
 
                 except json.JSONDecodeError:
                     # Not JSON, might be raw output or error
-                    print(line)
+                    print("json.JSONDecodeError", flush=True)
                     output.append(line + "\n")
             else:
                 # Regular non-JSON streaming

@@ -88,7 +88,7 @@ def register_setup(cli):
         loop.instructions = [
             "Initialize or update the testing infrastructure for both frontend and backend.",
             "Ensure the Makefile has working 'test-backend' and 'test-frontend' targets that match the architecture.",
-            "Create dummy test files (e.g., backend/tests/test_initial.py, frontend/src/initial.test.ts) to verify the harness. Use explicit imports in frontend tests (import from 'vitest').",
+            "Create dummy test files (e.g., tests/test_initial.py, frontend/src/initial.test.ts) to verify the harness. Use explicit imports in frontend tests (import from 'vitest').",
             "Ensure test dependencies and scripts are present in pyproject.toml and package.json. For React 18, use @testing-library/react ^14 or ^15.",
         ]
 
