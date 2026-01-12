@@ -387,8 +387,7 @@ def run_agent(
                     data = json.loads(line)
                     event_type = data.get("type")
                     subtype = data.get("subtype")
-                    # print(f"Agent data: {json.dumps(data, indent=2)}")
-                    # print(f"\nEvent type: {event_type}, Subtype: {subtype}", flush=True)
+
                     if event_type == "assistant":
                         # Extract partial text if available, otherwise complete message
                         message = data.get("message", {})
@@ -416,6 +415,25 @@ def run_agent(
                                     f"🛠️ Calling tool: {name} ({arguments})",
                                     flush=True,
                                 )
+                            else:
+                                print(f"🚫 Tool Call Error: {data}", flush=True)
+                        else:
+                            tool_call = data.get("tool_call", {})
+                            if "readToolCall" in tool_call:
+                                result = tool_call.get("result", {})
+                                print(f"📖 Reading Done: {result}", flush=True)
+                            elif "writeToolCall" in tool_call:
+                                result = tool_call.get("result", {})
+                                print(f"🔧 Writingg Done: {result}", flush=True)
+                            elif "function" in tool_call:
+                                name = tool_call["function"].get("name")
+                                result = tool_call.get("result", {})
+                                print(
+                                    f"🛠️ Calling tool Done: {result}",
+                                    flush=True,
+                                )
+                            else:
+                                print(f"🚫 Tool Call Error: {data}", flush=True)
 
                     elif event_type == "thinking":
                         text = data.get("text", None)
@@ -443,10 +461,10 @@ def run_agent(
                     output.append(line + "\n")
             else:
                 # Regular non-JSON streaming
-                print(line)
+                # print(line)
                 output.append(line + "\n")
 
-        print(f"WAIT FOR END OF PROCESS")
+        print(f"WAIT FOR END OF PROCESS", flush=True)
         process.wait()
         final_output = (
             "".join(output)
