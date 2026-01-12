@@ -603,7 +603,7 @@ vibe --help
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
 - `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.
 - `vibe memory`: Save a global instruction ("memory") always sent to the agent.
-- `vibe remember`: Alias for `vibe memory`.
+- `vibe memory`: Save a global instruction.
 - `vibe history`: Check the status of all PRDs.
 - `vibe cost`: View total estimated cost of LLM usage.
 - `vibe config api`: Configure API keys for Google Gemini/DSPy.
@@ -672,7 +672,7 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
    - `infrastructure.md` -> `prds/infrastructure.yaml`
    - `cicd.md` -> `prds/cicd.yaml`
 3. **Convert specs into Ralph-ready PRDs.** Ralph only reads `prds/prd_*.yaml` for implement tasks. Transform each spec into a YAML file using `vibe normalize`. Global truths are converted without the `prd_` prefix and are used purely for context.
-4. **Global Agent Instructions.** Use `vibe remember` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
+4. **Global Agent Instructions.** Use `vibe memory` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
 5. **Understand the Ralph loop.** [DEPRECATED] `vibe ralph` reads the `prds/` directory, loads the global truth context files, and sequentially processes `prd_*.yaml` files. It prompts the agent until it emits `<promise>DONE</promise>` before moving on to quality gates.
 
 ## Development
