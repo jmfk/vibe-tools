@@ -1,50 +1,69 @@
-SYSTEM_CONTRACT:
-  INPUTS:
-  - PRD files in implementation/prds/
-  - PRD files in vibe-tools-prds/ (legacy)
-  - implementation/state.json (completed_prds)
-  - config.json (editor option)
-  - Subcommand (all, inbox, backlog, history, trash)
-  - PRD ID or partial name
-  - Search term
-  - Target folder
-  OUTPUTS:
-  - product/inbox/ directory
-  - product/backlog/ directory
-  - product/history/ directory
-  - product/trash/ directory
-  - Moved PRD files
-  - CLI list output (paged in batches of 10)
-  - Filtered CLI list output
-  - External editor process
-  CONSTRAINTS:
-  - Migration command must be idempotent.
-  - Implementation loop processes backlog in alphabetical order (supporting numeric prefixes).
-  - vibe i defaults to backlog if no subcommand provided.
+SYSTEM_CONTRACT: MISSING
 DOMAIN_MODEL:
-  PRD_STATUSES:
-  - inbox: New, un-triaged PRDs or suggestions.
-  - backlog: PRDs planned for implementation.
-  - history: Successfully implemented PRDs.
-  - trash: Dismissed or irrelevant PRDs.
-  CONFIGURATION_OPTIONS:
-  - editor: cursor, typora, code, vim, etc.
+- name: PRD
+  attributes:
+  - name: Status
+    possible_values:
+    - inbox
+    - backlog
+    - history
+    - trash
 CAPABILITIES:
-- Migration: Create product/ status directories and relocate existing PRDs based on state.json and legacy directory existence.
-- Viewing: List PRDs in status folders with batch paging (10 items) and filename search filtering.
-- Status Management: Move PRDs between status folders by ID/partial name; specialized dismiss shortcut for trash.
-- Editing: Open PRD file in configured external editor process.
-- Implementation Integration: implementation loop reads from product/backlog/ and moves files to product/history/ upon success.
-OUTPUT_TARGETS:
-- product/inbox/
-- product/backlog/
-- product/history/
-- product/trash/
-- vibe_tools configuration (config.json)
-_vibe_sync:
-  issue_number: 62
-  last_synced_at: '2026-01-10T17:22:14.346714'
-  sync_hash: 3b8fceffa5f863cc511f52c22ff6ade1e512a79da7ebf0335458ba50c8986706
-TITLE: 04 Workflow Enhancements
-BRANCH: feature/prd_04_prd_workflow_enhancements
+- name: PRD Migration
+  description: Transition existing projects to the new directory structure.
+  commands:
+  - name: vibe migrate
+    behavior:
+    - Creates the product/{inbox,backlog,history,trash} directories.
+    - Reads implementation/state.json to identify completed_prds and moves corresponding
+      files from implementation/prds/ to product/history/.
+    - Moves all other PRDs from implementation/prds/ to product/backlog/.
+    - If vibe-tools-prds/ exists (legacy), it should also be considered during migration.
+    idempotency: The command should be safe to run multiple times. It should skip
+      files already in the target directories.
+- name: PRD Management and Viewing
+  description: Hub for PRD management.
+  commands:
+  - name: vibe i [all|inbox|backlog|history|trash]
+    behavior:
+    - Lists PRDs in the specified folder (defaults to backlog if no subcommand is
+      provided).
+    - Paging: Display items in batches of 10.
+    - Search: Accepts an optional search term to filter results by filename.
+  - name: vibe implement move <id> <target_folder>
+    behavior:
+    - Moves a PRD (identified by ID or partial name) from its current folder to the
+      target folder.
+    supported_targets:
+    - inbox
+    - backlog
+    - history
+    - trash
+  - name: vibe implement dismiss <id>
+    behavior: Shortcut for vibe implement move <id> trash.
+  - name: vibe implement edit <id>
+    behavior: Opens the specified PRD in the configured editor.
+- name: Configuration
+  description: Configuration option for editor.
+  options:
+  - name: editor
+    possible_values:
+    - cursor
+    - typora
+    - code
+    - vim
+    - etc.
+    usage: When vibe implement edit is called, it spawns the configured editor process.
+- name: Implementation Loop Updates
+  description: MISSING
+  behavior:
+  - Look for machine-readable PRDs in product/backlog/.
+  - Upon successful implementation of a PRD, move the file from backlog/ to history/.
+OUTPUT_TARGETS: MISSING
+METADATA:
+  SOURCE_HASH: c561ccae127795b5e29fff8a5c1ad9e113ad45411cb18c9908a272eb1731aa68
+  NORMALIZED_AT: '2026-01-12T16:59:02.305091'
+TITLE: 04 Prd Workflow Enhancements
+DEPENDS_ON: []
+BRANCH: feature/04_prd_workflow_enhancements
 PARENT_BRANCH: main
