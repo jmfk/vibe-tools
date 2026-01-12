@@ -209,8 +209,9 @@ For pyenv to work correctly, add to `~/.zshrc` or `~/.bash_profile`:
 ```bash
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
+# Note: Avoid eval "$(pyenv virtualenv-init -)" on macOS to prevent fork exhaustion
 ```
 
 ### 10. Key Environment Variables
