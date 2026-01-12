@@ -729,6 +729,44 @@ def get_vibe_status_report() -> str:
     return "\n".join(report)
 
 
+def check_env_health() -> bool:
+    """Checks if the current environment is healthy and correctly configured."""
+    config = load_config()
+    env_config = config.get("env")
+
+    # 1. Check if project package is importable
+    project_name = get_project_name()
+    package_found = False
+
+    for pkg in ["backend", project_name, "src"]:
+        try:
+            if importlib.util.find_spec(pkg):
+                logger.debug(f"✅ '{pkg}' package is importable.")
+                package_found = True
+                break
+        except (ImportError, AttributeError, ValueError):
+            continue
+
+    if not package_found:
+        logger.warning("❌ No project package found (backend, src, or project_name). Project structure may be broken.")
+        # We don't return False here yet as it might be a fresh project
+    else:
+        logger.debug("✅ Project package structure verified.")
+
+    # 2. If managed env is configured, check if we're in it
+    if env_config:
+        venv_name = env_config.get("venv_name")
+        if venv_name:
+            current_prefix = sys.prefix
+            if venv_name not in current_prefix:
+                logger.warning(f"⚠️  Managed environment '{venv_name}' is configured but not active.")
+                logger.warning(f"   Current environment: {current_prefix}")
+                return False
+            logger.debug(f"✅ Running in managed environment: {venv_name}")
+
+    return True
+
+
 def fix_kubeconfig_api_version() -> bool:
     """Checks for deprecated kubeconfig API versions and updates them to v1beta1 if needed."""
     kubeconfig_path = pathlib.Path.home() / ".kube" / "config"
