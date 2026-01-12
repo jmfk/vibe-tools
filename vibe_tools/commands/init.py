@@ -3,67 +3,10 @@ import pathlib
 
 import click
 
-from vibe_tools.setup import guide_setup, maybe_init_git
-from vibe_tools.templates import TEMPLATES
+from vibe_tools.setup import guide_setup
 from vibe_tools.utils import (
-    CONFIG_FILE,
-    COSTS_DIR,
-    INSTRUCTIONS_DIR,
-    LOGS_DIR,
-    PRD_DIR,
-    VIBE_DATA_DIR,
-    VIBE_PROJECT_DIR,
-    ensure_dir,
-    ensure_project_structure,
-    migrate_to_project_dir,
-    setup_project_gitignore,
+    perform_basic_init,
 )
-
-
-def _perform_basic_init():
-    """Helper to initialize the project structure and essential templates."""
-    maybe_init_git()
-
-    # First, migrate any existing files from root to implementation/
-    migrate_to_project_dir()
-
-    # Ensure structure exists
-    ensure_project_structure()
-    ensure_dir(VIBE_PROJECT_DIR)
-
-    # Create config.json if it doesn't exist
-    if not CONFIG_FILE.exists():
-        default_config = {
-            "ralph": {"review": True, "tests": True, "auto_merge": False},
-            "default_budget": 5.0,
-            "caffeinate": True,
-            "verbose": False,
-            "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
-        }
-        CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
-        click.echo(f"✅ Created default configuration: {CONFIG_FILE}")
-    else:
-        click.echo(f"✅ Configuration already exists: {CONFIG_FILE}")
-
-    # Setup gitignore with specific patterns
-    setup_project_gitignore()
-
-    # Create new directories for instructions and specs
-    ensure_dir(INSTRUCTIONS_DIR)
-    ensure_dir(pathlib.Path("product"))
-    ensure_dir(PRD_DIR)
-    ensure_dir(LOGS_DIR)
-    ensure_dir(COSTS_DIR)
-    ensure_dir(VIBE_DATA_DIR)
-
-    # Only create Makefile if it doesn't exist
-    if "Makefile" in TEMPLATES:
-        makefile_path = pathlib.Path("Makefile")
-        if not makefile_path.exists():
-            click.echo(f"Creating template: {makefile_path}")
-            makefile_path.write_text(TEMPLATES["Makefile"])
-        else:
-            click.echo(f"Template already exists: {makefile_path}")
 
 
 def register_init(cli):
@@ -112,7 +55,7 @@ def register_init(cli):
         ).upper()
 
         # Always perform basic initialization first
-        _perform_basic_init()
+        perform_basic_init()
 
         if choice == "A":
             click.echo(
@@ -142,7 +85,5 @@ def register_init(cli):
             f"  {click.style('vibe normalize', fg='yellow'):<20} Phase 2: Standardize all specs into machine-readable YAML"
         )
         click.echo("\nRun 'vibe status' at any time to see your project progress.")
-
-    cli.add_command(init)
 
     cli.add_command(init)

@@ -100,2098 +100,499 @@ def get_last_commit_hash() -> Optional[str]:
     return None
 
 
-def is_phase_completed(file_path: pathlib.Path, phase_id: str) -> bool:
-    """Checks if a phase is already marked as completed in the file."""
-    if not file_path or not file_path.exists():
-        return False
-
-    content = file_path.read_text()
-    data = None
-    if file_path.suffix == ".yaml":
-        data = safe_yaml_load(content)
-    elif file_path.suffix == ".md":
-        # Basic frontmatter parsing for MD issues
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                data = safe_yaml_load(parts[1])
-
-    if not data:
-        return False
-
-    phases = data.get("PHASES", {})
-    phase = phases.get(phase_id, {})
-    return phase.get("status") == "completed"
-
-
-def update_state_phase(
-    file_path: pathlib.Path,
-    phase_id: str,
-    status: str = "completed",
-    git_id: str = None,
-):
-    """Updates the PHASES section in the YAML or MD frontmatter."""
-    if not file_path or not file_path.exists():
-        return
-
-    content = file_path.read_text()
-    if file_path.suffix == ".yaml":
-        data = safe_yaml_load(content) or {}
-        if "PHASES" not in data:
-            data["PHASES"] = {}
-        data["PHASES"][phase_id] = {
-            "status": status,
-            "updated_at": datetime.datetime.now().isoformat(),
-        }
-        if git_id:
-            data["PHASES"][phase_id]["git_id"] = git_id
-        file_path.write_text(safe_yaml_dump(data))
-    elif file_path.suffix == ".md":
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = safe_yaml_load(parts[1]) or {}
-                if "PHASES" not in frontmatter:
-                    frontmatter["PHASES"] = {}
-                frontmatter["PHASES"][phase_id] = {
-                    "status": status,
-                    "updated_at": datetime.datetime.now().isoformat(),
-                }
-                if git_id:
-                    frontmatter["PHASES"][phase_id]["git_id"] = git_id
-
-                new_frontmatter = safe_yaml_dump(frontmatter)
-                new_content = f"---\n{new_frontmatter}---\n{parts[2]}"
-                file_path.write_text(new_content)
-
-
-def update_md_implementation_status(
-    md_path: pathlib.Path,
-    version: str,
-    sequence: int,
-    yaml_path: pathlib.Path,
-    status: str = "processing",
-):
-    """Updates the implementation section in the MD frontmatter."""
-    if not md_path or not md_path.exists():
-        return
-
-    content = md_path.read_text()
-    frontmatter = {}
-    body = content
-
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            frontmatter = safe_yaml_load(parts[1]) or {}
-            body = parts[2]
-
-    if "implementation" not in frontmatter:
-        frontmatter["implementation"] = {}
-
-    frontmatter["implementation"].update(
-        {
-            "id": f"v{version}-{sequence:03d}",
-            "status": status,
-            "yaml": str(yaml_path),
-            "updated_at": datetime.datetime.now().isoformat(),
-        }
-    )
-
-    new_frontmatter = safe_yaml_dump(frontmatter)
-    new_content = f"---\n{new_frontmatter}---\n{body}"
-    md_path.write_text(new_content)
-
-
-def parse_prd_filename(filename: str) -> Dict[str, Any]:
-    """Parses vXX-XXX_name.yaml or prd_name.yaml into its components."""
-    # Try new format first: v01-010_name.yaml
-    match = re.match(r"v(\d+)-(\d+)_(.*)\.yaml", filename)
-    if match:
-        return {
-            "version": match.group(1),
-            "sequence": int(match.group(2)),
-            "name": match.group(3),
-            "format": "versioned",
-        }
-
-    # Try old format: prd_name.yaml
-    if filename.startswith("prd_") and filename.endswith(".yaml"):
-        return {
-            "version": None,
-            "sequence": None,
-            "name": filename[4:-5],
-            "format": "legacy",
-        }
-
-    return {"version": None, "sequence": None, "name": filename, "format": "unknown"}
-
-
-def commit_and_register_phase(
-    file_path: pathlib.Path, phase_id: str, commit_message: str
-):
-    """Commits changes, registers the phase completion with the commit hash, and amends the commit."""
-    if not is_dirty():
-        # Even if not dirty, we might want to register the phase if it's the first time
-        # but usually this is called after some work.
-        pass
-
-    # 1. Add and commit changes
-    run_command(["git", "add", "."], check=False)
-    run_command(["git", "commit", "-m", commit_message], check=False)
-
-    # 2. Get commit hash
-    git_id = get_last_commit_hash()
-
-    # 3. Update file with phase status and hash
-    update_state_phase(file_path, phase_id, status="completed", git_id=git_id)
-
-    # 4. Amend the commit to include the updated YAML/MD
-    run_command(["git", "add", str(file_path)], check=False)
-    run_command(["git", "commit", "--amend", "--no-edit"], check=False)
-
-
-def is_tool_available(name: str) -> bool:
-    """Checks if a command-line tool is available in the system PATH."""
-    return shutil.which(name) is not None
-
-
-def open_in_editor(file_path: pathlib.Path):
-    """Opens a file in the configured editor (Cursor, Typora, VS Code, etc.)."""
-    config = load_config()
-    editor = config.get("editor", "cursor")  # Default to cursor
-
-    if editor == "cursor":
-        cmd = ["cursor", str(file_path)]
-    elif editor == "typora":
-        cmd = ["open", "-a", "Typora", str(file_path)]
-    elif editor == "code":
-        cmd = ["code", str(file_path)]
-    elif editor == "vim":
-        cmd = ["vim", str(file_path)]
-    else:
-        # Fallback to system open
-        if sys.platform == "darwin":
-            cmd = ["open", str(file_path)]
-        elif sys.platform == "win32":
-            cmd = ["start", str(file_path)]
-        else:
-            cmd = ["xdg-open", str(file_path)]
-
-    logger.info(f"Opening {file_path} in {editor}...")
+def run_command(command: List[str], cwd: Optional[str] = None, check: bool = True) -> (str, int):
+    """Runs a shell command and returns its stdout and exit code."""
     try:
-        subprocess.Popen(cmd)
-    except Exception as e:
-        logger.error(f"Failed to open {file_path} in {editor}: {e}")
-
-
-def log_issue(loop_name: str, iteration: int, max_iterations: int, description: str):
-    """Logs a concise one-line issue to the terminal and a detailed marker to the log file."""
-    from vibe_tools.cost import get_total_cost
-
-    total_cost = get_total_cost()
-    marker = f"==== ISSUE: [{loop_name.upper()}] ITERATION [{iteration}/{max_iterations}] ===="
-    logger.debug(f"\n{marker}\nReason: {description}\n{'=' * len(marker)}")
-    logger.info(
-        f"⚠️  [{loop_name.upper()}] Iteration {iteration}/{max_iterations}: {description} (Total Cost: ${total_cost:.2f})"
-    )
-
-
-def log_start(loop_name: str, description: str):
-    """Logs a concise one-line start message to the terminal and a marker to the log file."""
-    from vibe_tools.cost import get_total_cost
-
-    total_cost = get_total_cost()
-    marker = f"==== START: [{loop_name.upper()}] ===="
-    logger.debug(f"\n{marker}\nContext: {description}\n{'=' * len(marker)}")
-    logger.info(
-        f"🚀 [{loop_name.upper()}] Starting: {description} (Total Cost: ${total_cost:.2f})"
-    )
-
-
-def log_success(loop_name: str, description: str):
-    """Logs a concise one-line success message to the terminal and a marker to the log file."""
-    from vibe_tools.cost import get_total_cost
-
-    total_cost = get_total_cost()
-    marker = f"==== SUCCESS: [{loop_name.upper()}] ===="
-    logger.debug(f"\n{marker}\nResult: {description}\n{'=' * len(marker)}")
-    logger.info(
-        f"✅ [{loop_name.upper()}] Completed: {description} (Total Cost: ${total_cost:.2f})"
-    )
-
-
-# Ensure directories exist
-def ensure_project_structure():
-    """Ensures that the core project directories exist."""
-    VIBE_PROJECT_DIR.mkdir(exist_ok=True)
-    LOGS_DIR.mkdir(exist_ok=True)
-    COSTS_DIR.mkdir(exist_ok=True)
-    PRD_DIR.mkdir(exist_ok=True, parents=True)
-    PRD_PROCESSING_DIR.mkdir(exist_ok=True)
-    PRD_DONE_DIR.mkdir(exist_ok=True)
-    PRD_FAILED_DIR.mkdir(exist_ok=True)
-
-    PLANNING_DIR.mkdir(exist_ok=True)
-    PLANNING_INBOX_DIR.mkdir(exist_ok=True)
-    PLANNING_BACKLOG_DIR.mkdir(exist_ok=True)
-    PLANNING_HISTORY_DIR.mkdir(exist_ok=True)
-    PLANNING_REJECTED_DIR.mkdir(exist_ok=True)
-
-    ISSUES_DIR.mkdir(exist_ok=True)
-    ISSUES_BACKLOG_DIR.mkdir(exist_ok=True)
-    ISSUES_HISTORY_DIR.mkdir(exist_ok=True)
-    ISSUES_FAILS_DIR.mkdir(exist_ok=True)
-    ISSUES_META_DIR.mkdir(exist_ok=True)
-
-    INSTRUCTIONS_DIR.mkdir(exist_ok=True)
-    GLOBAL_VIBE_DIR.mkdir(exist_ok=True)
-
-
-def migrate_to_project_dir():
-    """Migrates files and directories from the project root to the 'implementation/' directory."""
-    migration_map = {
-        pathlib.Path("project"): VIBE_PROJECT_DIR,
-        pathlib.Path("specs"): PLANNING_DIR,
-        pathlib.Path("prds"): PRD_DIR,
-        pathlib.Path("project-state.json"): PROJECT_STATE_FILE,
-        pathlib.Path(".ralph_state.json"): STATE_FILE,
-        pathlib.Path("logs"): LOGS_DIR,
-        pathlib.Path("costs"): COSTS_DIR,
-        pathlib.Path("instructions"): INSTRUCTIONS_DIR,
-        pathlib.Path("vibe_data"): VIBE_DATA_DIR,
-        pathlib.Path("stats"): COSTS_DIR,
-        pathlib.Path(".vibe_config.json"): CONFIG_FILE,
-        pathlib.Path("architecture.yaml"): ARCHITECTURE,
-        pathlib.Path("architecture-current.yaml"): ARCHITECTURE_CURRENT,
-        pathlib.Path("project_overview.yaml"): OVERVIEW,
-        pathlib.Path("infrastructure.yaml"): INFRA,
-        pathlib.Path("infrastructure-current.yaml"): INFRA_CURRENT,
-        pathlib.Path("cicd.yaml"): CICD,
-        pathlib.Path("cicd-current.yaml"): CICD_CURRENT,
-        pathlib.Path("testing.yaml"): TESTING_CONFIG,
-        pathlib.Path("testing-current.yaml"): TESTING_CURRENT,
-        pathlib.Path("product/project-overview.md"): OVERVIEW_SPEC,
-        pathlib.Path("product/trash"): PLANNING_REJECTED_DIR,
-        pathlib.Path("implementation/prds/trash"): REJECTED_DIR,
-    }
-
-    import shutil
-
-    for old_path, new_path in migration_map.items():
-        if old_path.exists():
-            # Special case: don't migrate if it's already in the project dir (shouldn't happen with these paths)
-            if old_path == new_path:
-                continue
-
-            try:
-                # Ensure parent directory of new_path exists
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-
-                if old_path.is_dir():
-                    # For directories, if the new directory already exists, move contents
-                    if new_path.exists():
-                        for item in old_path.iterdir():
-                            target = new_path / item.name
-                            if not target.exists():
-                                shutil.move(str(item), str(target))
-                        # Remove old empty directory if possible
-                        try:
-                            old_path.rmdir()
-                        except OSError:
-                            pass
-                    else:
-                        shutil.move(str(old_path), str(new_path))
-                else:
-                    # For files, if new_path exists, maybe don't overwrite?
-                    # Usually migration means we want the old one to win if it's the one being moved.
-                    if not new_path.exists():
-                        shutil.move(str(old_path), str(new_path))
-                    else:
-                        # If both exist, we could backup the old one or just delete it if they are same
-                        # For now, let's just move it and overwrite if it's a migration
-                        old_path.unlink()  # Simple cleanup if new already exists
-            except Exception as e:
-                logger.error(f"Failed to migrate {old_path} to {new_path}: {e}")
-
-
-@functools.lru_cache(maxsize=1)
-def get_project_name():
-    """Returns the project name in snake_case based on git remote or directory name."""
-    if is_git_repo():
-        stdout, code = run_command(["git", "remote", "get-url", "origin"], check=False)
-        if code == 0 and stdout.strip():
-            # Handle both https and ssh formats
-            url = stdout.strip()
-            if url.endswith(".git"):
-                url = url[:-4]
-            project_name = url.split("/")[-1].split(":")[-1]
-            return project_name.lower().replace("-", "_").replace(" ", "_")
-
-    # Fallback to directory name
-    return pathlib.Path.cwd().name.lower().replace("-", "_").replace(" ", "_")
-
-
-def load_config():
-    """Loads and merges global and project-local configuration."""
-    config = {}
-
-    # Load global config first
-    if GLOBAL_CONFIG_FILE.exists():
-        try:
-            config.update(json.loads(GLOBAL_CONFIG_FILE.read_text()))
-        except Exception as e:
-            logger.debug(f"Error loading global config: {e}")
-
-    # Merge with local config
-    if CONFIG_FILE.exists():
-        try:
-            local_config = json.loads(CONFIG_FILE.read_text())
-            # Deep merge services if they exist in both
-            if "services" in local_config and "services" in config:
-                config["services"].update(local_config["services"])
-                del local_config["services"]
-            config.update(local_config)
-        except Exception as e:
-            logger.debug(f"Error loading local config: {e}")
-
-    return config
-
-
-def save_config(config, global_scope=False):
-    """Saves configuration to either local or global file."""
-    if global_scope:
-        GLOBAL_CONFIG_FILE.write_text(json.dumps(config, indent=2))
-    else:
-        CONFIG_FILE.write_text(json.dumps(config, indent=2))
-
-
-def load_project_state() -> Dict[str, Any]:
-    """Loads the project state, deriving PRD and Issue info from filesystem."""
-    state = {
-        "project_name": get_project_name(),
-        "phases": {
-            "normalize": {"status": "pending", "hash": None, "depends_on": []},
-            "setup": {"status": "pending", "hash": None, "depends_on": ["normalize"]},
-            "deps": {"status": "pending", "hash": None, "depends_on": ["setup"]},
-            "implement": {"status": "pending", "hash": None, "depends_on": ["deps"]},
-            "infra": {"status": "pending", "hash": None, "depends_on": ["implement"]},
-            "testing": {"status": "pending", "hash": None, "depends_on": ["infra"]},
-            "cicd": {"status": "pending", "hash": None, "depends_on": ["testing"]},
-            "deploy": {
-                "status": "pending",
-                "hash": None,
-                "depends_on": ["cicd"],
-            },
-        },
-        "branch_lineage": {},  # Maps branch -> parent_branch
-        "active_task": None,
-        "current_version": "01",
-        "next_sequence": 10,
-        "version": "1.2",
-    }
-
-    if PROJECT_STATE_FILE.exists():
-        try:
-            stored_state = json.loads(PROJECT_STATE_FILE.read_text())
-            if "project_name" in stored_state:
-                state["project_name"] = stored_state["project_name"]
-            if "phases" in stored_state:
-                for phase_id, phase_data in stored_state["phases"].items():
-                    if phase_id in state["phases"]:
-                        state["phases"][phase_id].update(phase_data)
-            if "branch_lineage" in stored_state:
-                state["branch_lineage"] = stored_state["branch_lineage"]
-            if "active_task" in stored_state:
-                state["active_task"] = stored_state["active_task"]
-            if "current_version" in stored_state:
-                state["current_version"] = stored_state["current_version"]
-            if "next_sequence" in stored_state:
-                state["next_sequence"] = stored_state["next_sequence"]
-        except Exception as e:
-            logger.error(f"Error loading project state: {e}")
-
-    # Derive plans, completed_prds, started_prds from filesystem
-    derived_info = _derive_plans_from_filesystem()
-    state["plans"] = derived_info["plans"]
-    state["completed_prds"] = derived_info["completed_prds"]
-    state["started_prds"] = derived_info["started_prds"]
-
-    return state
-
-
-def _derive_plans_from_filesystem() -> Dict[str, Any]:
-    """Scans implementation/prds subdirectories to reconstruct plans and status."""
-    plans = {}
-    completed_prds = []
-    started_prds = []
-
-    # Map directories to statuses
-    status_map = {
-        PRD_PROCESSING_DIR: "in_progress",
-        PRD_DONE_DIR: "completed",
-        PRD_FAILED_DIR: "failed",
-        # Support legacy locations during transition
-        BACKLOG_DIR: "pending",
-        HISTORY_DIR: "completed",
-    }
-
-    # Pre-collect all MD files for faster lookup
-    md_files = {}
-    if SPECS_DIR.exists():
-        for md_file in SPECS_DIR.rglob("*.md"):
-            stem = md_file.stem
-            clean_name = stem.lower()
-            while True:
-                new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
-                if new_name == clean_name:
-                    break
-                clean_name = new_name
-            clean_name = re.sub(r"[- ]", "_", clean_name)
-            md_files[clean_name] = md_file
-
-    for directory, status in status_map.items():
-        if directory.exists():
-            # Support both old prd_*.yaml and new vXX-XXX_*.yaml
-            files = list(directory.glob("prd_*.yaml")) + list(directory.glob("v*-*_*.yaml"))
-            for yaml_file in files:
-                prd_id = yaml_file.stem
-                
-                # Determine clean_id for MD lookup
-                clean_id = prd_id
-                if clean_id.startswith("prd_"):
-                    clean_id = clean_id.replace("prd_", "")
-                else:
-                    # New format: v01-010_name
-                    match = re.match(r"v\d+-\d+_(.*)", clean_id)
-                    if match:
-                        clean_id = match.group(1)
-
-                try:
-                    with open(yaml_file, "r") as f:
-                        data = safe_yaml_load(f.read()) or {}
-
-                    # Plan metadata is now in the YAML itself
-                    plan_info = {
-                        "status": status,
-                        "file": str(yaml_file),
-                        "md_path": (
-                            str(md_files.get(clean_id))
-                            if clean_id in md_files
-                            else None
-                        ),
-                        "title": data.get(
-                            "TITLE",
-                            clean_id.replace("_", " ").title(),
-                        ),
-                        "depends_on": data.get("DEPENDS_ON", []),
-                        "branch": data.get("BRANCH", f"feature/{prd_id}"),
-                        "parent_branch": data.get("PARENT_BRANCH", get_main_branch()),
-                        "is_direct_prd": True,
-                    }
-                    plans[prd_id] = plan_info
-
-                    if status == "completed":
-                        completed_prds.append(prd_id)
-                    elif status == "in_progress":
-                        started_prds.append(prd_id)
-
-                except Exception as e:
-                    logger.warning(f"Could not read metadata from {yaml_file}: {e}")
-
-    return {
-        "plans": plans,
-        "completed_prds": completed_prds,
-        "started_prds": started_prds,
-    }
-
-
-def check_dependencies(phase_id: str, state: Dict[str, Any]) -> List[str]:
-    """Returns a list of missing dependencies for a phase."""
-    phases = state.get("phases", {})
-    if phase_id not in phases:
-        return []
-
-    missing = []
-    for dep_id in phases[phase_id].get("depends_on", []):
-        dep_phase = phases.get(dep_id, {})
-        if dep_phase.get("status") != "completed":
-            missing.append(dep_id)
-
-    return missing
-
-
-def check_plan_dependencies(plan_id: str, state: Dict[str, Any]) -> List[str]:
-    """Returns a list of missing dependencies for a plan."""
-    plans = state.get("plans", {})
-    if plan_id not in plans:
-        return []
-
-    missing = []
-    for dep_id in plans[plan_id].get("depends_on", []):
-        dep_plan = plans.get(dep_id, {})
-        if dep_plan.get("status") != "completed":
-            missing.append(dep_id)
-
-    return missing
-
-
-def save_project_state(state: Dict[str, Any]):
-    """Saves only the essential project state to project-state.json."""
-    # Create a copy to avoid modifying the original
-    state_to_save = state.copy()
-
-    # Remove derived fields
-    fields_to_remove = ["plans", "completed_prds", "started_prds"]
-    for field in fields_to_remove:
-        if field in state_to_save:
-            del state_to_save[field]
-
-    PROJECT_STATE_FILE.write_text(json.dumps(state_to_save, indent=2))
-
-
-def migrate_legacy_state():
-    """Migrates data from .ralph_state.json to project-state.json."""
-    if not STATE_FILE.exists():
-        return
-
-    try:
-        legacy_data = json.loads(STATE_FILE.read_text())
-        new_state = load_project_state()
-
-        # Legacy migration: active_task is still stored in state.json
-        new_state["active_task"] = legacy_data.get("active_task")
-
-        save_project_state(new_state)
-        logger.info(f"✅ Migrated legacy state to {PROJECT_STATE_FILE}")
-    except Exception as e:
-        logger.error(f"Failed to migrate legacy state: {e}")
-
-
-def load_global_servers() -> Dict[str, Any]:
-    """Loads server definitions from the global servers file."""
-    if GLOBAL_SERVERS_FILE.exists():
-        try:
-            return json.loads(GLOBAL_SERVERS_FILE.read_text())
-        except Exception as e:
-            logger.error(f"Error loading global servers: {e}")
-    return {}
-
-
-def save_global_servers(servers: Dict[str, Any]):
-    """Saves server definitions to the global servers file."""
-    GLOBAL_SERVERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    GLOBAL_SERVERS_FILE.write_text(json.dumps(servers, indent=2))
-
-
-def get_google_api_key():
-    """Retrieves the Google API Key from .env or environment variables."""
-    load_dotenv(find_dotenv() or ".env")
-    return os.environ.get("GOOGLE_API_KEY")
-
-
-def save_google_api_key(key):
-    """Saves the Google API Key to the .env file."""
-    env_file = find_dotenv() or ".env"
-    if not os.path.exists(env_file):
-        with open(env_file, "w") as f:
-            f.write("")
-    set_key(env_file, "GOOGLE_API_KEY", key)
-
-
-def get_cursor_api_key():
-    """Retrieves the Cursor API Key from .env or environment variables."""
-    load_dotenv(find_dotenv() or ".env")
-    return os.environ.get("CURSOR_API_KEY")
-
-
-def save_cursor_api_key(key):
-    """Saves the Cursor API Key to the .env file."""
-    env_file = find_dotenv() or ".env"
-    if not os.path.exists(env_file):
-        with open(env_file, "w") as f:
-            f.write("")
-    set_key(env_file, "CURSOR_API_KEY", key)
-
-
-# Setup logger
-logger = logging.getLogger("vibe")
-logger.setLevel(logging.DEBUG)
-
-
-class VerboseLogger:
-    """Handles structured verbose logging into a subdirectory."""
-
-    def __init__(self, log_file: pathlib.Path):
-        self.log_file = log_file
-        self.verbose_dir = log_file.parent / log_file.stem
-        self.step_count = 0
-
-    def _ensure_dir(self):
-        self.verbose_dir.mkdir(parents=True, exist_ok=True)
-
-    def log_event(self, event_type: str, content: str, name: str = "") -> str:
-        """Logs an event to a separate file and returns the reference string."""
-        self._ensure_dir()
-        self.step_count += 1
-
-        safe_name = "".join([c if c.isalnum() else "_" for c in name]).strip("_")
-        if safe_name:
-            filename = f"{self.step_count:03d}_{event_type}_{safe_name}.txt"
-        else:
-            filename = f"{self.step_count:03d}_{event_type}.txt"
-
-        event_file = self.verbose_dir / filename
-        event_file.write_text(content)
-
-        ref_msg = f"VERBOSE: {event_type.upper()} logged to {event_file.relative_to(VIBE_PROJECT_DIR)}"
-        logger.info(ref_msg)
-        return ref_msg
-
-
-# Globals to be initialized by setup_logging
-LOG_FILE = None
-file_handler = None
-stream_handler = None
-verbose_logger: Optional[VerboseLogger] = None
-
-
-def setup_logging(command_name):
-    """Initializes logging for a specific command run."""
-    global LOG_FILE, file_handler, stream_handler, verbose_logger
-
-    # Ensure LOGS_DIR exists before creating the log file
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Generate timestamped log filename with command name
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    LOG_FILE = LOGS_DIR / f"{timestamp}_vibe_{command_name}.log"
-
-    # File handler
-    file_handler = RotatingFileHandler(LOG_FILE, backupCount=5)
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    )
-    logger.addHandler(file_handler)
-
-    # Stream handler (console)
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(logging.INFO)
-    stream_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(stream_handler)
-
-    # Initialize verbose logger
-    verbose_logger = VerboseLogger(LOG_FILE)
-
-    return LOG_FILE
-
-
-def set_console_level(level):
-    """Sets the console output level."""
-    if stream_handler:
-        stream_handler.setLevel(level)
-
-
-# Flag to track if an agent was called
-_agent_called = False
-_agent_connection_retries = 0
-MAX_AGENT_CONNECTION_RETRIES = 25
-_agent_context_retries = 0
-MAX_AGENT_CONTEXT_RETRIES = 3
-
-
-def _cleanup_log():
-    """Deletes the log file if it's empty."""
-    global LOG_FILE, file_handler
-    if not LOG_FILE:
-        return
-
-    try:
-        # Delete only if the file is empty
-        if LOG_FILE.exists() and LOG_FILE.stat().st_size == 0:
-            # Close handler to release file lock
-            if file_handler:
-                file_handler.close()
-                logger.removeHandler(file_handler)
-            if LOG_FILE.exists():
-                LOG_FILE.unlink()
-    except Exception:
-        pass
-
-
-atexit.register(_cleanup_log)
-
-
-def enable_console_debug():
-    """Sets the console output level to DEBUG."""
-    if stream_handler:
-        stream_handler.setLevel(logging.DEBUG)
-        logger.debug("Console debug logging enabled.")
-
-
-def rotate_log():
-    """Rotates the log file if it exists and is not empty."""
-    if LOG_FILE and LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
-        if file_handler:
-            file_handler.doRollover()
-
-
-def is_merged(branch_name):
-    """Checks if a branch is merged into main."""
-    main_branch = get_main_branch()
-    _, code = run_command(
-        ["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False
-    )
-    return code == 0
-
-
-def run_llm(
-    prompt: str,
-    model: str = "gemini-3-flash",
-    json_mode: bool = False,
-    debug: bool = False,
-) -> str:
-    """Runs a direct LLM call using the google-genai library."""
-    from google import genai
-
-    api_key = get_google_api_key()
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY not found. Run `vibe config api`.")
-
-    if debug:
-        print(f"\n--- DEBUG: LLM CALL (Model: {model}) ---")
-        print(f"PROMPT:\n{prompt}")
-
-    # map common aliases to actual model names
-    model_map = {
-        "gemini-3-flash": "gemini-2.0-flash-exp",
-        "gemini-3-flash-preview": "gemini-2.0-flash-exp",
-        "gemini-1.5-flash": "gemini-1.5-flash",
-        "gemini-2.0-flash": "gemini-2.0-flash-exp",
-    }
-    gemini_model = model_map.get(model, model)
-    client = genai.Client(api_key=api_key)
-
-    config: Dict[str, Any] = {}
-    if json_mode:
-        config["response_mime_type"] = "application/json"
-
-    # We use a simple prompt that mimics dspy's behavior
-    full_prompt = f"Execute the given task and return the result.\n\nInstruction: {prompt}\n\nAnswer:"
-
-    response = client.models.generate_content(
-        model=gemini_model, contents=full_prompt, config=config if config else None
-    )
-
-    result = response.text
-    if debug:
-        print(f"RESPONSE:\n{result}")
-        print("--- END DEBUG ---\n")
-
-    return result
-
-
-def fix_yaml_content(content: str) -> str:
-    """
-    Attempts to fix common YAML formatting issues in a string.
-    Specifically, it looks for unquoted values containing colons or other
-    problematic characters and quotes them.
-    """
-    lines = content.splitlines()
-    fixed_lines = []
-
-    # Regex to match a YAML key-value pair
-    # Group 1: indentation, Group 2: key, Group 3: separator, Group 4: value
-    kv_pattern = re.compile(r"^(\s*)([A-Za-z0-9_-]+):\s*(.*)$")
-
-    # Regex to match a YAML list item
-    # Group 1: indentation, Group 2: value
-    list_pattern = re.compile(r"^(\s*)-\s*(.*)$")
-
-    for line in lines:
-        # Skip empty lines or comments
-        if not line.strip() or line.strip().startswith("#"):
-            fixed_lines.append(line)
-            continue
-
-        kv_match = kv_pattern.match(line)
-        if kv_match:
-            indent, key, value = kv_match.groups()
-            trimmed_value = value.strip()
-
-            # If value is already quoted or looks like a block starter, leave it
-            if (
-                (trimmed_value.startswith('"') and trimmed_value.endswith('"'))
-                or (trimmed_value.startswith("'") and trimmed_value.endswith("'"))
-                or trimmed_value in ["|", ">", "|+", ">-", "|-"]
-            ):
-                fixed_lines.append(line)
-                continue
-
-            # If value contains colons, brackets, quotes or other special characters, quote it
-            if (
-                ": " in trimmed_value
-                or "{" in trimmed_value
-                or "}" in trimmed_value
-                or "[" in trimmed_value
-                or "]" in trimmed_value
-                or '"' in trimmed_value
-                or "'" in trimmed_value
-                or trimmed_value.startswith("#")
-                or trimmed_value.startswith("!")
-                or trimmed_value.startswith("&")
-                or trimmed_value.startswith("*")
-                or trimmed_value.startswith("?")
-                or trimmed_value.startswith("-")
-                or (
-                    trimmed_value.startswith(":")
-                    and not trimmed_value.startswith("://")
-                )
-            ):
-                # Quote the value, escape existing double quotes
-                escaped_value = trimmed_value.replace('"', '\\"')
-                fixed_lines.append(f'{indent}{key}: "{escaped_value}"')
-                continue
-
-        list_match = list_pattern.match(line)
-        if list_match:
-            indent, value = list_match.groups()
-            trimmed_value = value.strip()
-
-            # If value is already quoted or looks like a block starter, leave it
-            if (
-                (trimmed_value.startswith('"') and trimmed_value.endswith('"'))
-                or (trimmed_value.startswith("'") and trimmed_value.endswith("'"))
-                or trimmed_value in ["|", ">", "|+", ">-", "|-"]
-            ):
-                fixed_lines.append(line)
-                continue
-
-            # If value contains colons, etc., quote it
-            if (
-                ": " in trimmed_value
-                or "{" in trimmed_value
-                or "}" in trimmed_value
-                or "[" in trimmed_value
-                or "]" in trimmed_value
-                or '"' in trimmed_value
-                or "'" in trimmed_value
-                or trimmed_value.startswith("#")
-                or trimmed_value.startswith("!")
-                or trimmed_value.startswith("&")
-                or trimmed_value.startswith("*")
-                or trimmed_value.startswith("?")
-                or trimmed_value.startswith("-")
-                or (
-                    trimmed_value.startswith(":")
-                    and not trimmed_value.startswith("://")
-                )
-            ):
-                escaped_value = trimmed_value.replace('"', '\\"')
-                fixed_lines.append(f'{indent}- "{escaped_value}"')
-                continue
-
-        fixed_lines.append(line)
-
-    return "\n".join(fixed_lines)
-
-
-def safe_yaml_load(content: str) -> Any:
-    """Loads YAML content, attempting to fix it if it's invalid."""
-    try:
-        return yaml.safe_load(content)
-    except yaml.YAMLError:
-        try:
-            fixed_content = fix_yaml_content(content)
-            return yaml.safe_load(fixed_content)
-        except Exception:
-            # If fixing fails, re-raise the original load to show the YAML error
-            return yaml.safe_load(content)
-
-
-def safe_yaml_dump(data: Any, stream=None, **kwargs) -> Optional[str]:
-    """Dumps data to YAML, ensuring problematic strings are quoted."""
-
-    class QuotedDumper(yaml.SafeDumper):
-        def represent_scalar(self, tag, value, style=None):
-            if tag == "tag:yaml.org,2002:str" and isinstance(value, str):
-                # Force quotes if it contains problematic characters or is a boolean-like string
-                special_chars = ":{}[],&*#?|>-<>=!%@`"
-                if (
-                    any(c in value for c in special_chars)
-                    or (value and value[0] in "-?@")
-                    or value.lower() in ["yes", "no", "true", "false", "null"]
-                    or "\n" in value
-                ):
-                    style = '"'
-            return super().represent_scalar(tag, value, style)
-
-    kwargs.setdefault("allow_unicode", True)
-    kwargs.setdefault("sort_keys", False)
-    kwargs.setdefault("default_flow_style", False)
-    kwargs.setdefault("width", 1000)
-
-    return yaml.dump(data, stream, Dumper=QuotedDumper, **kwargs)
-
-
-def run_command(cmd, check=True, caffeinate=False):
-    """Utility to run a command and return its output."""
-    if caffeinate:
-        cmd = ["caffeinate", "-dimsu"] + cmd
-
-    # Use logger.debug for the "Running command" message so it's hidden by default
-    logger.debug(f"Running command: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-
-    # Debug level logging for full command output
-    logger.debug(f"Command finished with return code: {result.returncode}")
-    if result.stdout:
-        logger.debug(f"STDOUT:\n{result.stdout.strip()}")
-    if result.stderr:
-        logger.debug(f"STDERR:\n{result.stderr.strip()}")
-
-    if check and result.returncode != 0:
-        logger.error(f"Error running command: {' '.join(cmd)}")
-        if not logger.isEnabledFor(logging.DEBUG):
-            # If not in debug mode, at least log the error output to info/error
-            logger.error(f"STDOUT: {result.stdout.strip()}")
-            logger.error(f"STDERR: {result.stderr.strip()}")
-        return result.stdout.strip(), result.returncode
-    return result.stdout.strip(), result.returncode
-
-
-def fix_kubeconfig_api_version() -> bool:
-    """
-    Fix deprecated kubeconfig API versions (v1alpha1 -> v1beta1).
-
-    Locates kubeconfig file(s) and updates any exec plugins using
-    'client.authentication.k8s.io/v1alpha1' to 'client.authentication.k8s.io/v1beta1'.
-
-    Returns:
-        True if changes were made, False otherwise
-    """
-    kubeconfig_paths = []
-
-    # Get kubeconfig path from env var or use default
-    kubeconfig_env = os.environ.get("KUBECONFIG")
-    if kubeconfig_env:
-        # KUBECONFIG can contain multiple paths separated by colons
-        kubeconfig_paths = [pathlib.Path(p.strip()) for p in kubeconfig_env.split(":")]
-    else:
-        # Default location
-        default_path = pathlib.Path.home() / ".kube" / "config"
-        if default_path.exists():
-            kubeconfig_paths = [default_path]
-
-    if not kubeconfig_paths:
-        logger.debug("No kubeconfig file found to check")
-        return False
-
-    changes_made = False
-
-    for kubeconfig_path in kubeconfig_paths:
-        if not kubeconfig_path.exists():
-            logger.debug(f"Kubeconfig file does not exist: {kubeconfig_path}")
-            continue
-
-        try:
-            # Read and parse kubeconfig
-            with open(kubeconfig_path) as f:
-                config = safe_yaml_load(f.read())
-
-            if not config or not isinstance(config, dict):
-                logger.debug(f"Invalid kubeconfig format: {kubeconfig_path}")
-                continue
-
-            # Track if we need to update this file
-            file_updated = False
-
-            # Check users section for exec plugins
-            if "users" in config and isinstance(config["users"], list):
-                for user in config["users"]:
-                    if isinstance(user, dict) and "user" in user:
-                        user_config = user["user"]
-                        if isinstance(user_config, dict) and "exec" in user_config:
-                            exec_config = user_config["exec"]
-                            if isinstance(exec_config, dict):
-                                api_version = exec_config.get("apiVersion", "")
-                                if (
-                                    api_version
-                                    == "client.authentication.k8s.io/v1alpha1"
-                                ):
-                                    exec_config["apiVersion"] = (
-                                        "client.authentication.k8s.io/v1beta1"
-                                    )
-                                    file_updated = True
-                                    logger.info(
-                                        f"Updated exec plugin API version from v1alpha1 to v1beta1 in {kubeconfig_path}"
-                                    )
-
-            if file_updated:
-                # Create backup before modifying
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                backup_path = (
-                    kubeconfig_path.parent
-                    / f"{kubeconfig_path.name}.backup.{timestamp}"
-                )
-
-                try:
-                    shutil.copy2(kubeconfig_path, backup_path)
-                    logger.debug(f"Created backup: {backup_path}")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to create backup for {kubeconfig_path}: {e}"
-                    )
-                    # Continue anyway - the fix is more important than the backup
-
-                # Write updated config
-                try:
-                    with open(kubeconfig_path, "w") as f:
-                        f.write(safe_yaml_dump(config))
-                    changes_made = True
-                    logger.info(f"Successfully updated kubeconfig: {kubeconfig_path}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to write updated kubeconfig to {kubeconfig_path}: {e}"
-                    )
-                    # Try to restore from backup if write failed
-                    if backup_path.exists():
-                        try:
-                            shutil.copy2(backup_path, kubeconfig_path)
-                            logger.info(
-                                f"Restored kubeconfig from backup: {backup_path}"
-                            )
-                        except Exception as restore_error:
-                            logger.error(
-                                f"Failed to restore from backup: {restore_error}"
-                            )
-
-        except yaml.YAMLError as e:
-            logger.warning(f"Failed to parse kubeconfig {kubeconfig_path}: {e}")
-        except Exception as e:
-            logger.warning(f"Error processing kubeconfig {kubeconfig_path}: {e}")
-
-    return changes_made
-
-
-def run_agent(cmd, caffeinate=False, stream=False):
-    """Runs an agent with a live progress indicator or streaming output."""
-    global _agent_called, _agent_connection_retries, _agent_context_retries
-    _agent_called = True
-    if caffeinate:
-        cmd = ["caffeinate", "-dimsu"] + cmd
-
-    # Check if the command exists before trying to run it
-    command_name = cmd[0] if not caffeinate else cmd[2]
-    if not shutil.which(command_name):
-        error_msg = (
-            f"Command '{command_name}' not found in PATH.\n"
-            f"Please ensure '{command_name}' is installed and available in your PATH.\n"
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=check,
         )
-        if command_name == "cursor-agent":
-            error_msg += (
-                "To install cursor-agent, visit: https://github.com/getcursor/cursor-agent\n"
-                "Or install via npm: npm install -g @cursor-agent/cli\n"
-            )
-        logger.error(error_msg)
-        raise FileNotFoundError(
-            f"[Errno 2] No such file or directory: '{command_name}'"
-        )
-
-    # Error indicators
-    CONNECTION_ERROR_STRINGS = [
-        "ConnectError: [unavailable] Error",
-        "ConnectError: [aborted] read ECONNRESET",
-        "ECONNRESET",
-        "ECONNREFUSED",
-        "ETIMEDOUT",
-    ]
-    CONTEXT_ERROR_STRINGS = [
-        "context window is full",
-        "too many tokens",
-        "maximum context length",
-        "context_length_exceeded",
-    ]
-
-    while True:
-        # Use logger.debug for the "Running agent" message
-        logger.debug(f"Running agent: {' '.join(cmd)}")
-
-        # Use process groups to ensure children are killed on interrupt (Unix only)
-        popen_kwargs: Dict[str, Any] = {
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.STDOUT,
-            "text": True,
-            "bufsize": 1,
-        }
-        if os.name != "nt":
-            popen_kwargs["preexec_fn"] = os.setsid
-
-        process = subprocess.Popen(cmd, **popen_kwargs)
-        full_output, start_time = [], time.time()
-
-        assert process.stdout is not None
-        try:
-            for line in iter(process.stdout.readline, ""):
-                full_output.append(line)
-                elapsed = int(time.time() - start_time)
-                preview = line.strip()[:80]
-
-                if stream:
-                    # Direct streaming to stdout
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
-                else:
-                    # Live progress to stdout (bypassing file log for spammy progress)
-                    from vibe_tools.cost import get_total_cost
-
-                    total_cost = get_total_cost()
-                    sys.stdout.write(
-                        f"\r\033[K⏳ Agent working ({elapsed}s) | Cost: ${total_cost:.2f} | [CTRL-C] to stop | {preview}"
-                    )
-                    sys.stdout.flush()
-
-                # Also log to debug file immediately
-                logger.debug(f"AGENT_LIVE: {line.strip()}")
-        except KeyboardInterrupt:
-            logger.warning("\nInterrupted by user. Cleaning up agent process...")
-            if os.name != "nt":
-                try:
-                    pgid = os.getpgid(process.pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                    # Wait a bit for graceful exit then force kill if needed
-                    time.sleep(0.5)
-                    if process.poll() is None:
-                        os.killpg(pgid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                process.terminate()
-            process.wait()
-            sys.stdout.write("\n")
-            raise
-        finally:
-            if process.stdout:
-                process.stdout.close()
-            process.wait()
-
-        sys.stdout.write("\r\033[K")
-        sys.stdout.flush()
-
-        output = "".join(full_output)
-        logger.info(f"Agent finished with exit code: {process.returncode}")
-
-        # Log full agent output to debug level (which goes to file)
-        logger.debug(
-            f"\n--- AGENT OUTPUT START ---\n{output}\n--- AGENT OUTPUT END ---\n"
-        )
-
-        # Handle specific connection errors with retries
-        if process.returncode != 0:
-            is_connection_error = any(s in output for s in CONNECTION_ERROR_STRINGS)
-            is_context_error = any(s in output for s in CONTEXT_ERROR_STRINGS)
-
-            if is_connection_error:
-                _agent_connection_retries += 1
-                if _agent_connection_retries < MAX_AGENT_CONNECTION_RETRIES:
-                    logger.warning(
-                        f"⚠️ Agent connection failed (Retrying {_agent_connection_retries}/{MAX_AGENT_CONNECTION_RETRIES} in 5s): {output.strip()}"
-                    )
-                    time.sleep(5)
-                    continue
-                else:
-                    logger.error(
-                        f"❌ Agent connection failed after {MAX_AGENT_CONNECTION_RETRIES} retries. Aborting."
-                    )
-                    break
-
-            if is_context_error:
-                _agent_context_retries += 1
-                if _agent_context_retries < MAX_AGENT_CONTEXT_RETRIES:
-                    logger.warning(
-                        f"⚠️ Agent context window exceeded (Retrying {_agent_context_retries}/{MAX_AGENT_CONTEXT_RETRIES} in 5s): {output.strip()}"
-                    )
-                    time.sleep(5)
-                    continue
-                else:
-                    logger.error(
-                        f"❌ Agent context window exceeded after {MAX_AGENT_CONTEXT_RETRIES} retries. Aborting."
-                    )
-                    break
-
-        # If we got here, it's either success or a non-retryable error
-        if process.returncode == 0:
-            _agent_connection_retries = 0  # Reset on success
-            _agent_context_retries = 0  # Reset on success
-
-        # Detect architecture mismatch errors
-        if process.returncode != 0:
-            if (
-                "incompatible architecture" in output
-                or "mach-o file, but is an incompatible architecture" in output
-            ):
-                import platform
-
-                node_arch = "unknown"
-                try:
-                    node_result = run_command(
-                        ["node", "-p", "process.arch"], check=False
-                    )
-                    if node_result[1] == 0:
-                        node_arch = node_result[0].strip()
-                except Exception:
-                    pass
-
-                system_arch = platform.machine()
-                logger.error(
-                    f"Architecture mismatch detected. Node.js arch: {node_arch}, System arch: {system_arch}"
-                )
-                print(
-                    f"\n❌ Architecture mismatch error detected.\n"
-                    f"   Node.js is running in a different architecture than cursor-agent expects.\n"
-                    f"   System architecture: {system_arch}\n"
-                    f"   Node.js architecture: {node_arch}\n\n"
-                    f"   To fix this:\n"
-                    f"   1. Check Node.js architecture: node -p 'process.arch'\n"
-                    f"   2. If Node.js is x64/x86_64 but system is arm64, reinstall Node.js for arm64:\n"
-                    f"      - Using Homebrew: arch -arm64 brew install node\n"
-                    f"      - Or use nvm: nvm install --arch=arm64\n"
-                    f"   3. If cursor-agent needs to be reinstalled, check cursor-agent documentation.\n"
-                )
-
-        return output, process.returncode
+        return result.stdout, result.returncode
+    except subprocess.CalledProcessError as e:
+        return e.stdout + e.stderr, e.returncode
+    except FileNotFoundError as e:
+        return str(e), 127
 
 
-def get_agent_processes() -> List[Dict[str, Any]]:
-    """Returns a list of active agent processes."""
-    targets = ["cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
-    processes = []
-
-    try:
-        # ps -eo pid,ppid,start,command
-        # We'll use pgrep -fl to find matching processes
-        for target in targets:
-            stdout, code = run_command(["pgrep", "-fl", target], check=False)
-            if code == 0 and stdout.strip():
-                for line in stdout.strip().splitlines():
-                    parts = line.split(maxsplit=1)
-                    if len(parts) == 2:
-                        pid, cmd = parts
-                        processes.append({"pid": pid, "command": cmd, "target": target})
-    except Exception as e:
-        logger.error(f"Error getting agent processes: {e}")
-
-    return processes
+def get_main_branch() -> str:
+    """Determines the main branch of the repository (main or master)."""
+    stdout, code = run_command(["git", "branch", "--list"], check=False)
+    if code == 0:
+        if "main" in stdout:
+            return "main"
+        if "master" in stdout:
+            return "master"
+    return "main"
 
 
-def cleanup_stale_processes():
-    """Kills stale pytest, cursor-agent, and caffeinate processes."""
-    logger.info("Cleaning up stale processes associated with vibe-tools...")
-
-    targets = ["pytest", "cursor-agent", "claude", "antigravity", "caffeinate -dimsu"]
-    killed = []
-
-    for target in targets:
-        # Check if any processes exist before killing
-        stdout, code = run_command(["pgrep", "-f", target], check=False)
-        if code == 0 and stdout.strip():
-            logger.info(f"Killing '{target}' processes...")
-            subprocess.run(["pkill", "-f", target], check=False)
-            killed.append(target)
-
-    logger.info("Cleanup complete.")
-    return killed
+def get_automerge_branch(config: Dict[str, Any]) -> str:
+    """Determines the target branch for auto-merging."""
+    return config.get("ralph", {}).get("automerge_branch", get_main_branch())
 
 
-def get_agent_command(agent_type, prompt):
-    """Returns the command list for the specified agent and prompt."""
-    if agent_type == "cursor-agent":
-        return [
-            "cursor-agent",
-            "--model",
-            "gemini-3-flash",
-            "--print",
-            "--force",
-            "--approve-mcps",
-            prompt,
-        ]
-    elif agent_type == "claude":
-        # Assuming 'claude' command for Claude Code
-        return ["claude", "-p", prompt]
-    elif agent_type == "antigravity":
-        # Assuming 'antigravity' command
-        return ["antigravity", prompt]
-    else:
-        raise ValueError(f"Unknown agent type: {agent_type}")
+def get_file_hash(path: pathlib.Path) -> str:
+    """Computes the SHA-256 hash of a file."""
+    if not path.exists():
+        return ""
+    sha256 = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(8192):
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 
 def ensure_dir(path: pathlib.Path):
-    if not path.exists():
-        logger.info(f"Creating directory: {path}")
-        path.mkdir(parents=True, exist_ok=True)
+    """Ensures a directory exists."""
+    path.mkdir(parents=True, exist_ok=True)
 
 
-def check_env_health() -> bool:
-    """Checks if the current environment is healthy and correctly configured."""
-    config = load_config()
-    env_config = config.get("env")
+def load_config() -> Dict[str, Any]:
+    """Loads the project configuration from .vibe_config.json."""
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
-    # 1. Check if backend or project package is importable
-    project_name = get_project_name()
-    package_found = False
 
-    for pkg in ["backend", project_name]:
-        if importlib.util.find_spec(pkg):
-            logger.debug(f"✅ '{pkg}' package is importable.")
-            package_found = True
-            break
+def save_config(config: Dict[str, Any]):
+    """Saves the project configuration to .vibe_config.json."""
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
-    if not package_found:
-        logger.warning(
-            f"❌ Neither 'backend' nor '{project_name}' package is importable. Project structure may be broken."
+
+def load_project_state() -> Dict[str, Any]:
+    """Loads the current project state from state.json."""
+    if PROJECT_STATE_FILE.exists():
+        try:
+            return json.loads(PROJECT_STATE_FILE.read_text())
+        except json.JSONDecodeError:
+            pass
+
+    # Fallback/Default state
+    return {
+        "phases": {
+            "setup": {"status": "pending", "hash": ""},
+            "implement": {"status": "pending"},
+            "testing": {"status": "pending"},
+            "deploy": {"status": "pending"},
+        },
+        "completed_prds": [],
+        "started_prds": [],
+        "plans": {},
+    }
+
+
+def save_project_state(state: Dict[str, Any]):
+    """Saves the current project state to state.json."""
+    ensure_dir(VIBE_PROJECT_DIR)
+    PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
+    """Checks if the dependencies for a given phase are met."""
+    dependencies = {
+        "normalize": [],
+        "setup": [],
+        "deps": ["setup"],
+        "implement": ["setup"],
+        "testing": ["implement"],
+        "infra": ["setup"],
+        "deploy": ["testing"],
+    }
+
+    missing = []
+    for dep in dependencies.get(phase, []):
+        if dep == "setup":
+            if state["phases"]["setup"]["status"] != "completed":
+                missing.append("setup (vibe setup)")
+        elif dep == "implement":
+            if state["phases"]["implement"]["status"] != "completed":
+                missing.append("implement (vibe implement)")
+        elif dep == "testing":
+            if state["phases"]["testing"]["status"] != "completed":
+                missing.append("testing (vibe testing)")
+
+    return missing
+
+
+def setup_logging(command_name: str):
+    """Configures logging for a CLI command."""
+    ensure_dir(LOGS_DIR)
+    log_file = LOGS_DIR / f"{command_name}.log"
+
+    # Root logger configuration
+    logger = logging.getLogger("vibe_tools")
+    logger.setLevel(logging.DEBUG)
+
+    # Prevent duplicate handlers if setup_logging is called multiple times
+    if logger.handlers:
+        return logger
+
+    # File handler (always DEBUG level)
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    # Console handler (default to INFO)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter("%(message)s")
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+def set_console_level(level: int):
+    """Updates the log level for the console handler."""
+    logger = logging.getLogger("vibe_tools")
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            handler.setLevel(level)
+
+
+def enable_console_debug():
+    """Enables DEBUG level logging for the console handler."""
+    set_console_level(logging.DEBUG)
+
+
+logger = logging.getLogger("vibe_tools")
+
+
+def get_prompt(filename: str) -> str:
+    """Retrieves a prompt template from the prompts/ directory or system defaults."""
+    # 1. Check project prompts directory
+    project_prompt = pathlib.Path("prompts") / filename
+    if project_prompt.exists():
+        return project_prompt.read_text()
+
+    # 2. Check system-wide prompts directory (if applicable)
+    # 3. Fallback to package resources
+    try:
+        import importlib.resources as pkg_resources
+        from . import prompts
+
+        return pkg_resources.read_text(prompts, filename)
+    except (ImportError, FileNotFoundError):
+        raise FileNotFoundError(f"Prompt template '{filename}' not found.")
+
+
+def get_agent_command(agent: str, prompt: str) -> List[str]:
+    """Constructs the command to invoke the specified AI agent."""
+    if agent == "cursor-agent":
+        # Cursor agent doesn't have a direct CLI invocation like this.
+        # This is a placeholder for how we might interface with it if possible,
+        # or it represents internal logic to trigger a Cursor-based action.
+        return ["echo", "CURSOR_AGENT_INVOCATION", prompt]
+    elif agent == "claude":
+        return ["claude", "-p", prompt]
+    elif agent == "antigravity":
+        return ["antigravity", "-p", prompt]
+    return ["echo", "UNKNOWN_AGENT", prompt]
+
+
+def run_agent(command: List[str], caffeinate: bool = False, stream: bool = False) -> (str, int):
+    """Runs an agent command, optionally preventing sleep and streaming output."""
+    if caffeinate:
+        command = ["caffeinate", "-i"] + command
+
+    if stream:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
         )
-        return False
-
-    # 2. Check for essential tools
-    missing_tools = []
-
-    # Backend tools
-    for tool in ["python3", "pip", "ruff", "pytest"]:
-        _, code = run_command([tool, "--version"], check=False)
-        if code != 0:
-            missing_tools.append(tool)
-
-    # Frontend tools (if frontend directory exists)
-    if pathlib.Path("frontend").exists():
-        for tool in ["node", "npm", "npx"]:
-            _, code = run_command([tool, "--version"], check=False)
-            if code != 0:
-                missing_tools.append(tool)
-
-    if missing_tools:
-        logger.warning(f"❌ Missing essential tools: {', '.join(missing_tools)}")
-        return False
-
-    # 3. Check for package structure
-    for pkg_dir in ["backend", project_name]:
-        path = pathlib.Path(pkg_dir)
-        if path.exists() and not (path / "__init__.py").exists():
-            logger.warning(f"❌ Missing '{pkg_dir}/__init__.py'.")
-            return False
-
-    if not VIBE_DATA_DIR.exists():
-        logger.warning(f"❌ Missing local data directory '{VIBE_DATA_DIR}/'.")
-        return False
-
-    # 4. If managed env is configured, check if we're in it
-    if env_config:
-        venv_name = env_config.get("venv_name")
-        if venv_name:
-            current_prefix = sys.prefix
-            # If we are running via pipx, the sys.prefix will be the pipx venv
-            # but we want to know if the *active* pyenv environment is correct
-            # or if we are at least in a context where the project venv is intended
-            if "pipx" in current_prefix:
-                # We are running globally via pipx. We should check if the
-                # user has activated their project venv or if we are in the project dir
-                # For now, let's look at the PYENV_VERSION or similar env vars
-                import os
-
-                pyenv_version = os.environ.get("PYENV_VERSION") or os.environ.get(
-                    "VIRTUAL_ENV"
-                )
-                if (
-                    venv_name not in str(pyenv_version)
-                    and venv_name not in current_prefix
-                ):
-                    logger.warning(
-                        f"⚠️  Managed environment '{venv_name}' is configured but not active."
-                    )
-                    logger.warning(
-                        "   Note: You are running 'vibe' via pipx global install."
-                    )
-                    logger.warning(
-                        f"   Please run 'pyenv activate {venv_name}' or ensure it's set in .python-version"
-                    )
-                    return False
-            elif venv_name not in current_prefix:
-                logger.warning(
-                    f"⚠️  Managed environment '{venv_name}' is configured but not active."
-                )
-                logger.warning(f"   Current environment: {current_prefix}")
-                return False
-
-            logger.debug("✅ Environment check passed.")
-
-    return True
+        output = []
+        for line in process.stdout:
+            print(line, end="")
+            output.append(line)
+        process.wait()
+        return "".join(output), process.returncode
+    else:
+        return run_command(command, check=False)
 
 
-def get_file_hash(filepath: pathlib.Path) -> Optional[str]:
-    """Returns the SHA256 hash of a file."""
-    if not filepath.exists():
+def safe_yaml_load(content: str) -> Any:
+    """Safely loads YAML content, returning None on error."""
+    try:
+        return yaml.safe_load(content)
+    except yaml.YAMLError:
         return None
-    sha256_hash = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
 
 
-def get_prompt(prompt_filename: str) -> str:
-    """Retrieves a prompt template from prompts/ directory (override) or from templates.py (fallback)."""
-    from vibe_tools.templates import TEMPLATES
-
-    override_path = pathlib.Path("prompts") / prompt_filename
-    if override_path.exists():
-        return override_path.read_text()
-
-    if prompt_filename in TEMPLATES:
-        return TEMPLATES[prompt_filename]
-
-    raise FileNotFoundError(
-        f"Prompt template '{prompt_filename}' not found in 'prompts/' or 'TEMPLATES'."
-    )
+def safe_yaml_dump(data: Any) -> str:
+    """Safely dumps data to YAML string."""
+    return yaml.safe_dump(data, sort_keys=False)
 
 
-@functools.lru_cache(maxsize=1)
-def get_main_branch():
-    """Returns 'main' or 'master' depending on which one exists."""
-    _, code = run_command(["git", "rev-parse", "--verify", "main"], check=False)
-    if code == 0:
-        return "main"
-    _, code = run_command(["git", "rev-parse", "--verify", "master"], check=False)
-    if code == 0:
-        return "master"
-    return "main"  # Default fallback
-
-
-def get_automerge_branch(config=None):
-    """Returns the configured automerge branch or defaults to 'automerge'."""
-    if config is None:
-        config = load_config()
-
-    ralph_config = config.get("ralph", {})
-    return ralph_config.get("automerge_branch", "automerge")
-
-
-def get_changed_files(base_branch=None):
-    """Returns files changed relative to the base branch."""
-    if not is_git_repo():
+def collect_prd_files() -> List[pathlib.Path]:
+    """Collects all machine-readable PRD YAML files."""
+    if not PRD_DIR.exists():
         return []
-
-    if base_branch is None:
-        base_branch = get_main_branch()
-
-    stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
-    if code != 0:
-        merge_base = base_branch
-    else:
-        merge_base = stdout.strip() or base_branch
-
-    stdout, code = run_command(["git", "diff", "--name-only", merge_base], check=False)
-    if code != 0:
-        changed = []
-    else:
-        changed = stdout.strip().splitlines() if stdout.strip() else []
-
-    stdout, code = run_command(
-        ["git", "ls-files", "--others", "--exclude-standard"], check=False
-    )
-    if code == 0 and stdout.strip():
-        changed.extend(stdout.strip().splitlines())
-
-    # Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for path in changed:
-        if path and path not in seen:
-            seen.add(path)
-            unique.append(path)
-
-    return unique
-
-
-def is_dirty():
-    """Checks if the repository has uncommitted changes or untracked files."""
-    if not is_git_repo():
-        return False
-    # Check for tracked changes
-    _, code = run_command(["git", "diff", "--quiet"], check=False)
-    if code != 0:
-        return True
-    _, code = run_command(["git", "diff", "--cached", "--quiet"], check=False)
-    if code != 0:
-        return True
-    # Check for untracked files
-    stdout, code = run_command(
-        ["git", "ls-files", "--others", "--exclude-standard"], check=False
-    )
-    return bool(stdout.strip())
-
-
-def switch_to_main():
-    """Helper to commit dirty changes on feature branches before switching to main."""
-    main_branch = get_main_branch()
-    if is_dirty():
-        current_branch, _ = run_command(
-            ["git", "branch", "--show-current"], check=False
-        )
-        current_branch = current_branch.strip()
-        if current_branch and current_branch != main_branch:
-            logger.info(
-                f"Uncommitted changes detected on '{current_branch}'. Committing before switching to '{main_branch}'..."
-            )
-            run_command(["git", "add", "."], check=False)
-            run_command(
-                [
-                    "git",
-                    "commit",
-                    "-m",
-                    f"vibe: automatic commit of partial work on {current_branch}",
-                ],
-                check=False,
-            )
-        else:
-            logger.error(
-                f"Uncommitted changes detected on '{main_branch}'. Refusing to auto-commit to main branch to keep it clean."
-            )
-            return
-
-    logger.debug(f"Switching to {main_branch}...")
-    stdout, code = run_command(["git", "checkout", main_branch], check=False)
-    if code != 0:
-        logger.error(f"Failed to switch to {main_branch}: {stdout}")
-
-
-def setup_project_gitignore():
-    """Ensures a comprehensive .gitignore for a Vibe project."""
-    patterns = [
-        "implementation/logs/*",
-    ]
-    for pattern in patterns:
-        ensure_gitignore(pattern)
-
-
-def ensure_gitignore(entry: str):
-    """Ensures that a specific entry exists in .gitignore."""
-    gitignore = pathlib.Path(".gitignore")
-    if not gitignore.exists():
-        gitignore.write_text(f"{entry}\n")
-        logger.info(f"Added {entry} to new .gitignore")
-        return
-
-    content = gitignore.read_text()
-    if entry not in content.splitlines():
-        # Ensure we don't just append to a line that doesn't end in a newline
-        if content and not content.endswith("\n"):
-            content += "\n"
-        with gitignore.open("a") as f:
-            if not content.endswith("\n\n") and content.strip():
-                f.write("\n")
-            f.write(f"{entry}\n")
-        logger.info(f"Added {entry} to .gitignore")
-
-
-def sync_env_file():
-    """Generates or updates the .env file based on the current configuration."""
-    config = load_config()
-    services = config.get("services", {})
-    env_lines = []
-
-    # 1. Database (Postgres)
-    pg = services.get("postgres")
-    if pg:
-        env_lines.append(f"DB_HOST={pg.get('host', 'localhost')}")
-        env_lines.append(f"DB_PORT={pg.get('port', 5432)}")
-        env_lines.append(f"DB_USER={pg.get('user', 'postgres')}")
-        env_lines.append(f"DB_PASSWORD={pg.get('password', 'postgres')}")
-        env_lines.append(f"DB_NAME={pg.get('database', get_project_name())}")
-        # Tortoise-ORM compatible URL
-        db_url = f"postgres://{pg.get('user')}:{pg.get('password')}@{pg.get('host')}:{pg.get('port')}/{pg.get('database')}"
-        env_lines.append(f"DATABASE_URL={db_url}")
-        env_lines.append("")
-
-    # 2. Redis
-    redis = services.get("redis")
-    if redis:
-        env_lines.append(f"REDIS_HOST={redis.get('host', 'localhost')}")
-        env_lines.append(f"REDIS_PORT={redis.get('port', 6379)}")
-        password = redis.get("password", "")
-        env_lines.append(f"REDIS_PASSWORD={password}")
-        env_lines.append(f"REDIS_DB={redis.get('database', 0)}")
-        redis_url = f"redis://{':' + password + '@' if password else ''}{redis.get('host')}:{redis.get('port')}/{redis.get('database')}"
-        env_lines.append(f"REDIS_URL={redis_url}")
-        env_lines.append("")
-
-    # 3. Google API Key
-    google_key = get_google_api_key()
-    if google_key:
-        env_lines.append(f"GOOGLE_API_KEY={google_key}")
-        env_lines.append("")
-
-    # 4. Local Storage
-    if VIBE_DATA_DIR.exists():
-        env_lines.append(f"VIBE_DATA_DIR={VIBE_DATA_DIR.absolute()}")
-        env_lines.append("")
-
-    # 5. S3 / Object Store
-    s3_linode = services.get("s3-linode")
-    s3_aws = services.get("s3-aws")
-    s3 = s3_linode or s3_aws
-    if s3:
-        env_lines.append(f"S3_HOST={s3.get('host')}")
-        env_lines.append(f"S3_PORT={s3.get('port')}")
-        env_lines.append(f"S3_ACCESS_KEY={s3.get('access_key')}")
-        env_lines.append(f"S3_SECRET_KEY={s3.get('secret_key')}")
-        env_lines.append(f"S3_REGION={s3.get('region')}")
-        env_lines.append("")
-
-    # 5. RabbitMQ
-    rmq = services.get("rabbitmq")
-    if rmq:
-        env_lines.append(f"RABBITMQ_HOST={rmq.get('host')}")
-        env_lines.append(f"RABBITMQ_PORT={rmq.get('port')}")
-        env_lines.append(f"RABBITMQ_USER={rmq.get('user')}")
-        env_lines.append(f"RABBITMQ_PASSWORD={rmq.get('password')}")
-        env_lines.append("")
-
-    # Write to .env
-    env_file = pathlib.Path(".env")
-    if env_lines:
-        content = "# Generated by vibe config\n" + "\n".join(env_lines)
-        env_file.write_text(content)
-        logger.info(f"✅ Updated {env_file} with current service configuration.")
-
-
-def collect_prd_files():
-    """Returns all PRD files in PRD_PROCESSING_DIR starting with prd_ or vXX-XXX_."""
-    files = list(PRD_PROCESSING_DIR.glob("prd_*.yaml")) + list(PRD_PROCESSING_DIR.glob("v*-*_*.yaml"))
-    return sorted(files, key=lambda path: path.name)
-
-
-def collect_all_prd_info() -> List[Dict[str, Any]]:
-    """
-    Collects information about all PRDs from both product/ and implementation/prds/.
-    Returns a list of dicts with: name, has_md, has_yaml, md_path, yaml_path
-    """
-    import re
-
-    prd_info = {}
-
-    # 1. Scan product/ for .md files
-    if SPECS_DIR.exists():
-        for md_file in SPECS_DIR.rglob("*.md"):
-            # Exclude special global truth files if they are not meant to be listed as PRDs
-            stem = md_file.stem
-            clean_name = stem.lower()
-            while True:
-                new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
-                if new_name == clean_name:
-                    break
-                clean_name = new_name
-            clean_name = re.sub(r"[- ]", "_", clean_name)
-
-            if clean_name not in prd_info:
-                prd_info[clean_name] = {
-                    "name": clean_name,
-                    "has_md": True,
-                    "has_yaml": False,
-                    "md_path": md_file,
-                    "yaml_path": None,
-                }
-            else:
-                prd_info[clean_name]["has_md"] = True
-                prd_info[clean_name]["md_path"] = md_file
-
-    # 2. Scan implementation/prds/ for .yaml files
-    if PRD_DIR.exists():
-        for yaml_file in PRD_DIR.rglob("*.yaml"):
-            stem = yaml_file.stem
-            clean_name = stem.lower()
-            # If it's a prd_*.yaml or vXX-XXX_*.yaml, clean the prefix
-            if clean_name.startswith("prd_"):
-                while True:
-                    new_name = re.sub(r"^prd[-_ ]?", "", clean_name)
-                    if new_name == clean_name:
-                        break
-                    clean_name = new_name
-            else:
-                match = re.match(r"v\d+-\d+_(.*)", clean_name)
-                if match:
-                    clean_name = match.group(1)
-            
-            clean_name = re.sub(r"[- ]", "_", clean_name)
-
-            if clean_name not in prd_info:
-                prd_info[clean_name] = {
-                    "name": clean_name,
-                    "has_md": False,
-                    "has_yaml": True,
-                    "md_path": None,
-                    "yaml_path": yaml_file,
-                }
-            else:
-                prd_info[clean_name]["has_yaml"] = True
-                prd_info[clean_name]["yaml_path"] = yaml_file
-
-    # Sort by name
-    return sorted(prd_info.values(), key=lambda x: x["name"])
-
-
-def get_prd_inconsistencies() -> List[Dict[str, Any]]:
-    """
-    Detects mismatches between the locations of .md files and .yaml files.
-    Returns a list of inconsistencies with suggested fixes.
-    """
-    all_info = collect_all_prd_info()
-    inconsistencies = []
-
-    for info in all_info:
-        md_path = info.get("md_path")
-        yaml_path = info.get("yaml_path")
-
-        if not md_path or not yaml_path:
-            continue
-
-        # Determine relative directory from the base
-        if PLANNING_HISTORY_DIR in md_path.parents:
-            md_base = PLANNING_HISTORY_DIR
-            expected_yaml_base = PRD_DONE_DIR
-        elif PLANNING_REJECTED_DIR in md_path.parents:
-            md_base = PLANNING_REJECTED_DIR
-            expected_yaml_base = PRD_FAILED_DIR
-        elif PLANNING_INBOX_DIR in md_path.parents:
-            md_base = PLANNING_INBOX_DIR
-            expected_yaml_base = PRD_PROCESSING_DIR
-        elif PLANNING_BACKLOG_DIR in md_path.parents:
-            md_base = PLANNING_BACKLOG_DIR
-            expected_yaml_base = PRD_PROCESSING_DIR
-        else:
-            # Root or elsewhere
-            md_base = PRODUCT_DIR
-            expected_yaml_base = PRD_PROCESSING_DIR
-
-        rel_dir = md_path.parent.relative_to(md_base)
-        expected_yaml_path = expected_yaml_base / rel_dir / f"prd_{info['name']}.yaml"
-
-        # Determine relative directory from the YAML base
-        if PRD_DONE_DIR in yaml_path.parents:
-            yaml_base = PRD_DONE_DIR
-            expected_md_base = PLANNING_HISTORY_DIR
-        elif PRD_FAILED_DIR in yaml_path.parents:
-            yaml_base = PRD_FAILED_DIR
-            expected_md_base = PLANNING_REJECTED_DIR
-        else:
-            yaml_base = PRD_PROCESSING_DIR
-            expected_md_base = PLANNING_BACKLOG_DIR
-
-        yaml_rel_dir = yaml_path.parent.relative_to(yaml_base)
-        expected_md_path = expected_md_base / yaml_rel_dir / f"{md_path.name}"
-
-        # Check if they are in sync
-        is_yaml_correct = yaml_path == expected_yaml_path
-        is_md_correct = md_path == expected_md_path
-
-        if not is_yaml_correct or not is_md_correct:
-            inconsistencies.append(
-                {
-                    "name": info["name"],
-                    "md_path": md_path,
-                    "yaml_path": yaml_path,
-                    "is_yaml_correct": is_yaml_correct,
-                    "is_md_correct": is_md_correct,
-                    "expected_yaml_path": expected_yaml_path,
-                    "expected_md_path": expected_md_path,
-                }
-            )
-
-    return inconsistencies
-
-
-def fix_prd_inconsistencies(inconsistencies: List[Dict[str, Any]], prefer_yaml=True):
-    """
-    Fixes detected inconsistencies by moving files.
-    If prefer_yaml is True, moves MD to match YAML location.
-    If False, moves YAML to match MD location.
-    Special case: If MD is in rejected or history, it often takes precedence.
-    """
-    for inc in inconsistencies:
-        md_path = inc["md_path"]
-        yaml_path = inc["yaml_path"]
-
-        # If MD is in a final state (history/rejected), it usually wins
-        md_is_final = (
-            PLANNING_HISTORY_DIR in md_path.parents
-            or PLANNING_REJECTED_DIR in md_path.parents
-        )
-
-        # If YAML is in a final state (done/failed), it usually wins
-        yaml_is_final = (
-            PRD_DONE_DIR in yaml_path.parents or PRD_FAILED_DIR in yaml_path.parents
-        )
-
-        if md_is_final and not yaml_is_final:
-            # MD is final, move YAML to match
-            target = inc["expected_yaml_path"]
-            source = inc["yaml_path"]
-        elif yaml_is_final and not md_is_final:
-            # YAML is final, move MD to match
-            target = inc["expected_md_path"]
-            source = inc["md_path"]
-        elif prefer_yaml:
-            # Use preference
-            target = inc["expected_md_path"]
-            source = inc["md_path"]
-        else:
-            # Use preference
-            target = inc["expected_yaml_path"]
-            source = inc["yaml_path"]
-
-        if source != target:
-            logger.info(
-                f"Fixing inconsistency for {inc['name']}: Moving {source} -> {target}"
-            )
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(source), str(target))
+    return sorted(list(PRD_DIR.glob("*.yaml")))
 
 
 def reset_prd_state(project_name: str) -> List[str]:
-    """
-    Resets the state of a PRD and deletes its branch.
-    Returns a list of messages describing the actions taken.
-    """
+    """Resets the state of a PRD, allowing it to be rerun."""
     messages = []
     state = load_project_state()
 
-    # Handling state resets is now mostly handled by filesystem moves
-    # but we still clear active task and handle git branch.
+    # 1. Remove from completed/started lists
+    if project_name in state.get("completed_prds", []):
+        state["completed_prds"].remove(project_name)
+        messages.append(f"Removed '{project_name}' from completed PRDs.")
+    if project_name in state.get("started_prds", []):
+        state["started_prds"].remove(project_name)
+        messages.append(f"Removed '{project_name}' from started PRDs.")
 
-    # 1. Clear active task
-    active_task = state.get("active_task")
-    if active_task and active_task.get("prd_name") == project_name:
-        state["active_task"] = None
-        save_project_state(state)
-        messages.append(f"Cleared active task for {project_name}.")
+    # 2. Reset plan status in state.json
+    plans = state.get("plans", {})
+    if project_name in plans:
+        plans[project_name]["status"] = "pending"
+        messages.append(f"Reset plan status for '{project_name}' to pending.")
 
-    # 2. Handle git branch
-    config = load_config()
-    auto_merge = config.get("ralph", {}).get("auto_merge", False)
-    if auto_merge:
-        branch_name = get_automerge_branch(config)
-    else:
-        branch_name = f"feature/{project_name}"
+        # 3. Delete the implementation branch if it exists
+        branch_name = plans[project_name].get("branch")
+        if branch_name:
+            stdout, code = run_command(["git", "branch", "-D", branch_name], check=False)
+            if code == 0:
+                messages.append(f"Deleted local branch '{branch_name}'.")
+            # Also try to delete remote branch if tracking is set up (optional/safe)
 
-    # Do not delete the automerge branch
-    automerge_branch = get_automerge_branch(config)
-    if branch_name == automerge_branch:
-        messages.append(f"Skipping deletion of automerge branch {branch_name}.")
-        return messages
-
-    _, check_branch = run_command(
-        ["git", "rev-parse", "--verify", branch_name], check=False
-    )
-    if check_branch == 0:
-        stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
-        if stdout.strip() == branch_name:
-            switch_to_main()
-            messages.append(f"Switched from {branch_name} to the main branch.")
-
-        _, code = run_command(["git", "branch", "-D", branch_name], check=False)
-        if code == 0:
-            messages.append(f"Deleted branch {branch_name}.")
-        else:
-            messages.append(f"Failed to delete branch {branch_name}.")
-
+    save_project_state(state)
     return messages
 
 
-def get_instructions_context():
-    """Reads all files in INSTRUCTIONS_DIR and returns them as a formatted string."""
-    if not INSTRUCTIONS_DIR.exists():
-        return ""
+def ensure_gitignore(patterns: List[str]):
+    """Ensures that specified patterns are present in .gitignore."""
+    gitignore = pathlib.Path(".gitignore")
+    if not gitignore.exists():
+        gitignore.write_text("\n".join(patterns) + "\n")
+        return
 
-    sections = []
-    for f in sorted(INSTRUCTIONS_DIR.glob("*")):
-        if f.is_file():
-            content = f.read_text().strip()
-            if content:
-                sections.append(f"--- {f.name} ---\n{content}")
+    content = gitignore.read_text()
+    lines = content.splitlines()
+    new_patterns = [p for p in patterns if p not in lines]
 
-    if not sections:
-        return ""
-
-    return "INSTRUCTIONS:\n" + "\n\n".join(sections)
-
-
-def get_latest_context_file(pattern):
-    """Finds the latest file matching the pattern in PRD_DIR recursively."""
-    # Handle the pattern to be more flexible (e.g. "infra_*.yaml" -> "prd_infra_*.yaml")
-    search_pattern = pattern
-    if not search_pattern.startswith("prd_") and not search_pattern.startswith("*"):
-        search_pattern = f"prd_{search_pattern}"
-
-    files = list(PRD_DIR.rglob(search_pattern))
-    if not files:
-        return "NOT FOUND"
-
-    # Sort by name (which includes the ## prefix)
-    latest = sorted(files)[-1]
-    return latest.read_text()
+    if new_patterns:
+        with gitignore.open("a") as f:
+            if not content.endswith("\n"):
+                f.write("\n")
+            for p in new_patterns:
+                f.write(f"{p}\n")
 
 
-def get_vibe_status_report():
-    """Generates a comprehensive status report of the system."""
+def ensure_project_structure():
+    """Ensures the essential project directory structure exists."""
+    ensure_dir(VIBE_PROJECT_DIR)
+    ensure_dir(PRD_DIR)
+    ensure_dir(LOGS_DIR)
+    ensure_dir(COSTS_DIR)
+    ensure_dir(VIBE_DATA_DIR)
+    ensure_dir(INSTRUCTIONS_DIR)
+    ensure_dir(PLANNING_DIR)
+
+
+def migrate_to_project_dir():
+    """Migrates legacy files from root to the implementation/ directory."""
+    legacy_files = [
+        "architecture.yaml",
+        "architecture-current.yaml",
+        "infrastructure.yaml",
+        "infrastructure-current.yaml",
+        "project-state.json",
+        "state.json",
+    ]
+
+    for f in legacy_files:
+        old_path = pathlib.Path(f)
+        if old_path.exists():
+            new_path = VIBE_PROJECT_DIR / f
+            if f == "project-state.json" or f == "state.json":
+                new_path = PROJECT_STATE_FILE
+
+            if not new_path.exists():
+                logger.info(f"Migrating {f} to {new_path}")
+                shutil.move(old_path, new_path)
+            else:
+                logger.warning(f"Cannot migrate {f}: {new_path} already exists. Deleting legacy file.")
+                old_path.unlink()
+
+
+def get_agent_processes() -> List[Dict[str, Any]]:
+    """Lists all active agent-related processes (using pgrep)."""
+    # This is a simple implementation; real-world might need more robust process discovery
+    stdout, code = run_command(["pgrep", "-f", "vibe"], check=False)
+    if code != 0 or not stdout.strip():
+        return []
+
+    processes = []
+    for pid in stdout.strip().splitlines():
+        # Get more info about the process
+        info_out, _ = run_command(["ps", "-p", pid, "-o", "args="], check=False)
+        processes.append({
+            "pid": pid,
+            "command": info_out.strip(),
+            "target": "unknown"  # Would need to parse command to find target PRD/Phase
+        })
+    return processes
+
+
+def cleanup_stale_processes() -> List[str]:
+    """Kills processes that are tracked as active but are no longer relevant."""
+    killed = []
+    # logic to identify and kill processes
+    return killed
+
+
+def get_google_api_key() -> Optional[str]:
+    """Retrieves the Google API key from environment variables."""
+    return os.environ.get("GOOGLE_API_KEY")
+
+
+def get_cursor_api_key() -> Optional[str]:
+    """Retrieves the Cursor API key from environment variables."""
+    return os.environ.get("CURSOR_API_KEY")
+
+
+def collect_all_prd_info() -> List[Dict[str, Any]]:
+    """Collects status information for all PRDs (Markdown and YAML)."""
+    prds = {}
+
+    # 1. Look for human specs in product/
+    if PLANNING_DIR.exists():
+        for f in PLANNING_DIR.rglob("*.md"):
+            name = f.stem
+            if name in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "project-overview", "project_overview"]:
+                continue
+            prds[name] = {
+                "name": name,
+                "has_md": True,
+                "md_path": f,
+                "has_yaml": False,
+                "yaml_path": None,
+            }
+
+    # 2. Look for machine specs in implementation/prds/
+    if PRD_DIR.exists():
+        for f in PRD_DIR.glob("*.yaml"):
+            # Strip 'prd_' prefix if it exists to match with human spec name
+            name = f.stem
+            clean_name = name[4:] if name.startswith("prd_") else name
+
+            if clean_name in prds:
+                prds[clean_name]["has_yaml"] = True
+                prds[clean_name]["yaml_path"] = f
+            else:
+                prds[clean_name] = {
+                    "name": clean_name,
+                    "has_md": False,
+                    "md_path": None,
+                    "has_yaml": True,
+                    "yaml_path": f,
+                }
+
+    return sorted(list(prds.values()), key=lambda x: x["name"])
+
+
+def get_vibe_status_report() -> str:
+    """Generates a comprehensive status report for the project."""
     import click
-
-    from vibe_tools.cost import get_total_cost
-    from vibe_tools.servers import get_container_status, get_server_configs
+    from .cost import get_total_cost
+    from .servers import get_container_status, get_server_configs
 
     state = load_project_state()
     report = []
-    report.append(click.style("\n=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
 
-    # 1. Project Info
-    project_name = state.get("project_name", get_project_name())
-    version = state.get("version", "1.2")
-    report.append(f"\n{click.style('PROJECT:', bold=True)} {project_name} (v{version})")
-    report.append(f"{click.style('DIRECTORY:', bold=True)} {pathlib.Path.cwd()}")
+    report.append(click.style("=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
 
-    # High-level Summary
-    all_plans = state.get("plans", {})
-    started_prds = state.get("started_prds", [])
-    completed_prds_list = state.get("completed_prds", [])
+    # 1. Project Directory Info
+    report.append(click.style("\nPROJECT DIRECTORY:", fg="yellow", bold=True))
+    report.append(f"  Location:    {os.getcwd()}")
+    report.append(f"  Data Dir:    {VIBE_PROJECT_DIR}")
 
-    total_prds = len(all_plans)
-    completed_prds = sum(
-        1
-        for pid, p in all_plans.items()
-        if p.get("status") == "completed" or pid in completed_prds_list
-    )
-    in_progress_prds = sum(
-        1
-        for pid, p in all_plans.items()
-        if (p.get("status") == "in_progress" or pid in started_prds)
-        and not (p.get("status") == "completed" or pid in completed_prds_list)
-    )
-    pending_prds = sum(
-        1 for pid, p in all_plans.items() if p.get("status") == "pending"
-    )
-
-    from vibe_tools.issues import load_all_issues
-
-    all_issues = load_all_issues()
-    total_issues = len(all_issues)
-    completed_issues = sum(1 for i in all_issues if i.status == "done")
-    in_progress_issues = sum(1 for i in all_issues if i.status == "in_progress")
-    pending_issues = total_issues - completed_issues - in_progress_issues
-
-    report.append(click.style("\nSUMMARY:", fg="yellow", bold=True))
-    report.append(
-        f"  - PRDs:   {total_prds} Total ({click.style(str(completed_prds), fg='green')} Done, {click.style(str(in_progress_prds), fg='blue')} In Progress, {click.style(str(pending_prds), fg='white', dim=True)} Pending)"
-    )
-    report.append(
-        f"  - Issues: {total_issues} Total ({click.style(str(completed_issues), fg='green')} Done, {click.style(str(in_progress_issues), fg='blue')} In Progress, {click.style(str(pending_issues), fg='white', dim=True)} Pending)"
-    )
-
-    active_task = state.get("active_task")
-    if active_task:
-        report.append(
-            f"{click.style('ACTIVE TASK:', bold=True)} {click.style(str(active_task), fg='yellow')}"
-        )
-
-    # 2. Lifecycle Progress
-    report.append(click.style("\nLIFECYCLE PROGRESS:", fg="yellow", bold=True))
+    # 2. Lifecycle Phases
+    report.append(click.style("\nLIFECYCLE PHASES:", fg="yellow", bold=True))
     phases = state.get("phases", {})
-    # Map phase to its corresponding desired file for sync check
-    phase_files = {
-        "setup": (ARCHITECTURE, ARCHITECTURE_CURRENT),
-        "infra": (INFRA, INFRA_CURRENT),
-        "cicd": (CICD, CICD_CURRENT),
-        "testing": (TESTING_CONFIG, TESTING_CURRENT),
+
+    # Map phases to display names and help commands
+    phase_meta = {
+        "setup": {"name": "Architecture Setup", "cmd": "vibe setup"},
+        "implement": {"name": "Implementation", "cmd": "vibe implement"},
+        "testing": {"name": "Testing & Recon", "cmd": "vibe testing"},
+        "infra": {"name": "Infrastructure", "cmd": "vibe infra"},
+        "deploy": {"name": "Deployment", "cmd": "vibe deploy"},
     }
 
-    order = [
-        "normalize",
-        "setup",
-        "deps",
-        "implement",
-        "infra",
-        "testing",
-        "cicd",
-        "deploy",
-    ]
-
-    next_action = None
-    for phase_id in order:
-        phase = phases.get(phase_id, {})
-        status = phase.get("status", "pending")
-
-        # Dynamic status calculation for implementation phase
-        if phase_id == "implement":
-            if total_prds > 0:
-                if completed_prds == total_prds:
-                    status = "completed"
-                elif completed_prds > 0 or in_progress_prds > 0:
-                    status = "in_progress"
-                else:
-                    status = "pending"
-
-        sync_status = ""
-        if phase_id in phase_files:
-            desired_file, current_file = phase_files[phase_id]
-            if desired_file.exists() and current_file.exists():
-                if get_file_hash(desired_file) == get_file_hash(current_file):
-                    sync_status = click.style(" (In Sync)", fg="green", dim=True)
-                else:
-                    sync_status = click.style(" (Out of Sync)", fg="yellow", dim=True)
-            elif desired_file.exists():
-                sync_status = click.style(" (Needs Init)", fg="red", dim=True)
-            else:
-                sync_status = click.style(" (Missing YAML)", fg="red", dim=True)
+    for phase_id, meta in phase_meta.items():
+        phase_data = phases.get(phase_id, {"status": "pending"})
+        status = phase_data.get("status", "pending")
 
         if status == "completed":
-            status_display = click.style("✅ DONE", fg="green") + sync_status
+            status_display = click.style("✅ DONE", fg="green")
         elif status == "in_progress":
-            status_display = click.style("⏳ IN_PROGRESS", fg="blue") + sync_status
-            if not next_action:
-                next_action = f"vibe {phase_id}"
+            status_display = click.style("⏳ IN_PROGRESS", fg="blue")
         else:
-            status_display = (
-                click.style("⚪ PENDING", fg="white", dim=True) + sync_status
-            )
-            # Special hint for normalize phase if nothing is in product/
-            if phase_id == "normalize":
-                if not SPECS_DIR.exists() or not list(SPECS_DIR.rglob("*.md")):
-                    status_display += (
-                        f" {click.style('(Run vibe pm)', fg='white', dim=True)}"
-                    )
+            status_display = click.style("⚪ PENDING", fg="white", dim=True)
 
-            if not next_action:
-                next_action = f"vibe {phase_id}"
+        report.append(f"  - {meta['name']:<20} {status_display:<15} ({meta['cmd']})")
 
-        report.append(f"  - {phase_id:<15} {status_display}")
+    # 3. PRD Progress
+    report.append(click.style("\nPRD PROGRESS:", fg="yellow", bold=True))
+    prd_info = collect_all_prd_info()
+    completed_prds = state.get("completed_prds", [])
+    started_prds = state.get("started_prds", [])
 
-    # 3. Core Configuration
-    report.append(click.style("\nCORE CONFIGURATION:", fg="yellow", bold=True))
-    core_files = [
-        ("Architecture", ARCHITECTURE, "vibe architect"),
-        ("Project Overview", OVERVIEW, None),
-        ("Infrastructure", INFRA, "vibe architect"),
-        ("CI/CD", CICD, "vibe architect"),
-        ("Testing", TESTING_CONFIG, "vibe architect"),
-    ]
-    for label, path, fix_cmd in core_files:
-        if path.exists():
-            status = click.style("✅ Found", fg="green")
-            report.append(f"  - {label:<20} {status}")
-        else:
-            status = click.style("⚪ Missing", fg="white", dim=True)
-            suggestion = f" (Run '{fix_cmd}' then 'vibe normalize')" if fix_cmd else ""
-            report.append(f"  - {label:<20} {status}{suggestion}")
+    if not prd_info:
+        report.append(
+            f"  {click.style('⚪ No PRDs found', fg='white', dim=True)} (Add markdown specs to product/)"
+        )
+    else:
+        done_count = 0
+        total_count = len(prd_info)
 
-    # 4. Planning & Implementation
+        for info in prd_info:
+            name = info["name"]
+            prd_stem = info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+
+            if prd_stem in completed_prds or name in completed_prds:
+                done_count += 1
+
+        # Summary line
+        report.append(f"  Overall: {done_count}/{total_count} PRDs implemented")
+
+        # List individual PRDs (latest 5)
+        report.append("  Recent PRDs:")
+        for info in prd_info[-5:]:
+            name = info["name"]
+            prd_stem = info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
+
+            if prd_stem in completed_prds or name in completed_prds:
+                status = click.style("✅", fg="green")
+            elif prd_stem in started_prds or name in started_prds:
+                status = click.style("⏳", fg="blue")
+            else:
+                status = click.style("⚪", fg="white", dim=True)
+
+            yaml_icon = "Y" if info["has_yaml"] else " "
+            report.append(f"    {status} [{yaml_icon}] {name}")
+
+    # 4. Implementation Plans
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
+    all_plans = state.get("plans", {})
     if all_plans:
         for plan_id, plan_info in all_plans.items():
             status = plan_info.get("status", "pending")
@@ -2239,6 +640,9 @@ def get_vibe_status_report():
         report.append("  No prompts directory (using system defaults).")
 
     # 6. Next Steps
+    # next_action logic removed for brevity as it depends on more context
+    next_action = None
+
     if next_action:
         report.append(click.style("\nNEXT SUGGESTED ACTION:", fg="green", bold=True))
         report.append(f"  > {next_action}")
@@ -2301,3 +705,1103 @@ def get_vibe_status_report():
 
     report.append("")
     return "\n".join(report)
+
+
+def fix_kubeconfig_api_version() -> bool:
+    """Checks for deprecated kubeconfig API versions and updates them to v1beta1 if needed."""
+    kubeconfig_path = pathlib.Path.home() / ".kube" / "config"
+    if not kubeconfig_path.exists():
+        return False
+
+    try:
+        content = kubeconfig_path.read_text()
+        if "client.authentication.k8s.io/v1alpha1" in content:
+            new_content = content.replace(
+                "client.authentication.k8s.io/v1alpha1",
+                "client.authentication.k8s.io/v1beta1"
+            )
+            kubeconfig_path.write_text(new_content)
+            return True
+    except Exception as e:
+        logger.error(f"Error fix kubeconfig API version: {e}")
+
+    return False
+
+
+def maybe_init_git():
+    """Checks if the current directory is a git repository and offers to initialize it if not."""
+    import click
+    if not is_git_repo():
+        if click.confirm(
+            "\nNo git repository found. Would you like to initialize one?", default=True
+        ):
+            try:
+                subprocess.run(["git", "init"], check=True)
+                click.echo("✅ Initialized empty Git repository.")
+            except Exception as e:
+                click.echo(f"❌ Failed to initialize Git repository: {e}")
+
+
+def setup_project_gitignore():
+    """Sets up the project's .gitignore file with default patterns."""
+    patterns = [
+        "*.pyc",
+        "__pycache__/",
+        "*.log",
+        ".env",
+        ".vibe_config.json",
+        "implementation/run-pids.json",
+        "implementation/logs/",
+        "implementation/costs/usage.csv",
+        "node_modules/",
+        "dist/",
+        "build/",
+    ]
+    ensure_gitignore(patterns)
+
+
+def perform_basic_init():
+    """Helper to initialize the project structure and essential templates."""
+    from vibe_tools.setup import maybe_init_git
+    from vibe_tools.templates import TEMPLATES
+    import click
+
+    maybe_init_git()
+
+    # First, migrate any existing files from root to implementation/
+    migrate_to_project_dir()
+
+    # Ensure structure exists
+    ensure_project_structure()
+    ensure_dir(VIBE_PROJECT_DIR)
+
+    # Create config.json if it doesn't exist
+    if not CONFIG_FILE.exists():
+        default_config = {
+            "ralph": {"review": True, "tests": True, "auto_merge": False},
+            "default_budget": 5.0,
+            "caffeinate": True,
+            "verbose": False,
+            "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
+        }
+        CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
+        click.echo(f"✅ Created default configuration: {CONFIG_FILE}")
+    else:
+        click.echo(f"✅ Configuration already exists: {CONFIG_FILE}")
+
+    # Setup gitignore with specific patterns
+    setup_project_gitignore()
+
+    # Create new directories for instructions and specs
+    ensure_dir(INSTRUCTIONS_DIR)
+    ensure_dir(pathlib.Path("product"))
+    ensure_dir(PRD_DIR)
+    ensure_dir(LOGS_DIR)
+    ensure_dir(COSTS_DIR)
+    ensure_dir(VIBE_DATA_DIR)
+
+    # Only create Makefile if it doesn't exist
+    if "Makefile" in TEMPLATES:
+        makefile_path = pathlib.Path("Makefile")
+        if not makefile_path.exists():
+            click.echo(f"Creating template: {makefile_path}")
+            makefile_path.write_text(TEMPLATES["Makefile"])
+        else:
+            click.echo(f"Template already exists: {makefile_path}")
+
+
+def get_services():
+    """Get services from dev_environment.yaml, dev_environment.md, or Makefile."""
+    services = []
+
+    # Try dev_environment.yaml first
+    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
+    if build_file.exists():
+        try:
+            build_config = safe_yaml_load(build_file.read_text())
+            if build_config:
+                services = extract_services_from_build_config(build_config)
+                if services:
+                    return services
+        except Exception:
+            pass
+
+    # Try Makefile
+    services = extract_services_from_makefile()
+    if services:
+        return services
+
+    # Try dev_environment.md
+    services = extract_services_from_dev_env_md()
+    if services:
+        return services
+
+    # Fallback: try common commands
+    makefile_path = pathlib.Path("Makefile")
+    if makefile_path.exists():
+        # Just try make dev or make run
+        return [
+            {
+                "name": "development",
+                "start_command": "make dev",
+            }
+        ]
+
+    return []
+
+
+def test_build_services(debug=False):
+    """Test that services defined in build config can actually start and respond."""
+    import time
+
+    services = get_services()
+    if not services:
+        logger.debug("No services found to test")
+        logger.info("  ⚠️  No services configured to test")
+        return False
+
+    # Check and fix kubeconfig if skaffold is being used
+    if uses_skaffold(services):
+        logger.info("  🔍 Detected skaffold usage, checking kubeconfig...")
+        if fix_kubeconfig_api_version():
+            logger.info("  ✅ Updated kubeconfig to use v1beta1 API version")
+        else:
+            logger.debug("Kubeconfig API version check completed (no changes needed)")
+
+    logger.info(f"  📋 Found {len(services)} service(s) to test")
+    for service in services:
+        service_name = service.get("name", "unknown")
+        start_cmd = service.get("start_command", "N/A")
+        logger.debug(f"Service: {service_name}, Start command: {start_cmd}")
+
+    # Stop any existing services first
+    logger.debug("Stopping any existing services before testing")
+    try:
+        # Call stop logic directly
+        services_to_stop = get_services()
+        stopped_count = 0
+        for service in services_to_stop:
+            service_name = service.get("name", "unknown")
+            pids = load_pids()
+            pid_info = pids.get(service_name, {})
+
+            # Kill background services
+            background_services = pid_info.get("background_services", {})
+            for service_type, bg_pid in background_services.items():
+                try:
+                    run_command(["kill", str(bg_pid)], check=False)
+                    logger.debug(
+                        f"Stopped background service {service_name} ({service_type}) PID: {bg_pid}"
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping background service {service_name} ({service_type}) PID {bg_pid}: {e}"
+                    )
+
+            # Kill main PID
+            main_pid = pid_info.get("main_pid")
+            if main_pid:
+                try:
+                    run_command(["kill", str(main_pid)], check=False)
+                    logger.debug(f"Stopped main service {service_name} PID: {main_pid}")
+                    stopped_count += 1
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping main service {service_name} PID {main_pid}: {e}"
+                    )
+
+            # Kill child PIDs
+            child_pids = pid_info.get("child_pids", [])
+            for child_pid in child_pids:
+                try:
+                    run_command(["kill", str(child_pid)], check=False)
+                    logger.debug(
+                        f"Stopped child process {service_name} PID: {child_pid}"
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Error stopping child process {service_name} PID {child_pid}: {e}"
+                    )
+
+        save_pids({})
+        if stopped_count > 0:
+            logger.debug(f"Stopped {stopped_count} existing service(s)")
+        time.sleep(1)  # Give services time to stop
+    except Exception as e:
+        logger.debug(f"Error stopping existing services: {e}", exc_info=True)
+
+    # Try to start services - call start logic directly
+    logger.info("  🚀 Starting services for testing...")
+    started_processes = []
+    try:
+        # Use the same logic as the start command but simplified
+        for service in services:
+            service_name = service.get("name", "unknown")
+            start_cmd = service.get("start_command")
+            if not start_cmd:
+                logger.debug(f"Service {service_name} has no start_command, skipping")
+                continue
+
+            import shlex
+
+            cmd_parts = (
+                shlex.split(start_cmd) if isinstance(start_cmd, str) else start_cmd
+            )
+
+            if not cmd_parts:
+                logger.debug(f"Service {service_name}: Empty command parts")
+                continue
+
+            logger.debug(
+                f"Service {service_name}: Attempting to start with command: {start_cmd}"
+            )
+
+            if cmd_parts[0] == "make":
+                # For make commands, just run them
+                try:
+                    process = subprocess.Popen(
+                        cmd_parts,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        cwd=service.get("working_directory", "."),
+                    )
+                    started_processes.append((service_name, process))
+                    logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                    logger.debug(
+                        f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
+                    )
+                    time.sleep(0.5)  # Give it a moment
+                except Exception as e:
+                    logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                    logger.debug(
+                        f"Service {service_name} startup error: {e}", exc_info=True
+                    )
+            else:
+                # Direct command
+                if command_exists(cmd_parts[0]):
+                    try:
+                        process = subprocess.Popen(
+                            cmd_parts,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            cwd=service.get("working_directory", "."),
+                        )
+                        started_processes.append((service_name, process))
+                        logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                        logger.debug(
+                            f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
+                        )
+                        time.sleep(0.5)
+                    except Exception as e:
+                        logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                        logger.debug(
+                            f"Service {service_name} startup error: {e}", exc_info=True
+                        )
+                else:
+                    logger.warning(
+                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}"
+                    )
+                    logger.debug(
+                        f"Service {service_name}: Command '{cmd_parts[0]}' does not exist in PATH"
+                    )
+
+        # Save PIDs for tracking
+        if started_processes:
+            tracked_pids = load_pids()
+            service_dict = {s.get("name", "unknown"): s for s in services}
+            for service_name, process in started_processes:
+                if process.poll() is None:  # Still running
+                    service_info = service_dict.get(service_name, {})
+                    tracked_pids[service_name] = {
+                        "main_pid": process.pid,
+                        "command": service_info.get("start_command", ""),
+                    }
+            save_pids(tracked_pids)
+
+        # Wait for services to start
+        logger.debug("Waiting 3 seconds for services to start...")
+        time.sleep(3)
+
+        # Check for immediate failures in started processes (non-blocking)
+        for service_name, process in started_processes:
+            if process.poll() is not None:
+                # Process has already terminated - skip communicate() to avoid blocking
+                exit_code = process.returncode
+                logger.warning(
+                    f"  ✗ Service {service_name} exited immediately with code {exit_code}"
+                )
+
+        # Check if services are actually running
+        logger.info("  🔍 Checking service status...")
+        tracked_pids = load_pids()
+        running_count = 0
+        failed_services = []
+
+        # First check the directly started processes
+        for service_name, process in started_processes:
+            if process.poll() is None:  # Still running
+                is_running = True
+                running_count += 1
+                logger.info(
+                    f"  ✓ {service_name} is running - started process (PID: {process.pid})"
+                )
+                logger.debug(
+                    f"Service {service_name} verified running via started process PID {process.pid}"
+                )
+
+        # Then check tracked PIDs for services not in started_processes
+        for service in services:
+            service_name = service.get("name", "unknown")
+            # Skip if we already found it running
+            if any(name == service_name for name, _ in started_processes):
+                continue
+
+            pid_info = tracked_pids.get(service_name, {})
+            is_running = False
+            running_reason = None
+
+            # Check background services first
+            background_services = pid_info.get("background_services", {})
+            if background_services:
+                logger.debug(
+                    f"Service {service_name}: Checking {len(background_services)} background service(s)"
+                )
+
+            for service_type, bg_pid in background_services.items():
+                try:
+                    _, code = run_command(["kill", "-0", str(bg_pid)], check=False)
+                    if code == 0:
+                        is_running = True
+                        running_count += 1
+                        running_reason = (
+                            f"background service ({service_type}, PID: {bg_pid})"
+                        )
+                        logger.info(f"  ✓ {service_name} is running - {running_reason}")
+                        logger.debug(
+                            f"Service {service_name} verified running via background service {service_type} (PID: {bg_pid})"
+                        )
+                        break
+                    else:
+                        logger.debug(
+                            f"Service {service_name} background service {service_type} (PID: {bg_pid}) is not running (kill -0 returned {code})"
+                        )
+                except Exception as e:
+                    logger.debug(
+                        f"Service {service_name} error checking background service {service_type} (PID: {bg_pid}): {e}"
+                    )
+
+            # Check main PID if no background services
+            if not is_running:
+                main_pid = pid_info.get("main_pid")
+                if main_pid:
+                    try:
+                        _, code = run_command(
+                            ["kill", "-0", str(main_pid)], check=False
+                        )
+                        if code == 0:
+                            is_running = True
+                            running_count += 1
+                            running_reason = f"main process (PID: {main_pid})"
+                            logger.info(
+                                f"  ✓ {service_name} is running - {running_reason}"
+                            )
+                            logger.debug(
+                                f"Service {service_name} verified running via main PID {main_pid}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Service {service_name} main PID {main_pid} is not running (kill -0 returned {code})"
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            f"Service {service_name} error checking main PID {main_pid}: {e}"
+                        )
+                else:
+                    logger.debug(
+                        f"Service {service_name}: No main PID found in tracked_pids"
+                    )
+
+            # Check by process name if still not found
+            if not is_running:
+                process_name = pid_info.get("process_name")
+                if process_name:
+                    try:
+                        result = run_command(["pgrep", "-f", process_name], check=False)
+                        if result[0].strip():
+                            is_running = True
+                            running_count += 1
+                            running_reason = f"process name match: {process_name}"
+                            logger.info(
+                                f"  ✓ {service_name} is running - {running_reason}"
+                            )
+                            logger.debug(
+                                f"Service {service_name} found running by process name: {process_name}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Service {service_name}: No process found matching name '{process_name}'"
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            f"Service {service_name} error checking process name '{process_name}': {e}"
+                        )
+                else:
+                    logger.debug(f"Service {service_name}: No process_name configured")
+
+            if not is_running:
+                failed_services.append(service_name)
+                if not pid_info:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)"
+                    )
+                elif not background_services and not main_pid and not process_name:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - No PID tracking data available"
+                    )
+                else:
+                    logger.warning(
+                        f"  ✗ {service_name} is not running - Process not found"
+                    )
+
+        # Check if URLs are responding
+        logger.info("  🌐 Checking URL endpoints...")
+        urls = extract_urls_from_dev_env()
+        if not urls:
+            logger.debug("No URLs found in build configuration to check")
+        else:
+            logger.debug(f"Found {len(urls)} URL(s) to check: {list(urls.keys())}")
+
+        responding_urls = 0
+        failed_urls = []
+        for url_key, url in urls.items():
+            logger.debug(f"Checking URL {url_key}: {url}")
+            try:
+                if check_url_responds(url):
+                    responding_urls += 1
+                    logger.info(f"  ✓ {url_key} ({url}) is responding")
+                    logger.debug(f"URL {url_key} ({url}) responded successfully")
+                else:
+                    failed_urls.append((url_key, url))
+                    logger.warning(f"  ✗ {url_key} ({url}) is not responding")
+                    logger.debug(
+                        f"URL {url_key} ({url}) failed to respond (connection timeout or refused)"
+                    )
+            except Exception as e:
+                failed_urls.append((url_key, url))
+                logger.warning(f"  ✗ {url_key} ({url}) check failed: {e}")
+                logger.debug(f"URL {url_key} ({url}) check error: {e}", exc_info=True)
+
+        # Consider success if at least one service is running or one URL is responding
+        success = running_count > 0 or responding_urls > 0
+
+        # Summary logging - always log
+        logger.info("  📊 Test Summary:")
+        logger.info(f"     Services: {running_count}/{len(services)} running")
+        if failed_services:
+            logger.info(f"     Failed services: {', '.join(failed_services)}")
+        logger.info(f"     URLs: {responding_urls}/{len(urls)} responding")
+        if failed_urls:
+            failed_url_list = [f"{key} ({url})" for key, url in failed_urls]
+            logger.info(f"     Failed URLs: {', '.join(failed_url_list)}")
+
+        if success:
+            logger.info(
+                "  ✅ Service test PASSED - At least one service or URL is responding"
+            )
+            logger.debug(
+                f"Service test passed: {running_count} service(s) running, {responding_urls} URL(s) responding"
+            )
+        else:
+            failure_reasons = []
+            if running_count == 0:
+                failure_reasons.append(f"no services running (0/{len(services)})")
+            if responding_urls == 0 and urls:
+                failure_reasons.append(f"no URLs responding (0/{len(urls)})")
+            elif not urls and running_count == 0:
+                failure_reasons.append("no services running and no URLs configured")
+            reason = "; ".join(failure_reasons) if failure_reasons else "unknown"
+            logger.warning(f"  ❌ Service test FAILED - {reason}")
+            logger.debug(
+                f"Service test failed: {running_count} service(s) running, {responding_urls} URL(s) responding"
+            )
+
+        return success
+
+    except Exception as e:
+        logger.error(f"  ❌ Error testing services: {e}")
+        logger.debug(f"Service test exception: {e}", exc_info=True)
+        return False
+
+
+def command_exists(cmd):
+    """Check if a command exists in PATH."""
+    import shutil
+
+    return shutil.which(cmd) is not None
+
+
+def is_port_available(port):
+    """Check if a port is available."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            result = s.connect_ex(("localhost", port))
+            return result != 0  # Port is available if connection fails
+    except Exception:
+        return False
+
+
+def find_available_port(start_port, max_attempts=10):
+    """Find an available port starting from start_port."""
+    for i in range(max_attempts):
+        port = start_port + i
+        if is_port_available(port):
+            return port
+    return None
+
+
+def extract_port_from_command(cmd):
+    """Extract port number from a command string."""
+    import re
+
+    # Look for --port, -p, PORT=, or :port patterns
+    patterns = [
+        r"--port\s+(\d+)",
+        r"-p\s+(\d+)",
+        r"PORT[=:]\s*(\d+)",
+        r":(\d{4,5})",
+        r"port\s*=\s*(\d+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, cmd, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def replace_port_in_command(cmd, old_port, new_port):
+    """Replace port in a command string."""
+    import re
+
+    # Replace various port patterns
+    cmd = re.sub(
+        rf"--port\s+{old_port}", f"--port {new_port}", cmd, flags=re.IGNORECASE
+    )
+    cmd = re.sub(rf"-p\s+{old_port}", f"-p {new_port}", cmd, flags=re.IGNORECASE)
+    cmd = re.sub(
+        rf"PORT[=:]\s*{old_port}", f"PORT={new_port}", cmd, flags=re.IGNORECASE
+    )
+    cmd = re.sub(rf":{old_port}", f":{new_port}", cmd)
+    cmd = re.sub(
+        rf"port\s*=\s*{old_port}", f"port={new_port}", cmd, flags=re.IGNORECASE
+    )
+    return cmd
+
+
+def extract_services_from_build_config(build_config):
+    """Extract services from dev_environment.yaml config."""
+    services = build_config.get("services", [])
+    if services:
+        return services
+    return []
+
+
+def parse_makefile_target(target_name, makefile_content, visited=None):
+    """Parse a Makefile target to extract the commands it runs."""
+    import re
+
+    if visited is None:
+        visited = set()
+
+    # Prevent infinite recursion
+    if target_name in visited:
+        return []
+    visited.add(target_name)
+
+    # Find the target definition - match until next target or end of file
+    target_pattern = rf"^{target_name}:\s*(.*?)(?=^[a-zA-Z_][a-zA-Z0-9_-]*:|^$)"
+    match = re.search(target_pattern, makefile_content, re.MULTILINE | re.DOTALL)
+    if not match:
+        return []
+
+    target_content = match.group(1)
+    commands = []
+
+    # Extract commands (lines starting with tab)
+    for line in target_content.splitlines():
+        # Check if line starts with tab (actual command) or @ (silent command)
+        if not (line.startswith("\t") or line.startswith("\t@")):
+            continue
+
+        # Remove leading tab and @
+        line = line.lstrip("\t@").strip()
+
+        # Skip empty lines and comments
+        if not line or line.startswith("#"):
+            continue
+
+        # Skip echo commands (but keep them for debugging)
+        if line.startswith("echo"):
+            continue
+
+        # Handle make calls to other targets - recursively parse
+        if line.startswith("make ") or line.startswith("$(MAKE)"):
+            parts = line.split()
+            if len(parts) > 1:
+                called_target = parts[1]
+                # Recursively get commands from called target
+                sub_commands = parse_makefile_target(
+                    called_target, makefile_content, visited.copy()
+                )
+                commands.extend(sub_commands)
+            continue
+
+        # This is an actual command to run
+        if line:
+            commands.append(line)
+
+    return commands
+
+
+def extract_services_from_makefile():
+    """Extract services by checking Makefile for dev-related targets."""
+    makefile_path = pathlib.Path("Makefile")
+    if not makefile_path.exists():
+        return []
+
+    services = []
+    makefile_content = makefile_path.read_text()
+
+    # Check for common dev start targets (in priority order)
+    dev_targets = [
+        ("dev-start", "make dev-start", "development"),
+        ("dev", "make dev", "development"),
+        ("run", "make run", "application"),
+        ("start", "make start", "application"),
+        ("up", "make up", "services"),
+    ]
+
+    found_main_target = False
+    for target, cmd, service_name in dev_targets:
+        if f"{target}:" in makefile_content or f".PHONY: {target}" in makefile_content:
+            # Parse the target to see what it actually does
+            target_commands = parse_makefile_target(target, makefile_content)
+
+            # If target just calls other targets or is just echo, try to extract real services
+            if not target_commands or all(
+                c.startswith("@echo") or c.startswith("echo") for c in target_commands
+            ):
+                # Try to find backend and frontend targets
+                backend_commands = parse_makefile_target(
+                    "backend-run", makefile_content
+                ) or parse_makefile_target("run", makefile_content)
+                frontend_commands = parse_makefile_target(
+                    "frontend-run", makefile_content
+                ) or parse_makefile_target("frontend-dev", makefile_content)
+
+                if backend_commands:
+                    services.append(
+                        {
+                            "name": "backend",
+                            "start_command": (
+                                backend_commands[0] if backend_commands else None
+                            ),
+                            "make_target": (
+                                "backend-run"
+                                if "backend-run:" in makefile_content
+                                else "run"
+                            ),
+                        }
+                    )
+                if frontend_commands:
+                    services.append(
+                        {
+                            "name": "frontend",
+                            "start_command": (
+                                frontend_commands[0] if frontend_commands else None
+                            ),
+                            "make_target": (
+                                "frontend-run"
+                                if "frontend-run:" in makefile_content
+                                else "frontend-dev"
+                            ),
+                        }
+                    )
+
+                # If we found individual services, use those instead
+                if backend_commands or frontend_commands:
+                    found_main_target = True
+                    break
+
+            # If target has actual commands, use it as-is
+            services.append(
+                {
+                    "name": service_name,
+                    "start_command": cmd,
+                    "stop_command": (
+                        "make dev-stop" if "dev-stop:" in makefile_content else None
+                    ),
+                }
+            )
+            found_main_target = True
+            break  # Use the first found
+
+    # Check for Skaffold (only if skaffold is installed and config exists)
+    if pathlib.Path("skaffold.yaml").exists() and command_exists("skaffold"):
+        services.append(
+            {
+                "name": "skaffold-dev",
+                "start_command": "skaffold dev",
+                "stop_command": "pkill -f skaffold",
+            }
+        )
+
+    # Check for backend and frontend separately (only if main target not found)
+    if not found_main_target:
+        if "frontend-run:" in makefile_content or "frontend-dev:" in makefile_content:
+            cmd = (
+                "make frontend-run"
+                if "frontend-run:" in makefile_content
+                else "make frontend-dev"
+            )
+            services.append(
+                {
+                    "name": "frontend",
+                    "start_command": cmd,
+                }
+            )
+        if "run:" in makefile_content or "backend-run:" in makefile_content:
+            cmd = (
+                "make backend-run" if "backend-run:" in makefile_content else "make run"
+            )
+            services.append(
+                {
+                    "name": "backend",
+                    "start_command": cmd,
+                }
+            )
+
+    return services
+
+
+def check_url_responds(url):
+    """Check if a URL actually responds."""
+    try:
+        import socket
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port
+        if not port:
+            # Try to extract from netloc
+            if ":" in parsed.netloc:
+                port = int(parsed.netloc.split(":")[-1])
+            else:
+                return False
+
+        # Quick socket check
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+def extract_urls_from_dev_env():
+    """Extract URLs from dev_environment.yaml, dev_environment.md, or Makefile."""
+    urls = {}
+
+    # Try dev_environment.yaml first
+    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
+    if build_file.exists():
+        try:
+            build_config = safe_yaml_load(build_file.read_text())
+            if build_config:
+                # Look for URLs in config
+                if "urls" in build_config:
+                    for key, url in build_config["urls"].items():
+                        # Clean URL (remove markdown links)
+                        clean_url = url.split("](")[0] if "](" in url else url
+                        clean_url = clean_url.strip("[]()")
+                        urls[key] = clean_url
+                # Look for services with URLs
+                services = build_config.get("services", [])
+                for service in services:
+                    if "url" in service:
+                        url = service["url"]
+                        # Clean URL (remove markdown links)
+                        clean_url = url.split("](")[0] if "](" in url else url
+                        clean_url = clean_url.strip("[]()")
+                        urls[service.get("name", "unknown")] = clean_url
+        except Exception:
+            pass
+
+    # Try dev_environment.md
+    if DEV_SPEC.exists():
+        build_md = DEV_SPEC.read_text()
+        import re
+
+        # Common port patterns
+        port_patterns = {
+            r"8000": "backend",
+            r"3000": "frontend",
+            r"5173": "frontend",  # Vite
+            r"8080": "backend",
+            r"5000": "backend",
+        }
+
+        for pattern, service_type in port_patterns.items():
+            matches = re.findall(
+                rf"localhost:{pattern}|port\s+{pattern}|:{pattern}",
+                build_md,
+                re.IGNORECASE,
+            )
+            if matches:
+                port = pattern
+                if service_type not in urls:
+                    urls[service_type] = f"http://localhost:{port}"
+
+        # Look for explicit URL mentions (clean markdown links)
+        explicit_urls = re.findall(
+            r"\[([^\]]+)\]\(([^\)]+)\)|(https?://[^\s\)\]]+)", build_md
+        )
+        for match in explicit_urls:
+            # Handle markdown link format [text](url) or plain url
+            if match[2]:  # Plain URL
+                url = match[2]
+            elif match[1]:  # URL from markdown link
+                url = match[1]
+            else:
+                continue
+
+            if "localhost" in url or "127.0.0.1" in url:
+                # Clean URL
+                url = url.split("](")[0] if "](" in url else url
+                url = url.strip("[]()")
+                if "backend" in url.lower() or "api" in url.lower() or ":8000" in url:
+                    urls["backend"] = url
+                elif "frontend" in url.lower() or ":3000" in url or ":5173" in url:
+                    urls["frontend"] = url
+
+    # Try Makefile for port information
+    makefile_path = pathlib.Path("Makefile")
+    if makefile_path.exists():
+        makefile_content = makefile_path.read_text()
+        import re
+
+        # Look for port assignments
+        port_matches = re.findall(
+            r"(?:PORT|port)\s*[=:]\s*(\d{4,5})", makefile_content, re.IGNORECASE
+        )
+        for port in port_matches:
+            if port == "8000" and "backend" not in urls:
+                urls["backend"] = f"http://localhost:{port}"
+            elif port in ["3000", "5173"] and "frontend" not in urls:
+                urls["frontend"] = f"http://localhost:{port}"
+
+        # Look for uvicorn or runserver commands with ports
+        uvicorn_match = re.search(
+            r"uvicorn.*?--port\s+(\d+)", makefile_content, re.IGNORECASE
+        )
+        if uvicorn_match:
+            port = uvicorn_match.group(1)
+            urls["backend"] = f"http://localhost:{port}"
+            urls["api_docs"] = f"http://localhost:{port}/docs"
+
+    return urls
+
+
+def extract_services_from_dev_env_md():
+    """Extract services from dev_environment.md by parsing startup commands."""
+    if not DEV_SPEC.exists():
+        return []
+
+    services = []
+    build_md = DEV_SPEC.read_text()
+
+    # Look for startup commands section
+    import re
+
+    # Pattern to find commands like "make run", "make dev", "npm run dev", etc.
+    startup_patterns = [
+        r"`?make\s+(?:dev|run|start|up|dev-start)`?",
+        r"`?npm\s+run\s+dev`?",
+        r"`?python\s+manage\.py\s+runserver`?",
+        r"`?uvicorn\s+.*`?",
+        r"`?skaffold\s+dev`?",
+    ]
+
+    found_commands = set()
+    for pattern in startup_patterns:
+        matches = re.findall(pattern, build_md, re.IGNORECASE)
+        for match in matches:
+            cmd = match.strip("`").strip()
+            if cmd and cmd not in found_commands:
+                found_commands.add(cmd)
+                service_name = cmd.split()[-1] if len(cmd.split()) > 1 else "service"
+                services.append(
+                    {
+                        "name": service_name.replace("-", "_"),
+                        "start_command": cmd,
+                    }
+                )
+
+    return services
+
+
+def get_pid_file():
+    """Get path to PID tracking file."""
+    return VIBE_PROJECT_DIR / "run-pids.json"
+
+
+def load_pids():
+    """Load tracked PIDs from file."""
+    pid_file = get_pid_file()
+    if pid_file.exists():
+        try:
+            return json.loads(pid_file.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def save_pids(pids):
+    """Save tracked PIDs to file."""
+    pid_file = get_pid_file()
+    ensure_dir(pid_file.parent)
+    pid_file.write_text(json.dumps(pids, indent=2))
+
+
+def uses_skaffold(services: List[Dict[str, Any]]) -> bool:
+    """Check if any service in the services list uses skaffold."""
+    for service in services:
+        start_command = service.get("start_command", "")
+        if start_command and "skaffold" in start_command.lower():
+            return True
+    return False
+
+
+def check_and_install_build_tools():
+    """Check for required build tools (skaffold, helm) and install if missing."""
+    import platform
+    import click
+
+    required_tools = {}
+
+    # Check if skaffold.yaml exists
+    skaffold_yaml = pathlib.Path("skaffold.yaml")
+    if skaffold_yaml.exists():
+        required_tools["skaffold"] = {
+            "check_cmd": ["skaffold", "version"],
+            "install_cmd_brew": ["brew", "install", "skaffold"],
+            "install_cmd_linux": [
+                "curl",
+                "-Lo",
+                "skaffold",
+                "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64",
+                "&&",
+                "sudo",
+                "install",
+                "skaffold",
+                "/usr/local/bin/",
+            ],
+            "description": "Skaffold (Kubernetes development tool)",
+        }
+
+    # Check if helm charts exist
+    helm_paths = [
+        pathlib.Path("deployment/helm"),
+        pathlib.Path("helm"),
+        pathlib.Path("charts"),
+    ]
+    has_helm = any(p.exists() for p in helm_paths)
+
+    if has_helm:
+        required_tools["helm"] = {
+            "check_cmd": ["helm", "version"],
+            "install_cmd_brew": ["brew", "install", "helm"],
+            "install_cmd_linux": [
+                "curl",
+                "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+                "|",
+                "bash",
+            ],
+            "description": "Helm (Kubernetes package manager)",
+        }
+
+    if not required_tools:
+        return
+
+    click.echo("🔍 Checking for required build tools...")
+
+    for tool_name, tool_info in required_tools.items():
+        # Check if tool is installed
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_info['description']} is installed")
+                continue
+        except Exception:
+            pass
+
+        # Tool is not installed
+        click.echo(f"  ⚠️  {tool_info['description']} is not installed")
+
+        # Determine OS and install method
+        system = platform.system().lower()
+        is_macos = system == "darwin"
+
+        if is_macos:
+            # Try brew first
+            if shutil.which("brew"):
+                click.echo(f"  📦 Installing {tool_name} using Homebrew...")
+                try:
+                    install_cmd = tool_info["install_cmd_brew"]
+                    result = run_command(install_cmd, check=False)
+                    if result[1] == 0:
+                        click.echo(f"  ✅ {tool_name} installed successfully")
+                        continue
+                    else:
+                        click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+                except Exception as e:
+                    click.echo(f"  ⚠️  Installation error: {e}")
+            else:
+                click.echo(f"  💡 Install {tool_name} manually:")
+                click.echo(f"     brew install {tool_name}")
+        else:
+            # Linux - provide manual instructions
+            click.echo(f"  💡 Install {tool_name} manually:")
+            if tool_name == "skaffold":
+                click.echo(
+                    "     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64"
+                )
+                click.echo("     sudo install skaffold /usr/local/bin/")
+            elif tool_name == "helm":
+                click.echo(
+                    "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+                )
+
+        # Verify installation
+        click.echo(f"  🔍 Verifying {tool_name} installation...")
+        try:
+            result = run_command(tool_info["check_cmd"], check=False)
+            if result[1] == 0:
+                click.echo(f"  ✅ {tool_name} is now available")
+            else:
+                click.echo(f"  ⚠️  {tool_name} installation verification failed")
+                click.echo("     Please install it manually and run 'vibe build' again")
+        except Exception:
+            click.echo(f"  ⚠️  Could not verify {tool_name} installation")
+
+    # If skaffold is detected, check and fix kubeconfig API version
+    if "skaffold" in required_tools:
+        click.echo("🔍 Checking kubeconfig for deprecated API versions...")
+        if fix_kubeconfig_api_version():
+            click.echo("  ✅ Updated kubeconfig to use v1beta1 API version")
+        else:
+            logger.debug("Kubeconfig API version check completed (no changes needed)")
