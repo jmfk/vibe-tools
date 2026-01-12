@@ -1562,19 +1562,28 @@ def is_phase_completed(phase_id, project_name=None):
     return False
 
 
-def log_issue(message):
+def log_issue(tag, *args):
     """Placeholder for logging an issue."""
-    logger.error(message)
+    message = " ".join(str(a) for a in args)
+    logger.error(f"ISSUE: [{tag}] {message}")
 
 
-def log_start(message):
+def log_start(tag, *args):
     """Placeholder for logging the start of an action."""
-    logger.info(f"START: {message}")
+    message = " ".join(str(a) for a in args)
+    if message:
+        logger.info(f"START: [{tag}] {message}")
+    else:
+        logger.info(f"START: {tag}")
 
 
-def log_success(message):
+def log_success(tag, *args):
     """Placeholder for logging the success of an action."""
-    logger.info(f"SUCCESS: {message}")
+    message = " ".join(str(a) for a in args)
+    if message:
+        logger.info(f"SUCCESS: [{tag}] {message}")
+    else:
+        logger.info(f"SUCCESS: {tag}")
 
 
 def run_llm(prompt, model="gemini-3-flash", debug=False):
