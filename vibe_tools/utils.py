@@ -381,7 +381,7 @@ def run_agent(
                     data = json.loads(line)
                     event_type = data.get("type")
                     subtype = data.get("subtype")
-                    print(f"Agent data: {data}")
+                    print(f"Agent data: {json.dumps(data, indent=2)}")
                     if event_type == "assistant":
                         # Extract partial text if available, otherwise complete message
                         message = data.get("message", {})
@@ -423,6 +423,7 @@ def run_agent(
                 print(line)
                 output.append(line + "\n")
 
+        print(f"WAIT FOR END OF PROCESS")
         process.wait()
         final_output = (
             "".join(output)
