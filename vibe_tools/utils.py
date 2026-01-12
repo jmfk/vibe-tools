@@ -231,8 +231,25 @@ def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
     return missing
 
 
+# Global handlers for console and file
+stream_handler: Optional[logging.StreamHandler] = None
+file_handler: Optional[RotatingFileHandler] = None
+
+
+def rotate_log():
+    """Manually rotates the log file if it exists and is not empty."""
+    global file_handler
+    if (
+        file_handler
+        and os.path.exists(file_handler.baseFilename)
+        and os.path.getsize(file_handler.baseFilename) > 0
+    ):
+        file_handler.doRollover()
+
+
 def setup_logging(command_name: str):
     """Configures logging for a CLI command."""
+    global stream_handler, file_handler
     ensure_dir(LOGS_DIR)
     log_file = LOGS_DIR / f"{command_name}.log"
 
@@ -256,21 +273,26 @@ def setup_logging(command_name: str):
     logger.addHandler(file_handler)
 
     # Console handler (default to INFO)
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
     console_formatter = logging.Formatter("%(message)s")
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
+    stream_handler.setFormatter(console_formatter)
+    logger.addHandler(stream_handler)
 
     return logger
 
 
 def set_console_level(level: int):
     """Updates the log level for the console handler."""
-    logger = logging.getLogger("vibe_tools")
-    for handler in logger.handlers:
-        if isinstance(handler, logging.StreamHandler):
-            handler.setLevel(level)
+    global stream_handler
+    if stream_handler:
+        stream_handler.setLevel(level)
+    else:
+        # Fallback to searching handlers
+        logger = logging.getLogger("vibe_tools")
+        for handler in logger.handlers:
+            if isinstance(handler, logging.StreamHandler):
+                handler.setLevel(level)
 
 
 def enable_console_debug():
@@ -336,7 +358,7 @@ def run_agent(
     is_cursor_agent = command[0] == "agent" or (
         len(command) > 2 and command[2] == "agent"
     )
-
+    print(f"Running agent command: {command}")
     if stream or is_cursor_agent:
         process = subprocess.Popen(
             command,
@@ -359,7 +381,7 @@ def run_agent(
                     data = json.loads(line)
                     event_type = data.get("type")
                     subtype = data.get("subtype")
-
+                    print(f"Agent data: {data}")
                     if event_type == "assistant":
                         # Extract partial text if available, otherwise complete message
                         message = data.get("message", {})
