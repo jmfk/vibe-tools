@@ -122,11 +122,8 @@ def register_normalize(cli):
             click.echo("🔄 Normalizing system files...")
             for spec_path in to_normalize:
                 overwrite_mode = normalize_system_file(
-                    agent=ctx.obj["agent"],
                     input_file=spec_path,
                     auto_overwrite=overwrite_mode,
-                    caffeinate=ctx.obj.get("caffeinate", False),
-                    stream=ctx.obj.get("stream", False),
                     debug=debug,
                     force=True if (overwrite_mode is True or overwrite_mode == "yes") else False
                 )
@@ -136,11 +133,8 @@ def register_normalize(cli):
         # No files specified, normalize all files in product/
         click.echo("🔄 Normalizing PRDs...")
         normalize_prd(
-            agent=ctx.obj["agent"],
             input_file=None,
             auto_overwrite=overwrite_mode,
-            caffeinate=ctx.obj.get("caffeinate", False),
-            stream=ctx.obj.get("stream", False),
             debug=debug,
         )
 

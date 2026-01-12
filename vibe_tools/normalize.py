@@ -6,7 +6,7 @@ import sys
 import click
 import yaml
 
-from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
+from vibe_tools.cost import CostLogger
 from vibe_tools.ralph import _switch_to_branch
 from vibe_tools.utils import (
     PLANNING_BACKLOG_DIR,
@@ -19,14 +19,12 @@ from vibe_tools.utils import (
     PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
     SYSTEM_FILES,
-    get_agent_command,
     get_file_hash,
     get_main_branch,
     get_prompt,
     is_dirty,
     load_project_state,
     logger,
-    run_agent,
     run_command,
     save_project_state,
     switch_to_main,
@@ -39,36 +37,30 @@ from vibe_tools.utils import (
 DEFAULT_SPECS_DIR = pathlib.Path("product")
 
 
-def _run_normalization_agent(
-    agent,
+def _run_normalization_llm(
     prompt,
     cost_logger,
     stem,
     phase="normalize",
-    caffeinate=False,
-    stream=False,
     debug=False,
 ):
-    """Internal helper to run agent and handle YAML extraction/fixing."""
+    """Internal helper to run LLM and handle YAML extraction/fixing."""
     from vibe_tools.utils import run_llm
 
-    # If it's a direct LLM agent, run it directly
-    if agent in ["cursor-agent", "gemini"]:
-        output = run_llm(prompt, model="gemini-3-flash", debug=debug)
-        code = 0 if output else -1
-    else:
-        cmd = get_agent_command(agent, prompt)
-        output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+    # Normalization always uses direct LLM call
+    output = run_llm(prompt, model="gemini-3-flash", debug=debug)
+    code = 0 if output else -1
 
     if debug:
-        print("\n--- DEBUG: AGENT OUTPUT ---")
+        print("\n--- DEBUG: LLM OUTPUT ---")
         print(output)
         print("--- END DEBUG ---\n")
 
     if output:
+        # Use 'gemini' as the internal agent name for logging direct LLM calls
         cost_logger.log_run(
-            agent=agent,
-            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+            agent="gemini",
+            model="gemini-2.0-flash-exp",
             prompt=prompt,
             output=output,
             prd_name=stem,
@@ -98,13 +90,6 @@ def _run_normalization_agent(
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         clean_output = "\n".join(lines).strip()
-
-    # If it's the placeholder, we shouldn't try to parse it as YAML
-    if "CURSOR_AGENT_INVOCATION" in clean_output:
-        logger.warning(
-            "⚠️  Cursor agent placeholder detected. Normalization not performed."
-        )
-        return {"METADATA": {"STATUS": "placeholder"}}, 0
 
     data = None
     try:
@@ -153,11 +138,8 @@ Ensure all string values with special characters are properly quoted.
 
 
 def normalize_system_file(
-    agent,
     input_file,
     auto_overwrite=False,
-    caffeinate=False,
-    stream=False,
     debug=False,
     force=False,
 ):
@@ -222,17 +204,14 @@ def normalize_system_file(
             logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
     print(
-        f"🔄 Normalizing system file: {path.name} -> {output_path.name} using {agent}..."
+        f"🔄 Normalizing system file: {path.name} -> {output_path.name} using Gemini..."
     )
     prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
 
-    data, code = _run_normalization_agent(
-        agent=agent,
+    data, code = _run_normalization_llm(
         prompt=prompt,
         cost_logger=cost_logger,
         stem=clean_stem,
-        caffeinate=caffeinate,
-        stream=stream,
         debug=debug,
     )
 
@@ -252,11 +231,8 @@ def normalize_system_file(
 
 
 def normalize_prd(
-    agent,
     input_file=None,
     auto_overwrite=False,
-    caffeinate=False,
-    stream=False,
     debug=False,
 ):
     from vibe_tools.cli import load_config
@@ -354,7 +330,7 @@ def normalize_prd(
         else:
             branch_name = f"vibe/normalize/{clean_stem}"
 
-        _switch_to_branch(branch_name, agent, clean_stem, stream=stream)
+        _switch_to_branch(branch_name, "gemini", clean_stem, stream=False)
 
         if not spec_path.exists():
             spec_path.parent.mkdir(parents=True, exist_ok=True)
@@ -460,18 +436,13 @@ def normalize_prd(
             except Exception as e:
                 logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
-        print(
-            f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using {agent}..."
-        )
+        print(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using Gemini...")
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
 
-        data, code = _run_normalization_agent(
-            agent=agent,
+        data, code = _run_normalization_llm(
             prompt=prompt,
             cost_logger=cost_logger,
             stem=stem,
-            caffeinate=caffeinate,
-            stream=stream,
             debug=debug,
         )
 
