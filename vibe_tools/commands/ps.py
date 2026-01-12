@@ -12,8 +12,10 @@ def register_ps(cli):
             click.echo("No active agent processes found.")
             return
 
-        click.echo(f"{'PID':<10} {'TARGET':<20} {'COMMAND'}")
-        click.echo("-" * 60)
+        click.echo(f"{'PID':<10} {'TRACKED':<10} {'CHAT_ID':<20} {'COMMAND'}")
+        click.echo("-" * 80)
         for p in processes:
-            click.echo(f"{p['pid']:<10} {p['target']:<20} {p['command']}")
+            tracked = "Yes" if p.get("tracked", True) else "No"
+            chat_id = p.get("chat_id") or "N/A"
+            click.echo(f"{p['pid']:<10} {tracked:<10} {chat_id:<20} {p['command'][:100]}")
     cli.add_command(ps)
