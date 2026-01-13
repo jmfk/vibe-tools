@@ -139,7 +139,7 @@ def get_agent_command(
         agent_config = config.get("cursor-agent", {})
         force = agent_config.get("force", True)
 
-        cmd = ["agent", "-p"]
+        cmd = ["cursor-agent", "-p"]
         if force:
             cmd.append("--force")
 
@@ -167,11 +167,11 @@ def run_agent(
         )
         return "ERROR: Agent call blocked in current environment.", 1, None
 
-    print(f"run_agent command: {command}", flush=True)
+    print(f"run_agent command: {command[0]}", flush=True)
     is_cursor_agent = command[0] == "cursor-agent" or (
         len(command) > 2 and command[2] == "cursor-agent"
     )
-
+    print(f"is_cursor_agent: {is_cursor_agent}", flush=True)
     # Use os.setsid to create a new process group for robust cleanup
     env = os.environ.copy()
     env["VIBE_AGENT_ACTIVE"] = "1"
@@ -188,13 +188,15 @@ def run_agent(
     )
 
     agent_manager.register_agent(process.pid, command)
-
+    print(f"process.pid: {process.pid}", flush=True)
+    print(f"stream: {stream}", flush=True)
     try:
         output = []
         accumulated_assistant_text = []
         detected_chat_id = None
 
         if stream or is_cursor_agent:
+            print(f"stream: {stream}", flush=True)
             for line in process.stdout:
                 line = line.strip()
                 if not line:

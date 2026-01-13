@@ -31,6 +31,9 @@ def register_setup(cli):
         state = load_project_state()
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
+        print(f"ctx.obj: {ctx.obj}", flush=True)
+        print(f"agent: {agent}", flush=True)
+        print(f"stream: {stream}", flush=True)
 
         if import_code:
             # Ensure project directory exists before agent runs
@@ -68,8 +71,12 @@ def register_setup(cli):
 
         if not ARCHITECTURE.exists():
             if ARCHITECTURE_SPEC.exists():
-                click.echo(f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists.")
-                click.echo("   Run 'vibe normalize' to generate the required YAML file.")
+                click.echo(
+                    f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists."
+                )
+                click.echo(
+                    "   Run 'vibe normalize' to generate the required YAML file."
+                )
             else:
                 click.echo(
                     f"❌ {ARCHITECTURE} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
@@ -108,13 +115,16 @@ def register_setup(cli):
             click.echo("\n--- Running Development Environment Scaffolding Setup ---")
             try:
                 from vibe_tools.setup import scaffold
+
                 # Create a minimal context object for scaffold
                 scaffold_ctx = click.Context(click.Command("scaffold"))
                 scaffold_ctx.obj = ctx.obj
                 scaffold(scaffold_ctx)
             except Exception as e:
                 click.echo(f"⚠️  Scaffold setup encountered an error: {e}")
-                click.echo("   You can run 'vibe config scaffold' manually to set up development environment infrastructure.")
+                click.echo(
+                    "   You can run 'vibe config scaffold' manually to set up development environment infrastructure."
+                )
 
             click.echo("\nNext Steps:")
             click.echo("1. Run 'vibe deps' to install any new testing dependencies.")
