@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.012306'
-updated_at: '2026-01-13T18:43:27.726354'
+updated_at: '2026-01-13T18:55:29.609872'
 discussion_id: D_kwDOQzI0Lc4AjltU
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/32
-last_synced_at: '2026-01-10T15:24:27.672577'
-sync_hash: 35068d960c99698d21bbeaefc6a996c7415fd1627c43df848535c311aa9ff78c
+last_synced_at: '2026-01-13T18:55:29.609781'
+sync_hash: d513e6c4ff503895aae903bed20092d901c7fedd543a1c8e00b1d19e5cf4248c
 ---
 
 # Cost Tracking System

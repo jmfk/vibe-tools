@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.017234'
-updated_at: '2026-01-13T18:43:27.702968'
+updated_at: '2026-01-13T18:54:02.880476'
 discussion_id: D_kwDOQzI0Lc4Ajlto
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/51
-last_synced_at: '2026-01-10T15:24:58.346317'
-sync_hash: daf493c8a1921ac0a85ad3e7c60c57a068ba39faf5ec77dde27203fbf4fc1a4d
+last_synced_at: '2026-01-13T18:54:02.880415'
+sync_hash: fa44c0f3f88f6fd4f3c4fd110f29cfc55ad18840ffca7d552086dceb136a8ac3
 ---
 
 # Stats and Billing

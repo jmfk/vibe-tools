@@ -6,10 +6,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.015925'
-updated_at: '2026-01-13T18:43:27.720236'
+updated_at: '2026-01-13T18:55:10.445437'
 discussion_id: D_kwDOQzI0Lc4Ajltj
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/46
-last_synced_at: '2026-01-10T15:24:51.108229'
+last_synced_at: '2026-01-13T18:55:10.445322'
 sync_hash: 7546be3b07f606988adb07a11e4746c47d41096c587420ba3e33d16671977648
 ---
 

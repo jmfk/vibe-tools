@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.013290'
-updated_at: '2026-01-13T18:43:27.740764'
+updated_at: '2026-01-13T18:56:04.803014'
 discussion_id: D_kwDOQzI0Lc4AjltZ
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/36
-last_synced_at: '2026-01-10T15:24:33.837653'
-sync_hash: 88eed4656da62f18bda72332ab6053615eb42f467b20de6f07f42ad504507409
+last_synced_at: '2026-01-13T18:56:04.802935'
+sync_hash: 715412d2cffec1e9ab32187d6380ac780d7da8a303377e99527d6420ff8dae39
 ---
 
 # Cost Reconciliation
