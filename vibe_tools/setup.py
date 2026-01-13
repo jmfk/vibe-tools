@@ -1073,7 +1073,7 @@ IMPORTANT REQUIREMENTS:
    - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
    - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
    - IMPORTANT: For React 18 projects, ensure @testing-library/react is pinned to ^14 or ^15 (not v16).
-   - IMPORTANT: Prefer explicit imports in Vitest (import { describe, it, expect, vi } from 'vitest') over globals.
+   - IMPORTANT: Prefer explicit imports in Vitest (import {{ describe, it, expect, vi }} from 'vitest') over globals.
 
 3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
    - **Quick Log Streaming (Stern)**: For instant log tailing during local debugging:
