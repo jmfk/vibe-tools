@@ -19,7 +19,6 @@ from vibe_tools.normalize import normalize_to_data
 from vibe_tools.branches import _switch_to_branch
 from vibe_tools.utils import (
     ARCHITECTURE_SPEC,
-    DEV_ENV,
     DEV_ENV_CURRENT,
     CICD_SPEC,
     INFRA_SPEC,
@@ -58,7 +57,8 @@ class RalphLoop:
     def __init__(
         self,
         name: str,
-        desired_file: pathlib.Path,
+        desired_content: str,
+        desired_file_name: str,
         current_file: pathlib.Path,
         agent: str = "cursor-agent",
         stream: bool = False,
@@ -67,7 +67,8 @@ class RalphLoop:
         phase_id: str = None,
     ):
         self.name = name
-        self.desired_file = desired_file
+        self.desired_content = desired_content
+        self.desired_file_name = desired_file_name
         self.current_file = current_file
         self.agent = agent
         self.stream = stream
@@ -85,27 +86,27 @@ class RalphLoop:
         """Executes the reconciliation loop."""
         log_start(
             self.name,
-            f"Reconciling {self.desired_file.name} vs {self.current_file.name}",
+            f"Reconciling {self.desired_file_name} vs {self.current_file.name}",
         )
         logger.info(f"🔄 Starting {self.name} Loop...")
 
         # Switch to the dedicated branch before starting
         _switch_to_branch(self.branch_name, self.agent, self.name, stream=self.stream)
 
-        if not self.desired_file.exists():
-            logger.error(f"❌ Desired file {self.desired_file} not found.")
+        if not self.desired_content:
+            logger.error(f"❌ Desired content for {self.desired_file_name} is empty.")
             return False
 
         # 1. Compare Desired vs Current
-        desired_content = self.desired_file.read_text()
         current_content = (
             self.current_file.read_text() if self.current_file.exists() else None
         )
 
-        # Sync Check
-        if current_content and get_file_hash(self.desired_file) == get_file_hash(
-            self.current_file
-        ):
+        # Sync Check - compare desired YAML content string with current file content
+        import hashlib
+        desired_hash = hashlib.sha256(self.desired_content.encode()).hexdigest()
+        
+        if current_content and get_file_hash(self.current_file) == desired_hash:
             logger.info(f"✅ {self.name} is already in sync.")
             return True
 
@@ -130,9 +131,9 @@ class RalphLoop:
         prompt = prompt_template.format(
             name=self.name,
             mode=mode,
-            desired_file=self.desired_file.name,
+            desired_file=self.desired_file_name,
             current_file=self.current_file.name,
-            desired_content=desired_content,
+            desired_content=self.desired_content,
             current_content=current_content,
             custom_instructions=custom_instructions,
         )

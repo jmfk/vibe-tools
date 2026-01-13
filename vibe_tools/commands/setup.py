@@ -1,8 +1,8 @@
 import click
 
 from vibe_tools.ralph import COMPLETION_PROMISE, RalphLoop
+from vibe_tools.normalize import normalize_to_data
 from vibe_tools.utils import (
-    ARCHITECTURE,
     ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
     INFRA_CURRENT,
@@ -14,6 +14,7 @@ from vibe_tools.utils import (
     load_project_state,
     run_agent,
     save_project_state,
+    safe_yaml_dump,
 )
 
 
@@ -27,7 +28,7 @@ def register_setup(cli):
     )
     @click.pass_context
     def setup(ctx, import_code):
-        """Phase 3: Architecture Setup. Reconciles architecture.yaml with architecture-current.yaml."""
+        """Phase 3: Architecture Setup. Reconciles architecture.md with architecture-current.yaml."""
         state = load_project_state()
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
@@ -58,32 +59,31 @@ def register_setup(cli):
                 click.echo("✅ Generated current state and specification files.")
                 click.echo("\nNext Steps:")
                 click.echo(f"1. Review {ARCHITECTURE_SPEC} and {INFRA_SPEC}")
-                click.echo(
-                    "2. Run 'vibe normalize' to create the desired state YAML files."
-                )
-                click.echo("3. Run 'vibe setup' (without --import-code) to reconcile.")
+                click.echo("2. Run 'vibe setup' (without --import-code) to reconcile.")
             else:
                 click.echo("❌ Failed to generate discovery files.")
             return
 
-        if not ARCHITECTURE.exists():
-            if ARCHITECTURE_SPEC.exists():
-                click.echo(
-                    f"❌ {ARCHITECTURE} not found, but {ARCHITECTURE_SPEC} exists."
-                )
-                click.echo(
-                    "   Run 'vibe normalize' to generate the required YAML file."
-                )
-            else:
-                click.echo(
-                    f"❌ {ARCHITECTURE} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
-                )
+        if not ARCHITECTURE_SPEC.exists():
+            click.echo(
+                f"❌ {ARCHITECTURE_SPEC} not found. Please create it manually or via 'vibe architect'."
+            )
             return
+
+        # Normalize architecture.md just-in-time
+        click.echo(f"🔄 Normalizing {ARCHITECTURE_SPEC.name} in-memory...")
+        arch_data = normalize_to_data(ARCHITECTURE_SPEC.read_text(), "architecture")
+        if not arch_data:
+            click.echo("❌ Normalization failed. Please check the content of architecture.md.")
+            return
+        
+        arch_yaml = safe_yaml_dump(arch_data)
 
         # Run the reconciliation loop
         loop = RalphLoop(
             name="Architecture Setup",
-            desired_file=ARCHITECTURE,
+            desired_content=arch_yaml,
+            desired_file_name=ARCHITECTURE_SPEC.name,
             current_file=ARCHITECTURE_CURRENT,
             agent=agent,
             stream=stream,
@@ -98,8 +98,10 @@ def register_setup(cli):
 
         success = loop.run()
         if success:
+            import hashlib
+            arch_hash = hashlib.sha256(arch_yaml.encode()).hexdigest()
             state["phases"]["setup"]["status"] = "completed"
-            state["phases"]["setup"]["hash"] = get_file_hash(ARCHITECTURE)
+            state["phases"]["setup"]["hash"] = arch_hash
             save_project_state(state)
             click.echo("\n✅ Architecture setup complete. project-state.json updated.")
 

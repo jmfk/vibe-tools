@@ -1,13 +1,14 @@
 import click
 
 from vibe_tools.ralph import RalphLoop
+from vibe_tools.normalize import normalize_to_data
 from vibe_tools.utils import (
-    TESTING_CONFIG,
     TESTING_CURRENT,
     TESTING_SPEC,
     check_dependencies,
     load_project_state,
     save_project_state,
+    safe_yaml_dump,
 )
 
 
@@ -24,22 +25,28 @@ def register_testing(cli):
             )
             return
 
-        if not TESTING_CONFIG.exists():
-            if TESTING_SPEC.exists():
-                click.echo(f"❌ {TESTING_CONFIG} not found, but {TESTING_SPEC} exists.")
-                click.echo("   Run 'vibe normalize' to generate the required YAML file.")
-            else:
-                click.echo(
-                    f"❌ {TESTING_CONFIG} not found. Please create it manually or via 'vibe architect' + 'vibe normalize'."
-                )
+        if not TESTING_SPEC.exists():
+            click.echo(
+                f"❌ {TESTING_SPEC} not found. Please create it manually or via 'vibe architect'."
+            )
             return
 
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
 
+        # Normalize testing.md just-in-time
+        click.echo(f"🔄 Normalizing {TESTING_SPEC.name} in-memory...")
+        testing_data = normalize_to_data(TESTING_SPEC.read_text(), "testing")
+        if not testing_data:
+            click.echo("❌ Normalization failed. Please check the content of testing.md.")
+            return
+        
+        testing_yaml = safe_yaml_dump(testing_data)
+
         loop = RalphLoop(
             name="Testing",
-            desired_file=TESTING_CONFIG,
+            desired_content=testing_yaml,
+            desired_file_name=TESTING_SPEC.name,
             current_file=TESTING_CURRENT,
             agent=agent,
             stream=stream,

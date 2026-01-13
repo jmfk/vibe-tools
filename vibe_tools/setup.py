@@ -967,12 +967,13 @@ def eject_prompts():
 @setup_cli.command()
 @click.pass_context
 def scaffold(ctx):
-    """Generate development environment scaffolding (dev_environment.md, dev_environment.yaml, Makefile, Dockerfiles, etc.)."""
-    from vibe_tools.normalize import normalize_prd
+    """Generate development environment scaffolding (dev_environment.md, Makefile, Dockerfiles, etc.)."""
+    from vibe_tools.normalize import normalize_to_data
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
-        DEV_ENV,
+        DEV_ENV_CURRENT,
         DEV_SPEC,
+        safe_yaml_dump,
     )
 
     click.echo("\n--- Development Environment Scaffolding Setup ---")
@@ -1002,22 +1003,8 @@ def scaffold(ctx):
 
         _generate_dev_spec(agent, stream)
 
-    # Normalize dev_environment.md to dev_environment.yaml if needed
-    if DEV_SPEC.exists() and not DEV_ENV.exists():
-        click.echo("🔄 Normalizing dev_environment.md to dev_environment.yaml...")
-
-        normalize_prd(
-            input_file=str(DEV_SPEC),
-            auto_overwrite=True,
-        )
-
-        if DEV_ENV.exists():
-            click.echo("✅ Development environment specification normalized successfully.")
-        else:
-            click.echo(
-                "❌ Normalization failed. Please review and fix dev_environment.md, then run 'vibe normalize' manually."
-            )
-            return
+    # Note: YAML normalization is now handled just-in-time by 'vibe build'
+    # No longer writing dev_environment.yaml here.
 
     # Check and install build tools
     check_and_install_build_tools()
@@ -1034,7 +1021,7 @@ def scaffold(ctx):
 
     click.echo("\n✅ Development environment scaffolding complete.")
     click.echo("Next steps:")
-    click.echo(f"  - Review {DEV_SPEC} and {DEV_ENV}")
+    click.echo(f"  - Review {DEV_SPEC}")
     click.echo("  - Run 'vibe build' to build and test the application")
 
 

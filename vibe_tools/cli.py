@@ -15,21 +15,18 @@ from dotenv import find_dotenv, load_dotenv
 from vibe_tools.cost import finalize_cost_report, get_total_cost
 from vibe_tools.setup import SERVICE_DEFINITIONS, install_deps, maybe_init_git
 from vibe_tools.templates import TEMPLATES
+from vibe_tools.normalize import normalize_to_data
 from vibe_tools.utils import (
-    ARCHITECTURE,
     ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
-    DEV_ENV,
     DEV_ENV_CURRENT,
     DEV_SPEC,
     CICD_SPEC,
     COSTS_DIR,
-    INFRA,
     INFRA_CURRENT,
     INFRA_SPEC,
     LOGS_DIR,
     PRD_DIR,
-    TESTING_CONFIG,
     TESTING_CURRENT,
     TESTING_SPEC,
     VIBE_PROJECT_DIR,
@@ -84,7 +81,6 @@ class OrderedGroup(click.Group):
             # Phases 1-8
             "architect",
             "pm",
-            "normalize",
             "setup",
             "deps",
             "implement",
@@ -277,19 +273,29 @@ def build(ctx, force):
 
 def _build_reconciliation(ctx, force):
     """Build the application and verify it runs."""
-    # Check if dev_environment.yaml exists - if not, scaffolding needs to be done first
-    if not DEV_ENV.exists():
-        click.echo("❌ Development environment configuration not found.")
+    if not DEV_SPEC.exists():
+        click.echo(f"❌ {DEV_SPEC} not found.")
         click.echo(
             "   Please run 'vibe config scaffold' first to generate development environment scaffolding."
         )
         return
 
-    # Check if dev_environment.yaml and dev_environment-current.yaml are identical (skip if so, unless forced)
-    if not force and DEV_ENV.exists() and DEV_ENV_CURRENT.exists():
-        if get_file_hash(DEV_ENV) == get_file_hash(DEV_ENV_CURRENT):
+    # Normalize dev_environment.md just-in-time
+    click.echo(f"🔄 Normalizing {DEV_SPEC.name} in-memory...")
+    dev_data = normalize_to_data(DEV_SPEC.read_text(), "dev_environment")
+    if not dev_data:
+        click.echo("❌ Normalization failed. Please check the content of dev_environment.md.")
+        return
+    
+    dev_yaml = safe_yaml_dump(dev_data)
+    import hashlib
+    dev_hash = hashlib.sha256(dev_yaml.encode()).hexdigest()
+
+    # Check if dev_environment.md and dev_environment-current.yaml are identical (skip if so, unless forced)
+    if not force and DEV_ENV_CURRENT.exists():
+        if dev_hash == get_file_hash(DEV_ENV_CURRENT):
             click.echo(
-                "✅ Development environment files are identical. Skipping build."
+                "✅ Development environment is up-to-date. Skipping build."
             )
             click.echo("   Use --force to rebuild anyway.")
             return
@@ -332,11 +338,8 @@ def _build_reconciliation(ctx, force):
     if test_success:
         click.echo("✅ Build complete and application verified working.")
 
-        # Copy DEV_ENV to DEV_ENV_CURRENT to mark as successful
-        if DEV_ENV.exists():
-            import shutil
-
-            shutil.copy(DEV_ENV, DEV_ENV_CURRENT)
+        # Save the normalized YAML to DEV_ENV_CURRENT to mark as successful
+        DEV_ENV_CURRENT.write_text(dev_yaml)
 
         success = True
     else:
@@ -396,9 +399,6 @@ def build_debug(ctx):
         f"  DEV_SPEC ({DEV_SPEC}): {'✅ exists' if DEV_SPEC.exists() else '❌ missing'}"
     )
     click.echo(
-        f"  DEV_ENV ({DEV_ENV}): {'✅ exists' if DEV_ENV.exists() else '❌ missing'}"
-    )
-    click.echo(
         f"  DEV_ENV_CURRENT ({DEV_ENV_CURRENT}): {'✅ exists' if DEV_ENV_CURRENT.exists() else '❌ missing'}"
     )
     click.echo(
@@ -455,10 +455,9 @@ def build_debug(ctx):
         click.echo("  ⚠️  Makefile not found, cannot check log targets")
 
     # Check for log aggregation services
-    if DEV_ENV.exists() or DEV_ENV_CURRENT.exists():
+    if DEV_ENV_CURRENT.exists():
         try:
-            build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
-            build_config = safe_yaml_load(build_file.read_text())
+            build_config = safe_yaml_load(DEV_ENV_CURRENT.read_text())
             if build_config:
                 services = build_config.get("services", [])
                 log_services = [
@@ -483,8 +482,8 @@ def build_debug(ctx):
     click.echo("\n🔧 Build Tools:")
     check_and_install_build_tools()
 
-    # Show services if dev_environment.yaml exists
-    if DEV_ENV.exists() or DEV_ENV_CURRENT.exists():
+    # Show services if dev_environment-current.yaml exists
+    if DEV_ENV_CURRENT.exists():
         click.echo("\n📦 Detected Services:")
         try:
             services = get_services()
