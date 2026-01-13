@@ -924,12 +924,37 @@ def register_sync(cli):
     @click.option("--since", help="Pull updates since date")
     @click.option("--issues/--no-issues", default=True, help="Sync issues (default: true)")
     @click.option("--prds/--no-prds", default=True, help="Sync PRDs (default: true)")
+    @click.option("--local", is_flag=True, help="Sync local files and state only")
     @click.option("--open-only", is_flag=True, default=True)
     @click.option("--label", help="Filter by label")
-    def sync_command(dry_run, full, since, issues, prds, open_only, label):
-        """Synchronize local issues and PRDs with GitHub."""
+    def sync_command(dry_run, full, since, issues, prds, local, open_only, label):
+        """Synchronize local issues and PRDs with GitHub and align implementation state."""
         from vibe_tools.commands.migrate import run_reconciliation
-        # Run reconciliation first to ensure local state is clean
+        from vibe_tools.utils import get_prd_inconsistencies, fix_prd_inconsistencies
+        
+        # 1. Local Reconciliation (Move YAMLs and update state.json based on MD moves)
+        click.echo("🔄 Aligning local PRD files and state...")
+        inconsistencies = get_prd_inconsistencies()
+        if inconsistencies:
+            if not dry_run:
+                fix_prd_inconsistencies(inconsistencies)
+                click.echo(f"✅ Fixed {len(inconsistencies)} local PRD inconsistencies.")
+            else:
+                click.echo(f"ℹ️ [DRY RUN] Would fix {len(inconsistencies)} local PRD inconsistencies.")
+        else:
+            click.echo("✅ Local PRD state is consistent.")
+
+        if local:
+            click.echo("Local sync complete.")
+            return
+
+        # 2. Normalization (Convert newer MD to YAML)
+        if not dry_run:
+            from vibe_tools.normalize import normalize_prd
+            click.echo("🔄 Checking for PRDs that need normalization...")
+            normalize_prd(auto_overwrite="ask" if not full else "yes")
+
+        # 3. Run reconciliation first to ensure local state is clean
         run_reconciliation(quiet=True)
 
         repo = get_github_repo()

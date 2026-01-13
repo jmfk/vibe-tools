@@ -604,10 +604,17 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
 
     # 2. Look for machine specs in implementation/prds/
     if PRD_DIR.exists():
-        for f in PRD_DIR.glob("*.yaml"):
+        for f in PRD_DIR.rglob("*.yaml"):
             # Strip 'prd_' prefix if it exists to match with human spec name
             name = f.stem
-            clean_name = name[4:] if name.startswith("prd_") else name
+            clean_name = name
+            if name.startswith("prd_"):
+                clean_name = name[4:]
+            
+            # Also handle vXX-XXX_ prefix
+            match = re.search(r"v\d+-\d+_(.+)", clean_name)
+            if match:
+                clean_name = match.group(1)
 
             if clean_name in prds:
                 prds[clean_name]["has_yaml"] = True
@@ -1587,13 +1594,79 @@ def save_global_servers(servers: Dict[str, Any]):
 
 
 def get_prd_inconsistencies():
-    """Placeholder for getting PRD location inconsistencies."""
-    return []
+    """Returns a list of PRDs where MD location and YAML location don't match."""
+    inconsistencies = []
+    
+    # 1. Get all PRD info
+    prd_info = collect_all_prd_info()
+    
+    for info in prd_info:
+        if not info["has_md"] or not info["has_yaml"]:
+            continue
+            
+        md_path = info["md_path"]
+        yaml_path = info["yaml_path"]
+        
+        # Determine expected YAML base dir based on MD location
+        if PLANNING_HISTORY_DIR in md_path.parents or md_path.parent == PLANNING_HISTORY_DIR:
+            expected_base = PRD_DONE_DIR
+        elif PLANNING_REJECTED_DIR in md_path.parents or md_path.parent == PLANNING_REJECTED_DIR:
+            expected_base = PRD_FAILED_DIR
+        else:
+            expected_base = PRD_PROCESSING_DIR
+            
+        if expected_base not in yaml_path.parents and yaml_path.parent != expected_base:
+            inconsistencies.append({
+                "name": info["name"],
+                "md_path": md_path,
+                "yaml_path": yaml_path,
+                "expected_base": expected_base,
+                "current_base": yaml_path.parent
+            })
+            
+    return inconsistencies
 
 
 def fix_prd_inconsistencies(inconsistencies, prefer_yaml=True):
-    """Placeholder for fixing PRD location inconsistencies."""
-    pass
+    """Fixes PRD location inconsistencies by moving YAML files and updating state.json."""
+    if not inconsistencies:
+        return
+        
+    state = load_project_state()
+    completed_prds = set(state.get("completed_prds", []))
+    
+    for inc in inconsistencies:
+        yaml_path = inc["yaml_path"]
+        expected_base = inc["expected_base"]
+        
+        # 1. Move the YAML file
+        ensure_dir(expected_base)
+        target_path = expected_base / yaml_path.name
+        
+        if not target_path.exists():
+            logger.info(f"Moving {yaml_path.name} from {yaml_path.parent} to {expected_base}")
+            shutil.move(str(yaml_path), str(target_path))
+        else:
+            logger.warning(f"Target path {target_path} already exists. Deleting source {yaml_path}")
+            yaml_path.unlink()
+            
+        # 2. Update state.json completed_prds list
+        prd_id = target_path.stem
+        
+        if expected_base == PRD_DONE_DIR:
+            completed_prds.add(prd_id)
+            # Also update plan status if it exists
+            if prd_id in state.get("plans", {}):
+                state["plans"][prd_id]["status"] = "completed"
+        else:
+            if prd_id in completed_prds:
+                completed_prds.remove(prd_id)
+            # Reset plan status if it exists and was completed
+            if prd_id in state.get("plans", {}) and state["plans"][prd_id].get("status") == "completed":
+                state["plans"][prd_id]["status"] = "pending"
+
+    state["completed_prds"] = sorted(list(completed_prds))
+    save_project_state(state)
 
 
 def check_plan_dependencies(plan_id, all_plans):
