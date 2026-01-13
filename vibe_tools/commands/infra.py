@@ -1,14 +1,14 @@
 import click
 
 from vibe_tools.architect import generate_infrastructure_spec
-from vibe_tools.normalize import normalize_prd
+from vibe_tools.normalize import normalize_to_data
 from vibe_tools.ralph import RalphLoop
 from vibe_tools.utils import (
-    INFRA,
     INFRA_CURRENT,
     INFRA_SPEC,
     check_dependencies,
     load_project_state,
+    safe_yaml_dump,
 )
 
 
@@ -32,42 +32,33 @@ def register_infra(cli):
             )
             return
 
-        # Handle missing infrastructure files
-        if not INFRA.exists():
-            if INFRA_SPEC.exists():
-                # infrastructure.md exists but not normalized - auto-normalize it
-                click.echo(f"📝 {INFRA_SPEC} found but not normalized. Normalizing...")
-                normalize_prd(
-                    input_file=str(INFRA_SPEC),
-                    auto_overwrite=True,
+        # Ensure infrastructure spec exists
+        if not INFRA_SPEC.exists():
+            # generate from PRDs if it doesn't exist
+            click.echo(f"📝 Generating {INFRA_SPEC} from PRDs...")
+            generate_infrastructure_spec(
+                agent=ctx.obj.get("agent", "cursor-agent"),
+            )
+            if not INFRA_SPEC.exists():
+                click.echo(
+                    "❌ Failed to generate infrastructure spec. Please create infrastructure.md manually."
                 )
-                if not INFRA.exists():
-                    click.echo(
-                        "❌ Normalization failed. Please review and fix infrastructure.md, then run 'vibe normalize' manually."
-                    )
-                    return
-                click.echo("✅ Infrastructure normalized successfully.")
-            else:
-                # Neither exists - generate from PRDs
-                click.echo(f"📝 Generating {INFRA_SPEC} from PRDs...")
-                generate_infrastructure_spec(
-                    agent=ctx.obj.get("agent", "cursor-agent"),
-                )
-                if INFRA_SPEC.exists():
-                    normalize_prd(
-                        input_file=str(INFRA_SPEC),
-                        auto_overwrite=True,
-                    )
-                else:
-                    click.echo(
-                        "❌ Failed to generate infrastructure spec. Please create infrastructure.md manually."
-                    )
-                    return
+                return
+
+        # Normalize infrastructure.md just-in-time
+        click.echo(f"🔄 Normalizing {INFRA_SPEC.name} in-memory...")
+        infra_data = normalize_to_data(INFRA_SPEC.read_text(), "infrastructure")
+        if not infra_data:
+            click.echo("❌ Normalization failed. Please check the content of infrastructure.md.")
+            return
+        
+        infra_yaml = safe_yaml_dump(infra_data)
 
         # Run infrastructure reconciliation
         loop = RalphLoop(
             name="Infrastructure",
-            desired_file=INFRA,
+            desired_content=infra_yaml,
+            desired_file_name=INFRA_SPEC.name,
             current_file=INFRA_CURRENT,
             agent=ctx.obj.get("agent", "cursor-agent"),
             stream=ctx.obj.get("stream", False),

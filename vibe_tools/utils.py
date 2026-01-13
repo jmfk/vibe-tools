@@ -57,34 +57,19 @@ CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
-ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
 ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
-OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
 OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
-INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
 INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
-CICD = VIBE_PROJECT_DIR / "cicd.yaml"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
 CICD_SPEC = PLANNING_DIR / "cicd.md"
-TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
 TESTING_SPEC = PLANNING_DIR / "testing.md"
-DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
 DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
 DEV_SPEC = PLANNING_DIR / "dev_environment.md"
 SETUP_SPEC = PLANNING_DIR / "setup.md"
 
-SYSTEM_FILES = [
-    "architecture",
-    "project_overview",
-    "infrastructure",
-    "cicd",
-    "testing",
-    "build",
-    "dev_environment",
-]
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
@@ -712,8 +697,7 @@ def get_vibe_status_report() -> str:
             else:
                 status = click.style("⚪", fg="white", dim=True)
 
-            yaml_icon = "Y" if info["has_yaml"] else " "
-            report.append(f"    {status} [{yaml_icon}] {name}")
+            report.append(f"    {status} {name}")
 
     # 4. Implementation Plans
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
@@ -1010,14 +994,13 @@ def setup_vibe_test_env(monkeypatch):
 
 
 def get_services():
-    """Get services from dev_environment.yaml, dev_environment.md, or Makefile."""
+    """Get services from dev_environment-current.yaml, dev_environment.md, or Makefile."""
     services = []
 
-    # Try dev_environment.yaml first
-    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
-    if build_file.exists():
+    # Try dev_environment-current.yaml first (represents the last successful build)
+    if DEV_ENV_CURRENT.exists():
         try:
-            build_config = safe_yaml_load(build_file.read_text())
+            build_config = safe_yaml_load(DEV_ENV_CURRENT.read_text())
             if build_config:
                 services = extract_services_from_build_config(build_config)
                 if services:
@@ -2064,14 +2047,13 @@ def check_url_responds(url):
 
 
 def extract_urls_from_dev_env():
-    """Extract URLs from dev_environment.yaml, dev_environment.md, or Makefile."""
+    """Extract URLs from dev_environment-current.yaml, dev_environment.md, or Makefile."""
     urls = {}
 
-    # Try dev_environment.yaml first
-    build_file = DEV_ENV_CURRENT if DEV_ENV_CURRENT.exists() else DEV_ENV
-    if build_file.exists():
+    # Try dev_environment-current.yaml first
+    if DEV_ENV_CURRENT.exists():
         try:
-            build_config = safe_yaml_load(build_file.read_text())
+            build_config = safe_yaml_load(DEV_ENV_CURRENT.read_text())
             if build_config:
                 # Look for URLs in config
                 if "urls" in build_config:

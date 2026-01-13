@@ -367,6 +367,13 @@ def sync_feature_prd(prd: PRD, owner, name, repo_id, gh_by_id, gh_by_title, dry_
                 prd.save()
                 update_gh_labels(prd, disc["id"], f"{owner}/{name}", is_discussion=True)
                 logger.info(f"Created GitHub Discussion for {prd.id}")
+                # Set gh_disc so it can be closed if needed below
+                gh_disc = {
+                    "id": disc["id"],
+                    "body": body,
+                    "isClosed": False,
+                    "labels": {"nodes": []}
+                }
             except Exception:
                 logger.error(f"Failed to parse discussion creation for {prd.id}")
     else:
@@ -393,6 +400,7 @@ def sync_feature_prd(prd: PRD, owner, name, repo_id, gh_by_id, gh_by_title, dry_
                 prd.save()
                 logger.info(f"Updated GitHub Discussion for {prd.id}")
         
+    if gh_disc:
         # Close/Reopen based on status
         mapping = STATUS_GITHUB_MAPPING.get(prd.status, STATUS_GITHUB_MAPPING["backlog"])
         should_close = mapping["state"] == "closed"
@@ -450,6 +458,8 @@ def sync_issue_prd(prd: PRD, repo, dry_run, gh_issue=None):
             prd.save()
             update_gh_labels(prd, str(number), repo, is_discussion=False)
             logger.info(f"Created GitHub Issue #{number} for {prd.id}")
+            # Set gh_issue for state checks below
+            gh_issue = {"number": number, "state": "OPEN", "body": body}
     else:
         # Update existing
         current_hash = prd.get_hash()
@@ -468,6 +478,7 @@ def sync_issue_prd(prd: PRD, repo, dry_run, gh_issue=None):
                 prd.save()
                 logger.info(f"Updated GitHub Issue #{prd.issue_number}")
         
+    if prd.issue_number:
         # Check if we need to close/reopen
         mapping = STATUS_GITHUB_MAPPING.get(prd.status, STATUS_GITHUB_MAPPING["backlog"])
         should_close = mapping["state"] == "closed"

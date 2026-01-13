@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from vibe_tools.utils import INFRA, logger, safe_yaml_load
+from vibe_tools.utils import INFRA_SPEC, INFRA_CURRENT, logger, safe_yaml_load
+from vibe_tools.normalize import normalize_to_data
 
 DEPLOYMENT_DIR = pathlib.Path("deployment")
 TERRAFORM_DIR = DEPLOYMENT_DIR / "terraform"
@@ -20,15 +21,23 @@ def ensure_deployment_dirs():
 
 
 def load_infrastructure_spec() -> Dict[str, Any]:
-    """Load the infrastructure specification."""
-    if not INFRA.exists():
-        logger.warning(f"Infrastructure spec {INFRA} not found")
+    """Load the infrastructure specification, normalizing just-in-time if needed."""
+    if INFRA_CURRENT.exists():
+        try:
+            return safe_yaml_load(INFRA_CURRENT.read_text()) or {}
+        except Exception:
+            pass
+
+    if not INFRA_SPEC.exists():
+        logger.warning(f"Infrastructure spec {INFRA_SPEC} not found")
         return {}
 
     try:
-        return safe_yaml_load(INFRA.read_text()) or {}
+        # Normalize just-in-time
+        data = normalize_to_data(INFRA_SPEC.read_text(), "infrastructure")
+        return data or {}
     except Exception as e:
-        logger.error(f"Failed to load infrastructure spec: {e}")
+        logger.error(f"Failed to load infrastructure spec from {INFRA_SPEC}: {e}")
         return {}
 
 
