@@ -11,6 +11,7 @@ from vibe_tools.utils import (
     PRODUCT_BACKLOG_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
+    PRODUCT_DIR,
     PLANNING_INBOX_DIR,
     PLANNING_REJECTED_DIR,
     ensure_dir,
@@ -19,6 +20,42 @@ from vibe_tools.utils import (
 )
 from vibe_tools.pm import InteractivePM
 from vibe_tools.prds import load_prd, PRD
+
+
+def _print_prd_line(path: pathlib.Path):
+    try:
+        p = load_prd(path)
+        status_color = "white"
+        if p.status == "done":
+            status_color = "green"
+        elif p.status == "in_progress":
+            status_color = "blue"
+
+        status_str = click.style(p.status.upper(), fg=status_color)
+        type_str = click.style(
+            p.type, fg="cyan" if p.type == "FEATURE" else "yellow"
+        )
+        group_str = p.group or "-"
+        click.echo(
+            f"{p.id:<10} {type_str:<10} {status_str:<15} {group_str:<15} {p.title}"
+        )
+    except Exception:
+        click.echo(f"{path.name:<10} {'ERROR':<10} {'-':<15} {'-':<15} {path.name}")
+
+
+def _display_prd_list(files: List[pathlib.Path], title: Optional[str] = None):
+    if title:
+        click.echo(click.style(f"\n--- {title} ---", bold=True))
+
+    click.echo(f"{'ID':<10} {'Type':<10} {'Status':<15} {'Group':<15} {'Title'}")
+    click.echo("-" * 80)
+
+    if not files:
+        click.echo(click.style("No PRDs found.", dim=True))
+        return
+
+    for f in files:
+        _print_prd_line(f)
 
 
 def register_prd(cli):
@@ -34,35 +71,40 @@ def register_prd(cli):
     def list_prds(all):
         """List unified PRDs and their status."""
         state = load_project_state()
-        
+
         # Collect PRDs from new structure
         backlog = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
         in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
         history = sorted(list(PRODUCT_HISTORY_DIR.glob("*.md")), reverse=True)
-        
-        click.echo(f"{'ID':<10} {'Type':<10} {'Status':<15} {'Group':<15} {'Title'}")
-        click.echo("-" * 80)
-        
-        def print_prd(path: pathlib.Path):
-            try:
-                p = load_prd(path)
-                status_color = "white"
-                if p.status == "done": status_color = "green"
-                elif p.status == "in_progress": status_color = "blue"
-                
-                status_str = click.style(p.status.upper(), fg=status_color)
-                type_str = click.style(p.type, fg="cyan" if p.type == "FEATURE" else "yellow")
-                group_str = p.group or "-"
-                click.echo(f"{p.id:<10} {type_str:<10} {status_str:<15} {group_str:<15} {p.title}")
-            except Exception:
-                click.echo(f"{path.name:<10} {'ERROR':<10} {'-':<15} {'-':<15} {path.name}")
 
-        for f in in_progress: print_prd(f)
-        for f in backlog: print_prd(f)
+        if in_progress:
+            _display_prd_list(in_progress, "In Progress")
+        
+        if backlog:
+            _display_prd_list(backlog, "Backlog")
+
         if all:
-            for f in history: print_prd(f)
+            if history:
+                _display_prd_list(history, "History")
         elif history:
-            click.echo(click.style(f"... and {len(history)} items in history (use --all to see them)", dim=True))
+            click.echo(
+                click.style(
+                    f"\n... and {len(history)} items in history (use --all or 'vibe prd history' to see them)",
+                    dim=True,
+                )
+            )
+
+    @prd.command(name="history")
+    def prd_history():
+        """List PRD history."""
+        history = sorted(list(PRODUCT_HISTORY_DIR.glob("*.md")), reverse=True)
+        _display_prd_list(history, "PRD History")
+
+    @prd.command(name="rejected")
+    def prd_rejected():
+        """List rejected PRDs."""
+        rejected = sorted(list(PLANNING_REJECTED_DIR.glob("*.md")), reverse=True)
+        _display_prd_list(rejected, "Rejected PRDs")
 
     @prd.command(name="plan")
     def plan_prds():
@@ -104,10 +146,22 @@ def register_prd(cli):
                 idx = int(choice.split()[1]) - 1
                 if 0 <= idx < len(backlog):
                     # Check if anything else is in progress
-                    if list(PRODUCT_IN_PROGRESS_DIR.glob("*.md")):
-                        click.echo("❌ Another PRD is already in progress.")
-                        return
-                    
+                    in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
+                    if in_progress:
+                        curr_p = load_prd(in_progress[0])
+                        if click.confirm(
+                            f"⚠️  PRD {curr_p.id} is already in progress. Move it back to backlog?"
+                        ):
+                            # Stop current
+                            for f in in_progress:
+                                p_to_stop = load_prd(f)
+                                p_to_stop.status = "backlog"
+                                p_to_stop.save(PRODUCT_BACKLOG_DIR / f.name)
+                                f.unlink()
+                        else:
+                            click.echo("Aborted.")
+                            return
+
                     selected = backlog[idx]
                     p = load_prd(selected)
                     p.status = "in_progress"
@@ -117,6 +171,22 @@ def register_prd(cli):
                     click.echo(f"Started {p.id}. Run 'vibe implement' to begin.")
             except (ValueError, IndexError):
                 click.echo("Invalid index.")
+
+    @prd.command(name="stop")
+    def stop_prd():
+        """Move the current in-progress PRD back to the backlog."""
+        in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
+        if not in_progress:
+            click.echo("No PRD is currently in progress.")
+            return
+
+        for f in in_progress:
+            p = load_prd(f)
+            p.status = "backlog"
+            new_path = PRODUCT_BACKLOG_DIR / f.name
+            p.save(new_path)
+            f.unlink()
+            click.echo(f"✅ Stopped {p.id} and moved back to backlog.")
 
     @prd.command(name="pm")
     @click.argument("query", required=False)
@@ -131,7 +201,9 @@ def register_prd(cli):
 
     @prd.command(name="move")
     @click.argument("prd_id")
-    @click.argument("target", type=click.Choice(["backlog", "history", "rejected"]))
+    @click.argument(
+        "target", type=click.Choice(["backlog", "history", "rejected", "in_progress"])
+    )
     def move_prd(prd_id, target):
         """Move a PRD by its ID."""
         # Find the file
@@ -141,26 +213,39 @@ def register_prd(cli):
             if prd_id.upper() in f.name:
                 found_path = f
                 break
-        
+
         if not found_path:
             click.echo(f"❌ PRD not found: {prd_id}")
             return
-            
+
         target_map = {
             "backlog": PRODUCT_BACKLOG_DIR,
             "history": PRODUCT_HISTORY_DIR,
             "rejected": PLANNING_REJECTED_DIR,
+            "in_progress": PRODUCT_IN_PROGRESS_DIR,
         }
-        
+
+        if target == "in_progress":
+            existing = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
+            if existing and existing[0].name != found_path.name:
+                click.echo("❌ Another PRD is already in progress.")
+                return
+
         target_dir = target_map[target]
         ensure_dir(target_dir)
-        
+
         p = load_prd(found_path)
-        p.status = "done" if target == "history" else "backlog"
+        if target == "history":
+            p.status = "done"
+        elif target == "in_progress":
+            p.status = "in_progress"
+        else:
+            p.status = "backlog"
+
         new_path = target_dir / found_path.name
         p.save(new_path)
         found_path.unlink()
-        
+
         click.echo(f"✅ Moved {prd_id} to {target}")
 
     cli.add_command(prd)

@@ -32,12 +32,24 @@ VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
 
-# Issues
+# Legacy - to be removed after migration
 ISSUES_DIR = pathlib.Path("issues")
 ISSUES_BACKLOG_DIR = ISSUES_DIR / "backlog"
 ISSUES_HISTORY_DIR = ISSUES_DIR / "history"
 ISSUES_FAILS_DIR = ISSUES_DIR / "fails"
 ISSUES_META_DIR = ISSUES_DIR / "meta"
+
+# Implementation PRDs (YAML)
+PRD_DIR = VIBE_PROJECT_DIR / "prds"
+PRD_PROCESSING_DIR = PRD_DIR / "processing"
+PRD_DONE_DIR = PRD_DIR / "done"
+PRD_FAILED_DIR = PRD_DIR / "failed"
+
+# Legacy implementation dirs
+BACKLOG_DIR = PRD_DIR / "backlog"
+HISTORY_DIR = PRD_DIR / "history"
+REJECTED_DIR = PRD_DIR / "rejected"
+INBOX_DIR = PRD_DIR / "inbox"
 
 # Product Planning (Markdown)
 PRODUCT_BACKLOG_DIR = PRODUCT_DIR / "backlog"
@@ -47,18 +59,6 @@ PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
 PLANNING_BACKLOG_DIR = PRODUCT_BACKLOG_DIR
 PLANNING_HISTORY_DIR = PRODUCT_HISTORY_DIR
 PLANNING_REJECTED_DIR = PLANNING_DIR / "rejected"
-
-# Implementation PRDs (YAML)
-PRD_DIR = VIBE_PROJECT_DIR / "prds"
-PRD_PROCESSING_DIR = PRD_DIR / "processing"
-PRD_DONE_DIR = PRD_DIR / "done"
-PRD_FAILED_DIR = PRD_DIR / "failed"
-
-# Legacy - to be removed after migration
-BACKLOG_DIR = PRD_DIR / "backlog"
-HISTORY_DIR = PRD_DIR / "history"
-REJECTED_DIR = PRD_DIR / "rejected"
-INBOX_DIR = PRD_DIR / "inbox"
 
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
