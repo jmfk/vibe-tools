@@ -12,6 +12,7 @@ from vibe_tools.utils import (
     log_success,
     logger,
     run_agent,
+    out_warn,
 )
 
 STATE_FILE = pathlib.Path(".test_fix_state.json")
@@ -34,7 +35,7 @@ def load_state():
         try:
             return json.loads(STATE_FILE.read_text())
         except Exception as e:
-            print(f"Warning: Failed to load state file: {e}")
+            out_warn(f"Warning: Failed to load state file: {e}")
             return None
     return None
 
