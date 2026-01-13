@@ -24,6 +24,42 @@ class PRD:
     history: str = ""
     path: Optional[pathlib.Path] = None
 
+    @property
+    def discussion_id(self) -> Optional[str]:
+        return self.metadata.get("discussion_id")
+
+    @discussion_id.setter
+    def discussion_id(self, value: str):
+        self.metadata["discussion_id"] = value
+
+    @property
+    def issue_number(self) -> Optional[int]:
+        return self.metadata.get("issue_number")
+
+    @issue_number.setter
+    def issue_number(self, value: int):
+        self.metadata["issue_number"] = value
+
+    @property
+    def last_synced_at(self) -> Optional[str]:
+        return self.metadata.get("last_synced_at")
+
+    @last_synced_at.setter
+    def last_synced_at(self, value: str):
+        self.metadata["last_synced_at"] = value
+
+    @property
+    def sync_hash(self) -> Optional[str]:
+        return self.metadata.get("sync_hash")
+
+    @sync_hash.setter
+    def sync_hash(self, value: str):
+        self.metadata["sync_hash"] = value
+
+    def get_hash(self) -> str:
+        import hashlib
+        return hashlib.sha256(self.content.encode()).hexdigest()
+
     @classmethod
     def from_markdown(cls, text: str, path: Optional[pathlib.Path] = None) -> "PRD":
         frontmatter = {}
