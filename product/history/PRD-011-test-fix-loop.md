@@ -1,20 +1,3 @@
----
-id: PRD-011
-title: Test Fix Loop
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.012843'
-updated_at: '2026-01-13T19:03:45.941619'
-discussion_id: D_kwDOQzI0Lc4AjoM_
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/34
-last_synced_at: '2026-01-13T19:03:45.941528'
-sync_hash: 35191da0cd44fcec29627409bacc5595e2fbbedbf9aade18f5038236ea254275
-implementation_id: v01-170
-implementation_yaml: v01-170_13_test_fix_loop.yaml
----
-
 # Test Fix Loop
 
 ## Overview
@@ -103,3 +86,28 @@ N/A - CLI command with progress output.
 8. **Fast Mode**: Test with --fast flag, verify frontend skipped
 9. **Error Handling**: Test with various error types, verify handled correctly
 10. **Max Iterations**: Test with unfixable errors, verify max iterations enforced
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-011
+title: Test Fix Loop
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.012843'
+updated_at: '2026-01-13T20:07:27.797463'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/34
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-170
+implementation_yaml: v01-170_13_test_fix_loop.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-011 -->

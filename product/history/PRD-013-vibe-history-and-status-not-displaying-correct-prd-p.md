@@ -1,27 +1,3 @@
----
-id: PRD-013
-title: Vibe history and status not displaying correct PRD progress
-type: ISSUE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-10T17:17:22Z'
-updated_at: '2026-01-13T19:02:56.649743'
-severity: medium
-service: unknown
-summary: ''
-github:
-  repo: jmfk/vibe-tools
-  number: 1
-  url: https://github.com/jmfk/vibe-tools/issues/1
-sync:
-  last_synced_at: '2026-01-10T17:17:22Z'
-  sync_hash: 2414ba827f679f3b4a259a776ce61cf779b6e19102658482c6d0ebcfd0ad63ba
-issue_number: 80
-last_synced_at: '2026-01-13T18:53:34.699267'
-sync_hash: 96a8728b0977d66e7eb58632110230988cfb77c212e2b8150e07ef8a54219676
----
-
 # Vibe history and status not displaying correct PRD progress
 
 ## Summary
@@ -59,3 +35,35 @@ The `vibe history` and `vibe status` commands provide inconsistent views of PRD 
 ## Solution Notes
 - Agent started solve mode at 2026-01-10T14:10:35.551973
 - Agent started solve mode at 2026-01-10T18:17:21.682129
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-013
+title: Vibe history and status not displaying correct PRD progress
+type: ISSUE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-10T17:17:22Z'
+updated_at: '2026-01-13T20:07:27.752011'
+severity: medium
+service: unknown
+summary: ''
+github:
+  repo: jmfk/vibe-tools
+  number: 1
+  url: https://github.com/jmfk/vibe-tools/issues/1
+sync:
+  last_synced_at: '2026-01-10T17:17:22Z'
+  sync_hash: 2414ba827f679f3b4a259a776ce61cf779b6e19102658482c6d0ebcfd0ad63ba
+issue_number: null
+last_synced_at: null
+sync_hash: null
+discussion_id: null
+```
+</details>
+
+<!-- vibe-id: PRD-013 -->

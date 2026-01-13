@@ -1,20 +1,3 @@
----
-id: PRD-38
-title: Vibe Document and Issue Explorer
-type: FEATURE
-status: backlog
-group: null
-depends_on: []
-created_at: 2026-01-13
-updated_at: '2026-01-13T19:03:03.756943'
-owner: Core Platform
-implementation_id: v01-470
-implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
-discussion_id: D_kwDOQzI0Lc4AjoMm
-last_synced_at: '2026-01-13T19:03:03.756812'
-sync_hash: e8d119c358bb0fef4d73cdc6350f6fd4682e3139bd6e7f54dbfaf649bbb60b01
----
-
 # PRD-38: Vibe Document and Issue Explorer
 
 **Project:** vibe-tools
@@ -77,3 +60,28 @@ This feature provides the visualization layer for the planning and management ar
 - Seamless rendering of complex Mermaid diagrams.
 - Fast switching between different document types.
 - Clear visualization of the link between a PRD and its implementation spec.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-38
+title: Vibe Document and Issue Explorer
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: 2026-01-13
+updated_at: '2026-01-13T20:07:27.746242'
+owner: Core Platform
+implementation_id: v01-470
+implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
+discussion_id: null
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-38 -->

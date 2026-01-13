@@ -1,20 +1,3 @@
----
-id: PRD-005
-title: Architect Interactive Shell
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.012080'
-updated_at: '2026-01-13T19:03:20.697113'
-discussion_id: D_kwDOQzI0Lc4AjoMs
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/31
-last_synced_at: '2026-01-13T19:03:20.696869'
-sync_hash: 40740d32b9e0cedd5d0e1fdb4eea84544517ecfffe92a1f00f5716842bcab450
-implementation_id: v01-090
-implementation_yaml: v01-090_05_architect_shell.yaml
----
-
 # Architect Interactive Shell
 
 ## Overview
@@ -97,3 +80,28 @@ N/A - CLI interactive shell interface.
 8. **Editor Integration**: Configure editor, use `/edit arch`, verify editor opens
 9. **ASK Mode**: In ASK mode, verify no file changes made
 10. **AGENT Mode**: In AGENT mode, verify spec files can be updated
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-005
+title: Architect Interactive Shell
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.012080'
+updated_at: '2026-01-13T20:07:27.760068'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/31
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-090
+implementation_yaml: v01-090_05_architect_shell.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-005 -->

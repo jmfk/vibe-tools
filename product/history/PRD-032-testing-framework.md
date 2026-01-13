@@ -1,18 +1,3 @@
----
-id: PRD-032
-title: Testing Framework
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.016210'
-updated_at: '2026-01-13T19:03:56.981178'
-discussion_id: D_kwDOQzI0Lc4AjoNG
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/47
-last_synced_at: '2026-01-13T19:03:56.981020'
-sync_hash: f11b38fc94f0d80475d95a4b185f83ebda3f178f2aa210bbc72e0e72d8251106
----
-
 # Testing Framework
 
 ## Overview
@@ -70,3 +55,26 @@ N/A - CLI command.
 2. **Runner Detection**: Verify test runners detected correctly
 3. **Configuration**: Verify configuration saved correctly
 4. **Integration**: Verify used by coverage and test-fix loops
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-032
+title: Testing Framework
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.016210'
+updated_at: '2026-01-13T20:07:27.808671'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/47
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-032 -->

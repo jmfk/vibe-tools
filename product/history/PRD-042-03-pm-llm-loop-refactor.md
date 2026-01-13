@@ -1,17 +1,3 @@
----
-id: PRD-042
-title: 03 Pm Llm Loop Refactor
-type: ISSUE
-status: in_progress
-group: null
-depends_on: []
-created_at: '2026-01-13T18:53:26.305624'
-updated_at: '2026-01-13T19:04:02.125214'
-issue_number: 11
-last_synced_at: '2026-01-13T18:53:48.926099'
-sync_hash: 04a0d6768abbb673c23dc671d3c2dd950a78de95187a8650d19c63c7be7f1de6
----
-
 # 03 Pm Llm Loop Refactor
 
 ## System Contract
@@ -48,3 +34,25 @@ sync_hash: 04a0d6768abbb673c23dc671d3c2dd950a78de95187a8650d19c63c7be7f1de6
 
 ## Output Targets
 - interactive shell
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-042
+title: 03 Pm Llm Loop Refactor
+type: ISSUE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:53:26.305624'
+updated_at: '2026-01-13T20:07:27.782126'
+issue_number: null
+last_synced_at: null
+sync_hash: null
+discussion_id: null
+```
+</details>
+
+<!-- vibe-id: PRD-042 -->

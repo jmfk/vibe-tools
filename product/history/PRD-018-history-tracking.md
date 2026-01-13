@@ -1,18 +1,3 @@
----
-id: PRD-018
-title: History Tracking
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.010708'
-updated_at: '2026-01-13T19:04:09.173992'
-discussion_id: D_kwDOQzI0Lc4AjoNM
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/27
-last_synced_at: '2026-01-13T19:04:09.173891'
-sync_hash: 8e78b6b1b77b3bc556a829984de3a5862a06c9108f1fc601a5fdcf9e206ece9d
----
-
 # History Tracking
 
 ## Overview
@@ -77,3 +62,26 @@ N/A - CLI commands with formatted output.
 3. **Implemented Filter**: Run `vibe implemented`, verify only completed shown
 4. **State Persistence**: Update state, restart, verify persisted
 5. **Progress Tracking**: Verify progress tracked correctly
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-018
+title: History Tracking
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.010708'
+updated_at: '2026-01-13T20:07:27.816858'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/27
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-018 -->

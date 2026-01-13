@@ -1,43 +1,66 @@
 import datetime
-from typing import Optional
+from typing import Optional, List
 
 import click
 
-from vibe_tools.issues import Issue, load_all_issues, load_issue_by_id, save_issue
-from vibe_tools.ralph import issue_solve_loop
+from vibe_tools.prds import PRD, load_prd
+from vibe_tools.ralph import implementation_loop
 
 
-def _solve_issue(issue: Issue, mode: str, agent: str, stream: bool = False):
+def load_prd_by_id(prd_id: str) -> Optional[PRD]:
+    from vibe_tools.utils import PRODUCT_DIR
+    if not PRODUCT_DIR.exists():
+        return None
+    for f in PRODUCT_DIR.rglob("*.md"):
+        if prd_id.upper() in f.name.upper():
+            try:
+                return load_prd(f)
+            except Exception:
+                continue
+    return None
+
+def load_all_issue_prds() -> List[PRD]:
+    from vibe_tools.utils import PRODUCT_DIR
+    prds = []
+    if PRODUCT_DIR.exists():
+        for f in PRODUCT_DIR.rglob("*.md"):
+            try:
+                p = load_prd(f)
+                if p.type == "ISSUE":
+                    prds.append(p)
+            except Exception:
+                continue
+    return sorted(prds, key=lambda x: x.id)
+
+def _solve_issue(issue: PRD, mode: str, agent: str, stream: bool = False):
     """Internal helper to solve a single issue."""
+    from vibe_tools.utils import PRODUCT_IN_PROGRESS_DIR
     click.echo(f"🎯 Starting {mode} mode for issue: {issue.title} ({issue.id})")
 
-    from vibe_tools.commands.sync import sync_issues
     # Update status if not already in progress
-    now = datetime.datetime.now().isoformat()
     if issue.status == "backlog":
         issue.status = "in_progress"
-        issue.updated_at = now
-        save_issue(issue)
-        sync_issues(quiet=True)
+        # Move to in_progress directory if it's not already there
+        if "in_progress" not in str(issue.path):
+            new_path = PRODUCT_IN_PROGRESS_DIR / issue.path.name
+            issue.save(new_path)
+            issue.path.unlink()
+            issue.path = new_path
+        else:
+            issue.save()
         click.echo(f"Status transitioned to: {issue.status}")
 
-    # In local-first workflow, we want to update the investigation or solution notes
-    note = f"- Agent started {mode} mode at {now}"
-    if mode == "investigate":
-        issue.body.investigation_notes = (issue.body.investigation_notes + "\n" + note).strip()
-    else:
-        issue.body.solution_notes = (issue.body.solution_notes + "\n" + note).strip()
-
-    issue.updated_at = now
-    save_issue(issue)
-    sync_issues(quiet=True)
+    # In local-first workflow, we want to update the history
+    issue.append_history(f"Agent started {mode} mode.")
+    issue.save()
 
     if mode == "solve":
-        success = issue_solve_loop(issue, agent, stream=stream)
+        # Redirect to the unified implementation loop
+        success = implementation_loop(agent, stream=stream)
         if success:
             click.echo(click.style(f"✅ Issue {issue.id} solved successfully!", fg="green"))
         else:
-            click.echo(click.style(f"❌ Failed to solve issue {issue.id}. Check failure report in issues/fails/", fg="red"))
+            click.echo(click.style(f"❌ Failed to solve issue {issue.id}.", fg="red"))
     else:
         click.echo(f"Issue {issue.id} updated and marked as in_progress.")
         click.echo("Investigation mode currently updates the issue state.")
@@ -54,19 +77,19 @@ def register_solve(cli):
     def solve_command(ctx, issue_id: Optional[str], solve_next: bool, solve_all: bool, mode: str, agent: str, stream: bool):
         """Resolve issue(s) via agent-driven loop."""
         if issue_id:
-            issue = load_issue_by_id(issue_id)
+            issue = load_prd_by_id(issue_id)
             if not issue:
                 click.echo(f"Error: Issue {issue_id} not found.")
                 return
             _solve_issue(issue, mode, agent, stream)
         elif solve_next:
-            issues = [i for i in load_all_issues() if i.status in ("backlog", "in_progress")]
+            issues = [i for i in load_all_issue_prds() if i.status in ("backlog", "in_progress")]
             if not issues:
                 click.echo("No issues in backlog or in progress.")
                 return
             _solve_issue(issues[0], mode, agent, stream)
         elif solve_all:
-            issues = [i for i in load_all_issues() if i.status in ("backlog", "in_progress")]
+            issues = [i for i in load_all_issue_prds() if i.status in ("backlog", "in_progress")]
             if not issues:
                 click.echo("No issues in backlog or in progress.")
                 return

@@ -2,18 +2,27 @@ import re
 
 import click
 
-from vibe_tools.issues import load_all_issues
+from vibe_tools.prds import load_prd
 
 
 def list_issues_impl(status, severity, service, search, full, search_query):
     """Internal implementation of issue listing."""
-    issues = load_all_issues()
+    from vibe_tools.utils import PRODUCT_DIR
+    prds = []
+    if PRODUCT_DIR.exists():
+        for f in PRODUCT_DIR.rglob("*.md"):
+            try:
+                p = load_prd(f)
+                if p.type == "ISSUE":
+                    prds.append(p)
+            except Exception:
+                continue
 
     # Merge search and search_query
     effective_search = search or search_query
 
     filtered_issues = []
-    for issue in issues:
+    for issue in prds:
         if status:
             if issue.status != status:
                 continue
@@ -29,7 +38,7 @@ def list_issues_impl(status, severity, service, search, full, search_query):
         if effective_search:
             pattern = re.compile(effective_search, re.IGNORECASE)
             match_title = pattern.search(issue.title)
-            match_body = pattern.search(issue.body.to_markdown())
+            match_body = pattern.search(issue.content)
             match_status = pattern.search(issue.status)
             if not (match_title or match_body or match_status):
                 continue
@@ -46,19 +55,20 @@ def list_issues_impl(status, severity, service, search, full, search_query):
             click.echo(f"ID:       {issue.id}")
             click.echo(f"Title:    {issue.title}")
             click.echo(f"Status:   {issue.status}")
-            click.echo(f"Severity: {issue.severity}")
+            click.echo(f"Severity: {issue.severity or 'N/A'}")
             click.echo(f"Service:  {issue.service or 'N/A'}")
             click.echo("-" * 80)
-            click.echo(issue.body.to_markdown())
+            click.echo(issue.content)
             click.echo("")
     else:
         # Table View
-        header = f"{'ID':<25} {'Status':<12} {'Severity':<10} {'Service':<15} {'Title'}"
+        header = f"{'ID':<15} {'Status':<12} {'Severity':<10} {'Service':<15} {'Title'}"
         click.echo(header)
         click.echo("-" * 100)
         for issue in filtered_issues:
             service_str = issue.service or "N/A"
-            click.echo(f"{issue.id:<25} {issue.status:<12} {issue.severity:<10} {service_str:<15} {issue.title}")
+            severity_str = issue.severity or "N/A"
+            click.echo(f"{issue.id:<15} {issue.status:<12} {severity_str:<10} {service_str:<15} {issue.title}")
 
 def register_issue_list(issue_group):
     options = [

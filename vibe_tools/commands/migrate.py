@@ -10,7 +10,6 @@ from vibe_tools.utils import (
     PRODUCT_BACKLOG_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
-    ISSUES_DIR,
     PRD_DIR,
     PRD_DONE_DIR,
     PRD_FAILED_DIR,
@@ -33,6 +32,7 @@ def full_migration_needed(prd: PRD) -> bool:
 
 def run_reconciliation(quiet=False):
     """Unified migration to PRD-NNN scheme in product/ directory."""
+    ISSUES_DIR = pathlib.Path("issues")
     if not quiet:
         click.echo("🚀 Starting unified PRD migration...")
 

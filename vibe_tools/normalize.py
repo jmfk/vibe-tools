@@ -261,8 +261,16 @@ def normalize_prd(
         out_info(f"🔄 Normalizing PRD: {spec_path.name}...")
         data = normalize_to_data(content, stem, debug=debug)
         if data:
-            # In the old way, we'd save to PRD_PROCESSING_DIR
-            # In the new way, we don't save normalized PRDs to disk
-            out_success(f"✅ Normalized: {spec_path.name}")
+            # For legacy CLI compatibility, we still save to PRD_PROCESSING_DIR
+            # and try to preserve relative structure if possible
+            try:
+                rel_path = spec_path.relative_to(PLANNING_BACKLOG_DIR).with_suffix(".yaml")
+                output_path = PRD_PROCESSING_DIR / rel_path
+            except ValueError:
+                output_path = PRD_PROCESSING_DIR / f"{stem}.yaml"
+                
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(safe_yaml_dump(data))
+            out_success(f"✅ Normalized: {spec_path.name} -> {output_path}")
         else:
             out_error(f"❌ Failed to normalize {spec_path.name}")

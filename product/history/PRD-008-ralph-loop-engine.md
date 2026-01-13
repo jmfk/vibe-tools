@@ -1,20 +1,3 @@
----
-id: PRD-008
-title: Ralph Loop Engine
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.014396'
-updated_at: '2026-01-13T19:03:30.877567'
-discussion_id: D_kwDOQzI0Lc4AjoM0
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/40
-last_synced_at: '2026-01-13T19:03:30.877336'
-sync_hash: 7eb34b027f2ea9fcd2c9b72e520181ccc7bae78545ef2b70c707017ac85e1890
-implementation_id: v01-140
-implementation_yaml: v01-140_10_ralph_loop_engine.yaml
----
-
 # Ralph Loop Engine
 
 ## Overview
@@ -95,3 +78,28 @@ N/A - Core engine, used by other commands.
 7. **Git Commits**: Verify changes committed on branch
 8. **Error Handling**: Test with invalid files, agent failures, verify graceful handling
 9. **Custom Instructions**: Verify custom instructions included in prompts
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-008
+title: Ralph Loop Engine
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.014396'
+updated_at: '2026-01-13T20:07:27.774487'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/40
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-140
+implementation_yaml: v01-140_10_ralph_loop_engine.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-008 -->

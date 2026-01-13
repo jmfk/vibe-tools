@@ -1,18 +1,3 @@
----
-id: PRD-02
-title: 'PRD-02: Issue Handling Improvements'
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:37:25.059365'
-updated_at: '2026-01-13T19:03:35.399867'
-discussion_id: D_kwDOQzI0Lc4AjoM3
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
-last_synced_at: '2026-01-13T19:03:35.399748'
-sync_hash: 18443269ab898b94a5a32679dfb5d8bcca8e265641fbbc600b6bdc84127d5b34
----
-
 # PRD-02: Issue Handling Improvements
 
 **Project:** vibe-tools
@@ -112,3 +97,26 @@ Location: issues/backlog/ISSUE-2026-01-09-002.md
 - Users can list issues without manual `ls issues/backlog/`.
 - Search works across title and status.
 - `vibe issue add` creates a complete, valid issue artifact from a single CLI command.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-02
+title: 'PRD-02: Issue Handling Improvements'
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.059365'
+updated_at: '2026-01-13T20:07:27.783780'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-02 -->

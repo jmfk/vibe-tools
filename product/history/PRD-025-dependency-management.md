@@ -1,18 +1,3 @@
----
-id: PRD-025
-title: Dependency Management
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.013849'
-updated_at: '2026-01-13T19:03:18.051718'
-discussion_id: D_kwDOQzI0Lc4AjoMq
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/38
-last_synced_at: '2026-01-13T19:03:18.051607'
-sync_hash: 8e76f315bcd4462bd223ccff4ed857e9c68239aefeda7acd3ee6631eed28c803
----
-
 # Dependency Management
 
 ## Overview
@@ -68,3 +53,26 @@ N/A - CLI command with formatted output.
 2. **Missing Detection**: Remove dependency, verify detected
 3. **Installation Guidance**: Verify guidance provided for missing deps
 4. **Integration**: Test commands that use dependency checking
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-025
+title: Dependency Management
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.013849'
+updated_at: '2026-01-13T20:07:27.755635'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/38
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-025 -->

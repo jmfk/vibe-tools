@@ -1,18 +1,3 @@
----
-id: PRD-026
-title: Rerun System
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.014073'
-updated_at: '2026-01-13T19:03:50.250986'
-discussion_id: D_kwDOQzI0Lc4AjoNB
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/39
-last_synced_at: '2026-01-13T19:03:50.250841'
-sync_hash: 8b61964b7ebe5856e2674822f6dd8ace0b90eb4b300377c902b16c5cbc5519a7
----
-
 # Rerun System
 
 ## Overview
@@ -70,3 +55,26 @@ N/A - CLI command.
 2. **Implementation Clear**: Verify implementation state cleared
 3. **Rerun**: Rerun PRD after reset, verify works
 4. **Validation**: Test with invalid PRD ID, verify error
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-026
+title: Rerun System
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.014073'
+updated_at: '2026-01-13T20:07:27.802538'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/39
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-026 -->

@@ -1,18 +1,3 @@
----
-id: PRD-020
-title: Branch Management
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.011628'
-updated_at: '2026-01-13T19:03:21.863066'
-discussion_id: D_kwDOQzI0Lc4AjoMt
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/30
-last_synced_at: '2026-01-13T19:03:21.862929'
-sync_hash: d3785e297a0b5a29e3e4d7160100aacb45287d55545d4f9d095686e76ce68b5a
----
-
 # Branch Management
 
 ## Overview
@@ -86,3 +71,26 @@ N/A - CLI commands with formatted output.
 5. **Status Tracking**: Verify branch status matches PRD status
 6. **Branches View**: Run `vibe branches`, verify table displayed correctly
 7. **Dependency Support**: Test branches with dependencies, verify ordering correct
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-020
+title: Branch Management
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.011628'
+updated_at: '2026-01-13T20:07:27.762388'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/30
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-020 -->
