@@ -2,6 +2,7 @@ import datetime
 import pathlib
 import re
 import sys
+from typing import Optional
 
 import click
 import yaml
@@ -18,6 +19,10 @@ from vibe_tools.utils import (
     PRD_FAILED_DIR,
     PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
+    check_dependencies,
+    collect_prd_files,
+    enable_console_debug,
+    ensure_dir,
     get_file_hash,
     get_main_branch,
     get_prompt,
@@ -165,3 +170,61 @@ def normalize_to_data(md_content: str, stem: str, debug: bool = False) -> dict:
     if code == 0 and data is not None:
         return data
     return {}
+
+
+def normalize_prd(
+    input_file: Optional[pathlib.Path] = None,
+    auto_overwrite: bool = False,
+    debug: bool = False,
+):
+    """Normalize PRDs from product/ into implementation/prds/."""
+    from vibe_tools.cli import load_config
+    config = load_config()
+    cost_logger = CostLogger(config)
+
+    # 1. Collect PRDs to normalize
+    if input_file:
+        files = [input_file]
+    else:
+        # Defaults to all PRDs in DEFAULT_SPECS_DIR
+        files = [
+            f for f in DEFAULT_SPECS_DIR.rglob("*.md")
+            if f.stem not in [
+                "architecture",
+                "infrastructure",
+                "cicd",
+                "testing",
+                "dev_environment",
+                "project-overview",
+                "project_overview",
+                "setup",
+            ]
+        ]
+
+    if not files:
+        out_info("No PRDs found to normalize.")
+        return
+
+    ensure_dir(PRD_PROCESSING_DIR)
+
+    for f in files:
+        out_info(f"🔄 Normalizing {f.name}...")
+        
+        # Determine target path
+        rel_path = f.relative_to(DEFAULT_SPECS_DIR)
+        target_yaml = PRD_PROCESSING_DIR / rel_path.with_suffix(".yaml")
+        ensure_dir(target_yaml.parent)
+
+        # Skip if already exists and not auto_overwrite
+        if target_yaml.exists() and not auto_overwrite:
+            if not click.confirm(f"⚠️  {target_yaml.name} already exists. Overwrite?"):
+                continue
+
+        # Run normalization
+        data = normalize_to_data(f.read_text(), f.stem, debug=debug)
+        
+        if data:
+            target_yaml.write_text(safe_yaml_dump(data))
+            out_success(f"✅ Normalized to {target_yaml}")
+        else:
+            out_error(f"❌ Failed to normalize {f.name}")

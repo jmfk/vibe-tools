@@ -84,11 +84,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.017783'
-updated_at: '2026-01-13T20:32:21.940871'
-discussion_id: D_kwDOQzI0Lc4AjoSh
+updated_at: '2026-01-13T23:56:53.408389'
+discussion_id: null
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/53
-last_synced_at: '2026-01-13T20:32:21.940692'
-sync_hash: 04cc0a8add8484372636a2c113216ccb6618f7519c9481745dd422baf5a577eb
+last_synced_at: null
+sync_hash: null
 implementation_id: v01-130
 implementation_yaml: v01-130_09_spec_management.yaml
 issue_number: null

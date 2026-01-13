@@ -66,11 +66,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:37:25.058620'
-updated_at: '2026-01-13T20:30:51.927074'
-discussion_id: D_kwDOQzI0Lc4AjoSN
+updated_at: '2026-01-13T23:56:53.376498'
+discussion_id: null
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/4
-last_synced_at: '2026-01-13T20:30:51.926951'
-sync_hash: 928f09666aa03bd184d5ff7858618193c13eb9af529a27595f5d1eda82dbf389
+last_synced_at: null
+sync_hash: null
 issue_number: null
 ```
 </details>

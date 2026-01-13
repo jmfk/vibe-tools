@@ -64,10 +64,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:53:26.329626'
-updated_at: '2026-01-13T20:30:59.312874'
-issue_number: 143
-last_synced_at: '2026-01-13T20:30:59.312794'
-sync_hash: 1f6319ce0ab38bacb738fd4e41149aaa4840e9a90b6aff44128743bd5268e4fb
+updated_at: '2026-01-13T23:56:53.380170'
+issue_number: null
+last_synced_at: null
+sync_hash: null
 discussion_id: null
 ```
 </details>

@@ -71,7 +71,7 @@ def test_load_save_config(tmp_path):
 
 
 def test_normalize_command(runner):
-    with patch("vibe_tools.normalize.normalize_prd") as mock_normalize:
+    with patch("vibe_tools.commands.normalize.normalize_prd") as mock_normalize:
         # Command doesn't take input file as argument in current version
         result = runner.invoke(cli, ["normalize", "--yes"])
         assert result.exit_code == 0

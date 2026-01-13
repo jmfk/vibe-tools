@@ -1,19 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vibe-tools"
-version = "0.1.0"
-requires-python = ">=3.11"
+dynamic = ["version"]
 dependencies = [
     "click",
-    "google-generativeai",
+    "google-genai",
     "pyyaml",
-    "python-dotenv",
+    "rich",
+    "pydantic",
 ]
-
-[project.scripts]
-vibe = "vibe_tools.cli:cli"
-
-[project.entry-points.pytest11]
-vibe_tools = "vibe_tools.pytest_plugin"
 
 [project.optional-dependencies]
 test = [
@@ -22,5 +20,8 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
-norecursedirs = [".git", "implementation"]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.setuptools_scm]
+write_to = "vibe_tools/version.py"
