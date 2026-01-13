@@ -77,6 +77,8 @@
     "deps_branch_enabled": false
   },
   "agent": {
-    "force": true
+    "agent": "cursor-agent",
+    "force": true,
+    "stream": true  
   }
 }
