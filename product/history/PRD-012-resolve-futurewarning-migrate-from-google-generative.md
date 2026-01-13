@@ -2,11 +2,11 @@
 id: PRD-012
 title: 'Resolve FutureWarning: Migrate from google.generativeai to google.genai'
 type: ISSUE
-status: backlog
+status: done
 group: null
 depends_on: []
 created_at: '2026-01-10T17:06:06Z'
-updated_at: '2026-01-13T18:53:57.325168'
+updated_at: '2026-01-13T18:58:10.407530'
 severity: medium
 service: unknown
 summary: ''

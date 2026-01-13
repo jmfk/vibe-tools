@@ -2,11 +2,11 @@
 id: PRD-013
 title: Vibe history and status not displaying correct PRD progress
 type: ISSUE
-status: backlog
+status: done
 group: null
 depends_on: []
 created_at: '2026-01-10T17:17:22Z'
-updated_at: '2026-01-13T18:53:34.699484'
+updated_at: '2026-01-13T18:58:10.372403'
 severity: medium
 service: unknown
 summary: ''
