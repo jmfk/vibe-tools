@@ -42,7 +42,7 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-10T14:29:20.944749'
-updated_at: '2026-01-13T20:07:27.801007'
+updated_at: '2026-01-13T20:22:33.988474'
 severity: low
 service: ''
 summary: ''
@@ -53,9 +53,9 @@ github:
 sync:
   last_synced_at: '2026-01-10T14:48:18.336954'
   sync_hash: e5671b47c5182873f38d94f6d0414c05dbe9f1b4b6747e25c21b217afde1bfe4
-issue_number: null
-last_synced_at: null
-sync_hash: null
+issue_number: 160
+last_synced_at: '2026-01-13T20:22:33.988279'
+sync_hash: 40069245d5f48d78b3edc4d44ea72b0764e6fb0f6948fea2f4366f26e0ffbe5e
 discussion_id: null
 ```
 </details>

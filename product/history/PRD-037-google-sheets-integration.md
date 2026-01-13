@@ -87,11 +87,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.017458'
-updated_at: '2026-01-13T20:07:27.779146'
-discussion_id: null
+updated_at: '2026-01-13T20:22:09.921159'
+discussion_id: D_kwDOQzI0Lc4AjoRK
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/52
-last_synced_at: null
-sync_hash: null
+last_synced_at: '2026-01-13T20:22:09.921048'
+sync_hash: 9fa84eab64b1bfa2052e59fd45e872e539e9e4e7b89436585895e6d53c323a7d
 issue_number: null
 ```
 </details>

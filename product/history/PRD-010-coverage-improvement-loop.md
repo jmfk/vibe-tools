@@ -92,11 +92,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.008767'
-updated_at: '2026-01-13T20:07:27.785516'
-discussion_id: null
+updated_at: '2026-01-13T20:22:16.295447'
+discussion_id: D_kwDOQzI0Lc4AjoRN
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/22
-last_synced_at: null
-sync_hash: null
+last_synced_at: '2026-01-13T20:22:16.295242'
+sync_hash: df49950c4c0dffa611f984047d8108a0e76884a8be8f9f25cabebd6170a21c77
 implementation_id: v01-160
 implementation_yaml: v01-160_12_coverage_improvement_loop.yaml
 issue_number: null

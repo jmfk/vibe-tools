@@ -48,7 +48,7 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-10T17:17:22Z'
-updated_at: '2026-01-13T20:07:27.752011'
+updated_at: '2026-01-13T20:21:46.896233'
 severity: medium
 service: unknown
 summary: ''
@@ -59,9 +59,9 @@ github:
 sync:
   last_synced_at: '2026-01-10T17:17:22Z'
   sync_hash: 2414ba827f679f3b4a259a776ce61cf779b6e19102658482c6d0ebcfd0ad63ba
-issue_number: null
-last_synced_at: null
-sync_hash: null
+issue_number: 131
+last_synced_at: '2026-01-13T20:21:46.896067'
+sync_hash: 96a8728b0977d66e7eb58632110230988cfb77c212e2b8150e07ef8a54219676
 discussion_id: null
 ```
 </details>

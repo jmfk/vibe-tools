@@ -298,11 +298,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:37:25.061576'
-updated_at: '2026-01-13T20:07:27.820209'
-discussion_id: null
+updated_at: '2026-01-13T20:22:58.569923'
+discussion_id: D_kwDOQzI0Lc4AjoRm
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
-last_synced_at: null
-sync_hash: null
+last_synced_at: '2026-01-13T20:22:58.569786'
+sync_hash: c6298faffd8ce4e57a57e966e483da592447c4eaf0068c34e9315852392aa582
 issue_number: null
 ```
 </details>

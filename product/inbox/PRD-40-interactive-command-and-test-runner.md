@@ -74,13 +74,13 @@ status: backlog
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-13T20:07:27.744375'
+updated_at: '2026-01-13T20:21:40.938672'
 owner: Core Platform
 implementation_id: v01-460
 implementation_yaml: v01-460_40_interactive_command_and_test_runner.yaml
-discussion_id: null
-last_synced_at: null
-sync_hash: null
+discussion_id: D_kwDOQzI0Lc4AjoQ6
+last_synced_at: '2026-01-13T20:21:40.938460'
+sync_hash: ba78e02f62c7600a46e855b9585098a933c63831b71f31a9983cf763780bb0d5
 issue_number: null
 ```
 </details>

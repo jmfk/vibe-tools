@@ -77,11 +77,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.009654'
-updated_at: '2026-01-13T20:07:27.764421'
-discussion_id: null
+updated_at: '2026-01-13T20:21:56.752589'
+discussion_id: D_kwDOQzI0Lc4AjoRE
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/24
-last_synced_at: null
-sync_hash: null
+last_synced_at: '2026-01-13T20:21:56.752374'
+sync_hash: cd223af2ca0c72c64f6d3bbb4ad85395d45d67ded32bad2d148db306c0f43838
 implementation_id: v01-080
 implementation_yaml: v01-080_04_project_initialization.yaml
 issue_number: null

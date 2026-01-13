@@ -47,10 +47,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:53:26.305624'
-updated_at: '2026-01-13T20:07:27.782126'
-issue_number: null
-last_synced_at: null
-sync_hash: null
+updated_at: '2026-01-13T20:22:11.980858'
+issue_number: 147
+last_synced_at: '2026-01-13T20:22:11.980758'
+sync_hash: 04a0d6768abbb673c23dc671d3c2dd950a78de95187a8650d19c63c7be7f1de6
 discussion_id: null
 ```
 </details>
