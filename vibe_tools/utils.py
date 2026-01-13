@@ -26,6 +26,7 @@ from vibe_tools.command_output import (
     out_print,
     out_success,
     out_warn,
+    output_manager,
 )
 
 VIBE_PROJECT_DIR = pathlib.Path("implementation")
@@ -325,6 +326,9 @@ def setup_logging(command_name: str):
     # Root logger configuration
     logger = logging.getLogger("vibe_tools")
     logger.setLevel(logging.DEBUG)
+
+    # Initialize OutputManager with the log file
+    output_manager.set_log_file(log_file)
 
     # Prevent duplicate handlers if setup_logging is called multiple times
     if logger.handlers:
