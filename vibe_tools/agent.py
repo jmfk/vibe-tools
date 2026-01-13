@@ -202,8 +202,9 @@ def run_agent(
         log_large_output("agent_prompt", command[-1])
 
     try:
-        output = []
         accumulated_assistant_text = []
+        full_event_log = []
+        full_result_text = None
         detected_chat_id = None
 
         if stream or is_cursor_agent:
@@ -215,14 +216,33 @@ def run_agent(
                 if is_cursor_agent:
                     try:
                         data = json.loads(line)
+                        full_event_log.append(line)
                         event_type = data.get("type")
                         subtype = data.get("subtype")
 
-                        # Capture chat_id if available in any event
+                        # Capture chat_id if available
                         if not detected_chat_id:
-                            detected_chat_id = data.get("chatId") or data.get("chat_id")
+                            detected_chat_id = (
+                                data.get("chatId")
+                                or data.get("chat_id")
+                                or data.get("session_id")
+                            )
 
-                        if event_type == "assistant":
+                        if event_type == "system":
+                            if stream:
+                                model = data.get("model", "unknown")
+                                print(f"🤖 System: {model}", flush=True)
+
+                        elif event_type == "user":
+                            message = data.get("message", {})
+                            content_list = message.get("content", [])
+                            for content in content_list:
+                                if content.get("type") == "text":
+                                    text = content.get("text", "")
+                                    if stream:
+                                        print(f"👤 User: {text}", flush=True)
+
+                        elif event_type == "assistant":
                             message = data.get("message", {})
                             content_list = message.get("content", [])
                             for content in content_list:
@@ -230,13 +250,14 @@ def run_agent(
                                     text = content.get("text", "")
                                     if text:
                                         if stream:
-                                            print(f"💬 {text}", flush=True)
+                                            print(text, end="", flush=True)
                                         accumulated_assistant_text.append(text)
 
                         elif event_type == "tool_call":
                             if subtype == "started":
                                 tool_call = data.get("tool_call", {})
                                 if stream:
+                                    print("\n", end="", flush=True)
                                     _print_tool_call_start(tool_call, data)
                             else:
                                 tool_call = data.get("tool_call", {})
@@ -245,33 +266,45 @@ def run_agent(
 
                         elif event_type == "thinking":
                             text = data.get("text", None)
-                            if stream:
-                                if text:
-                                    print(f"🤔 Thinking:\n{text}", flush=True)
-                                else:
-                                    print("...", flush=True)
+                            if stream and text:
+                                # Thinking is usually suppressed in print mode but we handle it just in case
+                                print(f"🤔 {text}", flush=True)
 
                         elif event_type == "result":
-                            if subtype == "success":
-                                full_result = data.get("result", "")
-                                output = [full_result]
+                            full_result_text = data.get("result", "")
+                            is_error = data.get("is_error", False)
+                            if subtype == "success" and not is_error:
+                                if stream:
+                                    print("\n✅ Done.", flush=True)
+                            else:
+                                if stream:
+                                    print(f"\n❌ Error: {full_result_text}", flush=True)
 
                     except json.JSONDecodeError:
                         if stream:
                             print(line, flush=True)
-                        output.append(line + "\n")
+                        full_event_log.append(line)
                 else:
                     if stream:
                         print(line, flush=True)
-                    output.append(line + "\n")
+                    full_event_log.append(line)
 
             process.wait()
-            final_output = (
-                "".join(output)
-                if not is_cursor_agent
-                else (output[0] if output else "".join(accumulated_assistant_text))
-            )
-            log_large_output("agent_output", final_output)
+
+            # For cursor-agent, final_output is the assistant text, but we log the full event stream separately
+            if is_cursor_agent:
+                final_output = (
+                    full_result_text
+                    if full_result_text is not None
+                    else "".join(accumulated_assistant_text)
+                )
+                # Log both the clean output and the full raw event log
+                log_large_output("agent_output", final_output)
+                log_large_output("agent_raw_events", "\n".join(full_event_log))
+            else:
+                final_output = "".join(full_event_log)
+                log_large_output("agent_output", final_output)
+
             return final_output, process.returncode, detected_chat_id
         else:
             stdout, stderr = process.communicate()
@@ -299,80 +332,72 @@ def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
         print(f"🔧 Editing: {path}", flush=True)
     elif "lsToolCall" in tool_call:
         path = tool_call["lsToolCall"]["args"].get("path")
-        print(f"🔧 List Directory: {path}", flush=True)
+        print(f"🔧 Listing: {path}", flush=True)
     elif "shellToolCall" in tool_call:
         commandText = tool_call["shellToolCall"]["args"].get("command")
         print(f"🔧 Command: {commandText}", flush=True)
     elif "globToolCall" in tool_call:
         globPattern = tool_call["globToolCall"]["args"].get("globPattern")
-        print(f"🔧 globToolCall: {globPattern}", flush=True)
+        print(f"🔧 Searching: {globPattern}", flush=True)
     elif "function" in tool_call:
         name = tool_call["function"].get("name")
         arguments = tool_call["function"].get("arguments")
-        print(f"🛠️ Calling tool: {name} ({arguments})", flush=True)
+        print(f"🛠️ Calling: {name} ({arguments})", flush=True)
 
 
 def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
     if "readToolCall" in tool_call:
         result = tool_call.get("readToolCall", {}).get("result", {})
-        success = result.get("success", None)
+        success = result.get("success")
         if success:
-            message = success.get("message", "")
-            print(f"✅ Reading Done! {message}", flush=True)
+            total_lines = success.get("totalLines", 0)
+            print(f"✅ Read {total_lines} lines.", flush=True)
         else:
-            print(f"🚫 Reading Error: {json.dumps(tool_call, indent=2)}", flush=True)
+            print(f"🚫 Read failed.", flush=True)
     elif "writeToolCall" in tool_call:
         result = tool_call.get("writeToolCall", {}).get("result", {})
-        success = result.get("success", {})
+        success = result.get("success")
         if success:
-            message = success.get("message", "")
-            print(f"✅ Writing Done! {message}", flush=True)
+            lines = success.get("linesCreated", 0)
+            print(f"✅ Wrote {lines} lines.", flush=True)
         else:
-            print(f"🚫 Writing Error: {json.dumps(tool_call, indent=2)}", flush=True)
+            print(f"🚫 Write failed.", flush=True)
     elif "editToolCall" in tool_call:
         result = tool_call.get("editToolCall", {}).get("result", {})
-        success = result.get("success", {})
+        success = result.get("success")
         if success:
-            message = success.get("message", "")
-            print(f"✅ Editing Done! {message}", flush=True)
+            print(f"✅ Edit complete.", flush=True)
         else:
-            print(f"🚫 Editing Error: {json.dumps(tool_call, indent=2)}", flush=True)
+            print(f"🚫 Edit failed.", flush=True)
     elif "lsToolCall" in tool_call:
         result = tool_call.get("lsToolCall", {}).get("result", {})
-        success = result.get("success", {})
+        success = result.get("success")
         if success:
-            directoryTreeRoot = success.get("directoryTreeRoot", {})
-            numFiles = directoryTreeRoot.get("numFiles", {})
-            print(f"✅ List Directory Done: {numFiles} files found", flush=True)
+            num_files = success.get("directoryTreeRoot", {}).get("numFiles", 0)
+            print(f"✅ Found {num_files} files.", flush=True)
         else:
-            print(
-                f"🚫 List Directory Error: {json.dumps(tool_call, indent=2)}",
-                flush=True,
-            )
+            print(f"🚫 List failed.", flush=True)
     elif "shellToolCall" in tool_call:
         result = tool_call.get("shellToolCall", {}).get("result", {})
-        success = result.get("success", {})
+        success = result.get("success")
         if success:
-            executionTime = result.get("executionTime", "")
-            print(f"✅ Command Done in {executionTime} ms!", flush=True)
+            ms = success.get("executionTime", 0)
+            print(f"✅ Command successful ({ms}ms).", flush=True)
         else:
             failure = result.get("failure", {})
-            command = failure.get("command", "")
-            exitCode = failure.get("exitCode", "")
-            print(
-                f"🚫 Command Error: {command} exited with code {exitCode}", flush=True
-            )
+            code = failure.get("exitCode", "unknown")
+            print(f"❌ Command failed (Exit code: {code}).", flush=True)
     elif "globToolCall" in tool_call:
         result = tool_call.get("globToolCall", {}).get("result", {})
-        success = result.get("success", {})
+        success = result.get("success")
         if success:
-            totalFiles = success.get("totalFiles", 0)
-            print(f"✅ Search Success: {totalFiles} totalFiles", flush=True)
+            total = success.get("totalFiles", 0)
+            print(f"✅ Found {total} matches.", flush=True)
         else:
-            print(f"🚫 Search Error: {json.dumps(tool_call, indent=2)}", flush=True)
+            print(f"🚫 Search failed.", flush=True)
     elif "function" in tool_call:
         result = tool_call.get("function", {}).get("result", {})
-        print(f"🛠️ Calling tool Done: {result}", flush=True)
+        print(f"🛠️ Done: {result}", flush=True)
 
 
 def get_agent_processes() -> List[Dict[str, Any]]:

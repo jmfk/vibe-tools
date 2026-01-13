@@ -110,7 +110,8 @@ def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
 
     if LOG_SESSION_DIR is None:
         # Fallback if logging wasn't set up via setup_logging
-        LOG_SESSION_DIR = LOGS_DIR / "misc_outputs"
+        # LOG_SESSION_DIR = LOGS_DIR
+        return None
 
     ensure_dir(LOG_SESSION_DIR)
 
