@@ -4,7 +4,7 @@ SYSTEM_CONTRACT:
   structure:
     services: Map of service names to connection details
     ralph: Ralph loop settings (review, tests, auto_merge)
-    caffeinate: Boolean flag for system sleep prevention
+    verbose: Boolean flag for detailed output
     use_google_sheets: Boolean for cost logging
     google_sheet_id: Google Sheet ID for cost tracking
     verbose: Boolean for verbose output
@@ -31,7 +31,7 @@ DOMAIN_MODEL:
   Configuration:
     services: Map[String, Service]
     ralph: RalphSettings
-    caffeinate: Boolean
+    verbose: Boolean
     use_google_sheets: Boolean
     google_sheet_id: String
     verbose: Boolean
@@ -52,7 +52,7 @@ CAPABILITIES:
 - Service configuration (Postgres, Redis, RabbitMQ, Elasticsearch, S3, imgproxy, etc.)
 - AI agent configuration (model selection, API keys)
 - Cost tracking settings (Google Sheets integration, budget limits)
-- Workflow preferences (caffeinate, verbose mode, auto-merge)
+- Workflow preferences (verbose mode, auto-merge)
 - Docker container auto-detection via docker ps and docker inspect
 - Environment variable integration and overrides
 - Configuration loading with validation and default merging

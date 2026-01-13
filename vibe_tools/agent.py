@@ -153,13 +153,13 @@ def get_agent_command(
 
 
 def run_agent(
-    command: List[str], caffeinate: bool = False, stream: bool = False
+    command: List[str], stream: bool = False
 ) -> Tuple[str, int, Optional[str]]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     is_cursor_agent = command[0] == "agent" or (
         len(command) > 2 and command[2] == "agent"
     )
-
+    
     # Use os.setsid to create a new process group for robust cleanup
     process = subprocess.Popen(
         command,

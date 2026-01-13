@@ -921,7 +921,6 @@ class InteractiveArchitect:
 
 def generate_infrastructure_spec(
     agent: str = "cursor-agent",
-    caffeinate: bool = False,
 ):
     """Generate infrastructure.md from PRDs in the specs directory."""
     from vibe_tools.utils import (
@@ -969,7 +968,7 @@ Generate the infrastructure.md content in markdown format. Output ONLY the markd
 
     click.echo("⏳ Generating infrastructure specification...")
     command = get_agent_command(agent, prompt)
-    output, exit_code = run_agent(command, caffeinate=caffeinate, stream=False)
+    output, exit_code = run_agent(command, stream=False)
 
     if exit_code != 0:
         click.echo("❌ Failed to generate infrastructure specification.")

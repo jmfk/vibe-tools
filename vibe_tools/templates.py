@@ -476,7 +476,6 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
     "tests": true,
     "auto_merge": false
   },
-  "caffeinate": true,
   "use_google_sheets": true,
   "google_sheet_id": "YOUR_SHEET_ID_HERE",
   "verbose": false,
@@ -535,7 +534,6 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
 }
 ```
 
-- `caffeinate`: Prevent system sleep during long-running tasks.
 - `use_google_sheets`: Whether to log LLM costs to Google Sheets.
 - `google_sheet_id`: The ID of the Google Sheet to log to.
 - `verbose`: Whether to output detailed logs (like prompts) to the terminal.
@@ -584,7 +582,7 @@ vibe --help
 - `vibe pm`: Interactive PRD & Specification manager (preferred for requirement gathering).
 - `vibe prd`: Interactive PRD writer with slash commands.
 - `vibe rerun <prd_id>`: Reset a PRD's state and branch to allow rerunning from scratch.
-- `vibe cleanup`: Clean up stale pytest, agent, and caffeinate processes.
+- `vibe cleanup`: Clean up stale pytest and agent processes.
 - `vibe memory`: Save a global instruction ("memory") always sent to the agent.
 - `vibe memory`: Save a global instruction.
 - `vibe history`: Check the status of all PRDs.

@@ -153,8 +153,8 @@ vibe implement
 # With streaming output
 vibe implement --stream
 
-# With caffeinate
-vibe implement --caffeinate
+# Manual implement
+vibe implement
 ```
 
 ### Implementation Sequence

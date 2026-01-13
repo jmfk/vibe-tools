@@ -16,7 +16,6 @@ def register_test_fix(cli):
         """Run the test and fix loop."""
         run_test_fix_loop(
             agent=ctx.obj["agent"],
-            caffeinate=ctx.obj.get("caffeinate", False),
             fast=fast,
             stream=ctx.obj.get("stream", False),
         )

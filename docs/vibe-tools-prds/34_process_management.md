@@ -1,15 +1,15 @@
 # Process Management
 
 ## Overview
-- **Problem statement**: Developers need to monitor and manage running processes (agent processes, pytest, caffeinate) to avoid resource leaks and manage long-running tasks. The system should provide process listing and cleanup capabilities.
+- **Problem statement**: Developers need to monitor and manage running processes (agent processes, pytest) to avoid resource leaks and manage long-running tasks. The system should provide process listing and cleanup capabilities.
 - **User benefits**: Process visibility, resource management, and easy cleanup of stale processes.
 - **Success criteria**: `vibe ps` and `vibe kill` successfully list and manage processes, and cleanup works correctly.
 
 ## Feature Inspiration
-The `vibe ps` and `vibe kill` commands provide process management. They identify running agent processes, pytest processes, and caffeinate processes, allow listing them, and provide cleanup capabilities.
+The `vibe ps` and `vibe kill` commands provide process management. They identify running agent processes and pytest processes, allow listing them, and provide cleanup capabilities.
 
 **Key capabilities**:
-- Process detection (agents, pytest, caffeinate)
+- Process detection (agents, pytest)
 - Process listing
 - Process cleanup
 - Stale process detection
@@ -21,7 +21,7 @@ N/A - CLI commands.
 - **Process Detection**: 
   - `get_agent_processes()`: Finds running agent processes
   - Detects pytest processes
-  - Detects caffeinate processes
+  - Detects pytest processes
   - Uses process name/command matching
 - **PS Command** (`vibe ps`):
   - Lists all detected processes

@@ -50,7 +50,6 @@ loop = RalphLoop(
     current_file=pathlib.Path("implementation/architecture-current.yaml"),
     agent="cursor-agent",
     stream=False,
-    caffeinate=False,
     branch_name="vibe/architecture"
 )
 success = loop.run()
@@ -173,7 +172,6 @@ cmd = get_agent_command(agent="cursor-agent", prompt="...")
 ```python
 output, exit_code = run_agent(
     cmd,
-    caffeinate=False,
     stream=False
 )
 ```
@@ -189,7 +187,7 @@ vibe implement --stream
 
 Prevent system sleep during long runs:
 ```bash
-vibe implement --caffeinate
+vibe implement
 ```
 
 ## Cost Tracking

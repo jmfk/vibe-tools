@@ -18,7 +18,6 @@ def register_branch_resolve(cli):
         """Use the agent to resolve git history/conflicts across the branch stack."""
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
-        caffeinate = ctx.obj.get("caffeinate", False)
 
         click.echo("🔍 Analyzing git history and branch lineage...")
 
@@ -46,7 +45,7 @@ def register_branch_resolve(cli):
 
         click.echo(f"🤖 Calling {agent} to resolve git state...")
         cmd = get_agent_command(agent, prompt)
-        output, code = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+        output, code = run_agent(cmd, stream=stream)
 
         if code == 0:
             click.echo("✅ Git resolution attempt completed.")

@@ -120,12 +120,8 @@ def run_command(
     command: List[str],
     cwd: Optional[str] = None,
     check: bool = True,
-    caffeinate: bool = False,
 ) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
-    if caffeinate and sys.platform == "darwin":
-        command = ["caffeinate", "-i"] + command
-
     try:
         result = subprocess.run(
             command,
@@ -352,12 +348,17 @@ def get_agent_command(agent: str, prompt: str) -> List[str]:
 
 
 def run_agent(
-    command: List[str], caffeinate: bool = False, stream: bool = False
+    command: List[str], stream: bool = False
 ) -> Tuple[str, int]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     from .agent import run_agent as _run_agent
 
-    output, code, _ = _run_agent(command, caffeinate=caffeinate, stream=stream)
+    print(
+        f"Running agent: {command} with stream: {stream}"
+    )
+    output, code, _ = _run_agent(command, stream=stream)
+    print(f"Agent output: {output}")
+    print(f"Agent code: {code}")
     return output, code
 
 
@@ -863,7 +864,6 @@ def perform_basic_init():
         default_config = {
             "ralph": {"review": True, "tests": True, "auto_merge": False},
             "default_budget": 5.0,
-            "caffeinate": True,
             "verbose": False,
             "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
         }

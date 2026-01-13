@@ -8,7 +8,7 @@ All `vibe` commands support these global options:
 - `--verbose` / `--no-verbose`: Output verbose information (default: verbose)
 - `--stream` / `--no-stream`: Stream agent output in real-time (default: no-stream)
 - `--agent [cursor-agent|claude|antigravity]`: Select the agent to use (default: cursor-agent)
-- `--caffeinate` / `--no-caffeinate`: Prevent system sleep during long-running tasks
+- `--stream` / `--no-stream`: Stream agent output in real-time
 - `--version`: Show version information
 
 ## Command Categories

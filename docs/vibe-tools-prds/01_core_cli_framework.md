@@ -6,11 +6,11 @@
 - **Success criteria**: CLI supports 30+ commands, provides comprehensive help, handles errors gracefully, supports multiple agent backends, and maintains backward compatibility.
 
 ## Feature Inspiration
-The CLI framework provides the foundation for all vibe-tools commands. It uses Click for command registration and parsing, supports ordered command groups for logical organization, and provides global options (debug, verbose, stream, agent selection, caffeinate) that apply to all subcommands. The framework initializes logging, loads configuration, registers exit handlers for cost reporting, and ensures proper project directory structure.
+The CLI framework provides the foundation for all vibe-tools commands. It uses Click for command registration and parsing, supports ordered command groups for logical organization, and provides global options (debug, verbose, stream, agent selection) that apply to all subcommands. The framework initializes logging, loads configuration, registers exit handlers for cost reporting, and ensures proper project directory structure.
 
 **Key capabilities**:
 - Command registration and discovery
-- Global option handling (debug, verbose, stream, agent, caffeinate)
+- Global option handling (debug, verbose, stream, agent)
 - Configuration loading and validation
 - Logging initialization per command
 - Session cost tracking and reporting
@@ -26,7 +26,7 @@ N/A - CLI-only interface.
   - `--verbose/--no-verbose`: Control verbose output (default: True)
   - `--stream/--no-stream`: Stream agent output in real-time
   - `--agent`: Select agent backend (cursor-agent, claude, antigravity)
-  - `--caffeinate`: Prevent system sleep during long tasks
+  - `--stream`: Stream agent output
 - **Configuration Management**: Loads `.vibe_config.json` from project root, merges with defaults, validates required fields.
 - **Logging System**: Per-command logging setup, console and file handlers, configurable log levels based on verbose/debug flags.
 - **Cost Tracking Integration**: Registers atexit handler to finalize cost reports, tracks session costs across all commands.
