@@ -1,18 +1,3 @@
----
-id: PRD-015
-title: Template System
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.008278'
-updated_at: '2026-01-13T19:03:28.315521'
-discussion_id: D_kwDOQzI0Lc4AjoMy
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/21
-last_synced_at: '2026-01-13T19:03:28.315429'
-sync_hash: e2d187a933ce5d6128e936b3ed32e8d289b0d3c889756e5d2a6d043f7ca3293f
----
-
 # Template System
 
 ## Overview
@@ -73,3 +58,26 @@ N/A - Background system, used by other components.
 2. **Project Override**: Create project template, verify used
 3. **Template Init**: Run init, verify templates copied
 4. **Variable Substitution**: Test template with variables, verify substituted
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-015
+title: Template System
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.008278'
+updated_at: '2026-01-13T20:07:27.770560'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/21
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-015 -->

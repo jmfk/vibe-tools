@@ -1,18 +1,3 @@
----
-id: PRD-024
-title: Cost Reconciliation
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.013290'
-updated_at: '2026-01-13T19:04:10.541042'
-discussion_id: D_kwDOQzI0Lc4AjoNN
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/36
-last_synced_at: '2026-01-13T19:04:10.540951'
-sync_hash: 715412d2cffec1e9ab32187d6380ac780d7da8a303377e99527d6420ff8dae39
----
-
 # Cost Reconciliation
 
 ## Overview
@@ -86,3 +71,26 @@ N/A - CLI command or utility function.
 5. **Missing Detection**: Test missing entries, verify identified
 6. **Tolerance**: Test with timestamp/cost differences, verify tolerance works
 7. **Report**: Generate report, verify useful and accurate
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-024
+title: Cost Reconciliation
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.013290'
+updated_at: '2026-01-13T20:07:27.817929'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/36
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-024 -->

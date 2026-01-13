@@ -1,18 +1,3 @@
----
-id: PRD-038
-title: Status Reporting
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.018117'
-updated_at: '2026-01-13T19:03:37.847747'
-discussion_id: D_kwDOQzI0Lc4AjoM5
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/54
-last_synced_at: '2026-01-13T19:03:37.847636'
-sync_hash: 0a160944eb6e9485494cce12dad50a6bfc2efee9674e97f1698b4db3f1b54e4c
----
-
 # Status Reporting
 
 ## Overview
@@ -88,3 +73,26 @@ N/A - CLI formatted output.
 5. **Log Information**: Verify log information shown
 6. **Formatting**: Verify formatting clear and readable
 7. **Performance**: Verify report generated quickly
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-038
+title: Status Reporting
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.018117'
+updated_at: '2026-01-13T20:07:27.788281'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/54
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-038 -->

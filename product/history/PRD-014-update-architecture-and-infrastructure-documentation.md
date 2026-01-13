@@ -1,27 +1,3 @@
----
-id: PRD-014
-title: Update architecture and infrastructure documentation
-type: ISSUE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-10T14:29:20.944749'
-updated_at: '2026-01-13T19:02:56.677434'
-severity: low
-service: ''
-summary: ''
-github:
-  repo: jmfk/vibe-tools
-  number: 19
-  url: https://github.com/jmfk/vibe-tools/issues/19
-sync:
-  last_synced_at: '2026-01-10T14:48:18.336954'
-  sync_hash: e5671b47c5182873f38d94f6d0414c05dbe9f1b4b6747e25c21b217afde1bfe4
-issue_number: 82
-last_synced_at: '2026-01-13T18:55:20.025980'
-sync_hash: 40069245d5f48d78b3edc4d44ea72b0764e6fb0f6948fea2f4366f26e0ffbe5e
----
-
 # Update architecture and infrastructure documentation
 
 ## Summary
@@ -53,3 +29,35 @@ The documentation should accurately reflect the current project structure, the 8
 - [ ] `product/infrastructure.md` updated to include cloud deployment capabilities (K8s, Terraform, multiple providers).
 - [ ] All command references updated to use the unified `vibe <command>` format.
 - [ ] Documentation reflects the actual implementation state, removing or updating "Desired" labels where features are complete.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-014
+title: Update architecture and infrastructure documentation
+type: ISSUE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-10T14:29:20.944749'
+updated_at: '2026-01-13T20:07:27.801007'
+severity: low
+service: ''
+summary: ''
+github:
+  repo: jmfk/vibe-tools
+  number: 19
+  url: https://github.com/jmfk/vibe-tools/issues/19
+sync:
+  last_synced_at: '2026-01-10T14:48:18.336954'
+  sync_hash: e5671b47c5182873f38d94f6d0414c05dbe9f1b4b6747e25c21b217afde1bfe4
+issue_number: null
+last_synced_at: null
+sync_hash: null
+discussion_id: null
+```
+</details>
+
+<!-- vibe-id: PRD-014 -->

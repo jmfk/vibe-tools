@@ -1,18 +1,3 @@
----
-id: PRD-031
-title: Branch Resolution
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.015925'
-updated_at: '2026-01-13T19:03:44.593684'
-discussion_id: D_kwDOQzI0Lc4AjoM-
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/46
-last_synced_at: '2026-01-13T19:03:44.593598'
-sync_hash: 7546be3b07f606988adb07a11e4746c47d41096c587420ba3e33d16671977648
----
-
 # Branch Resolution
 
 ## Overview
@@ -73,3 +58,26 @@ N/A - CLI command.
 3. **Resolution**: Test automated resolution, verify works
 4. **Test Verification**: Verify tests pass after resolution
 5. **Complex Conflicts**: Test with complex conflicts, verify handled
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-031
+title: Branch Resolution
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.015925'
+updated_at: '2026-01-13T20:07:27.796080'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/46
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-031 -->

@@ -56,6 +56,22 @@ class PRD:
     def sync_hash(self, value: str):
         self.metadata["sync_hash"] = value
 
+    @property
+    def severity(self) -> Optional[str]:
+        return self.metadata.get("severity")
+
+    @severity.setter
+    def severity(self, value: str):
+        self.metadata["severity"] = value
+
+    @property
+    def service(self) -> Optional[str]:
+        return self.metadata.get("service")
+
+    @service.setter
+    def service(self, value: str):
+        self.metadata["service"] = value
+
     def get_hash(self) -> str:
         import hashlib
         return hashlib.sha256(self.content.encode()).hexdigest()
@@ -66,11 +82,34 @@ class PRD:
         content = text
         history = ""
 
+        # 1. Try legacy frontmatter
         if text.startswith("---"):
             parts = text.split("---", 2)
             if len(parts) >= 3:
                 frontmatter = safe_yaml_load(parts[1]) or {}
                 content = parts[2].strip()
+
+        # 2. Try new bottom-of-file metadata
+        if "<!-- vibe-id:" in text or "<summary>Metadata</summary>" in text:
+            # Extract YAML from <details> block
+            yaml_match = re.search(r"<details>\s*<summary>Metadata</summary>\s*```yaml\s*(.*?)\s*```\s*</details>", text, re.DOTALL)
+            if yaml_match:
+                bottom_yaml = yaml_match.group(1)
+                new_fm = safe_yaml_load(bottom_yaml)
+                if new_fm:
+                    # Update frontmatter (prefer bottom metadata if both exist)
+                    for k, v in new_fm.items():
+                        frontmatter[k] = v
+
+            # Extract vibe-id if present
+            id_match = re.search(r"<!-- vibe-id: (.*?) -->", text)
+            if id_match and ("id" not in frontmatter or not frontmatter["id"]):
+                frontmatter["id"] = id_match.group(1).strip()
+
+            # Clean content/history from the bottom metadata block
+            content = re.sub(r"\n*---\s*<details>.*?</details>\s*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL).strip()
+            content = re.sub(r"\n*---\s*<details>.*?</details>", "", content, flags=re.DOTALL).strip()
+            content = re.sub(r"\n*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL).strip()
 
         # Extract history section if exists
         if "## Implementation History" in content:
@@ -133,13 +172,19 @@ class PRD:
                 data[k] = v
 
         frontmatter = safe_yaml_dump(data)
-        text = f"---\n{frontmatter}---\n\n"
+        
+        # New format: No frontmatter at the top. Metadata at the bottom.
+        text = ""
         if not self.content.startswith("# "):
             text += f"# {self.title}\n\n"
         text += self.content.strip()
         
         if self.history:
             text += f"\n\n## Implementation History\n\n{self.history.strip()}"
+        
+        # Append metadata at the end
+        text += f"\n\n---\n<details>\n<summary>Metadata</summary>\n\n```yaml\n{frontmatter.strip()}\n```\n</details>\n"
+        text += f"\n<!-- vibe-id: {self.id} -->\n"
         
         return text
 

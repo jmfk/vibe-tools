@@ -1,18 +1,3 @@
----
-id: PRD-030
-title: Process Management
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.015681'
-updated_at: '2026-01-13T19:03:47.198356'
-discussion_id: D_kwDOQzI0Lc4AjoNA
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/45
-last_synced_at: '2026-01-13T19:03:47.198183'
-sync_hash: 0f9672149af3fd76d5480d2209203eaa8ce184a139d7ea27c5dcd09399d6e30b
----
-
 # Process Management
 
 ## Overview
@@ -70,3 +55,26 @@ N/A - CLI commands.
 2. **Process Listing**: Run `vibe ps`, verify processes shown
 3. **Process Cleanup**: Kill processes, verify terminated
 4. **Stale Detection**: Test stale process detection, verify works
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-030
+title: Process Management
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.015681'
+updated_at: '2026-01-13T20:07:27.799346'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/45
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-030 -->

@@ -32,33 +32,20 @@ VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
 
-# Legacy - to be removed after migration
-ISSUES_DIR = pathlib.Path("issues")
-ISSUES_BACKLOG_DIR = ISSUES_DIR / "backlog"
-ISSUES_HISTORY_DIR = ISSUES_DIR / "history"
-ISSUES_FAILS_DIR = ISSUES_DIR / "fails"
-ISSUES_META_DIR = ISSUES_DIR / "meta"
+# Product Planning (Markdown)
+PRODUCT_BACKLOG_DIR = PRODUCT_DIR / "backlog"
+PRODUCT_IN_PROGRESS_DIR = PRODUCT_DIR / "in_progress"
+PRODUCT_HISTORY_DIR = PRODUCT_DIR / "history"
+PLANNING_INBOX_DIR = PRODUCT_DIR / "inbox"
+PLANNING_BACKLOG_DIR = PRODUCT_BACKLOG_DIR
+PLANNING_HISTORY_DIR = PRODUCT_HISTORY_DIR
+PLANNING_REJECTED_DIR = PRODUCT_DIR / "rejected"
 
 # Implementation PRDs (YAML)
 PRD_DIR = VIBE_PROJECT_DIR / "prds"
 PRD_PROCESSING_DIR = PRD_DIR / "processing"
 PRD_DONE_DIR = PRD_DIR / "done"
 PRD_FAILED_DIR = PRD_DIR / "failed"
-
-# Legacy implementation dirs
-BACKLOG_DIR = PRD_DIR / "backlog"
-HISTORY_DIR = PRD_DIR / "history"
-REJECTED_DIR = PRD_DIR / "rejected"
-INBOX_DIR = PRD_DIR / "inbox"
-
-# Product Planning (Markdown)
-PRODUCT_BACKLOG_DIR = PRODUCT_DIR / "backlog"
-PRODUCT_IN_PROGRESS_DIR = PRODUCT_DIR / "in_progress"
-PRODUCT_HISTORY_DIR = PRODUCT_DIR / "history"
-PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
-PLANNING_BACKLOG_DIR = PRODUCT_BACKLOG_DIR
-PLANNING_HISTORY_DIR = PRODUCT_HISTORY_DIR
-PLANNING_REJECTED_DIR = PLANNING_DIR / "rejected"
 
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
@@ -1780,39 +1767,20 @@ def update_md_implementation_status(md_path, version, sequence, yaml_path):
         return
 
     try:
-        content = md_path.read_text()
-
+        # Use local import to avoid circular dependency
+        from vibe_tools.prds import load_prd
+        
+        prd = load_prd(md_path)
+        
         # Determine implementation ID and YAML name
         implementation_id = f"v{version}-{sequence:03d}"
         yaml_name = yaml_path.name if hasattr(yaml_path, "name") else str(yaml_path)
 
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            # Has existing frontmatter
-            frontmatter_str = parts[1]
-            body = parts[2]
-
-            frontmatter = safe_yaml_load(frontmatter_str) or {}
-            frontmatter["implementation_id"] = implementation_id
-            frontmatter["implementation_yaml"] = yaml_name
-            frontmatter["status"] = "normalized"
-
-            new_frontmatter = safe_yaml_dump(frontmatter)
-            # Ensure new_frontmatter ends with a newline and starts cleanly
-            new_frontmatter = new_frontmatter.strip() + "\n"
-            new_content = f"---\n{new_frontmatter}---{body}"
-            md_path.write_text(new_content)
-        else:
-            # No frontmatter
-            frontmatter = {
-                "implementation_id": implementation_id,
-                "implementation_yaml": yaml_name,
-                "status": "normalized",
-            }
-            new_frontmatter = safe_yaml_dump(frontmatter)
-            new_frontmatter = new_frontmatter.strip() + "\n"
-            new_content = f"---\n{new_frontmatter}---\n\n{content.strip()}\n"
-            md_path.write_text(new_content)
+        prd.metadata["implementation_id"] = implementation_id
+        prd.metadata["implementation_yaml"] = yaml_name
+        prd.status = "normalized"
+        
+        prd.save()
 
     except Exception as e:
         logger.warning(f"Could not update MD status for {md_path}: {e}")

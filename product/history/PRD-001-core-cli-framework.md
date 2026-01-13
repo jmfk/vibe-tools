@@ -1,20 +1,3 @@
----
-id: PRD-001
-title: Core CLI Framework
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.009212'
-updated_at: '2026-01-13T19:03:39.125667'
-discussion_id: D_kwDOQzI0Lc4AjoM6
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/23
-last_synced_at: '2026-01-13T19:03:39.125579'
-sync_hash: 9f27ea84e8edd6944dac70e304a953bdc852ab9e0711162e5f90d956f99ea669
-implementation_id: v01-010
-implementation_yaml: v01-010_01_core_cli_framework.yaml
----
-
 # Core CLI Framework
 
 ## Overview
@@ -79,3 +62,28 @@ N/A - CLI-only interface.
 5. **Logging**: Run command with `--debug`, verify debug logs appear in console and log file
 6. **Cost Tracking**: Run multiple commands, verify session cost report at exit
 7. **Command Execution**: Run each major command category, verify no framework-related errors
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-001
+title: Core CLI Framework
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.009212'
+updated_at: '2026-01-13T20:07:27.789864'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/23
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-010
+implementation_yaml: v01-010_01_core_cli_framework.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-001 -->

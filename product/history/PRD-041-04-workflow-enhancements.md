@@ -1,17 +1,3 @@
----
-id: PRD-041
-title: 04 Workflow Enhancements
-type: ISSUE
-status: backlog
-group: null
-depends_on: []
-created_at: '2026-01-13T18:53:26.275674'
-updated_at: '2026-01-13T19:04:02.124148'
-issue_number: 62
-last_synced_at: '2026-01-13T18:53:54.629357'
-sync_hash: 197d19e9c1733c7c37522786938521295d7f6c8585e8c04bc67579dbe8921181
----
-
 # 04 Workflow Enhancements
 
 ## System Contract
@@ -60,3 +46,25 @@ sync_hash: 197d19e9c1733c7c37522786938521295d7f6c8585e8c04bc67579dbe8921181
 - product/history/
 - product/trash/
 - vibe_tools configuration (config.json)
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-041
+title: 04 Workflow Enhancements
+type: ISSUE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:53:26.275674'
+updated_at: '2026-01-13T20:07:27.786924'
+issue_number: null
+last_synced_at: null
+sync_hash: null
+discussion_id: null
+```
+</details>
+
+<!-- vibe-id: PRD-041 -->

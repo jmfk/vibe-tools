@@ -1,18 +1,3 @@
----
-id: PRD-04
-title: 'PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History'
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:37:25.057377'
-updated_at: '2026-01-13T19:03:26.996434'
-discussion_id: D_kwDOQzI0Lc4AjoMx
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/3
-last_synced_at: '2026-01-13T19:03:26.996307'
-sync_hash: 0e25d189b5d18d6e729282bb9c7d618fb617ee2a3c35dd70f280c6b571bfbfcf
----
-
 # PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History
 
 ## Problem
@@ -75,3 +60,26 @@ The existing `vibe implement` loop will be updated to:
 *   Users can move PRDs between statuses using CLI commands.
 *   `vibe implement` works seamlessly with the new folder structure.
 *   `vibe implement edit` correctly opens the editor.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-04
+title: 'PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History'
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.057377'
+updated_at: '2026-01-13T20:07:27.768675'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/3
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-04 -->

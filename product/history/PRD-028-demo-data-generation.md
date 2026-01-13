@@ -1,18 +1,3 @@
----
-id: PRD-028
-title: Demo Data Generation
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.015178'
-updated_at: '2026-01-13T19:03:16.666897'
-discussion_id: D_kwDOQzI0Lc4AjoMp
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/43
-last_synced_at: '2026-01-13T19:03:16.666728'
-sync_hash: f5525d69f398a9c5f0faf659f42002af5e596b1455e9455441e77c18fe35344f
----
-
 # Demo Data Generation
 
 ## Overview
@@ -69,3 +54,26 @@ N/A - CLI commands.
 2. **Data Quality**: Verify data realistic and useful
 3. **Cleanup**: Clean demo data, verify removed
 4. **Schema Management**: Design schema, verify saved
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-028
+title: Demo Data Generation
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.015178'
+updated_at: '2026-01-13T20:07:27.753978'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/43
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-028 -->

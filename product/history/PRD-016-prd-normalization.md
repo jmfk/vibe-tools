@@ -1,18 +1,3 @@
----
-id: PRD-016
-title: PRD Normalization
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.010016'
-updated_at: '2026-01-13T19:04:12.286598'
-discussion_id: D_kwDOQzI0Lc4AjoNO
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/25
-last_synced_at: '2026-01-13T19:04:12.286436'
-sync_hash: a1a2fbbf5ffa9d1895bf996588fca0f3589bc5fac6119521b83c5d498f3e299a
----
-
 # PRD Normalization
 
 ## Overview
@@ -90,3 +75,26 @@ N/A - CLI command with progress output.
 6. **Validation**: Create invalid spec, verify error handling
 7. **Information Preservation**: Compare markdown and YAML, verify all info present
 8. **Idempotency**: Normalize same file twice, verify consistent output
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-016
+title: PRD Normalization
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.010016'
+updated_at: '2026-01-13T20:07:27.818980'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/25
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-016 -->

@@ -1,18 +1,3 @@
----
-id: PRD-021
-title: Cost Tracking System
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.012306'
-updated_at: '2026-01-13T19:03:52.758866'
-discussion_id: D_kwDOQzI0Lc4AjoND
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/32
-last_synced_at: '2026-01-13T19:03:52.758757'
-sync_hash: d513e6c4ff503895aae903bed20092d901c7fedd543a1c8e00b1d19e5cf4248c
----
-
 # Cost Tracking System
 
 ## Overview
@@ -87,3 +72,26 @@ N/A - CLI command for cost reporting.
 5. **Cost Report**: Run `vibe cost`, verify report displayed
 6. **Model Support**: Test all supported models, verify pricing correct
 7. **CSV Format**: Verify CSV format correct, importable to spreadsheet
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-021
+title: Cost Tracking System
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.012306'
+updated_at: '2026-01-13T20:07:27.804945'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/32
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-021 -->

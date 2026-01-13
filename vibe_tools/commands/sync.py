@@ -127,37 +127,56 @@ def get_files_changed_since(commit_hash: str) -> List[str]:
     return list(set(changed_files))
 
 def fetch_github_discussions(owner, name):
-    query = """
-    query($owner:String!, $name:String!) {
-      repository(owner:$owner, name:$name) {
-        discussions(first:100) {
-          nodes {
-            id
-            number
-            title
-            body
-            updatedAt
-            isClosed
-            category { name }
-            labels(first:10) { nodes { name } }
+    all_discussions = []
+    has_next_page = True
+    after = None
+
+    while has_next_page:
+        query = """
+        query($owner:String!, $name:String!, $after:String) {
+          repository(owner:$owner, name:$name) {
+            discussions(first:100, after:$after) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                id
+                number
+                title
+                body
+                updatedAt
+                isClosed
+                category { name }
+                labels(first:10) { nodes { name } }
+              }
+            }
           }
         }
-      }
-    }
-    """
-    cmd = [
-        "gh", "api", "graphql",
-        "-f", f"query={query}",
-        "-f", f"owner={owner}",
-        "-f", f"name={name}"
-    ]
-    stdout, code = run_command(cmd, check=False)
-    if code == 0:
+        """
+        cmd = [
+            "gh", "api", "graphql",
+            "-f", f"query={query}",
+            "-f", f"owner={owner}",
+            "-f", f"name={name}",
+        ]
+        if after:
+            cmd.extend(["-f", f"after={after}"])
+            
+        stdout, code = run_command(cmd, check=False)
+        if code != 0:
+            break
+
         try:
-            return json.loads(stdout)["data"]["repository"]["discussions"]["nodes"]
-        except (json.JSONDecodeError, KeyError):
-            pass
-    return []
+            data = json.loads(stdout)
+            discussions = data["data"]["repository"]["discussions"]
+            all_discussions.extend(discussions["nodes"])
+            has_next_page = discussions["pageInfo"]["hasNextPage"]
+            after = discussions["pageInfo"]["endCursor"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            break
+
+    return all_discussions
 
 def add_discussion_labels(discussion_id, label_ids):
     if not label_ids:
@@ -264,7 +283,8 @@ def sync_unified_prds(repo_owner, repo_name, repo_id, has_discussions, dry_run=F
     
     # Fetch issues in bulk to optimize state checks
     gh_issues = []
-    cmd = ["gh", "issue", "list", "--repo", repo, "--label", "prd", "--state", "all", "--json", "number,state"]
+    # Fetch more issues and include body for robust matching
+    cmd = ["gh", "issue", "list", "--repo", repo, "--label", "prd", "--state", "all", "--limit", "1000", "--json", "number,state,title,body"]
     stdout, code = run_command(cmd, check=False)
     if code == 0:
         try:
@@ -290,7 +310,15 @@ def sync_unified_prds(repo_owner, repo_name, repo_id, has_discussions, dry_run=F
             if prd.type == "FEATURE" and has_discussions:
                 sync_feature_prd(prd, repo_owner, repo_name, repo_id, gh_disc_by_id, gh_disc_by_title, dry_run)
             elif prd.type == "ISSUE":
-                sync_issue_prd(prd, repo, dry_run, gh_issue_by_number.get(prd.issue_number))
+                # Find matching issue if not known by number
+                match = gh_issue_by_number.get(prd.issue_number)
+                if not match:
+                    vibe_id_comment = f"<!-- vibe-id: {prd.id} -->"
+                    for ish in gh_issues:
+                        if vibe_id_comment in (ish.get("body") or ""):
+                            match = ish
+                            break
+                sync_issue_prd(prd, repo, dry_run, match)
         except Exception as e:
             logger.error(f"Failed to sync {path.name}: {e}")
 
@@ -303,8 +331,17 @@ def sync_feature_prd(prd: PRD, owner, name, repo_id, gh_by_id, gh_by_title, dry_
     gh_disc = None
     if prd.discussion_id:
         gh_disc = gh_by_id.get(prd.discussion_id)
+    
     if not gh_disc:
         gh_disc = gh_by_title.get(title)
+        
+    if not gh_disc:
+        # Robust matching by hidden ID
+        vibe_id_comment = f"<!-- vibe-id: {prd.id} -->"
+        for disc in gh_by_id.values():
+            if vibe_id_comment in (disc.get("body") or ""):
+                gh_disc = disc
+                break
         
     if not gh_disc:
         if dry_run:
@@ -393,6 +430,10 @@ def sync_issue_prd(prd: PRD, repo, dry_run, gh_issue=None):
     title = f"[ISSUE] {prd.title}"
     body = prd.to_markdown()
     
+    if not prd.issue_number and gh_issue:
+        prd.issue_number = gh_issue["number"]
+        prd.save()
+
     if not prd.issue_number:
         if dry_run:
             logger.info(f"[DRY RUN] Would create GitHub Issue for {prd.id}")
@@ -412,7 +453,11 @@ def sync_issue_prd(prd: PRD, repo, dry_run, gh_issue=None):
     else:
         # Update existing
         current_hash = prd.get_hash()
-        if prd.sync_hash != current_hash:
+        
+        # Determine if we need to update body
+        remote_body = (gh_issue.get("body") or "") if gh_issue else ""
+        
+        if prd.sync_hash != current_hash or (remote_body and remote_body != body):
             if dry_run:
                 logger.info(f"[DRY RUN] Would update GitHub Issue #{prd.issue_number}")
             else:
@@ -430,7 +475,7 @@ def sync_issue_prd(prd: PRD, repo, dry_run, gh_issue=None):
         # Determine current state if available
         is_closed = False
         if gh_issue:
-            is_closed = gh_issue.get("state") == "CLOSED"
+            is_closed = gh_issue.get("state") in ["CLOSED", "closed"]
         
         if should_close and not is_closed:
             if not dry_run:
@@ -548,12 +593,68 @@ def process_remote_item(item: Dict[str, Any], is_discussion: bool):
     new_prd.save(PRODUCT_BACKLOG_DIR / filename)
     logger.info(f"Pulled new {prd_type} from GitHub: {new_id}")
 
+def delete_github_discussion(discussion_id):
+    query = """
+    mutation($id: ID!) {
+      deleteDiscussion(input: {id: $id}) {
+        clientMutationId
+      }
+    }
+    """
+    cmd = [
+        "gh", "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"id={discussion_id}"
+    ]
+    run_command(cmd, check=False)
+
+def reset_remote_state(owner, name, has_discussions):
+    repo = f"{owner}/{name}"
+    click.echo(f"🗑️ Resetting remote state for {repo}...")
+    
+    # 1. Close all issues labeled 'prd'
+    cmd = ["gh", "issue", "list", "--repo", repo, "--label", "prd", "--state", "open", "--json", "number"]
+    stdout, code = run_command(cmd, check=False)
+    if code == 0:
+        issues = json.loads(stdout)
+        for ish in issues:
+            click.echo(f"  Closing issue #{ish['number']}...")
+            run_command(["gh", "issue", "close", str(ish["number"]), "--repo", repo], check=False)
+            
+    # 2. Delete all discussions labeled 'prd'
+    if has_discussions:
+        discs = fetch_github_discussions(owner, name)
+        for disc in discs:
+            labels = [l["name"] for l in disc["labels"]["nodes"]]
+            if "prd" in labels:
+                click.echo(f"  Deleting discussion {disc['id']}...")
+                delete_github_discussion(disc["id"])
+
+    # 3. Clear local sync metadata
+    all_local_paths = list(PRODUCT_DIR.rglob("*.md"))
+    for path in all_local_paths:
+        try:
+            # We don't want to load system files
+            system_stems = ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "project_overview", "setup"]
+            if path.stem in system_stems:
+                continue
+                
+            prd = load_prd(path)
+            if prd.discussion_id or prd.issue_number:
+                prd.discussion_id = None
+                prd.issue_number = None
+                prd.last_synced_at = None
+                prd.sync_hash = None
+                prd.save()
+        except Exception: continue
+
 def register_sync(cli):
     @click.command(name="sync")
     @click.option("--dry-run", is_flag=True)
     @click.option("--full", is_flag=True)
     @click.option("--local", is_flag=True, help="Sync local files and state only")
-    def sync_command(dry_run, full, local):
+    @click.option("--reset-remote", is_flag=True, help="Close all remote PRD issues and delete PRD discussions")
+    def sync_command(dry_run, full, local, reset_remote):
         """Synchronize local PRDs/Issues with GitHub and align state."""
         from vibe_tools.commands.migrate import run_reconciliation
         
@@ -570,6 +671,11 @@ def register_sync(cli):
         
         if not owner or not name:
             click.echo("Error: Not a GitHub repository or could not get info.")
+            return
+
+        if reset_remote:
+            reset_remote_state(owner, name, has_discussions)
+            click.echo("✅ Remote reset complete.")
             return
 
         # 2. Pull Remote

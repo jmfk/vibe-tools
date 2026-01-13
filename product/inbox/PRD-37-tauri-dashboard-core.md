@@ -1,20 +1,3 @@
----
-id: PRD-37
-title: Tauri Dashboard Core
-type: FEATURE
-status: backlog
-group: null
-depends_on: []
-created_at: 2026-01-13
-updated_at: '2026-01-13T19:03:05.273251'
-owner: Core Platform
-implementation_id: v01-480
-implementation_yaml: v01-480_37_tauri_dashboard_core.yaml
-discussion_id: D_kwDOQzI0Lc4AjoMn
-last_synced_at: '2026-01-13T19:03:05.273112'
-sync_hash: a0da3c6e1b85027f609af14a18bf5cae9f98767d8a74ed5390ab83277df023f2
----
-
 # PRD-37: Tauri Dashboard Core
 
 **Project:** vibe-tools
@@ -95,3 +78,28 @@ The dashboard will follow a modern, IDE-like layout:
 - Filesystem changes in `product/` or `issues/` are reflected in the UI within 500ms.
 - Smooth streaming of log files exceeding 10,000 lines.
 - No interference with existing CLI workflows.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-37
+title: Tauri Dashboard Core
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: 2026-01-13
+updated_at: '2026-01-13T20:07:27.748090'
+owner: Core Platform
+implementation_id: v01-480
+implementation_yaml: v01-480_37_tauri_dashboard_core.yaml
+discussion_id: null
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-37 -->

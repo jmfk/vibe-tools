@@ -3,10 +3,10 @@ import pathlib
 import click
 
 from vibe_tools.utils import (
-    BACKLOG_DIR,
-    HISTORY_DIR,
-    INBOX_DIR,
-    REJECTED_DIR,
+    PRODUCT_BACKLOG_DIR as BACKLOG_DIR,
+    PRODUCT_HISTORY_DIR as HISTORY_DIR,
+    PLANNING_INBOX_DIR as INBOX_DIR,
+    PLANNING_REJECTED_DIR as REJECTED_DIR,
     open_in_editor,
 )
 

@@ -1,18 +1,3 @@
----
-id: PRD-017
-title: Infrastructure Management
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.010310'
-updated_at: '2026-01-13T19:04:07.141031'
-discussion_id: D_kwDOQzI0Lc4AjoNL
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/26
-last_synced_at: '2026-01-13T19:04:07.140942'
-sync_hash: 8ac467ccf9398e559032648822d959cf19b39db4f4b260929fac9dc6cc4135b3
----
-
 # Infrastructure Management
 
 ## Overview
@@ -69,3 +54,26 @@ N/A - CLI command, integrates with architect shell.
 3. **YAML Conversion**: Normalize infrastructure.md, verify YAML created
 4. **Global Truth**: Verify infrastructure.yaml included in agent context
 5. **Implementation**: Run infrastructure implementation loop, verify works
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-017
+title: Infrastructure Management
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.010310'
+updated_at: '2026-01-13T20:07:27.815811'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/26
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-017 -->

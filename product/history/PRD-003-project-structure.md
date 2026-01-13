@@ -1,20 +1,3 @@
----
-id: PRD-003
-title: Project Structure
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.011138'
-updated_at: '2026-01-13T19:03:40.254217'
-discussion_id: D_kwDOQzI0Lc4AjoM7
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/28
-last_synced_at: '2026-01-13T19:03:40.254030'
-sync_hash: b7d972350d36ddcd32f4e205cd6aecdddf0f7696566f9ccd28720461ede1587b
-implementation_id: v01-060
-implementation_yaml: v01-060_03_project_structure.yaml
----
-
 # Project Structure
 
 ## Overview
@@ -83,3 +66,28 @@ N/A - Directory structure only.
 5. **Migration**: Simulate old structure, run init, verify migration successful
 6. **Permissions**: Verify directories have correct permissions
 7. **Template Loading**: Verify templates load from correct location (package vs project)
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-003
+title: Project Structure
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.011138'
+updated_at: '2026-01-13T20:07:27.791556'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/28
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-060
+implementation_yaml: v01-060_03_project_structure.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-003 -->

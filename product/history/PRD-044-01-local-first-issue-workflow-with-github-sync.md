@@ -1,17 +1,3 @@
----
-id: PRD-044
-title: 01 Local First Issue Workflow With Github Sync
-type: ISSUE
-status: backlog
-group: null
-depends_on: []
-created_at: '2026-01-13T18:53:26.352431'
-updated_at: '2026-01-13T19:02:56.641242'
-issue_number: 9
-last_synced_at: '2026-01-13T18:53:45.888858'
-sync_hash: 99ae0c7093300ba90b0e76a7d6da483f4ad0f9fe8d7de7bfb41d5b024d3d4370
----
-
 # 01 Local First Issue Workflow With Github Sync
 
 ## System Contract
@@ -48,3 +34,25 @@ sync_hash: 99ae0c7093300ba90b0e76a7d6da483f4ad0f9fe8d7de7bfb41d5b024d3d4370
   Markdown with YAML frontmatter
 ### Github Sync
   {'authority_local': ['Title', 'Body', 'Status', 'Labels', 'vibe-bot comments'], 'authority_github': ['External comments', 'Reactions', 'Mentions']}
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-044
+title: 01 Local First Issue Workflow With Github Sync
+type: ISSUE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:53:26.352431'
+updated_at: '2026-01-13T20:07:27.777592'
+issue_number: null
+last_synced_at: null
+sync_hash: null
+discussion_id: null
+```
+</details>
+
+<!-- vibe-id: PRD-044 -->

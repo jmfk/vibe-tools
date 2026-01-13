@@ -1,18 +1,3 @@
----
-id: PRD-027
-title: Service Setup
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.014622'
-updated_at: '2026-01-13T19:03:55.536451'
-discussion_id: D_kwDOQzI0Lc4AjoNF
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/41
-last_synced_at: '2026-01-13T19:03:55.536348'
-sync_hash: 81c1e9386b5a7e39953a68c749241b76366f60eb7b703d321928ab85900f7210
----
-
 # Service Setup
 
 ## Overview
@@ -97,3 +82,26 @@ N/A - CLI interactive prompts.
 6. **Test Command**: Run `vibe-setup test`, verify all services tested
 7. **Error Handling**: Test with invalid inputs, verify error handling
 8. **Multiple Services**: Configure multiple services, verify all saved
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-027
+title: Service Setup
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.014622'
+updated_at: '2026-01-13T20:07:27.807507'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/41
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-027 -->

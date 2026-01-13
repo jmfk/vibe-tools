@@ -1,20 +1,3 @@
----
-id: PRD-006
-title: PM Interactive Shell
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.014949'
-updated_at: '2026-01-13T19:03:43.140912'
-discussion_id: D_kwDOQzI0Lc4AjoM9
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/42
-last_synced_at: '2026-01-13T19:03:43.140821'
-sync_hash: e54f60e92134ad5265dc6ab8af7693eaf7ed9f64c8be2cf4bd5d476679e92598
-implementation_id: v01-100
-implementation_yaml: v01-100_06_pm_shell.yaml
----
-
 # PM Interactive Shell
 
 ## Overview
@@ -98,3 +81,28 @@ N/A - CLI interactive shell interface.
 8. **Spec Deletion**: Use `/delete <name>`, verify spec deleted
 9. **Agent Context**: Send prompt with focused PRD and attached files, verify all included
 10. **Spec Management**: Create, list, and delete multiple specs, verify operations work
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-006
+title: PM Interactive Shell
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.014949'
+updated_at: '2026-01-13T20:07:27.794743'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/42
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-100
+implementation_yaml: v01-100_06_pm_shell.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-006 -->

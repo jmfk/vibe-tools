@@ -1,18 +1,3 @@
----
-id: PRD-01
-title: 'PRD-XX: Local-First Issue Workflow with GitHub Sync'
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:37:25.061576'
-updated_at: '2026-01-13T19:04:14.162157'
-discussion_id: D_kwDOQzI0Lc4AjoNP
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
-last_synced_at: '2026-01-13T19:04:14.162031'
-sync_hash: c6298faffd8ce4e57a57e966e483da592447c4eaf0068c34e9315852392aa582
----
-
 # PRD-XX: Local-First Issue Workflow with GitHub Sync
 
 **Project:** vibe-tools
@@ -300,3 +285,26 @@ Agents must:
 - Should solved issues be squashed into changelogs automatically?
 
 ------
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-01
+title: 'PRD-XX: Local-First Issue Workflow with GitHub Sync'
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.061576'
+updated_at: '2026-01-13T20:07:27.820209'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
+last_synced_at: null
+sync_hash: null
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-01 -->

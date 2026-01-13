@@ -5,7 +5,7 @@ from typing import List
 
 import click
 
-from vibe_tools.issues import Issue, IssueBody, generate_issue_id, save_issue
+from vibe_tools.prds import PRD, generate_prd_id
 from vibe_tools.utils import LOGS_DIR, logger
 
 
@@ -91,38 +91,57 @@ def register_investigate(cli):
         actual = click.prompt("Actual Behavior", default="N/A")
         acceptance = click.prompt("Acceptance Criteria", default="Fix the issue.")
 
-        body = IssueBody(
-            summary=summary,
-            reproduction_steps=reproduction,
-            expected_behavior=expected,
-            actual_behavior=actual,
-            evidence=f"```\n{evidence}\n```" if evidence else "N/A",
-            acceptance_criteria=acceptance,
-            investigation_notes=f"- Created via `vibe investigate` on {datetime.datetime.now().isoformat()}"
-        )
-
-        issue_id = generate_issue_id()
+        from vibe_tools.utils import PRODUCT_DIR, PLANNING_INBOX_DIR
+        issue_id = generate_prd_id(PRODUCT_DIR)
         now = datetime.datetime.now().isoformat()
 
-        issue = Issue(
+        # Create sanitized filename
+        safe_title = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+        filename = f"{issue_id}-{safe_title}.md"
+        if len(filename) > 64:
+            filename = filename[:60] + ".md"
+        
+        target_path = PLANNING_INBOX_DIR / filename
+
+        content = f"# {title}\n\n"
+        if summary: content += f"## Summary\n{summary}\n\n"
+        if reproduction: content += f"## Reproduction Steps\n{reproduction}\n\n"
+        if expected: content += f"## Expected Behavior\n{expected}\n\n"
+        if actual: content += f"## Actual Behavior\n{actual}\n\n"
+        if evidence: content += f"## Evidence\n```\n{evidence}\n```\n\n"
+        if acceptance: content += f"## Acceptance Criteria\n{acceptance}\n\n"
+        
+        content += f"## Investigation Notes\n- Created via `vibe investigate` on {now}\n"
+
+        prd = PRD(
             id=issue_id,
             title=title,
+            type="ISSUE",
             status="backlog",
-            severity=severity,
-            service=service,
-            summary=summary,
             created_at=now,
             updated_at=now,
-            body=body
+            content=content,
+            metadata={
+                "severity": severity,
+                "service": service,
+                "summary": summary,
+                "reproduction_steps": reproduction,
+                "expected_behavior": expected,
+                "actual_behavior": actual,
+                "acceptance_criteria": acceptance,
+            },
+            path=target_path
         )
 
-        save_issue(issue)
+        prd.save()
         click.echo(f"\n✅ Issue created: {issue_id}")
-        click.echo(f"Location: issues/backlog/{issue_id}.md")
+        click.echo(f"Location: {target_path}")
 
         if github or click.confirm("Sync to GitHub now?"):
-            from vibe_tools.commands.sync import sync_issues
-            sync_issues()
+            from vibe_tools.commands.sync import register_sync
+            # The sync command is a bit different now, it's a CLI command.
+            # For now, let's just advise the user to run 'vibe sync'.
+            click.echo("Please run 'vibe sync' to synchronize with GitHub.")
 
     cli.add_command(investigate_command)
     cli.add_command(investigate_command, name="inv")

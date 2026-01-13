@@ -1,20 +1,3 @@
----
-id: PRD-004
-title: Project Initialization
-type: FEATURE
-status: done
-group: null
-depends_on: []
-created_at: '2026-01-13T18:35:15.009654'
-updated_at: '2026-01-13T19:03:23.101466'
-discussion_id: D_kwDOQzI0Lc4AjoMv
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/24
-last_synced_at: '2026-01-13T19:03:23.101311'
-sync_hash: cd223af2ca0c72c64f6d3bbb4ad85395d45d67ded32bad2d148db306c0f43838
-implementation_id: v01-080
-implementation_yaml: v01-080_04_project_initialization.yaml
----
-
 # Project Initialization
 
 ## Overview
@@ -81,3 +64,28 @@ N/A - CLI interactive prompts.
 7. **Git Integration**: Verify `.gitignore` updated, git repo detected
 8. **Idempotency**: Run init twice, verify no errors, no overwrites
 9. **Next Steps**: Verify helpful next steps message displayed
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-004
+title: Project Initialization
+type: FEATURE
+status: done
+group: null
+depends_on: []
+created_at: '2026-01-13T18:35:15.009654'
+updated_at: '2026-01-13T20:07:27.764421'
+discussion_id: null
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/24
+last_synced_at: null
+sync_hash: null
+implementation_id: v01-080
+implementation_yaml: v01-080_04_project_initialization.yaml
+issue_number: null
+```
+</details>
+
+<!-- vibe-id: PRD-004 -->
