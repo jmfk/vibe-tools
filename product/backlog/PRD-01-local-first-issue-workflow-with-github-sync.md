@@ -1,4 +1,12 @@
 ---
+id: PRD-01
+title: 'PRD-XX: Local-First Issue Workflow with GitHub Sync'
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.061576'
+updated_at: '2026-01-13T18:43:27.697979'
 discussion_id: D_kwDOQzI0Lc4AjlrM
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/6
 last_synced_at: '2026-01-10T17:22:08.100920'

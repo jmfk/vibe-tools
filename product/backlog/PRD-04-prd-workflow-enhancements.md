@@ -1,4 +1,12 @@
 ---
+id: PRD-04
+title: 'PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History'
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.057377'
+updated_at: '2026-01-13T18:43:27.693181'
 discussion_id: D_kwDOQzI0Lc4AjlrJ
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/3
 last_synced_at: '2026-01-10T17:22:06.567517'

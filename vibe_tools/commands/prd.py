@@ -1,147 +1,122 @@
 import click
 import pathlib
 import shutil
-from typing import Optional
+import re
+from typing import Optional, List
 
 from vibe_tools.utils import (
     collect_all_prd_info,
     load_project_state,
     reset_prd_state,
+    PRODUCT_BACKLOG_DIR,
+    PRODUCT_IN_PROGRESS_DIR,
+    PRODUCT_HISTORY_DIR,
     PLANNING_INBOX_DIR,
-    PLANNING_BACKLOG_DIR,
-    PLANNING_HISTORY_DIR,
     PLANNING_REJECTED_DIR,
-    PLANNING_DIR,
     ensure_dir,
-    logger
+    logger,
+    save_project_state
 )
 from vibe_tools.pm import InteractivePM
+from vibe_tools.prds import load_prd, PRD
 
 
 def register_prd(cli):
     @click.group(invoke_without_command=True)
     @click.pass_context
     def prd(ctx):
-        """Manage PRDs and specifications."""
+        """Manage PRDs and initiatives."""
         if ctx.invoked_subcommand is None:
-            ctx.invoke(list_prds)
+            click.echo(ctx.get_help())
 
     @prd.command(name="list")
-    def list_prds():
-        """List the status of all PRDs."""
-        prds = collect_all_prd_info()
-        if not prds:
-            click.echo("No PRD files found.")
+    @click.option("--all", is_flag=True, help="Show all PRDs including history.")
+    def list_prds(all):
+        """List unified PRDs and their status."""
+        state = load_project_state()
+        
+        # Collect PRDs from new structure
+        backlog = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
+        in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
+        history = sorted(list(PRODUCT_HISTORY_DIR.glob("*.md")), reverse=True)
+        
+        click.echo(f"{'ID':<10} {'Type':<10} {'Status':<15} {'Group':<15} {'Title'}")
+        click.echo("-" * 80)
+        
+        def print_prd(path: pathlib.Path):
+            try:
+                p = load_prd(path)
+                status_color = "white"
+                if p.status == "done": status_color = "green"
+                elif p.status == "in_progress": status_color = "blue"
+                
+                status_str = click.style(p.status.upper(), fg=status_color)
+                type_str = click.style(p.type, fg="cyan" if p.type == "FEATURE" else "yellow")
+                group_str = p.group or "-"
+                click.echo(f"{p.id:<10} {type_str:<10} {status_str:<15} {group_str:<15} {p.title}")
+            except Exception:
+                click.echo(f"{path.name:<10} {'ERROR':<10} {'-':<15} {'-':<15} {path.name}")
+
+        for f in in_progress: print_prd(f)
+        for f in backlog: print_prd(f)
+        if all:
+            for f in history: print_prd(f)
+        elif history:
+            click.echo(click.style(f"... and {len(history)} items in history (use --all to see them)", dim=True))
+
+    @prd.command(name="plan")
+    def plan_prds():
+        """Interactively prioritize the product backlog."""
+        backlog = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
+        if not backlog:
+            click.echo("No PRDs in backlog.")
             return
 
-        click.echo(f"{'PRD':<40} {'MD':<5} {'YAML':<5} {'Status':<15}")
-        click.echo("-" * 70)
+        click.echo("\n--- Product Backlog ---")
+        for i, f in enumerate(backlog, 1):
+            try:
+                p = load_prd(f)
+                click.echo(f"{i}. [{p.id}] {p.title}")
+            except Exception:
+                click.echo(f"{i}. {f.name}")
 
-        state = load_project_state()
-        completed_prds = state.get("completed_prds", [])
-        started_prds = state.get("started_prds", [])
-        plans = state.get("plans", {})
-
-        for info in prds:
-            project_name = info["name"]
-            display_name = project_name
-            
-            if info["has_yaml"] and info["yaml_path"]:
-                prd_stem = info["yaml_path"].stem
-                if prd_stem.startswith("v"):
-                    display_name = prd_stem
-            elif info["has_md"] and info["md_path"]:
-                prd_stem = info["md_path"].stem
-            else:
-                prd_stem = project_name
-
-            md_status = "✅" if info["has_md"] else "❌"
-            yaml_status = "✅" if info["has_yaml"] else "❌"
-
-            # Check status in plans first (Source of Truth)
-            plan_status = None
-            prd_id = f"prd_{project_name}"
-            if prd_stem in plans:
-                plan_status = plans[prd_stem].get("status")
-            elif project_name in plans:
-                plan_status = plans[project_name].get("status")
-            elif prd_id in plans:
-                plan_status = plans[prd_id].get("status")
-
-            if plan_status == "completed" or prd_stem in completed_prds or project_name in completed_prds or prd_id in completed_prds:
-                status = click.style("✅ DONE", fg="green")
-            elif plan_status == "in_progress" or prd_stem in started_prds or project_name in started_prds or prd_id in started_prds:
-                status = click.style("⏳ IN_PROGRESS", fg="blue")
-            else:
-                status = click.style("⚪️ PENDING", fg="white", dim=True)
-
-            click.echo(f"{display_name:<40} {md_status:<5} {yaml_status:<5} {status:<15}")
-
-    @prd.command(name="manage")
-    def manage_prds():
-        """List implemented PRDs (batched) and optionally reset them."""
-        state = load_project_state()
-        completed = state.get("completed_prds", [])
-
-        if not completed:
-            click.echo("No implemented PRDs found.")
-            return
-
-        # Sort reverse (last implemented first)
-        completed = list(reversed(completed))
-
-        batch_size = 10
-        current_idx = 0
-
-        while current_idx < len(completed):
-            batch = completed[current_idx : current_idx + batch_size]
-            click.echo(
-                click.style(
-                    f"\n--- Implemented PRDs (Batch {current_idx // batch_size + 1}) ---",
-                    fg="green",
-                    bold=True,
-                )
-            )
-            for i, prd_name in enumerate(batch, 1):
-                click.echo(f"  {i}. {prd_name}")
-
-            click.echo("-" * 40)
-            options = ["q"]
-            prompt_parts = ["[q]uit"]
-
-            if current_idx + batch_size < len(completed):
-                options.append("n")
-                prompt_parts.append("[n]ext batch")
-
-            # Add number options
-            num_options = [str(i) for i in range(1, len(batch) + 1)]
-            options.extend(num_options)
-            prompt_parts.append("[1-10] to reset")
-
-            prompt_text = f"Select an option ({', '.join(prompt_parts)})"
-            choice = click.prompt(prompt_text, type=click.Choice(options), default="q")
-
-            if choice == "q":
-                break
-            elif choice == "n":
-                current_idx += batch_size
-            elif choice in num_options:
-                selected_prd = batch[int(choice) - 1]
-                if click.confirm(
-                    f"Are you sure you want to reset '{selected_prd}'?", default=False
-                ):
-                    messages = reset_prd_state(selected_prd)
-                    for msg in messages:
-                        click.echo(f"✅ {msg}")
-                    # Update completed list for display
-                    completed.remove(selected_prd)
-                    if not completed:
-                        click.echo("No more implemented PRDs.")
-                        break
-                else:
-                    click.echo("Reset cancelled.")
-
-        click.echo("Done.")
+        click.echo("\nOptions: [q]uit, [m]ove <idx> to top, [s]tart <idx>")
+        choice = click.prompt("Selection", type=str, default="q")
+        
+        if choice.startswith("m "):
+            try:
+                idx = int(choice.split()[1]) - 1
+                if 0 <= idx < len(backlog):
+                    selected = backlog[idx]
+                    # Simple way to move to top in sorted list: rename with prefix
+                    # But we want to avoid prefixing if possible.
+                    # For now let's just use a hidden priority in frontmatter.
+                    p = load_prd(selected)
+                    p.metadata["priority"] = 0 # Future use
+                    # For now, we'll just rename the file to something that sorts first
+                    new_name = f"000-{selected.name}"
+                    selected.rename(PRODUCT_BACKLOG_DIR / new_name)
+                    click.echo(f"Moved {p.id} to top.")
+            except (ValueError, IndexError):
+                click.echo("Invalid index.")
+        elif choice.startswith("s "):
+            try:
+                idx = int(choice.split()[1]) - 1
+                if 0 <= idx < len(backlog):
+                    # Check if anything else is in progress
+                    if list(PRODUCT_IN_PROGRESS_DIR.glob("*.md")):
+                        click.echo("❌ Another PRD is already in progress.")
+                        return
+                    
+                    selected = backlog[idx]
+                    p = load_prd(selected)
+                    p.status = "in_progress"
+                    new_path = PRODUCT_IN_PROGRESS_DIR / selected.name
+                    p.save(new_path)
+                    selected.unlink()
+                    click.echo(f"Started {p.id}. Run 'vibe implement' to begin.")
+            except (ValueError, IndexError):
+                click.echo("Invalid index.")
 
     @prd.command(name="pm")
     @click.argument("query", required=False)
@@ -155,42 +130,37 @@ def register_prd(cli):
         pm_tool.run(query)
 
     @prd.command(name="move")
-    @click.argument("prd_name")
-    @click.argument("target", type=click.Choice(["inbox", "backlog", "history", "rejected"]))
-    def move_prd(prd_name, target):
-        """Move a PRD to a new planning stage."""
-        prd_info = collect_all_prd_info()
-        found_info = None
-        for info in prd_info:
-            if info["name"] == prd_name or (info["has_md"] and info["md_path"].stem == prd_name):
-                found_info = info
+    @click.argument("prd_id")
+    @click.argument("target", type=click.Choice(["backlog", "history", "rejected"]))
+    def move_prd(prd_id, target):
+        """Move a PRD by its ID."""
+        # Find the file
+        all_files = list(PRODUCT_DIR.rglob("*.md"))
+        found_path = None
+        for f in all_files:
+            if prd_id.upper() in f.name:
+                found_path = f
                 break
         
-        if not found_info or not found_info["has_md"]:
-            click.echo(f"❌ PRD MD file not found: {prd_name}")
+        if not found_path:
+            click.echo(f"❌ PRD not found: {prd_id}")
             return
             
-        md_path = found_info["md_path"]
-        
         target_map = {
-            "inbox": PLANNING_INBOX_DIR,
-            "backlog": PLANNING_BACKLOG_DIR,
-            "history": PLANNING_HISTORY_DIR,
+            "backlog": PRODUCT_BACKLOG_DIR,
+            "history": PRODUCT_HISTORY_DIR,
             "rejected": PLANNING_REJECTED_DIR,
         }
         
         target_dir = target_map[target]
         ensure_dir(target_dir)
         
-        target_path = target_dir / md_path.name
+        p = load_prd(found_path)
+        p.status = "done" if target == "history" else "backlog"
+        new_path = target_dir / found_path.name
+        p.save(new_path)
+        found_path.unlink()
         
-        if target_path.exists():
-            click.echo(f"❌ Target path already exists: {target_path}")
-            return
-            
-        click.echo(f"🚚 Moving {md_path.name} to {target}...")
-        shutil.move(str(md_path), str(target_path))
-        click.echo(f"✅ Moved to {target_path}")
-        click.echo("💡 Tip: Run 'vibe sync' to update implementation state.")
+        click.echo(f"✅ Moved {prd_id} to {target}")
 
     cli.add_command(prd)
