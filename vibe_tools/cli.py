@@ -137,20 +137,19 @@ class OrderedGroup(click.Group):
     help="Enable debug logging to console.",
 )
 @click.option(
-    "--verbose",
-    is_flag=True,
-    default=True,
+    "--verbose/--no-verbose",
+    default=None,
     help="Output verbose information (like prompts) to the terminal.",
 )
 @click.option(
     "--stream/--no-stream",
-    default=False,
+    default=None,
     help="Stream agent output in real-time to the console.",
 )
 @click.option(
     "--agent",
     type=click.Choice(["cursor-agent", "claude", "antigravity", "gemini"]),
-    default="cursor-agent",
+    default=None,
     help="Select the agent to use.",
 )
 @click.version_option(version=__version__)
@@ -169,11 +168,19 @@ def cli(ctx, debug, verbose, stream, agent):
     if not is_test_mode():
         migrate_to_project_dir()
 
+    config = load_config()
+
+    if stream is None:
+        stream = config.get("agent", {}).get("stream")
+        if stream is None:
+            stream = config.get("stream", False)
+
+    if agent is None:
+        agent = config.get("agent", {}).get("agent", "cursor-agent")
+
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
     ctx.obj["stream"] = stream
-
-    config = load_config()
 
     if debug:
         enable_console_debug()

@@ -139,7 +139,7 @@ def get_agent_command(
         agent_config = config.get("cursor-agent", {})
         force = agent_config.get("force", True)
 
-        cmd = ["agent", "-p"]
+        cmd = ["cursor-agent", "-p"]
         if force:
             cmd.append("--force")
 
@@ -167,7 +167,6 @@ def run_agent(
         )
         return "ERROR: Agent call blocked in current environment.", 1, None
 
-    print(f"run_agent command: {command}", flush=True)
     is_cursor_agent = command[0] == "cursor-agent" or (
         len(command) > 2 and command[2] == "cursor-agent"
     )
@@ -299,55 +298,62 @@ def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
 
 
 def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
-    result = tool_call.get("result", {})
     if "readToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", None)
         if success:
             message = success.get("message", "")
-            print(f"📖 Reading Done: {message}", flush=True)
+            print(f"✅ Reading Done: {message}", flush=True)
         else:
-            print(f"🚫 Reading Error: {json.dumps(result, indent=2)}", flush=True)
+            print(f"🚫 Reading Error: {json.dumps(tool_call, indent=2)}", flush=True)
     elif "writeToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", {})
         if success:
             message = success.get("message", "")
-            print(f"🔧 Writing Done: {message}", flush=True)
+            print(f"✅ Writing Done: {message}", flush=True)
         else:
-            print(f"🚫 Writing Error: {json.dumps(result, indent=2)}", flush=True)
+            print(f"🚫 Writing Error: {json.dumps(tool_call, indent=2)}", flush=True)
     elif "editToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", {})
         if success:
             message = success.get("message", "")
-            print(f"🔧 Editing Done: {message}", flush=True)
+            print(f"✅ Editing Done: {message}", flush=True)
         else:
-            print(f"🚫 Editing Error: {json.dumps(result, indent=2)}", flush=True)
+            print(f"🚫 Editing Error: {json.dumps(tool_call, indent=2)}", flush=True)
     elif "lsToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", {})
         if success:
             directoryTreeRoot = success.get("directoryTreeRoot", {})
             numFiles = directoryTreeRoot.get("numFiles", {})
-            print(f"🔧 List Directory Done: {numFiles} files found", flush=True)
+            print(f"✅ List Directory Done: {numFiles} files found", flush=True)
         else:
-            failure = result.get("failure", {})
             print(
-                f"🚫 List Directory Error: {json.dumps(failure, indent=2)}", flush=True
+                f"🚫 List Directory Error: {json.dumps(tool_call, indent=2)}",
+                flush=True,
             )
     elif "shellToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", {})
         if success:
             commandText = result.get("success", "")
             executionTime = result.get("executionTime", "")
-            print(f"🔧 Command Done: {commandText} in {executionTime} ms", flush=True)
+            print(f"✅ Command Done: {commandText} in {executionTime} ms", flush=True)
         else:
-            failure = result.get("failure", {})
-            print(f"🚫 Command Error: {json.dumps(failure, indent=2)}", flush=True)
+            print(f"🚫 Command Error: {json.dumps(tool_call, indent=2)}", flush=True)
     elif "globToolCall" in tool_call:
+        result = tool_call.get(tool_call, {}).get("result", {})
         success = result.get("success", {})
         if success:
             totalFiles = success.get("totalFiles", 0)
-            print(f"🚫 globToolCall Success: {totalFiles} totalFiles", flush=True)
+            print(f"✅ Search Success: {totalFiles} totalFiles", flush=True)
+        else:
+            print(f"🚫 Search Error: {json.dumps(tool_call, indent=2)}", flush=True)
     elif "function" in tool_call:
-        name = tool_call["function"].get("name")
+        # result = tool_call.get("result", {})
+        # name = tool_call["function"].get("name")
         result = tool_call.get("result", {})
         print(f"🛠️ Calling tool Done: {result}", flush=True)
 
