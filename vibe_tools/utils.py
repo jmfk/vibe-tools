@@ -108,6 +108,11 @@ def is_git_repo():
         return False
 
 
+def is_test_mode() -> bool:
+    """Checks if the system is running in test mode."""
+    return os.environ.get("VIBE_TEST_MODE") == "1" or "pytest" in sys.modules
+
+
 def get_last_commit_hash() -> Optional[str]:
     """Retrieves the current HEAD commit hash."""
     stdout, code = run_command(["git", "rev-parse", "HEAD"], check=False)
@@ -122,6 +127,26 @@ def run_command(
     check: bool = True,
 ) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
+    if is_test_mode():
+        intrusive_commands = {
+            "make",
+            "docker",
+            "skaffold",
+            "helm",
+            "pip",
+            "npm",
+            "npx",
+            "uvicorn",
+            "pytest",
+            "python",
+        }
+        main_cmd = command[0] if command else ""
+        if main_cmd in intrusive_commands:
+            logger.warning(
+                f"Blocking intrusive command in test mode: {' '.join(command)}"
+            )
+            return f"Blocked intrusive command: {' '.join(command)}", 0
+
     try:
         result = subprocess.run(
             command,
@@ -347,15 +372,11 @@ def get_agent_command(agent: str, prompt: str) -> List[str]:
     return _get_agent_command(agent, prompt)
 
 
-def run_agent(
-    command: List[str], stream: bool = False
-) -> Tuple[str, int]:
+def run_agent(command: List[str], stream: bool = False) -> Tuple[str, int]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     from .agent import run_agent as _run_agent
 
-    print(
-        f"Running agent: {command} with stream: {stream}"
-    )
+    print(f"Running agent: {command} with stream: {stream}")
     output, code, _ = _run_agent(command, stream=stream)
     print(f"Agent output: {output}")
     print(f"Agent code: {code}")
@@ -844,6 +865,18 @@ def setup_project_gitignore():
     ensure_gitignore(patterns)
 
 
+def save_memory(text: str) -> pathlib.Path:
+    """Saves a 'memory' instruction to the instructions directory."""
+    ensure_dir(INSTRUCTIONS_DIR)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # slugify text for filename
+    slug = "".join(c if c.isalnum() else "_" for c in text[:30]).lower()
+    filename = f"memory_{timestamp}_{slug}.txt"
+    filepath = INSTRUCTIONS_DIR / filename
+    filepath.write_text(text)
+    return filepath
+
+
 def perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
     from vibe_tools.setup import maybe_init_git
@@ -874,6 +907,26 @@ def perform_basic_init():
 
     # Setup gitignore with specific patterns
     setup_project_gitignore()
+
+    # Create conftest.py if it doesn't exist
+    conftest_path = pathlib.Path("tests/conftest.py")
+    if not conftest_path.exists():
+        ensure_dir(conftest_path.parent)
+        conftest_content = """import pytest
+import os
+
+# vibe-tools non-intrusive testing policy is enforced automatically via the pytest plugin.
+# The following environment variables are set by default:
+# VIBE_TEST_MODE=1
+# VIBE_AGENT_ACTIVE=1
+
+@pytest.fixture(autouse=True)
+def setup_vibe_test_env(monkeypatch):
+    # Local project specific test setup
+    pass
+"""
+        conftest_path.write_text(conftest_content)
+        click.echo(f"✅ Created default test safeguard: {conftest_path}")
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)

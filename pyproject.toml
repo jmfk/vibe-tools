@@ -6,7 +6,14 @@ dependencies = [
     "click",
     "google-generativeai",
     "pyyaml",
+    "python-dotenv",
 ]
+
+[project.scripts]
+vibe = "vibe_tools.cli:cli"
+
+[project.entry-points.pytest11]
+vibe_tools = "vibe_tools.pytest_plugin"
 
 [project.optional-dependencies]
 test = [

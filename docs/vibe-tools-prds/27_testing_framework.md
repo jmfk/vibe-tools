@@ -43,6 +43,12 @@ N/A - CLI command.
 ## Architecture and Constraints
 - **Test Runner Support**: Must support common test runners, may not support all.
 - **Discovery Accuracy**: Test discovery may not be 100% accurate.
+- **Non-Intrusive Testing (Enforced by Default)**:
+  - Tests must not trigger real agent calls, builds, or service starts.
+  - Subprocess execution is blocked by default during testing via `VIBE_TEST_MODE`.
+  - **Automated Enforcement**: The `vibe-tools` package includes a pytest plugin that automatically enables these safeguards for any project using it.
+  - Logic-first testing: Prefer testing underlying logic functions directly over CLI entry points.
+  - Global safeguards in `conftest.py` ensure no accidental side-effects.
 
 ## Success Criteria
 - Tests discovered correctly

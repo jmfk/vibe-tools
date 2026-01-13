@@ -4,12 +4,46 @@ import pytest
 from click.testing import CliRunner
 
 from vibe_tools.cli import cli, load_config
-from vibe_tools.utils import save_config
+from vibe_tools.utils import save_config, save_memory, perform_basic_init
 
 
 @pytest.fixture
 def runner():
     return CliRunner()
+
+
+def test_save_memory_logic(tmp_path, monkeypatch):
+    instructions_dir = tmp_path / "instructions"
+    instructions_dir.mkdir()
+    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
+
+    filepath = save_memory("Test instruction")
+
+    assert filepath.exists()
+    assert filepath.read_text() == "Test instruction"
+    assert "test_instruction" in filepath.name
+
+
+def test_perform_basic_init_logic(tmp_path, monkeypatch):
+    # Setup temporary directory for the test
+    project_dir = tmp_path / "implementation"
+    monkeypatch.setattr("vibe_tools.utils.VIBE_PROJECT_DIR", project_dir)
+    monkeypatch.setattr("vibe_tools.utils.CONFIG_FILE", project_dir / "config.json")
+    monkeypatch.setattr("vibe_tools.utils.PRD_DIR", project_dir / "prds")
+    monkeypatch.setattr("vibe_tools.utils.LOGS_DIR", project_dir / "logs")
+    monkeypatch.setattr("vibe_tools.utils.COSTS_DIR", project_dir / "costs")
+    monkeypatch.setattr("vibe_tools.utils.VIBE_DATA_DIR", project_dir / "data")
+    monkeypatch.setattr(
+        "vibe_tools.utils.INSTRUCTIONS_DIR", project_dir / "instructions"
+    )
+
+    with patch("vibe_tools.utils.maybe_init_git"):
+        perform_basic_init()
+
+    assert project_dir.exists()
+    assert (project_dir / "config.json").exists()
+    assert (project_dir / "prds").exists()
+    assert (project_dir / "instructions").exists()
 
 
 def test_cli_base(runner):
@@ -36,48 +70,27 @@ def test_load_save_config(tmp_path):
                 assert loaded["test"] == "value"
 
 
-def test_init_command(runner, tmp_path):
-    with patch("vibe_tools.setup.maybe_init_git"):
-        with patch("vibe_tools.commands.init.perform_basic_init") as mock_basic:
-            with patch("vibe_tools.commands.init.guide_setup", return_value=True):
-                # Provide 'D' for manual setup
-                result = runner.invoke(cli, ["init"], input="D\n")
-                assert result.exit_code == 0
-                mock_basic.assert_called_once()
-
-
 def test_normalize_command(runner):
     with patch("vibe_tools.normalize.normalize_prd") as mock_normalize:
-        result = runner.invoke(cli, ["normalize", "input.md", "--yes"])
+        # Command doesn't take input file as argument in current version
+        result = runner.invoke(cli, ["normalize", "--yes"])
         assert result.exit_code == 0
         mock_normalize.assert_called_once()
 
 
 def test_test_fix_command(runner):
-    with patch("vibe_tools.fixer.run_test_fix_loop") as mock_loop:
+    # Patch the reference held by the command module
+    with patch("vibe_tools.commands.test_fix.run_test_fix_loop") as mock_loop:
         result = runner.invoke(cli, ["test-fix"])
         assert result.exit_code == 0
         mock_loop.assert_called_once()
 
 
-def test_memory_command_saves_file(runner, tmp_path, monkeypatch):
-    instructions_dir = tmp_path / "instructions"
-    instructions_dir.mkdir()
-    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
-
-    result = runner.invoke(cli, ["memory", "Test instruction"])
-
-    assert result.exit_code == 0
-    assert "Memory saved" in result.output
-    files = list(instructions_dir.glob("memory_*_test_instruction.txt"))
-    assert len(files) == 1
-    assert files[0].read_text() == "Test instruction"
-
-
 def test_memory_list_command(runner, tmp_path, monkeypatch):
     instructions_dir = tmp_path / "instructions"
     instructions_dir.mkdir()
-    monkeypatch.setattr("vibe_tools.utils.INSTRUCTIONS_DIR", instructions_dir)
+    # Patch where it's used in the command module
+    monkeypatch.setattr("vibe_tools.commands.memory.INSTRUCTIONS_DIR", instructions_dir)
     (instructions_dir / "memory_1.txt").write_text("Instruction 1")
 
     result = runner.invoke(cli, ["memory", "--list"])

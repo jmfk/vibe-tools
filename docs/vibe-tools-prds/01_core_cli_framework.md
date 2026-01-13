@@ -30,7 +30,8 @@ N/A - CLI-only interface.
 - **Configuration Management**: Loads `.vibe_config.json` from project root, merges with defaults, validates required fields.
 - **Logging System**: Per-command logging setup, console and file handlers, configurable log levels based on verbose/debug flags.
 - **Cost Tracking Integration**: Registers atexit handler to finalize cost reports, tracks session costs across all commands.
-- **Project Initialization**: Ensures `implementation/` directory exists, migrates legacy files, validates git repository.
+- **Project Initialization**: Ensures `implementation/` directory exists, migrates legacy files, validates git repository. Skip migration in test mode to maintain isolation.
+- **Test Mode Isolation**: Detects test environment via `VIBE_TEST_MODE` or presence of `pytest` and disables automatic state modifications.
 
 ## Infrastructure
 - **Deployment**: Python package installable via pip, entry points defined in `setup.py`/`pyproject.toml`.

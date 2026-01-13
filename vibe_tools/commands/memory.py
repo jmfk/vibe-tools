@@ -2,7 +2,7 @@ import datetime
 
 import click
 
-from vibe_tools.utils import INSTRUCTIONS_DIR, ensure_dir
+from vibe_tools.utils import INSTRUCTIONS_DIR, ensure_dir, save_memory
 
 
 def register_memory(cli):
@@ -57,12 +57,7 @@ def register_memory(cli):
             text = click.prompt("Enter the instruction to remember")
 
         if text:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            # slugify text for filename
-            slug = "".join(c if c.isalnum() else "_" for c in text[:30]).lower()
-            filename = f"memory_{timestamp}_{slug}.txt"
-            filepath = INSTRUCTIONS_DIR / filename
-            filepath.write_text(text)
+            filepath = save_memory(text)
             click.echo(f"✅ Memory saved to {filepath}")
 
     cli.add_command(memory)
