@@ -35,6 +35,7 @@ def register_all_commands(cli):
         test_fix,
         testing,
         view_implement,
+        monitor,
     )
 
     init.register_init(cli)
@@ -73,6 +74,7 @@ def register_all_commands(cli):
     demo_data.register_demo_data(cli)
     investigate.register_investigate(cli)
     solve.register_solve(cli)
+    monitor.register_monitor(cli)
 
     from vibe_tools.servers import servers_cli
 

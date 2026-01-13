@@ -46,6 +46,7 @@ from vibe_tools.utils import (
     get_google_api_key,
     get_main_branch,
     get_prompt,
+    is_test_mode,
     load_config,
     load_project_state,
     logger,
@@ -165,7 +166,8 @@ def cli(ctx, debug, verbose, stream, agent):
     # Ensure files are in the right place
     from vibe_tools.utils import migrate_to_project_dir
 
-    migrate_to_project_dir()
+    if not is_test_mode():
+        migrate_to_project_dir()
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent

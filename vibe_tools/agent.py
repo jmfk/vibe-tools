@@ -13,6 +13,7 @@ from .utils import (
     LOGS_DIR,
     VIBE_PROJECT_DIR,
     ensure_dir,
+    is_test_mode,
     load_config,
     run_command,
 )
@@ -41,7 +42,9 @@ class AgentManager:
     def _save_active_agents(self, agents: Dict[str, Any]):
         self.active_agents_file.write_text(json.dumps(agents, indent=2))
 
-    def register_agent(self, pid: int, command: List[str], chat_id: Optional[str] = None):
+    def register_agent(
+        self, pid: int, command: List[str], chat_id: Optional[str] = None
+    ):
         """Registers a new agent process."""
         self.session_pids.add(pid)
         agents = self._load_active_agents()
@@ -133,7 +136,7 @@ def get_agent_command(
     """Constructs the command to invoke the specified AI agent."""
     if agent == "cursor-agent":
         config = load_config()
-        agent_config = config.get("agent", {})
+        agent_config = config.get("cursor-agent", {})
         force = agent_config.get("force", True)
 
         cmd = ["agent", "-p"]
@@ -143,7 +146,9 @@ def get_agent_command(
         if chat_id:
             cmd.extend(["--resume", chat_id])
 
-        cmd.extend(["--output-format", "stream-json", "--stream-partial-output", prompt])
+        cmd.extend(
+            ["--output-format", "stream-json", "--stream-partial-output", prompt]
+        )
         return cmd
     elif agent == "claude":
         return ["claude", "-p", prompt]
@@ -156,11 +161,21 @@ def run_agent(
     command: List[str], stream: bool = False
 ) -> Tuple[str, int, Optional[str]]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
-    is_cursor_agent = command[0] == "agent" or (
-        len(command) > 2 and command[2] == "agent"
+    if os.environ.get("VIBE_AGENT_ACTIVE") == "1" or is_test_mode():
+        logger.warning(
+            "Recursive or test-mode agent call detected. Preventing execution."
+        )
+        return "ERROR: Agent call blocked in current environment.", 1, None
+
+    print(f"run_agent command: {command}", flush=True)
+    is_cursor_agent = command[0] == "cursor-agent" or (
+        len(command) > 2 and command[2] == "cursor-agent"
     )
-    
+
     # Use os.setsid to create a new process group for robust cleanup
+    env = os.environ.copy()
+    env["VIBE_AGENT_ACTIVE"] = "1"
+
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -169,6 +184,7 @@ def run_agent(
         bufsize=1,
         universal_newlines=True,
         preexec_fn=os.setsid if sys.platform != "win32" else None,
+        env=env,
     )
 
     agent_manager.register_agent(process.pid, command)
@@ -313,7 +329,9 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
             print(f"🔧 List Directory Done: {numFiles} files found", flush=True)
         else:
             failure = result.get("failure", {})
-            print(f"🚫 List Directory Error: {json.dumps(failure, indent=2)}", flush=True)
+            print(
+                f"🚫 List Directory Error: {json.dumps(failure, indent=2)}", flush=True
+            )
     elif "shellToolCall" in tool_call:
         success = result.get("success", {})
         if success:
@@ -341,7 +359,7 @@ def get_agent_processes() -> List[Dict[str, Any]]:
 
     # 2. Augmented with pgrep to find floating ones
     stdout_vibe, _ = run_command(["pgrep", "-f", "vibe"], check=False)
-    stdout_agent, _ = run_command(["pgrep", "-f", "agent"], check=False)
+    stdout_agent, _ = run_command(["pgrep", "-f", "cursor-agent"], check=False)
 
     pids = set()
     if stdout_vibe.strip():
