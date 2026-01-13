@@ -54,12 +54,11 @@ def test_discover_frontend_test_cmd(tmp_path):
     tester.frontend_root.mkdir()
     (tester.frontend_root / "package.json").write_text("{}")
     assert tester.discover_frontend_test_cmd() == [
-        "npm",
+        "npx",
         "--prefix",
         str(tester.frontend_root),
-        "test",
-        "--",
-        "--run",
+        "vitest",
+        "run",
     ]
 
 

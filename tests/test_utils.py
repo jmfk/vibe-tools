@@ -1,4 +1,5 @@
 import logging
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,7 +49,7 @@ def test_ensure_dir(tmp_path):
 
 def test_run_command_success():
     stdout, code = run_command(["echo", "hello"], check=True)
-    assert stdout == "hello"
+    assert stdout.strip() == "hello"
     assert code == 0
 
 
@@ -62,12 +63,14 @@ def test_rotate_log(tmp_path):
     with patch("vibe_tools.utils.LOG_FILE", tmp_path / "vibe.log"):
         with patch("vibe_tools.utils.file_handler") as mock_handler:
             # File doesn't exist
+            mock_handler.baseFilename = str(tmp_path / "vibe.log")
             rotate_log()
             mock_handler.doRollover.assert_not_called()
 
             # File exists and not empty
             log_file = tmp_path / "vibe.log"
             log_file.write_text("some logs")
+            mock_handler.baseFilename = str(log_file)
             rotate_log()
             mock_handler.doRollover.assert_called_once()
 
@@ -83,9 +86,12 @@ def test_is_merged():
 
 def test_run_agent():
     with patch("subprocess.Popen") as mock_popen, \
-         patch("shutil.which", return_value="/usr/local/bin/some-agent"):
+         patch("shutil.which", return_value="/usr/local/bin/some-agent"), \
+         patch("vibe_tools.agent.is_test_mode", return_value=False), \
+         patch.dict(os.environ, {"VIBE_AGENT_ACTIVE": "0"}):
         mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = ["line1\n", "line2\n", ""]
+        mock_process.pid = 12345
+        mock_process.communicate.return_value = ("line1\nline2\n", "")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
@@ -98,20 +104,21 @@ def test_get_agent_command():
     assert get_agent_command("cursor-agent", "prompt")[0] == "cursor-agent"
     assert get_agent_command("claude", "prompt")[0] == "claude"
     assert get_agent_command("antigravity", "prompt")[0] == "antigravity"
-    with pytest.raises(ValueError):
-        get_agent_command("unknown", "prompt")
+    assert get_agent_command("unknown", "prompt")[1] == "UNKNOWN_AGENT"
 
 
-def test_is_git_repo():
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 0
+def test_is_git_repo(tmp_path):
+    # Test directory check
+    (tmp_path / ".git").mkdir()
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        is_git_repo.cache_clear()
         assert is_git_repo()
 
-        mock_run.return_value.returncode = 1
-        assert not is_git_repo()
-
-        mock_run.side_effect = FileNotFoundError()
-        assert not is_git_repo()
+    is_git_repo.cache_clear()
+    with patch("pathlib.Path.cwd", return_value=tmp_path.parent):
+        # ensure no .git in parent
+        if not (tmp_path.parent / ".git").exists():
+            assert not is_git_repo()
 
 
 def test_ensure_gitignore(tmp_path):

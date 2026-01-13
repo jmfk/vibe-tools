@@ -246,19 +246,22 @@ def ensure_dir(path: pathlib.Path):
     path.mkdir(parents=True, exist_ok=True)
 
 
-def load_config() -> Dict[str, Any]:
-    """Loads the project configuration from .vibe_config.json."""
-    if CONFIG_FILE.exists():
+def load_config(global_scope: bool = False) -> Dict[str, Any]:
+    """Loads the project or global configuration."""
+    target = GLOBAL_CONFIG_FILE if global_scope else CONFIG_FILE
+    if target.exists():
         try:
-            return json.loads(CONFIG_FILE.read_text())
+            return json.loads(target.read_text())
         except json.JSONDecodeError:
             return {}
     return {}
 
 
-def save_config(config: Dict[str, Any]):
-    """Saves the project configuration to .vibe_config.json."""
-    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+def save_config(config: Dict[str, Any], global_scope: bool = False):
+    """Saves the project or global configuration."""
+    target = GLOBAL_CONFIG_FILE if global_scope else CONFIG_FILE
+    ensure_dir(target.parent)
+    target.write_text(json.dumps(config, indent=2))
 
 
 def load_project_state() -> Dict[str, Any]:
