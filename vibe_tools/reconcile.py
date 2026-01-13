@@ -4,6 +4,8 @@ import pathlib
 import sys
 from typing import Optional
 
+from vibe_tools.command_output import out_info, out_print
+
 
 def parse_iso_timestamp(ts: str) -> Optional[datetime.datetime]:
     """Parse ISO timestamp from Cursor export."""
@@ -100,40 +102,40 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
     unmatched_exported = [exp for exp in exported_events if not exp["matched"]]
 
     # Print Report
-    print("=" * 60)
-    print("COST RECONCILIATION REPORT")
-    print("=" * 60)
-    print(f"Registered File: {registered_path}")
-    print(f"Exported File:   {exported_path}")
-    print("-" * 60)
+    out_print("=" * 60)
+    out_print("COST RECONCILIATION REPORT")
+    out_print("=" * 60)
+    out_print(f"Registered File: {registered_path}")
+    out_print(f"Exported File:   {exported_path}")
+    out_print("-" * 60)
 
     total_reg_cost = sum(r["cost"] for r in registered_events)
     total_exp_cost = sum(e["cost"] for e in exported_events)
 
-    print(f"Total Registered Cost: ${total_reg_cost:.4f}")
-    print(f"Total Exported Cost:   ${total_exp_cost:.4f}")
-    print(f"Difference:            ${abs(total_reg_cost - total_exp_cost):.4f}")
-    print("-" * 60)
-    print(f"Total Matches:         {len(matches)}")
-    print(f"Unmatched Registered:  {len(unmatched_registered)}")
-    print(f"Unmatched Exported:    {len(unmatched_exported)}")
-    print("-" * 60)
+    out_print(f"Total Registered Cost: ${total_reg_cost:.4f}")
+    out_print(f"Total Exported Cost:   ${total_exp_cost:.4f}")
+    out_print(f"Difference:            ${abs(total_reg_cost - total_exp_cost):.4f}")
+    out_print("-" * 60)
+    out_print(f"Total Matches:         {len(matches)}")
+    out_print(f"Unmatched Registered:  {len(unmatched_registered)}")
+    out_print(f"Unmatched Exported:    {len(unmatched_exported)}")
+    out_print("-" * 60)
 
     if unmatched_registered:
-        print("\nUNMATCHED REGISTERED EVENTS (In usage.csv but not in export):")
+        out_print("\nUNMATCHED REGISTERED EVENTS (In usage.csv but not in export):")
         for reg in unmatched_registered[:10]:
-            print(f"  {reg['timestamp']} | {reg['model']} | ${reg['cost']:.4f} | {reg['prd']}")
+            out_print(f"  {reg['timestamp']} | {reg['model']} | ${reg['cost']:.4f} | {reg['prd']}")
         if len(unmatched_registered) > 10:
-            print(f"  ... and {len(unmatched_registered) - 10} more")
+            out_print(f"  ... and {len(unmatched_registered) - 10} more")
 
     if unmatched_exported:
-        print("\nUNMATCHED EXPORTED EVENTS (In export but not in usage.csv):")
+        out_print("\nUNMATCHED EXPORTED EVENTS (In export but not in usage.csv):")
         for exp in unmatched_exported[:10]:
-            print(f"  {exp['timestamp']} | {exp['model']} | ${exp['cost']:.4f} | {exp['kind']}")
+            out_print(f"  {exp['timestamp']} | {exp['model']} | ${exp['cost']:.4f} | {exp['kind']}")
         if len(unmatched_exported) > 10:
-            print(f"  ... and {len(unmatched_exported) - 10} more")
+            out_print(f"  ... and {len(unmatched_exported) - 10} more")
 
-    print("\nSUMMARY OF DISCREPANCIES IN MATCHES:")
+    out_print("\nSUMMARY OF DISCREPANCIES IN MATCHES:")
     discrepancies = []
     for reg, exp in matches:
         cost_diff = abs(reg["cost"] - exp["cost"])
@@ -143,15 +145,15 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
     if discrepancies:
         discrepancies.sort(key=lambda x: x[2], reverse=True)
         for reg, exp, diff in discrepancies[:10]:
-            print(f"  Match at {reg['timestamp']}: Reg ${reg['cost']:.4f} vs Exp ${exp['cost']:.4f} (Diff: ${diff:.4f})")
+            out_print(f"  Match at {reg['timestamp']}: Reg ${reg['cost']:.4f} vs Exp ${exp['cost']:.4f} (Diff: ${diff:.4f})")
 
         # Calculate average multiplier
         multipliers = [exp["cost"] / reg["cost"] for reg, exp in matches if reg["cost"] > 0]
         if multipliers:
             avg_mult = sum(multipliers) / len(multipliers)
-            print(f"\nAverage Cost Multiplier (Exported / Registered): {avg_mult:.2f}x")
+            out_print(f"\nAverage Cost Multiplier (Exported / Registered): {avg_mult:.2f}x")
     else:
-        print("  No major discrepancies found in matched events.")
+        out_print("  No major discrepancies found in matched events.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -161,7 +163,7 @@ if __name__ == "__main__":
         if reg.exists() and exp.exists():
             reconcile(reg, exp)
         else:
-            print("Usage: python reconcile.py <registered_csv> <exported_csv>")
+            out_print("Usage: python reconcile.py <registered_csv> <exported_csv>")
     else:
         reconcile(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]))
 

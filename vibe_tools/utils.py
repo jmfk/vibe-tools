@@ -19,6 +19,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 from dotenv import find_dotenv, load_dotenv, set_key
 
+from vibe_tools.command_output import (
+    out_debug,
+    out_error,
+    out_info,
+    out_print,
+    out_success,
+    out_warn,
+)
+
 VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
@@ -621,6 +630,9 @@ def get_vibe_status_report() -> str:
     state = load_project_state()
     report = []
 
+    # Status report is returned as a string, usually printed by the caller.
+    # We should keep it as click.style for terminal, but OutputManager might need to handle rich/click strings.
+    # For now, let's keep it as is, but consider if we should convert it to plain text for history.
     report.append(click.style("=== VIBE PROJECT STATUS ===", fg="cyan", bold=True))
 
     # 1. Project Directory Info
@@ -888,9 +900,9 @@ def maybe_init_git():
         ):
             try:
                 subprocess.run(["git", "init"], check=True)
-                click.echo("✅ Initialized empty Git repository.")
+                out_success("✅ Initialized empty Git repository.")
             except Exception as e:
-                click.echo(f"❌ Failed to initialize Git repository: {e}")
+                out_error(f"❌ Failed to initialize Git repository: {e}")
 
 
 def setup_project_gitignore():
@@ -947,9 +959,9 @@ def perform_basic_init():
             "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
-        click.echo(f"✅ Created default configuration: {CONFIG_FILE}")
+        out_success(f"✅ Created default configuration: {CONFIG_FILE}")
     else:
-        click.echo(f"✅ Configuration already exists: {CONFIG_FILE}")
+        out_info(f"✅ Configuration already exists: {CONFIG_FILE}")
 
     # Setup gitignore with specific patterns
     setup_project_gitignore()
@@ -972,7 +984,7 @@ def setup_vibe_test_env(monkeypatch):
     pass
 """
         conftest_path.write_text(conftest_content)
-        click.echo(f"✅ Created default test safeguard: {conftest_path}")
+        out_success(f"✅ Created default test safeguard: {conftest_path}")
 
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
@@ -986,10 +998,10 @@ def setup_vibe_test_env(monkeypatch):
     if "Makefile" in TEMPLATES:
         makefile_path = pathlib.Path("Makefile")
         if not makefile_path.exists():
-            click.echo(f"Creating template: {makefile_path}")
+            out_info(f"Creating template: {makefile_path}")
             makefile_path.write_text(TEMPLATES["Makefile"])
         else:
-            click.echo(f"Template already exists: {makefile_path}")
+            out_info(f"Template already exists: {makefile_path}")
 
 
 def get_services():
@@ -1459,7 +1471,7 @@ def sync_env_file():
             f.write("# Vibe-Tools Environment\n")
 
     # Add logic if needed, but for now just ensure it exists
-    logger.info("Syncing .env file...")
+    out_info("Syncing .env file...")
 
 
 def get_instructions_context():
@@ -1640,9 +1652,9 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
         client = genai.Client(api_key=api_key)
 
         if debug:
-            print(f"\n--- DEBUG: LLM PROMPT ({model}) ---")
-            print(prompt)
-            print("--- END DEBUG ---\n")
+            out_debug(f"\n--- DEBUG: LLM PROMPT ({model}) ---")
+            out_debug(prompt)
+            out_debug("--- END DEBUG ---\n")
 
         response = client.models.generate_content(
             model=model,
@@ -1653,9 +1665,9 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
         log_large_output(f"llm_response_{model}", response.text)
 
         if debug:
-            print("\n--- DEBUG: LLM RESPONSE ---")
-            print(response.text)
-            print("--- END DEBUG ---\n")
+            out_debug("\n--- DEBUG: LLM RESPONSE ---")
+            out_debug(response.text)
+            out_debug("--- END DEBUG ---\n")
 
         return response.text
     except Exception as e:
@@ -2224,20 +2236,20 @@ def check_and_install_build_tools():
     if not required_tools:
         return
 
-    click.echo("🔍 Checking for required build tools...")
+    out_info("🔍 Checking for required build tools...")
 
     for tool_name, tool_info in required_tools.items():
         # Check if tool is installed
         try:
             result = run_command(tool_info["check_cmd"], check=False)
             if result[1] == 0:
-                click.echo(f"  ✅ {tool_info['description']} is installed")
+                out_success(f"  ✅ {tool_info['description']} is installed")
                 continue
         except Exception:
             pass
 
         # Tool is not installed
-        click.echo(f"  ⚠️  {tool_info['description']} is not installed")
+        out_warn(f"  ⚠️  {tool_info['description']} is not installed")
 
         # Determine OS and install method
         system = platform.system().lower()
@@ -2246,49 +2258,49 @@ def check_and_install_build_tools():
         if is_macos:
             # Try brew first
             if shutil.which("brew"):
-                click.echo(f"  📦 Installing {tool_name} using Homebrew...")
+                out_info(f"  📦 Installing {tool_name} using Homebrew...")
                 try:
                     install_cmd = tool_info["install_cmd_brew"]
                     result = run_command(install_cmd, check=False)
                     if result[1] == 0:
-                        click.echo(f"  ✅ {tool_name} installed successfully")
+                        out_success(f"  ✅ {tool_name} installed successfully")
                         continue
                     else:
-                        click.echo(f"  ⚠️  Homebrew installation failed: {result[0]}")
+                        out_warn(f"  ⚠️  Homebrew installation failed: {result[0]}")
                 except Exception as e:
-                    click.echo(f"  ⚠️  Installation error: {e}")
+                    out_error(f"  ⚠️  Installation error: {e}")
             else:
-                click.echo(f"  💡 Install {tool_name} manually:")
-                click.echo(f"     brew install {tool_name}")
+                out_info(f"  💡 Install {tool_name} manually:")
+                out_info(f"     brew install {tool_name}")
         else:
             # Linux - provide manual instructions
-            click.echo(f"  💡 Install {tool_name} manually:")
+            out_info(f"  💡 Install {tool_name} manually:")
             if tool_name == "skaffold":
-                click.echo(
+                out_info(
                     "     curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64"
                 )
-                click.echo("     sudo install skaffold /usr/local/bin/")
+                out_info("     sudo install skaffold /usr/local/bin/")
             elif tool_name == "helm":
-                click.echo(
+                out_info(
                     "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
                 )
 
         # Verify installation
-        click.echo(f"  🔍 Verifying {tool_name} installation...")
+        out_info(f"  🔍 Verifying {tool_name} installation...")
         try:
             result = run_command(tool_info["check_cmd"], check=False)
             if result[1] == 0:
-                click.echo(f"  ✅ {tool_name} is now available")
+                out_success(f"  ✅ {tool_name} is now available")
             else:
-                click.echo(f"  ⚠️  {tool_name} installation verification failed")
-                click.echo("     Please install it manually and run 'vibe build' again")
+                out_warn(f"  ⚠️  {tool_name} installation verification failed")
+                out_info("     Please install it manually and run 'vibe build' again")
         except Exception:
-            click.echo(f"  ⚠️  Could not verify {tool_name} installation")
+            out_error(f"  ⚠️  Could not verify {tool_name} installation")
 
     # If skaffold is detected, check and fix kubeconfig API version
     if "skaffold" in required_tools:
-        click.echo("🔍 Checking kubeconfig for deprecated API versions...")
+        out_info("🔍 Checking kubeconfig for deprecated API versions...")
         if fix_kubeconfig_api_version():
-            click.echo("  ✅ Updated kubeconfig to use v1beta1 API version")
+            out_success("  ✅ Updated kubeconfig to use v1beta1 API version")
         else:
             logger.debug("Kubeconfig API version check completed (no changes needed)")
