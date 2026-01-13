@@ -59,20 +59,45 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
 ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
-# ... rest of paths ...
+ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
+ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
+OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
+OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
+INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
+INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
+INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
+CICD = VIBE_PROJECT_DIR / "cicd.yaml"
+CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
+CICD_SPEC = PLANNING_DIR / "cicd.md"
+TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
+TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
+TESTING_SPEC = PLANNING_DIR / "testing.md"
+DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
+DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
 DEV_SPEC = PLANNING_DIR / "dev_environment.md"
 SETUP_SPEC = PLANNING_DIR / "setup.md"
 
+SYSTEM_FILES = [
+    "architecture",
+    "project_overview",
+    "infrastructure",
+    "cicd",
+    "testing",
+    "build",
+    "dev_environment",
+]
+GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
+ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
+ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
+PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
+PM_SESSION_FILE = VIBE_PROJECT_DIR / "pm-session.json"
+SPECS_DIR = PLANNING_DIR
+GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
+
 # --- Logging Setup ---
 logger = logging.getLogger("vibe_tools")
-LOGS_DIR = VIBE_PROJECT_DIR / "logs"
 LOG_SESSION_DIR: Optional[pathlib.Path] = None
 _log_counter = 0
-
-
-def ensure_dir(path: pathlib.Path):
-    """Ensures a directory exists."""
-    path.mkdir(parents=True, exist_ok=True)
 
 
 def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
@@ -284,40 +309,6 @@ def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
 # Global handlers for console and file
 stream_handler: Optional[logging.StreamHandler] = None
 file_handler: Optional[RotatingFileHandler] = None
-LOG_SESSION_DIR: Optional[pathlib.Path] = None
-_log_counter = 0
-
-
-def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
-    """Writes multi-row output to a separate numbered file in the session directory."""
-    global _log_counter, LOG_SESSION_DIR
-    if not content or not content.strip():
-        return None
-
-    _log_counter += 1
-
-    if LOG_SESSION_DIR is None:
-        # Fallback if logging wasn't set up via setup_logging
-        LOG_SESSION_DIR = LOGS_DIR / "misc_outputs"
-
-    ensure_dir(LOG_SESSION_DIR)
-
-    # Create a safe filename from the event name
-    slug = "".join(c if c.isalnum() else "_" for c in event_name[:30]).lower()
-    filename = f"{_log_counter:03d}_{slug}.txt"
-    filepath = LOG_SESSION_DIR / filename
-
-    filepath.write_text(content)
-
-    # Log only the event "pointer" to the main log file
-    try:
-        rel_path = filepath.relative_to(pathlib.Path.cwd())
-    except ValueError:
-        rel_path = filepath
-
-    logger.info(f"EVENT: {event_name} -> See {rel_path}")
-
-    return filepath
 
 
 def rotate_log():
@@ -395,7 +386,6 @@ def enable_console_debug():
     set_console_level(logging.DEBUG)
 
 
-logger = logging.getLogger("vibe_tools")
 LOG_FILE = LOGS_DIR / "vibe.log"
 
 
@@ -1411,7 +1401,7 @@ def test_build_services(debug=False):
             elif not urls and running_count == 0:
                 failure_reasons.append("no services running and no URLs configured")
             reason = "; ".join(failure_reasons) if failure_reasons else "unknown"
-            logger.warning(f"  ❌ Service test FAILED - {reason}")
+            logger.warning(f"  ✗ Service test FAILED - {reason}")
             logger.debug(
                 f"Service test failed: {running_count} service(s) running, {responding_urls} URL(s) responding"
             )
