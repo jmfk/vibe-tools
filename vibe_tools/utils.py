@@ -376,10 +376,8 @@ def run_agent(command: List[str], stream: bool = False) -> Tuple[str, int]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     from .agent import run_agent as _run_agent
 
-    print(f"Running agent: {command} with stream: {stream}")
     output, code, _ = _run_agent(command, stream=stream)
-    print(f"Agent output: {output}")
-    print(f"Agent code: {code}")
+
     return output, code
 
 
