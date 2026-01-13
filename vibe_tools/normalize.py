@@ -18,7 +18,6 @@ from vibe_tools.utils import (
     PRD_FAILED_DIR,
     PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
-    SYSTEM_FILES,
     get_file_hash,
     get_main_branch,
     get_prompt,
