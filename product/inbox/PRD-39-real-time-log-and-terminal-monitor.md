@@ -69,13 +69,13 @@ status: backlog
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-13T20:07:27.742183'
+updated_at: '2026-01-13T20:21:38.857306'
 owner: Core Platform
 implementation_id: v01-450
 implementation_yaml: v01-450_39_real_time_log_and_terminal_monitor.yaml
-discussion_id: null
-last_synced_at: null
-sync_hash: null
+discussion_id: D_kwDOQzI0Lc4AjoQ5
+last_synced_at: '2026-01-13T20:21:38.857079'
+sync_hash: c753e257fe998d4318798ae489d6684328164a37a9d181d2fa41bdf5d8223397
 issue_number: null
 ```
 </details>

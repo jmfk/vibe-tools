@@ -59,10 +59,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:53:26.275674'
-updated_at: '2026-01-13T20:07:27.786924'
-issue_number: null
-last_synced_at: null
-sync_hash: null
+updated_at: '2026-01-13T20:22:17.162060'
+issue_number: 150
+last_synced_at: '2026-01-13T20:22:17.161941'
+sync_hash: 197d19e9c1733c7c37522786938521295d7f6c8585e8c04bc67579dbe8921181
 discussion_id: null
 ```
 </details>

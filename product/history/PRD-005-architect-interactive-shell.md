@@ -93,11 +93,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.012080'
-updated_at: '2026-01-13T20:07:27.760068'
-discussion_id: null
+updated_at: '2026-01-13T20:21:54.005750'
+discussion_id: D_kwDOQzI0Lc4AjoRC
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/31
-last_synced_at: null
-sync_hash: null
+last_synced_at: '2026-01-13T20:21:54.005647'
+sync_hash: 40740d32b9e0cedd5d0e1fdb4eea84544517ecfffe92a1f00f5716842bcab450
 implementation_id: v01-090
 implementation_yaml: v01-090_05_architect_shell.yaml
 issue_number: null
