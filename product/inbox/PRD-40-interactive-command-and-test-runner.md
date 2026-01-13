@@ -1,10 +1,12 @@
 ---
 id: PRD-40
 title: Interactive Command and Test Runner
-status: inbox
+status: normalized
 owner: Core Platform
 created_at: 2026-01-13
 updated_at: 2026-01-13
+implementation_id: v01-1170
+implementation_yaml: v01-1170_40_interactive_command_and_test_runner.yaml
 ---
 
 # PRD-40: Interactive Command and Test Runner

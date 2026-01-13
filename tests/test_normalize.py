@@ -13,6 +13,9 @@ def test_normalize_prd_no_files(tmp_path):
          patch("vibe_tools.normalize.PRD_PROCESSING_DIR", prds_dir / "processing"), \
          patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
          patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_INBOX_DIR", specs_dir / "inbox"), \
+         patch("vibe_tools.normalize.PLANNING_HISTORY_DIR", specs_dir / "history"), \
+         patch("vibe_tools.normalize.PLANNING_REJECTED_DIR", specs_dir / "rejected"), \
          patch("vibe_tools.normalize._switch_to_branch"), \
          patch("vibe_tools.normalize.run_command"), \
          patch("vibe_tools.normalize.is_dirty", return_value=False), \
@@ -35,6 +38,7 @@ def test_normalize_prd_with_file(tmp_path):
          patch("vibe_tools.normalize.PRD_PROCESSING_DIR", prds_dir / "processing"), \
          patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
          patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_INBOX_DIR", specs_dir / "inbox"), \
          patch("vibe_tools.normalize._switch_to_branch"), \
          patch("vibe_tools.normalize.run_command"), \
          patch("vibe_tools.normalize.is_dirty", return_value=False), \
@@ -97,6 +101,7 @@ def test_normalize_prd_with_invalid_yaml_fix(tmp_path):
          patch("vibe_tools.normalize.PRD_PROCESSING_DIR", prds_dir / "processing"), \
          patch("vibe_tools.normalize.DEFAULT_SPECS_DIR", specs_dir), \
          patch("vibe_tools.normalize.PLANNING_BACKLOG_DIR", specs_dir), \
+         patch("vibe_tools.normalize.PLANNING_INBOX_DIR", specs_dir / "inbox"), \
          patch("vibe_tools.normalize._switch_to_branch"), \
          patch("vibe_tools.normalize.run_command"), \
          patch("vibe_tools.normalize.is_dirty", return_value=False), \
@@ -107,7 +112,7 @@ def test_normalize_prd_with_invalid_yaml_fix(tmp_path):
         # Return invalid YAML first, then fixed YAML
         mock_llm.side_effect = ["key: : invalid", "key: fixed"]
 
-        normalize_prd(auto_overwrite=True)
+        normalize_prd(input_file=specs_dir / "prd_01_invalid.md", auto_overwrite=True)
 
         assert mock_llm.call_count == 2
         files = list((prds_dir / "processing").glob("*_01_invalid.yaml"))

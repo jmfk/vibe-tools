@@ -1,10 +1,12 @@
 ---
 id: PRD-39
 title: Real-time Log and Terminal Monitor
-status: inbox
+status: normalized
 owner: Core Platform
 created_at: 2026-01-13
 updated_at: 2026-01-13
+implementation_id: v01-1160
+implementation_yaml: v01-1160_39_real_time_log_and_terminal_monitor.yaml
 ---
 
 # PRD-39: Real-time Log and Terminal Monitor
