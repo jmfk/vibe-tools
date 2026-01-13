@@ -59,40 +59,52 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
 ARCHITECTURE = VIBE_PROJECT_DIR / "architecture.yaml"
-ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
-ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
-OVERVIEW = VIBE_PROJECT_DIR / "project_overview.yaml"
-OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
-INFRA = VIBE_PROJECT_DIR / "infrastructure.yaml"
-INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
-INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
-CICD = VIBE_PROJECT_DIR / "cicd.yaml"
-CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
-CICD_SPEC = PLANNING_DIR / "cicd.md"
-TESTING_CONFIG = VIBE_PROJECT_DIR / "testing.yaml"
-TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
-TESTING_SPEC = PLANNING_DIR / "testing.md"
-DEV_ENV = VIBE_PROJECT_DIR / "dev_environment.yaml"
-DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
+# ... rest of paths ...
 DEV_SPEC = PLANNING_DIR / "dev_environment.md"
 SETUP_SPEC = PLANNING_DIR / "setup.md"
 
-SYSTEM_FILES = [
-    "architecture",
-    "project_overview",
-    "infrastructure",
-    "cicd",
-    "testing",
-    "build",
-    "dev_environment",
-]
-GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
-ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
-ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
-PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
-PM_SESSION_FILE = VIBE_PROJECT_DIR / "pm-session.json"
-SPECS_DIR = PLANNING_DIR
-GLOBAL_SERVERS_FILE = GLOBAL_VIBE_DIR / "servers.json"
+# --- Logging Setup ---
+logger = logging.getLogger("vibe_tools")
+LOGS_DIR = VIBE_PROJECT_DIR / "logs"
+LOG_SESSION_DIR: Optional[pathlib.Path] = None
+_log_counter = 0
+
+
+def ensure_dir(path: pathlib.Path):
+    """Ensures a directory exists."""
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
+    """Writes multi-row output to a separate numbered file in the session directory."""
+    global _log_counter, LOG_SESSION_DIR
+    if not content or not content.strip():
+        return None
+
+    _log_counter += 1
+
+    if LOG_SESSION_DIR is None:
+        # Fallback if logging wasn't set up via setup_logging
+        LOG_SESSION_DIR = LOGS_DIR / "misc_outputs"
+
+    ensure_dir(LOG_SESSION_DIR)
+
+    # Create a safe filename from the event name
+    slug = "".join(c if c.isalnum() else "_" for c in event_name[:30]).lower()
+    filename = f"{_log_counter:03d}_{slug}.txt"
+    filepath = LOG_SESSION_DIR / filename
+
+    filepath.write_text(content)
+
+    # Log only the event "pointer" to the main log file
+    try:
+        rel_path = filepath.relative_to(pathlib.Path.cwd())
+    except ValueError:
+        rel_path = filepath
+
+    logger.info(f"EVENT: {event_name} -> See {rel_path}")
+
+    return filepath
 
 
 @functools.lru_cache(maxsize=1)
@@ -155,9 +167,14 @@ def run_command(
             text=True,
             check=check,
         )
+        if len(result.stdout.splitlines()) > 5:
+            log_large_output(f"command_{command[0]}", result.stdout)
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
-        return (e.stdout or "") + (e.stderr or ""), e.returncode
+        output = (e.stdout or "") + (e.stderr or "")
+        if len(output.splitlines()) > 5:
+            log_large_output(f"command_{command[0]}_error", output)
+        return output, e.returncode
     except (FileNotFoundError, OSError) as e:
         return str(e), 127
 
@@ -267,6 +284,40 @@ def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
 # Global handlers for console and file
 stream_handler: Optional[logging.StreamHandler] = None
 file_handler: Optional[RotatingFileHandler] = None
+LOG_SESSION_DIR: Optional[pathlib.Path] = None
+_log_counter = 0
+
+
+def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
+    """Writes multi-row output to a separate numbered file in the session directory."""
+    global _log_counter, LOG_SESSION_DIR
+    if not content or not content.strip():
+        return None
+
+    _log_counter += 1
+
+    if LOG_SESSION_DIR is None:
+        # Fallback if logging wasn't set up via setup_logging
+        LOG_SESSION_DIR = LOGS_DIR / "misc_outputs"
+
+    ensure_dir(LOG_SESSION_DIR)
+
+    # Create a safe filename from the event name
+    slug = "".join(c if c.isalnum() else "_" for c in event_name[:30]).lower()
+    filename = f"{_log_counter:03d}_{slug}.txt"
+    filepath = LOG_SESSION_DIR / filename
+
+    filepath.write_text(content)
+
+    # Log only the event "pointer" to the main log file
+    try:
+        rel_path = filepath.relative_to(pathlib.Path.cwd())
+    except ValueError:
+        rel_path = filepath
+
+    logger.info(f"EVENT: {event_name} -> See {rel_path}")
+
+    return filepath
 
 
 def rotate_log():
@@ -282,9 +333,15 @@ def rotate_log():
 
 def setup_logging(command_name: str):
     """Configures logging for a CLI command."""
-    global stream_handler, file_handler
+    global stream_handler, file_handler, LOG_SESSION_DIR
     ensure_dir(LOGS_DIR)
-    log_file = LOGS_DIR / f"{command_name}.log"
+
+    # Add datetime prefix to log filename
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = LOGS_DIR / f"{timestamp}_{command_name}.log"
+
+    # Set the directory for multi-row outputs
+    LOG_SESSION_DIR = LOGS_DIR / f"{timestamp}_{command_name}"
 
     # Root logger configuration
     logger = logging.getLogger("vibe_tools")
@@ -1600,6 +1657,9 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
             model=model,
             contents=prompt,
         )
+
+        log_large_output(f"llm_prompt_{model}", prompt)
+        log_large_output(f"llm_response_{model}", response.text)
 
         if debug:
             print("\n--- DEBUG: LLM RESPONSE ---")

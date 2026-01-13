@@ -4,7 +4,7 @@ import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
-from vibe_tools.utils import get_changed_files, logger, run_command
+from vibe_tools.utils import get_changed_files, log_large_output, logger, run_command
 
 
 class ProjectTester:
@@ -158,6 +158,7 @@ class ProjectTester:
             # Actually run_command uses subprocess.run which inherits env.
             # Let's use the same pattern as discover_backend_test_cmd but targeted.
             output, code = run_command(["python3", "-m", "pytest", "-v", test_id], check=False)
+            log_large_output(f"test_backend_{test_id}", output)
             return output, code == 0
         elif failure["type"] == "frontend":
             test_file = failure["file"]
@@ -167,6 +168,7 @@ class ProjectTester:
             # We can use the prefix option for npm/npx
             cmd = ["npx", "--prefix", str(self.frontend_root), "vitest", "run", test_file, "-t", test_name]
             output, code = run_command(cmd, check=False)
+            log_large_output(f"test_frontend_{test_name}", output)
             return output, code == 0
 
         return "Unknown test type", False
@@ -218,8 +220,10 @@ class ProjectTester:
                     for k in ["CI", "VITE_CI"]:
                         if k in original_env:
                             os.environ[k] = original_env[k]
-                        else:
-                            os.environ.pop(k, None)
+                    else:
+                        os.environ.pop(k, None)
+
+                log_large_output(f"test_target_{target}", output)
 
                 env_failure = False
                 # Improved detection of command failures and environment issues

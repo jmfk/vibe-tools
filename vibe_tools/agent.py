@@ -15,6 +15,7 @@ from .utils import (
     ensure_dir,
     is_test_mode,
     load_config,
+    log_large_output,
     run_command,
 )
 
@@ -188,6 +189,18 @@ def run_agent(
 
     agent_manager.register_agent(process.pid, command)
 
+    # Log the prompt if it's large
+    prompt_found = False
+    for i, arg in enumerate(command):
+        if arg == "-p" or arg == "--prompt":
+            if i + 1 < len(command):
+                log_large_output("agent_prompt", command[i + 1])
+                prompt_found = True
+                break
+    if not prompt_found and command:
+        # For cursor-agent, prompt is often the last argument
+        log_large_output("agent_prompt", command[-1])
+
     try:
         output = []
         accumulated_assistant_text = []
@@ -258,9 +271,11 @@ def run_agent(
                 if not is_cursor_agent
                 else (output[0] if output else "".join(accumulated_assistant_text))
             )
+            log_large_output("agent_output", final_output)
             return final_output, process.returncode, detected_chat_id
         else:
             stdout, stderr = process.communicate()
+            log_large_output("agent_output", stdout)
             return stdout, process.returncode, None
 
     except KeyboardInterrupt:
