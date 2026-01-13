@@ -1,10 +1,13 @@
 ---
 id: PRD-40
 title: Interactive Command and Test Runner
-status: normalized
-owner: Core Platform
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
 created_at: 2026-01-13
-updated_at: 2026-01-13
+updated_at: '2026-01-13T18:43:27.700254'
+owner: Core Platform
 implementation_id: v01-460
 implementation_yaml: v01-460_40_interactive_command_and_test_runner.yaml
 ---

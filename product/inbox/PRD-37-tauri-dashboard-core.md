@@ -1,10 +1,13 @@
 ---
 id: PRD-37
 title: Tauri Dashboard Core
-status: normalized
-owner: Core Platform
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
 created_at: 2026-01-13
-updated_at: 2026-01-13
+updated_at: '2026-01-13T18:43:27.701889'
+owner: Core Platform
 implementation_id: v01-480
 implementation_yaml: v01-480_37_tauri_dashboard_core.yaml
 ---

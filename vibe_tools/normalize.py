@@ -7,7 +7,7 @@ import click
 import yaml
 
 from vibe_tools.cost import CostLogger
-from vibe_tools.ralph import _switch_to_branch
+from vibe_tools.branches import _switch_to_branch
 from vibe_tools.utils import (
     PLANNING_BACKLOG_DIR,
     PLANNING_HISTORY_DIR,
@@ -143,6 +143,31 @@ Ensure all string values with special characters are properly quoted.
     return data, 0
 
 
+def normalize_to_data(md_content: str, stem: str, debug: bool = False) -> dict:
+    """Normalize PRD content to structured data without writing to disk."""
+    from vibe_tools.cli import load_config
+    config = load_config()
+    cost_logger = CostLogger(config)
+
+    try:
+        prompt_base = get_prompt("prd_normalization_prompt.txt")
+    except FileNotFoundError as e:
+        logger.error(f"Error: {e}")
+        return {}
+
+    prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
+    data, code = _run_normalization_llm(
+        prompt=prompt,
+        cost_logger=cost_logger,
+        stem=stem,
+        debug=debug,
+    )
+
+    if code == 0 and data is not None:
+        return data
+    return {}
+
+
 def normalize_system_file(
     input_file,
     auto_overwrite=False,
@@ -150,17 +175,6 @@ def normalize_system_file(
     force=False,
 ):
     """Normalize core project system files (architecture, infrastructure, etc.)."""
-    from vibe_tools.cli import load_config
-
-    config = load_config()
-    cost_logger = CostLogger(config)
-
-    try:
-        prompt_base = get_prompt("prd_normalization_prompt.txt")
-    except FileNotFoundError as e:
-        out_error(f"Error: {e}")
-        sys.exit(1)
-
     path = pathlib.Path(input_file)
     if not path.exists():
         return auto_overwrite
@@ -189,39 +203,16 @@ def normalize_system_file(
                     else:
                         out_info(f"⏩ Skipping {path.name} (already up-to-date)")
                         return auto_overwrite
-
-                if auto_overwrite is True or auto_overwrite == "yes":
-                    pass  # Continue to normalization
-                elif auto_overwrite == "no":
-                    return auto_overwrite
-                elif sys.stdin.isatty():
-                    choice = click.prompt(
-                        f"⚠️  {path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
-                        type=click.Choice(["y", "n", "a", "N"], case_sensitive=False),
-                        default="y",
-                    )
-                    if choice.lower() == "a":
-                        auto_overwrite = True
-                    elif choice.lower() == "n":
-                        return auto_overwrite
-                    elif choice.lower() == "N":
-                        return "no"
         except Exception as e:
             logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
     out_info(
         f"🔄 Normalizing system file: {path.name} -> {output_path.name} using Gemini..."
     )
-    prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
+    
+    data = normalize_to_data(md_content, clean_stem, debug=debug)
 
-    data, code = _run_normalization_llm(
-        prompt=prompt,
-        cost_logger=cost_logger,
-        stem=clean_stem,
-        debug=debug,
-    )
-
-    if code == 0 and data is not None:
+    if data:
         if "METADATA" not in data:
             data["METADATA"] = {}
         data["METADATA"]["SOURCE_HASH"] = md_hash
@@ -241,26 +232,14 @@ def normalize_prd(
     auto_overwrite=False,
     debug=False,
 ):
+    # This function is now legacy/unused in the new workflow but kept for CLI compatibility
+    # The new workflow uses normalize_to_data in-memory
     from vibe_tools.cli import load_config
-
     config = load_config()
-    cost_logger = CostLogger(config)
-
-    try:
-        prompt_base = get_prompt("prd_normalization_prompt.txt")
-    except FileNotFoundError as e:
-        out_error(f"Error: {e}")
-        sys.exit(1)
-
+    
     specs_dir = DEFAULT_SPECS_DIR
     if not specs_dir.exists():
-        alt_specs = pathlib.Path("spec")
-        if alt_specs.exists():
-            specs_dir = alt_specs
-        else:
-            specs_dir.mkdir(exist_ok=True)
-
-    PRD_DIR.mkdir(exist_ok=True)
+        specs_dir.mkdir(exist_ok=True)
 
     files_to_process = []
     if input_file:
@@ -270,232 +249,20 @@ def normalize_prd(
             sys.exit(1)
         files_to_process = [(path, path.read_text(), path.stat().st_mtime)]
     else:
-        # Collect from product root (excluding system files)
-        if specs_dir.exists():
-            for path in specs_dir.glob("*.md"):
-                if path.stem in SYSTEM_FILES:
-                    continue
-                try:
-                    files_to_process.append(
-                        (path, path.read_text(), path.stat().st_mtime)
-                    )
-                except Exception as e:
-                    out_warn(f"⚠️  Warning: Could not read {path}: {e}")
-
-        # Collect from backlog/inbox
-        for d in [PLANNING_BACKLOG_DIR, PLANNING_INBOX_DIR]:
-            if d.exists():
-                for path in d.rglob("*.md"):
-                    if any(p[0] == path for p in files_to_process):
-                        continue
-                    try:
-                        files_to_process.append(
-                            (path, path.read_text(), path.stat().st_mtime)
-                        )
-                    except Exception as e:
-                        out_warn(f"⚠️  Warning: Could not read {path}: {e}")
-
-        if not files_to_process:
-            out_error(f"❌ No PRDs found to normalize.")
-            return
-
-    if isinstance(auto_overwrite, str):
-        overwrite_mode = auto_overwrite
-    else:
-        overwrite_mode = "yes" if auto_overwrite else "ask"
-
-    if not input_file:
-        existing_prds = list(PRD_PROCESSING_DIR.rglob("v*-*_*.yaml"))
-        if existing_prds and overwrite_mode == "ask" and sys.stdin.isatty():
-            choice = click.prompt(
-                f"Found {len(existing_prds)} existing PRDs. Overwrite? [y]es, [n]o, [a]sk per file",
-                type=click.Choice(["y", "n", "a"], case_sensitive=False),
-                default="a",
-            )
-            if choice.lower() == "y":
-                overwrite_mode = "yes"
-            elif choice.lower() == "n":
-                overwrite_mode = "no"
-            else:
-                overwrite_mode = "ask"
-
-    for spec_path, pre_read_content, pre_read_mtime in files_to_process:
-        stem = spec_path.stem
-        clean_stem = stem.lower()
-        while True:
-            new_stem = re.sub(r"^prd[-_ ]?", "", clean_stem)
-            if new_stem == clean_stem:
-                break
-            clean_stem = new_stem
-        clean_stem = re.sub(r"[- ]", "_", clean_stem)
-
-        if config.get("ralph", {}).get("auto_merge", False):
-            from vibe_tools.utils import get_automerge_branch
-
-            branch_name = get_automerge_branch(config)
-        else:
-            branch_name = f"vibe/normalize/{clean_stem}"
-
-        _switch_to_branch(branch_name, "gemini", clean_stem, stream=False)
-
-        if not spec_path.exists():
-            spec_path.parent.mkdir(parents=True, exist_ok=True)
-            spec_path.write_text(pre_read_content)
-
-        # Target directory logic
-        if (
-            PLANNING_BACKLOG_DIR in spec_path.parents
-            or spec_path.parent == PLANNING_BACKLOG_DIR
-        ):
-            target_base = PRD_PROCESSING_DIR
-            rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
-        elif (
-            PLANNING_HISTORY_DIR in spec_path.parents
-            or spec_path.parent == PLANNING_HISTORY_DIR
-        ):
-            target_base = PRD_DONE_DIR
-            rel_dir = spec_path.parent.relative_to(PLANNING_HISTORY_DIR)
-        elif (
-            PLANNING_INBOX_DIR in spec_path.parents
-            or spec_path.parent == PLANNING_INBOX_DIR
-        ):
-            target_base = PRD_PROCESSING_DIR
-            rel_dir = spec_path.parent.relative_to(PLANNING_INBOX_DIR)
-        else:
-            target_base = PRD_PROCESSING_DIR
+        # Collect from product backlog
+        for path in PLANNING_BACKLOG_DIR.rglob("*.md"):
             try:
-                rel_dir = spec_path.parent.relative_to(PLANNING_BACKLOG_DIR)
-            except ValueError:
-                rel_dir = spec_path.parent.relative_to(specs_dir)
-
-        target_prd_dir = target_base / rel_dir
-        target_prd_dir.mkdir(parents=True, exist_ok=True)
-
-        # Output path determination
-        md_content = pre_read_content
-        implementation_id = None
-        if md_content.startswith("---"):
-            parts = md_content.split("---", 2)
-            if len(parts) >= 3:
-                fm = safe_yaml_load(parts[1]) or {}
-                implementation_id = fm.get("implementation", {}).get("id")
-
-        existing_yaml = None
-        search_dirs = [PRD_PROCESSING_DIR, PRD_DONE_DIR, PRD_FAILED_DIR]
-        for sd in search_dirs:
-            if not sd.exists():
-                continue
-            leg = sd / f"prd_{clean_stem}.yaml"
-            if leg.exists():
-                existing_yaml = leg
-                break
-            ver_files = list(sd.glob(f"v*-*_{clean_stem}.yaml"))
-            if ver_files:
-                existing_yaml = ver_files[0]
-                break
-
-        if existing_yaml:
-            output_path = existing_yaml
-            output_filename = existing_yaml.name
-        elif implementation_id:
-            output_filename = f"{implementation_id}_{clean_stem}.yaml"
-            output_path = target_prd_dir / output_filename
-        else:
-            output_filename = f"PENDING_{clean_stem}.yaml"
-            output_path = target_prd_dir / output_filename
-
-        # Skip logic
-        md_hash = get_file_hash(spec_path)
-        if output_path.exists():
-            try:
-                existing_data = safe_yaml_load(output_path.read_text())
-                if existing_data and isinstance(existing_data, dict):
-                    old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
-                if old_hash == md_hash:
-                    out_info(f"⏩ Skipping {spec_path.name} (already up-to-date)")
-                    switch_to_main()
-                    continue
-
-                if overwrite_mode == "yes":
-                    pass
-                elif overwrite_mode == "no":
-                    out_info(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
-                    switch_to_main()
-                    continue
-                elif sys.stdin.isatty():
-                    choice = click.prompt(
-                        f"⚠️  {spec_path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
-                        type=click.Choice(["y", "n", "a", "N"], case_sensitive=False),
-                        default="y",
-                    )
-                    if choice.lower() == "a":
-                        overwrite_mode = "yes"
-                    elif choice.lower() == "n":
-                        switch_to_main()
-                        continue
-                    elif choice.lower() == "N":
-                        overwrite_mode = "no"
-                        switch_to_main()
-                        continue
+                files_to_process.append((path, path.read_text(), path.stat().st_mtime))
             except Exception as e:
-                logger.warning(f"Could not read existing hash from {output_path}: {e}")
+                out_warn(f"⚠️  Warning: Could not read {path}: {e}")
 
-        out_info(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using Gemini...")
-        prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
-
-        data, code = _run_normalization_llm(
-            prompt=prompt,
-            cost_logger=cost_logger,
-            stem=stem,
-            debug=debug,
-        )
-
-        if code == 0 and data is not None:
-            if "METADATA" not in data:
-                data["METADATA"] = {}
-            data["METADATA"]["SOURCE_HASH"] = md_hash
-            data["METADATA"]["NORMALIZED_AT"] = datetime.datetime.now().isoformat()
-
-            data["TITLE"] = data.get("TITLE", clean_stem.replace("_", " ").title())
-            data["DEPENDS_ON"] = data.get("DEPENDS_ON", [])
-            data["BRANCH"] = data.get("BRANCH", f"feature/{clean_stem}")
-            data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
-
-            if output_filename.startswith("PENDING_"):
-                state = load_project_state()
-                version = state.get("current_version", "01")
-                dependencies = data.get("DEPENDS_ON", [])
-                max_dep_seq = 0
-                plans = state.get("plans", {})
-                for dep_id in dependencies:
-                    dep_info = plans.get(dep_id) or plans.get(f"prd_{dep_id}")
-                    if dep_info:
-                        dep_filename = pathlib.Path(dep_info["file"]).name
-                        parsed = parse_prd_filename(dep_filename)
-                        if parsed["sequence"]:
-                            max_dep_seq = max(max_dep_seq, parsed["sequence"])
-                next_seq = max(max_dep_seq + 10, state.get("next_sequence", 10))
-                state["next_sequence"] = next_seq + 10
-                save_project_state(state)
-                output_filename = f"v{version}-{next_seq:03d}_{clean_stem}.yaml"
-                output_path = target_prd_dir / output_filename
-                update_md_implementation_status(
-                    spec_path, version, next_seq, output_path
-                )
-
-            output_path.write_text(safe_yaml_dump(data))
-            out_success(f"✅ Saved: {output_path}")
-
-            if is_dirty():
-                run_command(["git", "add", "."], check=False)
-                run_command(
-                    ["git", "commit", "-m", f"vibe: normalize PRD '{spec_path.name}'"],
-                    check=False,
-                )
-
-            if not input_file:
-                state = load_project_state()
-                state["phases"]["normalize"]["status"] = "completed"
-                save_project_state(state)
-
-        switch_to_main()
+    for spec_path, content, mtime in files_to_process:
+        stem = spec_path.stem
+        out_info(f"🔄 Normalizing PRD: {spec_path.name}...")
+        data = normalize_to_data(content, stem, debug=debug)
+        if data:
+            # In the old way, we'd save to PRD_PROCESSING_DIR
+            # In the new way, we don't save normalized PRDs to disk
+            out_success(f"✅ Normalized: {spec_path.name}")
+        else:
+            out_error(f"❌ Failed to normalize {spec_path.name}")

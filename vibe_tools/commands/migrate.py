@@ -1,281 +1,203 @@
 import pathlib
 import shutil
 import json
-import yaml
+import re
 import click
+from typing import Dict, List, Set
 
 from vibe_tools.utils import (
+    PRODUCT_DIR,
+    PRODUCT_BACKLOG_DIR,
+    PRODUCT_IN_PROGRESS_DIR,
+    PRODUCT_HISTORY_DIR,
+    ISSUES_DIR,
     PRD_DIR,
     PRD_DONE_DIR,
     PRD_FAILED_DIR,
     PRD_PROCESSING_DIR,
-    PLANNING_BACKLOG_DIR,
-    PLANNING_HISTORY_DIR,
-    PLANNING_INBOX_DIR,
-    PLANNING_REJECTED_DIR,
-    PRODUCT_DIR,
-    ISSUES_DIR,
-    ISSUES_BACKLOG_DIR,
-    ISSUES_HISTORY_DIR,
-    ISSUES_META_DIR,
     VIBE_PROJECT_DIR,
     PROJECT_STATE_FILE,
     ensure_project_structure,
     load_project_state,
     save_project_state,
-    run_command,
-    get_main_branch,
     safe_yaml_load,
-    safe_yaml_dump,
-    parse_prd_filename,
-    update_md_implementation_status,
     collect_all_prd_info,
 )
+from vibe_tools.prds import PRD, load_prd
+
+
+def full_migration_needed(prd: PRD) -> bool:
+    """Checks if a PRD needs a full migration (missing fields)."""
+    return not (prd.id and prd.type and prd.status)
+
 
 def run_reconciliation(quiet=False):
-    """Core logic to migrate and reconcile project state with the filesystem and git."""
+    """Unified migration to PRD-NNN scheme in product/ directory."""
     if not quiet:
-        click.echo("🚀 Starting comprehensive migration and reconciliation...")
-
-    # First, migrate from root or legacy paths to the project directory
-    from vibe_tools.utils import migrate_to_project_dir
-    migrate_to_project_dir()
+        click.echo("🚀 Starting unified PRD migration...")
 
     ensure_project_structure()
 
-    # 1. Load legacy data before it gets hidden by the new load_project_state
-    old_state = {}
-    if PROJECT_STATE_FILE.exists():
-        try:
-            old_state = json.loads(PROJECT_STATE_FILE.read_text())
-        except Exception:
-            pass
-
-    old_index = {}
-    index_file = ISSUES_META_DIR / "index.json"
-    if index_file.exists():
-        try:
-            old_index = json.loads(index_file.read_text())
-        except Exception:
-            pass
-
-    # 2. Migrate Issue metadata into frontmatter and move files
-    if not quiet: click.echo("📋 Reconciling Issues...")
-    all_issue_files = list(ISSUES_DIR.rglob("ISSUE-*.md"))
-    from vibe_tools.issues import Issue
+    # 1. Collect all initiatives
+    all_prds: List[PRD] = []
     
-    for issue_file in all_issue_files:
-        try:
-            issue = Issue.from_markdown(issue_file.read_text())
-            issue_id = issue.id
-            
-            # Enrich with index metadata if missing
-            if issue_id in old_index:
-                meta = old_index[issue_id]
-                if not issue.github and meta.get("github_number"):
-                    from vibe_tools.issues import GitHubInfo
-                    issue.github = GitHubInfo(repo="", number=meta["github_number"], url="")
-                if meta.get("updated_at") and not issue.updated_at:
-                    issue.updated_at = meta["updated_at"]
-
-            # Save to correct folder based on status
-            from vibe_tools.issues import save_issue
-            save_issue(issue)
-            
-            # Remove original if it was in a different place
-            target_dir = ISSUES_HISTORY_DIR if issue.status == "done" else ISSUES_BACKLOG_DIR
-            if issue_file.parent != target_dir:
-                if not quiet: click.echo(f"  📦 Moving issue {issue_id} to {target_dir.name}")
-                if issue_file.exists():
-                    issue_file.unlink()
-        except Exception as e:
-            if not quiet: click.echo(f"  ⚠️  Failed to process issue {issue_file.name}: {e}")
-
-    # 3. Migrate PRD metadata into YAMLs and move files
-    if not quiet: click.echo("📁 Reconciling PRDs...")
-    
-    # Track which PRD IDs we've processed to avoid duplicates
-    processed_prds = set()
-    
-    # Folders to scan for PRDs
-    prd_scan_dirs = [
-        PRD_DIR,
-        PRD_PROCESSING_DIR,
-        PRD_DONE_DIR,
-        PRD_FAILED_DIR,
-        PRD_DIR / "backlog", # Legacy
-        PRD_DIR / "history", # Legacy
-        PRD_DIR / "inbox",   # Legacy
-        PRD_DIR / "rejected",# Legacy
-    ]
-
-    plans = old_state.get("plans", {})
-    completed_prds = set(old_state.get("completed_prds", []))
-    started_prds = set(old_state.get("started_prds", []))
-
-    for scan_dir in prd_scan_dirs:
-        if not scan_dir.exists(): continue
-        
-        for yaml_file in scan_dir.glob("prd_*.yaml"):
-            prd_id = yaml_file.stem
-            if prd_id in processed_prds:
-                yaml_file.unlink() # Cleanup duplicates
-                continue
-            
+    # 1a. Migrate Legacy Issues
+    if ISSUES_DIR.exists():
+        if not quiet: click.echo("📋 Migrating legacy issues...")
+        for issue_file in ISSUES_DIR.rglob("ISSUE-*.md"):
             try:
-                content = yaml_file.read_text()
-                data = safe_yaml_load(content) or {}
-                
-                # Determine status from old state or current folder
-                status = "pending"
-                if prd_id in completed_prds or "done" in str(yaml_file):
-                    status = "completed"
-                elif prd_id in started_prds or "processing" in str(yaml_file):
-                    status = "in_progress"
-                elif "failed" in str(yaml_file):
-                    status = "failed"
-
-                # Enrich with old plan metadata
-                if prd_id in plans:
-                    plan = plans[prd_id]
-                    data["TITLE"] = data.get("TITLE", plan.get("title", prd_id.replace("_", " ").title()))
-                    data["DEPENDS_ON"] = data.get("DEPENDS_ON", plan.get("depends_on", []))
-                    data["BRANCH"] = data.get("BRANCH", plan.get("branch", f"feature/{prd_id}"))
-                    data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", plan.get("parent_branch", get_main_branch()))
-                else:
-                    data["TITLE"] = data.get("TITLE", prd_id.replace("prd_", "").replace("_", " ").title())
-                    data["BRANCH"] = data.get("BRANCH", f"feature/{prd_id}")
-                    data["PARENT_BRANCH"] = data.get("PARENT_BRANCH", get_main_branch())
-
-                # Write enriched YAML
-                yaml_file.write_text(safe_yaml_dump(data))
-
-                # Move to correct destination
-                target_dir = PRD_PROCESSING_DIR
-                if status == "completed": target_dir = PRD_DONE_DIR
-                elif status == "failed": target_dir = PRD_FAILED_DIR
-                
-                target_path = target_dir / yaml_file.name
-                if yaml_file != target_path:
-                    if not quiet: click.echo(f"  📦 Moving PRD {prd_id} to {target_dir.name}")
-                    if target_path.exists(): target_path.unlink()
-                    shutil.move(str(yaml_file), str(target_path))
-                
-                processed_prds.add(prd_id)
+                # We use the old Issue.from_markdown logic indirectly via PRD.from_markdown
+                # which I've updated to handle legacy frontmatter
+                prd = PRD.from_markdown(issue_file.read_text(), path=issue_file)
+                prd.type = "ISSUE"
+                if "history" in str(issue_file):
+                    prd.status = "done"
+                all_prds.append(prd)
             except Exception as e:
-                if not quiet: click.echo(f"  ⚠️  Failed to process PRD {yaml_file.name}: {e}")
+                if not quiet: click.echo(f"  ⚠️  Failed to load issue {issue_file.name}: {e}")
 
-    # 4. Clean up state.json
-    if not quiet: click.echo("🧹 Cleaning up state files...")
-    state = load_project_state()
-    save_project_state(state) # This will strip redundant fields as per my new save_project_state
-
-    # 5. Versioned Scheduling Migration (New)
-    if not quiet: click.echo("📅 Migrating to versioned scheduling (vXX-XXX)...")
-    
-    version = state.get("current_version", "01")
-    
-    # Collect all PRDs (processing, done, failed) that are still in legacy prd_*.yaml format
-    all_legacy_prds = []
-    for d in [PRD_PROCESSING_DIR, PRD_DONE_DIR, PRD_FAILED_DIR]:
-        if d.exists():
-            all_legacy_prds.extend(list(d.glob("prd_*.yaml")))
-    
-    if all_legacy_prds:
-        # Build dependency graph
-        graph = {}
-        for prd_path in all_legacy_prds:
-            try:
-                data = safe_yaml_load(prd_path.read_text()) or {}
-                prd_id = prd_path.stem
-                deps = data.get("DEPENDS_ON", [])
-                # Clean up deps to match prd_id format for the graph
-                clean_deps = []
-                for dep in deps:
-                    if not dep.startswith("prd_"):
-                        clean_deps.append(f"prd_{dep}")
-                    else:
-                        clean_deps.append(dep)
-                graph[prd_id] = {"path": prd_path, "deps": clean_deps, "data": data}
-            except Exception:
+    # 1b. Migrate Legacy PRDs (Markdown)
+    legacy_md_dirs = [
+        PRODUCT_DIR / "backlog",
+        PRODUCT_DIR / "inbox",
+        PRODUCT_DIR / "history",
+        PRODUCT_DIR / "rejected"
+    ]
+    if not quiet: click.echo("📁 Migrating legacy markdown PRDs...")
+    for md_dir in legacy_md_dirs:
+        if not md_dir.exists(): continue
+        for md_file in md_dir.glob("*.md"):
+            # Avoid system files
+            if md_file.stem in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "setup", "project_overview"]:
                 continue
-        
-        # Simple topological sort
-        sorted_ids = []
-        visited = set()
-        temp_visited = set()
-
-        def visit(n):
-            if n in temp_visited:
-                return # Cycle detected
-            if n not in visited:
-                temp_visited.add(n)
-                if n in graph:
-                    for m in graph[n]["deps"]:
-                        visit(m)
-                temp_visited.remove(n)
-                visited.add(n)
-                sorted_ids.append(n)
-
-        for pid in sorted(graph.keys()):
-            visit(pid)
-        
-        # Rename files based on sorted order
-        seq = 10
-        all_info = collect_all_prd_info()
-        for pid in sorted_ids:
-            if pid not in graph: continue
             
-            info = graph[pid]
-            prd_path = info["path"]
-            clean_name = pid.replace("prd_", "")
-            
-            new_filename = f"v{version}-{seq:03d}_{clean_name}.yaml"
-            new_path = prd_path.parent / new_filename
-            
-            if not quiet: click.echo(f"  🏷️  Renaming {pid} -> {new_filename}")
-            shutil.move(str(prd_path), str(new_path))
-            
-            # Find MD path for this PRD
-            md_path = None
-            for item in all_info:
-                if item["name"] == clean_name:
-                    md_path = item["md_path"]
-                    break
-            
-            if md_path:
-                update_md_implementation_status(
-                    pathlib.Path(md_path),
-                    version,
-                    seq,
-                    new_path
-                )
-            
-            seq += 10
-        
-        # Update state with next sequence
-        state["next_sequence"] = seq
-        save_project_state(state)
-
-    # 6. Legacy folder cleanup
-    legacy_prd_dirs = ["backlog", "history", "inbox", "rejected"]
-    for d in legacy_prd_dirs:
-        path = PRD_DIR / d
-        if path.exists() and path.is_dir():
             try:
-                # Only remove if empty or contains only non-PRD files we don't care about
-                if not any(path.glob("prd_*.yaml")):
-                    shutil.rmtree(path)
-                    if not quiet: click.echo(f"  🧹 Removed legacy directory implementation/prds/{d}")
-            except Exception:
-                pass
+                prd = load_prd(md_file)
+                
+                # Enforce status based on directory even if skipping full migration
+                if "history" in str(md_dir):
+                    prd.status = "done"
+                elif "backlog" in str(md_dir) or "inbox" in str(md_dir):
+                    prd.status = "backlog"
 
-    # 7. Finalize environment
-    if not quiet: click.echo("🔄 Syncing environment...")
-    from vibe_tools.utils import sync_env_file
-    sync_env_file()
+                # If it already has a proper PRD-NNN ID and frontmatter, only re-process if missing core fields
+                if prd.id and prd.id.startswith("PRD-") and prd.type and prd.status:
+                    if not full_migration_needed(prd):
+                        # Still save to update status if needed
+                        prd.save()
+                        continue
+            except Exception as e:
+                if not quiet: click.echo(f"  ⚠️  Failed to load PRD {md_file.name}: {e}")
+
+    # 2. Build Dependency Graph and Sort
+    # We want to assign IDs in a stable way, ideally topological or by date
+    # For now, we'll sort by creation date or existing sequence if possible
+    
+    def sort_key(p: PRD):
+        # Try to extract sequence from old PRD format v01-010
+        match = re.search(r"v\d+-(\d+)", p.id)
+        if match:
+            return f"0-seq-{int(match.group(1)):06d}"
+        # Issues usually have dates
+        match = re.search(r"ISSUE-(\d{4}-\d{2}-\d{2})-(\d+)", p.id)
+        if match:
+            return f"1-date-{match.group(1)}-{int(match.group(2)):06d}"
+        return f"2-time-{p.created_at}"
+
+    all_prds.sort(key=sort_key)
+
+    # 3. Assign New IDs and Map Dependencies
+    id_map = {} # old_id -> new_id
+    new_prds: List[PRD] = []
+    
+    for i, prd in enumerate(all_prds, 1):
+        old_id = prd.id
+        new_id = f"PRD-{i:03d}"
+        id_map[old_id] = new_id
+        prd.id = new_id
+        new_prds.append(prd)
+
+    # Update dependencies to use new IDs
+    for prd in new_prds:
+        new_deps = []
+        for dep in prd.depends_on:
+            if dep in id_map:
+                new_deps.append(id_map[dep])
+            elif f"prd_{dep}" in id_map:
+                new_deps.append(id_map[f"prd_{dep}"])
+            else:
+                # Keep as is if not found
+                new_deps.append(dep)
+        prd.depends_on = new_deps
+
+    # 4. Save to New Structure
+    if not quiet: click.echo("💾 Saving migrated PRDs to product/...")
+    for prd in new_prds:
+        target_dir = PRODUCT_HISTORY_DIR if prd.status == "done" else PRODUCT_BACKLOG_DIR
+        
+        # Enforce status based on directory during migration
+        if target_dir == PRODUCT_HISTORY_DIR:
+            prd.status = "done"
+        else:
+            prd.status = "backlog"
+
+        filename = f"{prd.id}-{re.sub(r'[^a-z0-9]+', '-', prd.title.lower())}.md"
+        # Truncate filename if too long
+        if len(filename) > 64:
+            filename = filename[:60] + ".md"
+        
+        target_path = target_dir / filename
+        prd.save(target_path)
+        
+        # If it was originally elsewhere, we'll cleanup later
+        if not quiet: click.echo(f"  ✅ {prd.id} -> {target_path.relative_to(PRODUCT_DIR)}")
+
+    # 5. Cleanup Old Files
+    if not quiet: click.echo("🧹 Cleaning up old files...")
+    
+    # Remove old issues dir
+    if ISSUES_DIR.exists():
+        shutil.rmtree(ISSUES_DIR)
+    
+    # Remove old PRD directories in implementation/
+    if PRD_DIR.exists():
+        # Keep PRD_DIR but clear contents
+        for item in PRD_DIR.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+
+    # Clear old markdown files that were migrated
+    for md_dir in legacy_md_dirs:
+        if not md_dir.exists(): continue
+        for md_file in md_dir.glob("*.md"):
+            if not md_file.name.startswith("PRD-") and md_file.stem not in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "setup", "project_overview"]:
+                md_file.unlink()
+
+    # 6. Update state.json
+    state = load_project_state()
+    # Plans are now based on PRD-NNN IDs
+    new_plans = {}
+    completed_prds = []
+    
+    for prd in new_prds:
+        new_plans[prd.id] = {
+            "title": prd.title,
+            "status": prd.status,
+            "type": prd.type,
+            "depends_on": prd.depends_on
+        }
+        if prd.status == "done":
+            completed_prds.append(prd.id)
+            
+    state["plans"] = new_plans
+    state["completed_prds"] = completed_prds
+    state["next_sequence"] = len(new_prds) + 1
+    save_project_state(state)
 
     if not quiet: click.echo("✅ Migration and reconciliation complete.")
+
 
 def register_migrate(cli):
     @click.command()

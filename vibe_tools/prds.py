@@ -1,158 +1,197 @@
 import pathlib
 import re
-from typing import Any, Dict, Optional
+import datetime
+from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional
 
 import yaml
 
 from vibe_tools.utils import safe_yaml_load, safe_yaml_dump
 
 
-class PRDMetadata:
-    def __init__(self, path: pathlib.Path):
-        self.path = path
-        self.is_yaml = path.suffix.lower() in ('.yaml', '.yml')
-        self.data: Dict[str, Any] = {}
-        self.content: str = ""
-        self.sync_info: Dict[str, Any] = {}
-        self._load()
+@dataclass
+class PRD:
+    id: str
+    title: str
+    type: str  # FEATURE or ISSUE
+    status: str = "backlog"
+    group: Optional[str] = None
+    depends_on: List[str] = field(default_factory=list)
+    created_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    content: str = ""
+    history: str = ""
+    path: Optional[pathlib.Path] = None
 
-    def _load(self):
-        if not self.path.exists():
-            return
+    @classmethod
+    def from_markdown(cls, text: str, path: Optional[pathlib.Path] = None) -> "PRD":
+        frontmatter = {}
+        content = text
+        history = ""
 
-        raw_content = self.path.read_text()
-        if self.is_yaml:
-            try:
-                self.data = safe_yaml_load(raw_content) or {}
-                self.sync_info = self.data.get('_vibe_sync', {})
-            except yaml.YAMLError:
-                self.data = {}
+        if text.startswith("---"):
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                frontmatter = safe_yaml_load(parts[1]) or {}
+                content = parts[2].strip()
+
+        # Extract history section if exists
+        if "## Implementation History" in content:
+            parts = content.split("## Implementation History", 1)
+            content = parts[0].strip()
+            history = parts[1].strip()
+
+        # If it's an old Issue format, map the fields
+        if "severity" in frontmatter or "service" in frontmatter:
+            # This is likely a legacy Issue
+            prd_id = frontmatter.get("id", "")
+            title = frontmatter.get("title", "")
+            prd_type = "ISSUE"
         else:
-            # Markdown with potential frontmatter
-            if raw_content.startswith('---'):
-                parts = raw_content.split('---', 2)
-                if len(parts) >= 3:
-                    try:
-                        self.sync_info = safe_yaml_load(parts[1]) or {}
-                        self.content = parts[2].strip()
-                    except yaml.YAMLError:
-                        self.content = raw_content.strip()
-                else:
-                    self.content = raw_content.strip()
-            else:
-                self.content = raw_content.strip()
+            prd_id = frontmatter.get("id", frontmatter.get("implementation_id", ""))
+            title = frontmatter.get("title", "")
+            prd_type = frontmatter.get("type", "FEATURE")
 
-    def save(self):
-        if self.is_yaml:
-            if self.sync_info:
-                self.data['_vibe_sync'] = self.sync_info
-            elif '_vibe_sync' in self.data:
-                del self.data['_vibe_sync']
-
-            content = safe_yaml_dump(self.data)
-            self.path.write_text(content)
-        else:
-            if self.sync_info:
-                frontmatter = safe_yaml_dump(self.sync_info)
-                new_content = f"---\n{frontmatter}---\n\n{self.content}"
-            else:
-                new_content = self.content
-
-            self.path.write_text(new_content)
-
-    @property
-    def github_discussion_url(self) -> Optional[str]:
-        return self.sync_info.get('discussion_url')
-
-    @github_discussion_url.setter
-    def github_discussion_url(self, url: str):
-        self.sync_info['discussion_url'] = url
-
-    @property
-    def github_issue_number(self) -> Optional[int]:
-        return self.sync_info.get('issue_number')
-
-    @github_issue_number.setter
-    def github_issue_number(self, number: int):
-        self.sync_info['issue_number'] = number
-
-    @property
-    def last_synced_at(self) -> Optional[str]:
-        return self.sync_info.get('last_synced_at')
-
-    @last_synced_at.setter
-    def last_synced_at(self, value: str):
-        self.sync_info['last_synced_at'] = value
-
-    @property
-    def sync_hash(self) -> Optional[str]:
-        return self.sync_info.get('sync_hash')
-
-    @sync_hash.setter
-    def sync_hash(self, value: str):
-        self.sync_info['sync_hash'] = value
-
-    @property
-    def title(self) -> str:
-        # Try to find a title in the PRD
-        if self.is_yaml:
-            # Maybe it's in a key like 'title' or 'NAME'
-            for key in ['title', 'name', 'TITLE', 'NAME']:
-                if key in self.data:
-                    return str(self.data[key])
-            # Fallback to stem
-            return self.path.stem.replace('prd_', '').replace('_', ' ').title()
-        else:
-            # Try to find first H1
-            match = re.search(r'^#\s+(.+)$', self.content, re.MULTILINE)
+        if not prd_id and path:
+            # Try to extract from filename
+            match = re.search(r"(PRD-\d+)", path.name)
             if match:
-                return match.group(1).strip()
-            return self.path.stem.title()
+                prd_id = match.group(1)
+
+        if not title and content:
+            # Try to find first H1
+            match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+            if match:
+                title = match.group(1).strip()
+
+        return cls(
+            id=prd_id,
+            title=title,
+            type=prd_type,
+            status=frontmatter.get("status", "backlog"),
+            group=frontmatter.get("group"),
+            depends_on=frontmatter.get("depends_on", []),
+            created_at=frontmatter.get("created_at", datetime.datetime.now().isoformat()),
+            updated_at=frontmatter.get("updated_at", datetime.datetime.now().isoformat()),
+            metadata=frontmatter,
+            content=content,
+            history=history,
+            path=path
+        )
 
     def to_markdown(self) -> str:
-        if not self.is_yaml:
-            return self.content
+        data = {
+            "id": self.id,
+            "title": self.title,
+            "type": self.type,
+            "status": self.status,
+            "group": self.group,
+            "depends_on": self.depends_on,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+        # Merge with extra metadata but prioritize known fields
+        for k, v in self.metadata.items():
+            if k not in data:
+                data[k] = v
 
-        # Convert YAML to a readable Markdown format
-        lines = []
-        lines.append(f"# {self.title}")
-        lines.append("")
+        frontmatter = safe_yaml_dump(data)
+        text = f"---\n{frontmatter}---\n\n"
+        if not self.content.startswith("# "):
+            text += f"# {self.title}\n\n"
+        text += self.content.strip()
+        
+        if self.history:
+            text += f"\n\n## Implementation History\n\n{self.history.strip()}"
+        
+        return text
 
-        for key, value in self.data.items():
-            if key == '_vibe_sync':
-                continue
+    def save(self, path: Optional[pathlib.Path] = None):
+        target_path = path or self.path
+        if not target_path:
+            raise ValueError("No path provided to save PRD")
+        
+        self.updated_at = datetime.datetime.now().isoformat()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(self.to_markdown())
 
-            lines.append(f"## {key.replace('_', ' ').title()}")
-            if isinstance(value, list):
-                for item in value:
-                    lines.append(f"- {item}")
-            elif isinstance(value, dict):
-                for k, v in value.items():
-                    lines.append(f"### {k.replace('_', ' ').title()}")
-                    if isinstance(v, list):
-                        for item in v:
-                            lines.append(f"  - {item}")
-                    else:
-                        lines.append(f"  {v}")
-            else:
-                lines.append(str(value))
-            lines.append("")
+    def append_history(self, note: str):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"### {timestamp}\n{note}\n"
+        if self.history:
+            self.history = self.history.strip() + "\n\n" + entry
+        else:
+            self.history = entry
 
-        return "\n".join(lines).strip()
+    def to_yaml_data(self) -> Dict[str, Any]:
+        """Convert PRD to structured data for normalization/implementation."""
+        # This will be used by the in-memory normalization step
+        return {
+            "TITLE": self.title,
+            "ID": self.id,
+            "TYPE": self.type,
+            "DEPENDS_ON": self.depends_on,
+            "METADATA": self.metadata,
+            "CONTENT": self.content
+        }
 
-    def get_hash(self) -> str:
+
+def load_prd(path: pathlib.Path) -> PRD:
+    if not path.exists():
+        raise FileNotFoundError(f"PRD file not found: {path}")
+    return PRD.from_markdown(path.read_text(), path=path)
+
+
+def generate_prd_id(base_dir: pathlib.Path) -> str:
+    """Generates a new PRD-NNN ID."""
+    max_id = 0
+    # Scan all directories under product/
+    for f in base_dir.rglob("PRD-*.md"):
+        match = re.search(r"PRD-(\d+)", f.name)
+        if match:
+            max_id = max(max_id, int(match.group(1)))
+    
+    return f"PRD-{max_id + 1:03d}"
+
+
+# --- Compatibility Shims for Legacy Commands ---
+
+class PRDMetadata:
+    """Legacy PRDMetadata shim."""
+    def __init__(self, path: pathlib.Path):
+        self.path = path
+        self.prd = load_prd(path) if path.exists() else None
+        self.sync_info = self.prd.metadata if self.prd else {}
+        self.content = self.prd.content if self.prd else ""
+
+    @property
+    def title(self): return self.prd.title if self.prd else self.path.stem
+    @property
+    def github_issue_number(self): return self.sync_info.get('issue_number')
+    @github_issue_number.setter
+    def github_issue_number(self, val): self.sync_info['issue_number'] = val
+    @property
+    def github_discussion_url(self): return self.sync_info.get('discussion_url')
+    @github_discussion_url.setter
+    def github_discussion_url(self, val): self.sync_info['discussion_url'] = val
+    @property
+    def last_synced_at(self): return self.sync_info.get('last_synced_at')
+    @last_synced_at.setter
+    def last_synced_at(self, val): self.sync_info['last_synced_at'] = val
+    @property
+    def sync_hash(self): return self.sync_info.get('sync_hash')
+    @sync_hash.setter
+    def sync_hash(self, val): self.sync_info['sync_hash'] = val
+
+    def save(self):
+        if self.prd:
+            self.prd.metadata = self.sync_info
+            self.prd.save()
+    def to_markdown(self): return self.prd.to_markdown() if self.prd else ""
+    def get_hash(self):
         import hashlib
-        import json
-        # Calculate hash of content only (excluding sync info)
-        content_to_hash = self.content
-        if self.is_yaml:
-            # For YAML, hash the data without the sync info key
-            data_copy = self.data.copy()
-            if '_vibe_sync' in data_copy:
-                del data_copy['_vibe_sync']
-            content_to_hash = json.dumps(data_copy, sort_keys=True)
-
-        return hashlib.sha256(content_to_hash.encode()).hexdigest()
+        return hashlib.sha256(self.content.encode()).hexdigest()
 
 def get_prd_metadata(path: pathlib.Path) -> PRDMetadata:
     return PRDMetadata(path)

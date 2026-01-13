@@ -1,10 +1,13 @@
 ---
 id: PRD-38
 title: Vibe Document and Issue Explorer
-status: normalized
-owner: Core Platform
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
 created_at: 2026-01-13
-updated_at: 2026-01-13
+updated_at: '2026-01-13T18:43:27.701133'
+owner: Core Platform
 implementation_id: v01-470
 implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
 ---

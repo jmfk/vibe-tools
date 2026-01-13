@@ -40,9 +40,12 @@ ISSUES_FAILS_DIR = ISSUES_DIR / "fails"
 ISSUES_META_DIR = ISSUES_DIR / "meta"
 
 # Product Planning (Markdown)
+PRODUCT_BACKLOG_DIR = PRODUCT_DIR / "backlog"
+PRODUCT_IN_PROGRESS_DIR = PRODUCT_DIR / "in_progress"
+PRODUCT_HISTORY_DIR = PRODUCT_DIR / "history"
 PLANNING_INBOX_DIR = PLANNING_DIR / "inbox"
-PLANNING_BACKLOG_DIR = PLANNING_DIR / "backlog"
-PLANNING_HISTORY_DIR = PLANNING_DIR / "history"
+PLANNING_BACKLOG_DIR = PRODUCT_BACKLOG_DIR
+PLANNING_HISTORY_DIR = PRODUCT_HISTORY_DIR
 PLANNING_REJECTED_DIR = PLANNING_DIR / "rejected"
 
 # Implementation PRDs (YAML)
@@ -521,7 +524,12 @@ def ensure_project_structure():
     ensure_dir(COSTS_DIR)
     ensure_dir(VIBE_DATA_DIR)
     ensure_dir(INSTRUCTIONS_DIR)
-    ensure_dir(PLANNING_DIR)
+    ensure_dir(PRODUCT_DIR)
+    ensure_dir(PRODUCT_BACKLOG_DIR)
+    ensure_dir(PRODUCT_IN_PROGRESS_DIR)
+    ensure_dir(PRODUCT_HISTORY_DIR)
+    ensure_dir(PLANNING_INBOX_DIR)
+    ensure_dir(PLANNING_REJECTED_DIR)
 
 
 def migrate_to_project_dir():

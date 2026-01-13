@@ -66,9 +66,10 @@ def register_infra(cli):
 
         # Run infrastructure reconciliation
         loop = RalphLoop(
+            name="Infrastructure",
+            desired_file=INFRA,
+            current_file=INFRA_CURRENT,
             agent=ctx.obj.get("agent", "cursor-agent"),
-            desired_state_file=INFRA,
-            current_state_file=INFRA_CURRENT,
             stream=ctx.obj.get("stream", False),
         )
         loop.run()

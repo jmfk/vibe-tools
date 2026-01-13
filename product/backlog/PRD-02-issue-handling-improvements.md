@@ -1,4 +1,12 @@
 ---
+id: PRD-02
+title: 'PRD-02: Issue Handling Improvements'
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-13T18:37:25.059365'
+updated_at: '2026-01-13T18:43:27.695534'
 discussion_id: D_kwDOQzI0Lc4AjlrL
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
 last_synced_at: '2026-01-10T17:22:07.589596'

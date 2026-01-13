@@ -7,6 +7,10 @@ from vibe_tools.utils import (
     is_merged,
     load_project_state,
     run_command,
+    get_prompt,
+    get_agent_command,
+    run_agent,
+    logger
 )
 
 
@@ -221,4 +225,71 @@ def investigate_git_lineage():
 
     save_project_state(state)
     click.echo("✅ Reconstructed branch lineage from history.")
+
+
+def _switch_to_branch(
+    branch_name, agent, project_name, parent_branch=None, stream=False
+):
+    """Robustly switches to a feature branch, using AI rescue if needed."""
+    import sys
+    from vibe_tools import utils
+    if parent_branch is None:
+        parent_branch = get_main_branch()
+
+    # Check if we are already on this branch
+    stdout, _ = run_command(["git", "branch", "--show-current"], check=False)
+    if stdout.strip() == branch_name:
+        return
+
+    # Check if branch exists in git
+    _, code = run_command(["git", "rev-parse", "--verify", branch_name], check=False)
+    branch_exists = code == 0
+
+    if branch_exists:
+        logger.info(f"Branch '{branch_name}' already exists. Switching...")
+        output, code = run_command(["git", "checkout", branch_name], check=False)
+    else:
+        logger.info(
+            f"Creating and switching to branch: {branch_name} from {parent_branch}"
+        )
+        # Ensure parent branch exists locally or pull it
+        run_command(["git", "checkout", parent_branch], check=False)
+        output, code = run_command(["git", "checkout", "-b", branch_name], check=False)
+
+    if code != 0:
+        logger.warning(
+            f"Git operation failed for branch '{branch_name}': {output}. Calling agent to sort it out..."
+        )
+        git_status, _ = run_command(["git", "status"], check=False)
+        try:
+            prompt_template = get_prompt("git_fix_prompt.txt")
+        except FileNotFoundError as e:
+            logger.error(f"Error: {e}")
+            sys.exit(1)
+
+        prompt = prompt_template.format(
+            branch_name=branch_name,
+            project_name=project_name,
+            error=output,
+            git_status=git_status,
+        )
+        cmd = get_agent_command(agent, prompt)
+
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
+
+        output, _ = run_agent(cmd, stream=stream)
+
+        if utils.verbose_logger:
+            utils.verbose_logger.log_event("reply", output, f"{project_name}_git_fix")
+
+        # Final attempt after agent fix
+        final_output, final_code = run_command(
+            ["git", "checkout", branch_name], check=False
+        )
+        if final_code != 0:
+            logger.error(
+                f"Agent was unable to resolve git conflict. Final error: {final_output}"
+            )
+            sys.exit(1)
 
