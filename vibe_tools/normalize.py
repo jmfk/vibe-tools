@@ -32,6 +32,12 @@ from vibe_tools.utils import (
     safe_yaml_dump,
     parse_prd_filename,
     update_md_implementation_status,
+    out_debug,
+    out_error,
+    out_info,
+    out_print,
+    out_success,
+    out_warn,
 )
 
 DEFAULT_SPECS_DIR = pathlib.Path("product")
@@ -52,9 +58,9 @@ def _run_normalization_llm(
     code = 0 if output else -1
 
     if debug:
-        print("\n--- DEBUG: LLM OUTPUT ---")
-        print(output)
-        print("--- END DEBUG ---\n")
+        out_debug("\n--- DEBUG: LLM OUTPUT ---")
+        out_debug(output)
+        out_debug("--- END DEBUG ---\n")
 
     if output:
         # Use 'gemini' as the internal agent name for logging direct LLM calls
@@ -98,7 +104,7 @@ def _run_normalization_llm(
             raise yaml.YAMLError("Output is not a valid YAML dictionary")
     except yaml.YAMLError as e:
         logger.warning(f"⚠️ Invalid YAML generated: {e}")
-        print(f"🔄 Attempting to fix YAML using Gemini...")
+        out_info(f"🔄 Attempting to fix YAML using Gemini...")
 
         fix_prompt = f"""The following YAML is invalid:
 ---
@@ -129,7 +135,7 @@ Ensure all string values with special characters are properly quoted.
             data = safe_yaml_load(fixed_output)
             if data is None:
                 data = {}
-            print(f"✅ Successfully fixed YAML")
+            out_success(f"✅ Successfully fixed YAML")
         except Exception as fix_err:
             logger.error(f"❌ Failed to fix YAML: {fix_err}")
             data = safe_yaml_load(clean_output) or {}
@@ -152,7 +158,7 @@ def normalize_system_file(
     try:
         prompt_base = get_prompt("prd_normalization_prompt.txt")
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        out_error(f"Error: {e}")
         sys.exit(1)
 
     path = pathlib.Path(input_file)
@@ -181,7 +187,7 @@ def normalize_system_file(
                         ):
                             return auto_overwrite
                     else:
-                        print(f"⏩ Skipping {path.name} (already up-to-date)")
+                        out_info(f"⏩ Skipping {path.name} (already up-to-date)")
                         return auto_overwrite
 
                 if auto_overwrite is True or auto_overwrite == "yes":
@@ -203,7 +209,7 @@ def normalize_system_file(
         except Exception as e:
             logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
-    print(
+    out_info(
         f"🔄 Normalizing system file: {path.name} -> {output_path.name} using Gemini..."
     )
     prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
@@ -223,9 +229,9 @@ def normalize_system_file(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(safe_yaml_dump(data))
-        print(f"✅ Saved: {output_path}")
+        out_success(f"✅ Saved: {output_path}")
     else:
-        print(f"❌ Failed to normalize {path.name}")
+        out_error(f"❌ Failed to normalize {path.name}")
 
     return auto_overwrite
 
@@ -243,7 +249,7 @@ def normalize_prd(
     try:
         prompt_base = get_prompt("prd_normalization_prompt.txt")
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        out_error(f"Error: {e}")
         sys.exit(1)
 
     specs_dir = DEFAULT_SPECS_DIR
@@ -260,7 +266,7 @@ def normalize_prd(
     if input_file:
         path = pathlib.Path(input_file)
         if not path.exists():
-            print(f"Error: File {input_file} not found.")
+            out_error(f"Error: File {input_file} not found.")
             sys.exit(1)
         files_to_process = [(path, path.read_text(), path.stat().st_mtime)]
     else:
@@ -274,7 +280,7 @@ def normalize_prd(
                         (path, path.read_text(), path.stat().st_mtime)
                     )
                 except Exception as e:
-                    print(f"⚠️  Warning: Could not read {path}: {e}")
+                    out_warn(f"⚠️  Warning: Could not read {path}: {e}")
 
         # Collect from backlog/inbox
         for d in [PLANNING_BACKLOG_DIR, PLANNING_INBOX_DIR]:
@@ -287,10 +293,10 @@ def normalize_prd(
                             (path, path.read_text(), path.stat().st_mtime)
                         )
                     except Exception as e:
-                        print(f"⚠️  Warning: Could not read {path}: {e}")
+                        out_warn(f"⚠️  Warning: Could not read {path}: {e}")
 
         if not files_to_process:
-            print(f"❌ No PRDs found to normalize.")
+            out_error(f"❌ No PRDs found to normalize.")
             return
 
     if isinstance(auto_overwrite, str):
@@ -405,17 +411,17 @@ def normalize_prd(
                 existing_data = safe_yaml_load(output_path.read_text())
                 if existing_data and isinstance(existing_data, dict):
                     old_hash = existing_data.get("METADATA", {}).get("SOURCE_HASH")
-                    if old_hash == md_hash:
-                        print(f"⏩ Skipping {spec_path.name} (already up-to-date)")
-                        switch_to_main()
-                        continue
+                if old_hash == md_hash:
+                    out_info(f"⏩ Skipping {spec_path.name} (already up-to-date)")
+                    switch_to_main()
+                    continue
 
-                    if overwrite_mode == "yes":
-                        pass
-                    elif overwrite_mode == "no":
-                        print(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
-                        switch_to_main()
-                        continue
+                if overwrite_mode == "yes":
+                    pass
+                elif overwrite_mode == "no":
+                    out_info(f"⏩ Skipping {spec_path.name} (overwrite mode: no)")
+                    switch_to_main()
+                    continue
                     elif sys.stdin.isatty():
                         choice = click.prompt(
                             f"⚠️  {spec_path.name} has changed. Update {output_path.name}? [y]es, [n]o, [A]ll, [N]one",
@@ -436,7 +442,7 @@ def normalize_prd(
             except Exception as e:
                 logger.warning(f"Could not read existing hash from {output_path}: {e}")
 
-        print(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using Gemini...")
+        out_info(f"🔄 Normalizing: {spec_path.name} -> {output_path.name} using Gemini...")
         prompt = prompt_base.replace("{PASTE HUMAN PRD HERE}", md_content)
 
         data, code = _run_normalization_llm(
@@ -480,7 +486,7 @@ def normalize_prd(
                 )
 
             output_path.write_text(safe_yaml_dump(data))
-            print(f"✅ Saved: {output_path}")
+            out_success(f"✅ Saved: {output_path}")
 
             if is_dirty():
                 run_command(["git", "add", "."], check=False)
