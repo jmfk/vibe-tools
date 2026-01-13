@@ -110,10 +110,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:37:25.059365'
-updated_at: '2026-01-13T20:22:15.005450'
-discussion_id: D_kwDOQzI0Lc4AjoRM
+updated_at: '2026-01-13T20:31:21.316720'
+discussion_id: D_kwDOQzI0Lc4AjoSS
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/5
-last_synced_at: '2026-01-13T20:22:15.005308'
+last_synced_at: '2026-01-13T20:31:21.316607'
 sync_hash: 18443269ab898b94a5a32679dfb5d8bcca8e265641fbbc600b6bdc84127d5b34
 issue_number: null
 ```
