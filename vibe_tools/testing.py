@@ -145,7 +145,7 @@ class ProjectTester:
 
         return failures
 
-    def run_single_test(self, failure, caffeinate=False):
+    def run_single_test(self, failure):
         """Runs a single failing test."""
         if failure["type"] == "backend":
             test_id = failure["id"]
@@ -157,7 +157,7 @@ class ProjectTester:
             # Since run_command doesn't take env, we'll prefix it if needed or just rely on current process env
             # Actually run_command uses subprocess.run which inherits env.
             # Let's use the same pattern as discover_backend_test_cmd but targeted.
-            output, code = run_command(["python3", "-m", "pytest", "-v", test_id], check=False, caffeinate=caffeinate)
+            output, code = run_command(["python3", "-m", "pytest", "-v", test_id], check=False)
             return output, code == 0
         elif failure["type"] == "frontend":
             test_file = failure["file"]
@@ -166,12 +166,12 @@ class ProjectTester:
             # cd frontend && npx vitest run <test_file> -t "<test_name>"
             # We can use the prefix option for npm/npx
             cmd = ["npx", "--prefix", str(self.frontend_root), "vitest", "run", test_file, "-t", test_name]
-            output, code = run_command(cmd, check=False, caffeinate=caffeinate)
+            output, code = run_command(cmd, check=False)
             return output, code == 0
 
         return "Unknown test type", False
 
-    def run_tests(self, targets=None, changed_only=False, caffeinate=False, parallel=False):
+    def run_tests(self, targets=None, changed_only=False, parallel=False):
         """Runs test and lint targets, optionally filtered by changed files."""
         # Force parallel=False by default for debugging loops to keep output clean
         if targets is None:
@@ -212,7 +212,7 @@ class ProjectTester:
                 try:
                     os.environ["CI"] = "true"
                     os.environ["VITE_CI"] = "true"
-                    output, code = run_command(["make", target], check=False, caffeinate=caffeinate)
+                    output, code = run_command(["make", target], check=False)
                 finally:
                     # Restore original env
                     for k in ["CI", "VITE_CI"]:
@@ -300,14 +300,14 @@ class ProjectTester:
 
         return filtered
 
-    def get_coverage_report(self, component=None, caffeinate=False):
+    def get_coverage_report(self, component=None):
         """Runs coverage for a component and returns the report and total percentage."""
         cmd = self.discover_coverage_cmd(component=component)
         if not cmd:
             return f"No coverage command discovered for component: {component or 'default'}", 0
 
         logger.info(f"Running Coverage ({component or 'default'}): {' '.join(cmd)}")
-        output, _ = run_command(cmd, check=False, caffeinate=caffeinate)
+        output, _ = run_command(cmd, check=False)
 
         # Extract total coverage from the last line like 'TOTAL ... 68%'
         # This works for both pytest-cov and vitest (standard istanbul report)

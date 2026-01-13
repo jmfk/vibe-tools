@@ -52,7 +52,6 @@ def register_infra(cli):
                 click.echo(f"📝 Generating {INFRA_SPEC} from PRDs...")
                 generate_infrastructure_spec(
                     agent=ctx.obj.get("agent", "cursor-agent"),
-                    caffeinate=ctx.obj.get("caffeinate", False),
                 )
                 if INFRA_SPEC.exists():
                     normalize_prd(
@@ -70,7 +69,6 @@ def register_infra(cli):
             agent=ctx.obj.get("agent", "cursor-agent"),
             desired_state_file=INFRA,
             current_state_file=INFRA_CURRENT,
-            caffeinate=ctx.obj.get("caffeinate", False),
             stream=ctx.obj.get("stream", False),
         )
         loop.run()

@@ -268,7 +268,7 @@ class PRDWriter:
 
     def _default_agent_runner(self, prompt: str) -> Tuple[str, int]:
         command = get_agent_command(self.agent_type, prompt)
-        return run_agent(command, caffeinate=False, stream=self.stream)
+        return run_agent(command, stream=self.stream)
 
 
 class InteractivePRD(PRDWriter):

@@ -23,7 +23,6 @@ The main configuration file is automatically created and updated when running se
     "tests": true,
     "auto_merge": false
   },
-  "caffeinate": true,
   "use_google_sheets": false,
   "google_sheet_id": "",
   "verbose": false,
@@ -73,10 +72,6 @@ The main configuration file is automatically created and updated when running se
 - When enabled, uses the automerge branch name from configuration
 
 #### System Settings
-
-**`caffeinate`** (boolean, default: `false`)
-- Prevent system sleep during long-running tasks
-- Can be overridden with `--caffeinate` flag
 
 **`verbose`** (boolean, default: `false`)
 - Output detailed logs (like prompts) to the terminal

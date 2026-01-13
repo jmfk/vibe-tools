@@ -6,7 +6,7 @@ SYSTEM_CONTRACT:
   - '--verbose/--no-verbose: Control verbose output (default: True)'
   - '--stream/--no-stream: Stream agent output in real-time'
   - '--agent: Select agent backend (cursor-agent, claude, antigravity)'
-  - '--caffeinate: Prevent system sleep during long tasks'
+  - '--stream: Stream agent output in real-time'
   dependencies:
   - Click
   - python-dotenv
@@ -24,7 +24,7 @@ SYSTEM_CONTRACT:
 DOMAIN_MODEL:
 - 'OrderedGroup: Custom Click class for logical command ordering'
 - 'Command: Registered via Click decorators'
-- 'Global Options: Context-level flags (debug, verbose, stream, agent, caffeinate)'
+- 'Global Options: Context-level flags (debug, verbose, stream, agent)'
 - 'Configuration: Merged defaults and .vibe_config.json'
 - 'Logging System: Console and file handlers with per-command setup'
 - 'Cost Report: Session-based tracking finalized atexit'

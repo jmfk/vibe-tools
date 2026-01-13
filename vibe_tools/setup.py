@@ -755,21 +755,21 @@ def install_deps():
     # 1. Always install essential tools for the loop
     click.echo("Installing essential tools (ruff, pytest, mypy)...")
     run_command(
-        ["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"], caffeinate=True
+        ["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"]
     )
 
     # 2. Project-specific Python dependencies
     if pathlib.Path("pyproject.toml").exists():
         click.echo("Found pyproject.toml. Installing in editable mode...")
-        run_command(["pip", "install", "-e", "."], caffeinate=True)
+        run_command(["pip", "install", "-e", "."])
     elif pathlib.Path("requirements.txt").exists():
         click.echo("Found requirements.txt. Installing...")
-        run_command(["pip", "install", "-r", "requirements.txt"], caffeinate=True)
+        run_command(["pip", "install", "-r", "requirements.txt"])
 
     # 3. Frontend dependencies
     if pathlib.Path("frontend/package.json").exists():
         click.echo("Found frontend/package.json. Installing npm dependencies...")
-        run_command(["npm", "install", "--prefix", "frontend"], caffeinate=True)
+        run_command(["npm", "install", "--prefix", "frontend"])
 
 
 @setup_cli.command()
@@ -839,7 +839,7 @@ def env(python_version):
         click.echo(
             f"Installing Python {python_version} (this may take a few minutes)..."
         )
-        run_command(["pyenv", "install", python_version], caffeinate=True)
+        run_command(["pyenv", "install", python_version])
     else:
         click.echo(f"✅ Python {python_version} already installed.")
 
@@ -983,7 +983,6 @@ def scaffold(ctx):
     # Get agent settings (defaults if not in context)
     agent = getattr(ctx.obj, "agent", "cursor-agent") if ctx.obj else "cursor-agent"
     stream = getattr(ctx.obj, "stream", False) if ctx.obj else False
-    caffeinate = getattr(ctx.obj, "caffeinate", False) if ctx.obj else False
 
     # Check if dev_environment.md already exists
     if DEV_SPEC.exists():

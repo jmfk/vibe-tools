@@ -8,13 +8,13 @@ MAX_ITERATIONS = 5
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 
-def get_coverage_report(component=None, caffeinate=False):
+def get_coverage_report(component=None):
     """Runs coverage and returns the full report and total coverage percentage."""
     tester = ProjectTester()
-    return tester.get_coverage_report(component=component, caffeinate=caffeinate)
+    return tester.get_coverage_report(component=component)
 
 
-def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
+def improve_coverage_loop(agent="cursor-agent", stream=False):
     from vibe_tools.cli import load_config
 
     logger.info("--- Starting Coverage Improvement Loop ---")
@@ -26,7 +26,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
 
     try:
         for i in range(1, max_iterations + 1):
-            report, current_cov = get_coverage_report(caffeinate=caffeinate)
+            report, current_cov = get_coverage_report()
             logger.info(
                 f"\n[COVERAGE LOOP] [PHASE: report] (Iteration {i}) Current Total Coverage: {current_cov}%"
             )
@@ -54,7 +54,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
                 f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage..."
             )
             cmd = get_agent_command(agent, prompt)
-            output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+            output, _ = run_agent(cmd, stream=stream)
 
             cost_logger.log_run(
                 agent=agent,
@@ -69,14 +69,14 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
 
             # Verify if tests still pass
             logger.info(f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests...")
-            _, test_exit_code = run_command(["make", "test"], check=False, caffeinate=caffeinate)
+            _, test_exit_code = run_command(["make", "test"], check=False)
             if test_exit_code != 0:
                 logger.warning(
                     "⚠️ Warning: Tests are failing after agent changes! Asking agent to fix..."
                 )
                 fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
                 cmd_fix = get_agent_command(agent, fix_prompt)
-                fix_output, _ = run_agent(cmd_fix, caffeinate=caffeinate, stream=stream)
+                fix_output, _ = run_agent(cmd_fix, stream=stream)
                 cost_logger.log_run(
                     agent=agent,
                     model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
@@ -88,7 +88,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
                     purpose="fixing_coverage_regressions",
                 )
 
-            new_report, new_cov = get_coverage_report(caffeinate=caffeinate)
+            new_report, new_cov = get_coverage_report()
             logger.info(f"New Total Coverage: {new_cov}%")
 
             if new_cov > current_cov:
@@ -101,7 +101,7 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
 
             if new_cov > current_cov and test_exit_code == 0:
                 logger.info("Committing improvements...")
-                run_command(["git", "add", "."], caffeinate=caffeinate)
+                run_command(["git", "add", "."])
                 run_command(
                     [
                         "git",
@@ -109,7 +109,6 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
                         "-m",
                         f"Improve test coverage from {current_cov}% to {new_cov}%",
                     ],
-                    caffeinate=caffeinate,
                 )
     except KeyboardInterrupt:
         logger.warning("\n🛑 Coverage loop interrupted by user.")
@@ -117,10 +116,9 @@ def improve_coverage_loop(agent="cursor-agent", caffeinate=False, stream=False):
         from vibe_tools.utils import is_dirty
         if is_dirty():
             logger.info("Committing partial work before exit...")
-            run_command(["git", "add", "."], caffeinate=caffeinate)
+            run_command(["git", "add", "."])
             run_command(
                 ["git", "commit", "-m", "vibe: partial work saved on interrupt (coverage)"],
-                caffeinate=caffeinate
             )
         logger.info("Run 'vibe coverage' again to resume.")
         return False

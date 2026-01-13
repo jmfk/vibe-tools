@@ -29,11 +29,11 @@ N/A - Class used by other components.
   - `discover_coverage_cmd(component)`: Finds coverage command
   - `discover_frontend_lint_cmd()`: Finds frontend lint command
 - **Test Execution**:
-  - `run_tests(component, caffeinate, fast)`: Runs tests for component
+  - `run_tests(component, fast)`: Runs tests for component
   - Supports backend, frontend, or both
   - Fast mode skips frontend tests
 - **Coverage**:
-  - `get_coverage_report(component, caffeinate)`: Gets coverage report
+  - `get_coverage_report(component)`: Gets coverage report
   - Parses coverage output
   - Extracts coverage percentage
 - **Makefile Support**: 

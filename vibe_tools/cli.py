@@ -152,15 +152,9 @@ class OrderedGroup(click.Group):
     default="cursor-agent",
     help="Select the agent to use.",
 )
-@click.option(
-    "--caffeinate",
-    is_flag=True,
-    default=None,
-    help="Use caffeinate to prevent sleep during long-running tasks.",
-)
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, debug, verbose, stream, agent, caffeinate):
+def cli(ctx, debug, verbose, stream, agent):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
@@ -195,10 +189,6 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
 
     ctx.obj["verbose"] = verbose
 
-    if caffeinate is None:
-        caffeinate = config.get("caffeinate", False)
-    ctx.obj["caffeinate"] = caffeinate
-
     default_budget = config.get("default_budget", 5.0)
     ctx.obj["default_budget"] = default_budget
 
@@ -206,7 +196,6 @@ def cli(ctx, debug, verbose, stream, agent, caffeinate):
         click.echo("vibe-tools configuration:")
         click.echo(f"  Agent: {agent}")
         click.echo(f"  Stream: {'ON' if stream else 'OFF'}")
-        click.echo(f"  Caffeinate: {'ON' if caffeinate else 'OFF'}")
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
         click.echo(f"  Default Budget: ${default_budget:.2f} USD")
 

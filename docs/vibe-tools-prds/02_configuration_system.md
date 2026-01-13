@@ -12,7 +12,7 @@ The configuration system manages `.vibe_config.json` in the project root, storin
 - Service configuration (Postgres, Redis, RabbitMQ, Elasticsearch, S3, imgproxy, etc.)
 - AI agent configuration (model selection, API keys)
 - Cost tracking settings (Google Sheets integration, budget limits)
-- Workflow preferences (caffeinate, verbose mode, auto-merge)
+- Workflow preferences (verbose mode, auto-merge)
 - Docker container auto-detection
 - Environment variable integration
 
@@ -23,7 +23,7 @@ N/A - Configuration files and CLI commands.
 - **Configuration File Format**: JSON file (`.vibe_config.json`) with nested structure:
   - `services`: Map of service names to connection details
   - `ralph`: Ralph loop settings (review, tests, auto_merge)
-  - `caffeinate`: Boolean flag for system sleep prevention
+  - `verbose`: Boolean flag for detailed output
   - `use_google_sheets`: Boolean for cost logging
   - `google_sheet_id`: Google Sheet ID for cost tracking
   - `verbose`: Boolean for verbose output

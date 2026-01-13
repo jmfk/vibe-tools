@@ -59,7 +59,7 @@ vibe-tools is built around a modular, CLI-first architecture that separates conc
 
 The CLI layer provides the unified command interface using Click. It implements:
 - Command ordering and organization
-- Global options (debug, verbose, stream, agent, caffeinate)
+- Global options (debug, verbose, stream, agent)
 - Configuration loading and context management
 - Command registration from the `commands/` module
 

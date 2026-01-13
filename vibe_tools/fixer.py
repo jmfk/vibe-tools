@@ -45,13 +45,13 @@ def clear_state():
         STATE_FILE.unlink()
 
 
-def run_tests(caffeinate=False, fast=False):
+def run_tests(fast=False):
     """Runs backend and frontend tests."""
     tester = ProjectTester()
-    return tester.run_tests(caffeinate=caffeinate, changed_only=fast)
+    return tester.run_tests(changed_only=fast)
 
 
-def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream=False):
+def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
     from vibe_tools.cli import load_config
 
     logger.info("--- Starting Optimized Test and Fix Loop ---")
@@ -74,7 +74,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
     for i in range(start_iteration, max_iterations + 1):
         logger.info(f"\n[TEST_FIX LOOP] [PHASE: test-all] (Iteration {i}/{max_iterations})")
 
-        test_output, tests_passed, env_failures, failed_targets = run_tests(caffeinate=caffeinate, fast=fast)
+        test_output, tests_passed, env_failures, failed_targets = run_tests(fast=fast)
 
         if env_failures:
             log_issue("test_fix", i, max_iterations, f"Environment failure: {', '.join(env_failures)}")
@@ -114,7 +114,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
                 prompt = specific_prompt.replace("{test_output}", test_output)
 
                 cmd = get_agent_command(agent, prompt)
-                agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+                agent_output, _ = run_agent(cmd, stream=stream)
 
                 cost_logger.log_run(
                     agent=agent,
@@ -128,7 +128,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
                 )
 
                 # Verify this specific test
-                verify_output, fixed = tester.run_single_test(failure, caffeinate=caffeinate)
+                verify_output, fixed = tester.run_single_test(failure)
                 if fixed:
                     logger.info(f"✅ Test fixed: {test_id}")
                 else:
@@ -149,7 +149,7 @@ def run_test_fix_loop(agent="cursor-agent", caffeinate=False, fast=False, stream
 
             prompt = prompt_base.replace("{test_output}", test_output)
             cmd = get_agent_command(agent, prompt)
-            agent_output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+            agent_output, _ = run_agent(cmd, stream=stream)
 
             cost_logger.log_run(
                 agent=agent,

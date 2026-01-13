@@ -10,7 +10,6 @@ def register_coverage(cli):
         """Run the coverage improvement loop."""
         improve_coverage_loop(
             agent=ctx.obj["agent"],
-            caffeinate=ctx.obj.get("caffeinate", False),
             stream=ctx.obj.get("stream", False),
         )
 

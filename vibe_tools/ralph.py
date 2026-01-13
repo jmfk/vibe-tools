@@ -72,7 +72,6 @@ class RalphLoop:
         current_file: pathlib.Path,
         agent: str = "cursor-agent",
         stream: bool = False,
-        caffeinate: bool = False,
         branch_name: str = None,
         prd_path: pathlib.Path = None,
         phase_id: str = None,
@@ -82,7 +81,6 @@ class RalphLoop:
         self.current_file = current_file
         self.agent = agent
         self.stream = stream
-        self.caffeinate = caffeinate
         self.instructions = []
         self.prd_path = prd_path
         self.phase_id = phase_id
@@ -178,7 +176,7 @@ class RalphLoop:
         if utils.verbose_logger:
             utils.verbose_logger.log_event("prompt", prompt, f"{self.name}_reconciliation")
 
-        output, code = run_agent(cmd, caffeinate=self.caffeinate, stream=self.stream)
+        output, code = run_agent(cmd, stream=self.stream)
 
         if utils.verbose_logger:
             utils.verbose_logger.log_event("reply", output, f"{self.name}_reconciliation")
@@ -1423,7 +1421,7 @@ def issue_solve_loop(issue: Issue, agent: str, stream: bool = False) -> bool:
 
 
 def _switch_to_branch(
-    branch_name, agent, project_name, parent_branch=None, caffeinate=False, stream=False
+    branch_name, agent, project_name, parent_branch=None, stream=False
 ):
     """Robustly switches to a feature branch, using AI rescue if needed."""
     if parent_branch is None:
@@ -1472,7 +1470,7 @@ def _switch_to_branch(
         if utils.verbose_logger:
             utils.verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
 
-        output, _ = run_agent(cmd, caffeinate=caffeinate, stream=stream)
+        output, _ = run_agent(cmd, stream=stream)
 
         if utils.verbose_logger:
             utils.verbose_logger.log_event("reply", output, f"{project_name}_git_fix")

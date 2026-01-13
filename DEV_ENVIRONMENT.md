@@ -109,7 +109,6 @@ prompts/                     # Override prompts (optional)
 Main configuration file containing:
 
 - **`ralph`**: Ralph loop settings (review, tests, auto_merge)
-- **`caffeinate`**: Prevent system sleep during long tasks
 - **`use_google_sheets`**: Enable Google Sheets cost logging
 - **`google_sheet_id`**: Google Sheet ID for cost logging
 - **`verbose`**: Verbose logging mode
