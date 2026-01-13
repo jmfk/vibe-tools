@@ -139,7 +139,7 @@ def get_agent_command(
         agent_config = config.get("cursor-agent", {})
         force = agent_config.get("force", True)
 
-        cmd = ["agent", "-p"]
+        cmd = ["cursor-agent", "-p"]
         if force:
             cmd.append("--force")
 
@@ -167,7 +167,6 @@ def run_agent(
         )
         return "ERROR: Agent call blocked in current environment.", 1, None
 
-    print(f"run_agent command: {command}", flush=True)
     is_cursor_agent = command[0] == "cursor-agent" or (
         len(command) > 2 and command[2] == "cursor-agent"
     )
