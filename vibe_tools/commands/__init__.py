@@ -12,9 +12,7 @@ def register_all_commands(cli):
         deploy,
         deps,
         docs,
-        history,
         implement,
-        implemented,
         infra,
         init,
         investigate,
@@ -23,7 +21,7 @@ def register_all_commands(cli):
         memory,
         migrate,
         normalize,
-        pm,
+        prd,
         ps,
         quick_fix,
         rerun,
@@ -46,7 +44,7 @@ def register_all_commands(cli):
     quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)
     normalize.register_normalize(cli)
-    history.register_history(cli)
+    prd.register_prd(cli)
     status.register_status(cli)
     sync.register_sync(cli)
     docs.register_docs(cli)
@@ -54,7 +52,6 @@ def register_all_commands(cli):
     setup.register_setup(cli)
     deps.register_deps(cli)
     architect.register_architect(cli)
-    pm.register_pm(cli)
     implement.register_implement(cli)
     # build.register_build(cli)  # TODO: Extract build command
     # devbug.register_devbug(cli)  # TODO: Extract devbug command
@@ -63,7 +60,6 @@ def register_all_commands(cli):
     deploy.register_deploy(cli)
     memory.register_memory(cli)
     rerun.register_rerun(cli)
-    implemented.register_implemented(cli)
     branch.register_branch(cli)
     branches.register_branches(cli)
     branch_resolve.register_branch_resolve(cli)
