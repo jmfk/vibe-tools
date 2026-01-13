@@ -64,10 +64,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.012525'
-updated_at: '2026-01-13T20:22:47.284154'
-discussion_id: D_kwDOQzI0Lc4AjoRg
+updated_at: '2026-01-13T20:32:41.926565'
+discussion_id: D_kwDOQzI0Lc4AjoSm
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/33
-last_synced_at: '2026-01-13T20:22:47.284063'
+last_synced_at: '2026-01-13T20:32:41.926336'
 sync_hash: 2b00c6a74fc04dc3574350ca4f0f0e82735a2b670097fba9cc49b55843bb10a8
 issue_number: null
 ```
