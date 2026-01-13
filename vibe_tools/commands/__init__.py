@@ -21,6 +21,7 @@ def register_all_commands(cli):
         memory,
         migrate,
         monitor,
+        normalize,
         prd,
         ps,
         quick_fix,
@@ -43,6 +44,7 @@ def register_all_commands(cli):
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)
+    normalize.register_normalize(cli)
     prd.register_prd(cli)
     status.register_status(cli)
     sync.register_sync(cli)
