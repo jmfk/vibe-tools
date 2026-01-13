@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.017783'
-updated_at: '2026-01-13T18:43:27.727519'
+updated_at: '2026-01-13T18:55:32.998859'
 discussion_id: D_kwDOQzI0Lc4Ajltq
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/53
-last_synced_at: '2026-01-10T15:25:01.494702'
-sync_hash: 381cba03de23208fe0f9a0397735ac9f343754bd0e105a1a719e91e2bdd6e39a
+last_synced_at: '2026-01-13T18:55:32.998799'
+sync_hash: 04cc0a8add8484372636a2c113216ccb6618f7519c9481745dd422baf5a577eb
 implementation_id: v01-130
 implementation_yaml: v01-130_09_spec_management.yaml
 ---

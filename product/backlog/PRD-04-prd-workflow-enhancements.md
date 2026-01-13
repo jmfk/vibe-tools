@@ -6,11 +6,11 @@ status: backlog
 group: null
 depends_on: []
 created_at: '2026-01-13T18:37:25.057377'
-updated_at: '2026-01-13T18:43:27.693181'
+updated_at: '2026-01-13T18:53:37.873841'
 discussion_id: D_kwDOQzI0Lc4AjlrJ
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/3
-last_synced_at: '2026-01-10T17:22:06.567517'
-sync_hash: 0fa521c979f3acf83315274ad7106b570ff40066842cf938058ac40ec2ba39eb
+last_synced_at: '2026-01-13T18:53:37.873713'
+sync_hash: 0e25d189b5d18d6e729282bb9c7d618fb617ee2a3c35dd70f280c6b571bfbfcf
 ---
 
 # PRD-04: PRD Workflow Enhancements: Inbox, Backlog, and History

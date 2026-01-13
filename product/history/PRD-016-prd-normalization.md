@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.010016'
-updated_at: '2026-01-13T18:43:27.741668'
+updated_at: '2026-01-13T18:56:08.368264'
 discussion_id: D_kwDOQzI0Lc4AjltM
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/25
-last_synced_at: '2026-01-10T15:24:16.301161'
-sync_hash: 92885216f2e838d28e7f00b5668af61d1e92e58b3572c40729d9185e66224e9b
+last_synced_at: '2026-01-13T18:56:08.368189'
+sync_hash: a1a2fbbf5ffa9d1895bf996588fca0f3589bc5fac6119521b83c5d498f3e299a
 ---
 
 # PRD Normalization

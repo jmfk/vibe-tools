@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.017015'
-updated_at: '2026-01-13T18:43:27.730928'
+updated_at: '2026-01-13T18:55:43.020900'
 discussion_id: D_kwDOQzI0Lc4Ajltn
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/50
-last_synced_at: '2026-01-10T15:24:56.903111'
-sync_hash: 4d84719c25f1e48e2c7987dced78508dbffe0215ea5330e9d326828aa0d2b8be
+last_synced_at: '2026-01-13T18:55:43.020818'
+sync_hash: 8eaf6ca54eaeb07610ff1ba78904114fd8233b47e3a696cd3566d6e928ffd768
 ---
 
 # Memory System

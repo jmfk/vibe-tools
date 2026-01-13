@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.011628'
-updated_at: '2026-01-13T18:43:27.707694'
+updated_at: '2026-01-13T18:54:21.654996'
 discussion_id: D_kwDOQzI0Lc4AjltS
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/30
-last_synced_at: '2026-01-10T15:24:24.458758'
-sync_hash: 3830cdc1ac04e0fc45c25fa1947dea8b6582b2645b1bfb7904315a6360b6e01f
+last_synced_at: '2026-01-13T18:54:21.654910'
+sync_hash: d3785e297a0b5a29e3e4d7160100aacb45287d55545d4f9d095686e76ce68b5a
 ---
 
 # Branch Management

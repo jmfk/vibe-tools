@@ -6,10 +6,13 @@ status: backlog
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-13T18:43:27.700254'
+updated_at: '2026-01-13T18:53:31.259735'
 owner: Core Platform
 implementation_id: v01-460
 implementation_yaml: v01-460_40_interactive_command_and_test_runner.yaml
+discussion_id: D_kwDOQzI0Lc4AjoMI
+last_synced_at: '2026-01-13T18:53:31.259594'
+sync_hash: ba78e02f62c7600a46e855b9585098a933c63831b71f31a9983cf763780bb0d5
 ---
 
 # PRD-40: Interactive Command and Test Runner

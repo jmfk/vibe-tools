@@ -6,11 +6,11 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.010310'
-updated_at: '2026-01-13T18:43:27.738856'
+updated_at: '2026-01-13T18:55:57.976541'
 discussion_id: D_kwDOQzI0Lc4AjltN
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/26
-last_synced_at: '2026-01-10T15:24:18.115466'
-sync_hash: e4f32983349ab9de8bfbc008ebed1ee5958e1fca7ecff2e67fbf3fec95758cc8
+last_synced_at: '2026-01-13T18:55:57.976475'
+sync_hash: 8ac467ccf9398e559032648822d959cf19b39db4f4b260929fac9dc6cc4135b3
 ---
 
 # Infrastructure Management
