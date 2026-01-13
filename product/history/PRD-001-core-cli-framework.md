@@ -6,10 +6,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.009212'
-updated_at: '2026-01-13T18:54:57.185411'
+updated_at: '2026-01-13T18:59:08.124116'
 discussion_id: D_kwDOQzI0Lc4AjltK
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/23
-last_synced_at: '2026-01-13T18:54:57.185262'
+last_synced_at: '2026-01-13T18:59:08.124020'
 sync_hash: 9f27ea84e8edd6944dac70e304a953bdc852ab9e0711162e5f90d956f99ea669
 implementation_id: v01-010
 implementation_yaml: v01-010_01_core_cli_framework.yaml

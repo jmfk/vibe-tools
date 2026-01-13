@@ -2,14 +2,14 @@
 id: PRD-03
 title: 'PRD: PM LLM Loop Refactor (Gemini 3 Flash & Streaming)'
 type: FEATURE
-status: backlog
+status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:37:25.058620'
-updated_at: '2026-01-13T18:53:40.505783'
+updated_at: '2026-01-13T18:58:56.366510'
 discussion_id: D_kwDOQzI0Lc4AjlrK
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/4
-last_synced_at: '2026-01-13T18:53:40.505662'
+last_synced_at: '2026-01-13T18:58:56.366434'
 sync_hash: 928f09666aa03bd184d5ff7858618193c13eb9af529a27595f5d1eda82dbf389
 ---
 

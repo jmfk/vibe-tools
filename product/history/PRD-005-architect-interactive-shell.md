@@ -6,10 +6,10 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.012080'
-updated_at: '2026-01-13T18:54:18.202721'
+updated_at: '2026-01-13T18:58:47.295747'
 discussion_id: D_kwDOQzI0Lc4AjltT
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/31
-last_synced_at: '2026-01-13T18:54:18.202562'
+last_synced_at: '2026-01-13T18:58:47.295627'
 sync_hash: 40740d32b9e0cedd5d0e1fdb4eea84544517ecfffe92a1f00f5716842bcab450
 implementation_id: v01-090
 implementation_yaml: v01-090_05_architect_shell.yaml

@@ -6,12 +6,12 @@ status: backlog
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-13T18:53:33.814359'
+updated_at: '2026-01-13T18:58:27.152752'
 owner: Core Platform
 implementation_id: v01-480
 implementation_yaml: v01-480_37_tauri_dashboard_core.yaml
 discussion_id: D_kwDOQzI0Lc4AjoMK
-last_synced_at: '2026-01-13T18:53:33.814202'
+last_synced_at: '2026-01-13T18:58:27.152667'
 sync_hash: a0da3c6e1b85027f609af14a18bf5cae9f98767d8a74ed5390ab83277df023f2
 ---
 

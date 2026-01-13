@@ -6,12 +6,12 @@ status: backlog
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-13T18:53:32.459219'
+updated_at: '2026-01-13T18:58:24.031123'
 owner: Core Platform
 implementation_id: v01-470
 implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
 discussion_id: D_kwDOQzI0Lc4AjoMJ
-last_synced_at: '2026-01-13T18:53:32.459079'
+last_synced_at: '2026-01-13T18:58:24.031049'
 sync_hash: e8d119c358bb0fef4d73cdc6350f6fd4682e3139bd6e7f54dbfaf649bbb60b01
 ---
 
