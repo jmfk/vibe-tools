@@ -70,12 +70,12 @@ This feature bridges the gap between static visualization and active execution. 
 id: PRD-40
 title: Interactive Command and Test Runner
 type: FEATURE
-status: planned
+status: done
 group: null
 depends_on:
 - PRD-39
 created_at: 2026-01-13
-updated_at: '2026-01-14T12:10:04.577974'
+updated_at: '2026-01-14T20:01:29.833495'
 owner: Core Platform
 implementation_id: v01-460
 implementation_yaml: v01-460_40_interactive_command_and_test_runner.yaml
@@ -83,6 +83,9 @@ discussion_id: null
 last_synced_at: null
 sync_hash: null
 issue_number: null
+impl_code_ready: true
+impl_tests_passed: true
+impl_review_passed: true
 ```
 </details>
 

@@ -1,7 +1,29 @@
-SYSTEM_CONTRACT: MISSING
-DOMAIN_MODEL: MISSING
-CAPABILITIES: MISSING
-OUTPUT_TARGETS: MISSING
-METADATA:
-  SOURCE_HASH: 67015c67a84004404e182e18f898cff4751936f85632ee96e12164efe946da30
-  NORMALIZED_AT: '2026-01-12T17:26:51.774979'
+tests:
+  - id: t01-vibe-architect
+    title: "Vibe Architect Session"
+    description: "Verify that 'vibe architect' starts and handles a complex session."
+    status: "pending"
+    steps:
+      - id: s1-start
+        text: "Trigger 'vibe architect' from the Command Launcher."
+        status: "pending"
+      - id: s2-interact
+        text: "Provide feedback to the Architect agent."
+        status: "pending"
+      - id: s3-finish
+        text: "Verify that the architect session completes and updates state."
+        status: "pending"
+  - id: t02-vibe-testing
+    title: "Interactive Test Runner"
+    description: "Test the ability to manually mark steps as completed."
+    status: "pending"
+    steps:
+      - id: s1-view
+        text: "Open the Testing tab and view the test cards."
+        status: "pending"
+      - id: s2-click
+        text: "Click on a step to mark it as passed."
+        status: "pending"
+      - id: s3-verify
+        text: "Verify that the card status updates to 'in_progress' and then 'passed'."
+        status: "pending"

@@ -68,7 +68,9 @@
   "next_sequence": 1,
   "completed_prds": [
     "PRD-37",
-    "PRD-38"
+    "PRD-38",
+    "PRD-39",
+    "PRD-40"
   ],
   "plans": {}
 }
