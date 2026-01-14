@@ -59,13 +59,15 @@
     }
   },
   "branch_lineage": {
-    "staging": "issue/ISSUE-2026-01-10-001",
+    "staging": "feature/prd-37",
     "issue/ISSUE-2026-01-10-001": "issue/ISSUE-2026-01-10-002",
     "issue/ISSUE-2026-01-10-002": "main"
   },
   "active_task": null,
   "version": "1.2",
   "next_sequence": 1,
-  "completed_prds": [],
+  "completed_prds": [
+    "PRD-37"
+  ],
   "plans": {}
 }

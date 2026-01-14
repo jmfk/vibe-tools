@@ -5,9 +5,15 @@ from vibe_tools.utils import get_agent_processes
 
 def register_ps(cli):
     @click.command()
-    def ps():
+    @click.option("--json", "json_format", is_flag=True, help="Output in JSON format.")
+    def ps(json_format):
         """List active agent processes."""
         processes = get_agent_processes()
+        if json_format:
+            import json
+            click.echo(json.dumps(processes))
+            return
+
         if not processes:
             click.echo("No active agent processes found.")
             return
