@@ -1,5 +1,6 @@
 import datetime
 import pathlib
+import re
 import shutil
 import socket
 import subprocess
@@ -510,31 +511,33 @@ def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
         current_makefile = TEMPLATES.get("Makefile", "")
 
     prompt = f"""You are a Makefile Expert. 
-Your task is to update or generate the project's Makefile based on the provided development environment specification.
+Your task is to generate a clean, professional Makefile based on the development environment specification.
 
 DEVELOPMENT ENVIRONMENT SPECIFICATION:
 ---
 {dev_spec_content}
 ---
 
-CURRENT MAKEFILE:
+CURRENT MAKEFILE (for reference only):
 ---
 {current_makefile}
 ---
 
 TASK:
-1. Identify all components (backend, frontend, etc.) and their build, test, and start commands from the specification.
-2. Update the Makefile to include targets for each component:
-   - Build targets (e.g., build-backend, build-frontend)
+1. Create a definitive Makefile that includes all necessary targets described in the specification.
+2. Mandatory sections to include (if relevant to the spec):
+   - .PHONY declaration for all targets
+   - Build targets (e.g., build-backend, build-desktop)
    - Test targets (e.g., test-backend, test-frontend)
-   - Development/Start targets (e.g., dev, start, stop)
+   - Development targets (e.g., dev, dev-desktop, install-backend)
    - Linting targets
-   - Any other targets mentioned in the spec (logs, clean, etc.)
-3. Ensure there is a 'test' target that runs all relevant test suites.
-4. Ensure there is a 'build' target that runs all relevant build steps.
-5. PRESERVE existing targets if they are already correct, but prioritize the specification.
-6. Use standard Makefile syntax.
-7. Output the FULL content of the updated Makefile. Do NOT include markdown code fences or explanations.
+   - Utility targets (e.g., clean, logs)
+3. Ensure a top-level 'test' target exists that runs all component tests.
+4. Ensure a top-level 'build' target exists that runs all component builds.
+5. CRITICAL: Avoid any redundancy. Each target should appear exactly once.
+6. CRITICAL: Do NOT simply append to the current Makefile. Use it as reference for existing logic, but produce a fresh, unified output that reflects the specification.
+7. Use standard Makefile syntax (tabs for indentation).
+8. Output ONLY the raw Makefile content. No markdown code fences, no explanations, no '```makefile' tags, no '--- FINAL RESULT ---' headers.
 
 Output ONLY the raw Makefile content.
 """
@@ -543,15 +546,33 @@ Output ONLY the raw Makefile content.
     output, code = run_agent(cmd, stream=stream)
 
     if code == 0 and output.strip():
-        # Clean output (remove code fences if present)
+        # Extraction logic: find the first .PHONY or first target
+        # If the agent is messy, we try to find the cleanest block
         clean_output = output.strip()
-        if clean_output.startswith("```"):
-            lines = clean_output.splitlines()
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            clean_output = "\n".join(lines).strip()
+        
+        # Remove any leading/trailing garbage common in messy LLM outputs
+        if "--- FINAL RESULT ---" in clean_output:
+            clean_output = clean_output.split("--- FINAL RESULT ---")[-1].strip()
+            
+        if "```" in clean_output:
+            # Extract content between code fences if present
+            match = re.search(r"```(?:makefile)?\s*([\s\S]*?)\s*```", clean_output, re.IGNORECASE)
+            if match:
+                clean_output = match.group(1).strip()
+            else:
+                # Fallback: just strip the fences
+                clean_output = clean_output.replace("```makefile", "").replace("```", "").strip()
+        
+        # Final sanitization: ensure it looks like a Makefile (starts with .PHONY or a target)
+        lines = clean_output.splitlines()
+        valid_start = -1
+        for i, line in enumerate(lines):
+            if line.startswith(".PHONY:") or (":" in line and not line.startswith("\t") and not line.startswith(" ")):
+                valid_start = i
+                break
+        
+        if valid_start != -1:
+            clean_output = "\n".join(lines[valid_start:]).strip()
             
         makefile_path.write_text(clean_output)
         click.echo("✅ Makefile updated successfully.")
