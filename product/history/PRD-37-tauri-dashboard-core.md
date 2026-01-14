@@ -87,11 +87,11 @@ The dashboard will follow a modern, IDE-like layout:
 id: PRD-37
 title: Tauri Dashboard Core
 type: FEATURE
-status: in_progress
+status: done
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-14T17:58:11.688198'
+updated_at: '2026-01-14T18:08:28.974575'
 owner: Core Platform
 implementation_id: v01-480
 implementation_yaml: v01-480_37_tauri_dashboard_core.yaml
@@ -99,9 +99,9 @@ discussion_id: null
 last_synced_at: null
 sync_hash: null
 issue_number: null
-impl_code_ready: false
-impl_tests_passed: false
-impl_review_passed: false
+impl_code_ready: true
+impl_tests_passed: true
+impl_review_passed: true
 ```
 </details>
 
