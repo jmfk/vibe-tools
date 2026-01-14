@@ -104,8 +104,9 @@ class RalphLoop:
 
         # Sync Check - compare desired YAML content string with current file content
         import hashlib
+
         desired_hash = hashlib.sha256(self.desired_content.encode()).hexdigest()
-        
+
         if current_content and get_file_hash(self.current_file) == desired_hash:
             logger.info(f"✅ {self.name} is already in sync.")
             return True
@@ -323,13 +324,13 @@ def generate_prd_plan() -> bool:
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Unified implementation loop working on Markdown PRDs in product/."""
     config = load_config()
-    
+
     # 1. Check for PRD in progress
     in_progress_files = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
     if len(in_progress_files) > 1:
         logger.error("❌ Multiple PRDs in progress. Only one is allowed at a time.")
         return False
-    
+
     prd: Optional[PRD] = None
     if in_progress_files:
         prd = load_prd(in_progress_files[0])
@@ -340,20 +341,22 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         if not backlog_files:
             logger.info("ℹ️ No PRDs in backlog.")
             return True
-        
+
         # In a real CLI we might prompt, here we'll take the first one
         # but let's assume we want to guide the user to 'vibe prd plan'
         selected_file = backlog_files[0]
         prd = load_prd(selected_file)
-        
+
         # Check dependencies
         state = load_project_state()
         completed = set(state.get("completed_prds", []))
         missing_deps = [d for d in prd.depends_on if d not in completed]
         if missing_deps:
-            logger.warning(f"⚠️ PRD {prd.id} has missing dependencies: {', '.join(missing_deps)}. Skipping.")
+            logger.warning(
+                f"⚠️ PRD {prd.id} has missing dependencies: {', '.join(missing_deps)}. Skipping."
+            )
             return False
-            
+
         # Move to in_progress
         logger.info(f"🚀 Starting PRD: {prd.title} ({prd.id})")
         new_path = PRODUCT_IN_PROGRESS_DIR / selected_file.name
@@ -389,40 +392,53 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     success_criteria = []
     if isinstance(capabilities, dict):
         for k, v in capabilities.items():
-            if isinstance(v, list): success_criteria.extend(v)
-            else: success_criteria.append(str(v))
+            if isinstance(v, list):
+                success_criteria.extend(v)
+            else:
+                success_criteria.append(str(v))
     elif isinstance(capabilities, list):
         success_criteria.extend(capabilities)
-    
+
     if not success_criteria:
         success_criteria = ["Implement all capabilities defined in the PRD."]
 
-    _switch_to_branch(branch_name, agent, prd.id, parent_branch=parent_branch, stream=stream)
+    _switch_to_branch(
+        branch_name, agent, prd.id, parent_branch=parent_branch, stream=stream
+    )
 
     success = False
     failure_reason = ""
-    
+
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
-        
+
         # 3a. Implementation Step
         try:
             prompt_template = get_prompt("implementation_prompt.txt")
             prompt = prompt_template.format(
                 title=prd.title,
                 description=prd.content,
-                success_criteria=chr(10).join(["- " + str(c) for c in success_criteria]),
+                success_criteria=chr(10).join(
+                    ["- " + str(c) for c in success_criteria]
+                ),
             )
             cmd = get_agent_command(agent, prompt)
             output, code = run_agent(cmd, stream=stream)
-            
+
             if code != 0 or COMPLETION_PROMISE not in output:
-                failure_reason = f"Agent failed with code {code}" if code != 0 else "No completion promise"
+                failure_reason = (
+                    f"Agent failed with code {code}"
+                    if code != 0
+                    else "No completion promise"
+                )
                 continue
-                
+
             if is_dirty():
                 run_command(["git", "add", "."], check=False)
-                run_command(["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"], check=False)
+                run_command(
+                    ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
+                    check=False,
+                )
         except Exception as e:
             failure_reason = str(e)
             continue
@@ -430,10 +446,12 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         # 3b. Quality Gates
         passed_gates = True
         if tests:
-            if not debugging_loop(agent, ["test"], stream=stream, iterations=max_debug_iterations):
+            if not debugging_loop(
+                agent, ["test"], stream=stream, iterations=max_debug_iterations
+            ):
                 passed_gates = False
                 failure_reason = "Tests failed"
-        
+
         if passed_gates and review:
             # Agentic review logic
             try:
@@ -458,24 +476,25 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         final_path = PRODUCT_HISTORY_DIR / prd.path.name
         prd.save(final_path)
         prd.path.unlink()
-        
+
         # Update state
         state = load_project_state()
         if prd.id not in state["completed_prds"]:
             state["completed_prds"].append(prd.id)
         save_project_state(state)
-        
+
         # Auto-merge if enabled
         if ralph_config.get("auto_merge", False):
             automerge_branch = get_automerge_branch(config)
             from vibe_tools.branches import merge_branches
+
             merge_branches(branch_name, automerge_branch)
-        
+
         switch_to_main()
         return True
     else:
         logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
-        
+
         # Create new issue PRD
         new_issue_id = generate_prd_id(pathlib.Path("product"))
         issue_title = f"Fix failures in {prd.id}: {prd.title}"
@@ -484,20 +503,24 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             title=issue_title,
             type="ISSUE",
             status="backlog",
-            content=f"Implementation of {prd.id} failed with: {failure_reason}"
+            content=f"Implementation of {prd.id} failed with: {failure_reason}",
         )
-        issue_filename = f"{new_issue_id}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower())}.md"
+        issue_filename = (
+            f"{new_issue_id}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower())}.md"
+        )
         new_issue.save(PRODUCT_BACKLOG_DIR / issue_filename)
-        
+
         # Update current PRD
         prd.status = "backlog"
         prd.depends_on.append(new_issue_id)
-        prd.append_history(f"Attempt failed: {failure_reason}. Blocked by {new_issue_id}.")
-        
+        prd.append_history(
+            f"Attempt failed: {failure_reason}. Blocked by {new_issue_id}."
+        )
+
         backlog_filename = prd.path.name
         prd.save(PRODUCT_BACKLOG_DIR / backlog_filename)
         prd.path.unlink()
-        
+
         switch_to_main()
         return False
 
