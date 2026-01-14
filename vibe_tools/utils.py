@@ -264,6 +264,25 @@ def save_project_state(state: Dict[str, Any]):
     PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def is_branch_switching_enabled() -> bool:
+    """Checks if automatic branch switching is enabled."""
+    import click
+    # Check Click context first if available
+    try:
+        ctx = click.get_current_context(silent=True)
+        if ctx and ctx.obj and ctx.obj.get("no_branch_switch"):
+            return False
+    except Exception:
+        pass
+
+    # Fallback to config
+    config = load_config()
+    if config.get("no_branch_switch"):
+        return False
+
+    return True
+
+
 def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
     """Checks if the dependencies for a given phase are met."""
     dependencies = {
@@ -482,11 +501,14 @@ def reset_prd_state(project_name: str) -> List[str]:
 
     # 2. Reset progress flags in the PRD file itself if possible
     from vibe_tools.prds import load_prd, PRODUCT_DIR
+
     potential_files = list(PRODUCT_DIR.rglob(f"*{project_name}*.md"))
     if not potential_files:
         # Fallback to stem match if full name doesn't match
-        potential_files = [f for f in PRODUCT_DIR.rglob("*.md") if project_name in f.name]
-    
+        potential_files = [
+            f for f in PRODUCT_DIR.rglob("*.md") if project_name in f.name
+        ]
+
     if len(potential_files) == 1:
         try:
             prd = load_prd(potential_files[0])
@@ -690,14 +712,23 @@ def get_vibe_status_report() -> str:
             if prd_stem in completed_prds or name in completed_prds:
                 status = click.style("✅", fg="green")
                 progress_str = ""
-            elif prd_stem in started_prds or name in started_prds or (prd_obj and prd_obj.status == "in_progress"):
+            elif (
+                prd_stem in started_prds
+                or name in started_prds
+                or (prd_obj and prd_obj.status == "in_progress")
+            ):
                 status = click.style("⏳", fg="blue")
                 if prd_obj:
                     p_parts = []
-                    if prd_obj.impl_code_ready: p_parts.append("C")
-                    if prd_obj.impl_tests_passed: p_parts.append("T")
-                    if prd_obj.impl_review_passed: p_parts.append("R")
-                    progress_str = f" ({','.join(p_parts)})" if p_parts else " (started)"
+                    if prd_obj.impl_code_ready:
+                        p_parts.append("C")
+                    if prd_obj.impl_tests_passed:
+                        p_parts.append("T")
+                    if prd_obj.impl_review_passed:
+                        p_parts.append("R")
+                    progress_str = (
+                        f" ({','.join(p_parts)})" if p_parts else " (started)"
+                    )
                 else:
                     progress_str = " (started)"
             else:

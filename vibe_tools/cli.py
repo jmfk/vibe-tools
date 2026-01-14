@@ -146,9 +146,15 @@ class OrderedGroup(click.Group):
     default=None,
     help="Select the agent to use.",
 )
+@click.option(
+    "--no-branch-switch",
+    is_flag=True,
+    default=None,
+    help="Disable automatic branch switching.",
+)
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, debug, verbose, stream, agent):
+def cli(ctx, debug, verbose, stream, agent, no_branch_switch):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
@@ -172,9 +178,13 @@ def cli(ctx, debug, verbose, stream, agent):
     if agent is None:
         agent = config.get("agent", {}).get("agent", "cursor-agent")
 
+    if no_branch_switch is None:
+        no_branch_switch = config.get("no_branch_switch", False)
+
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
     ctx.obj["stream"] = stream
+    ctx.obj["no_branch_switch"] = no_branch_switch
 
     if debug:
         enable_console_debug()
