@@ -267,6 +267,7 @@ def save_project_state(state: Dict[str, Any]):
 def is_branch_switching_enabled() -> bool:
     """Checks if automatic branch switching is enabled."""
     import click
+
     # Check Click context first if available
     try:
         ctx = click.get_current_context(silent=True)
