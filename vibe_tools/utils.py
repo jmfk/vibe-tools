@@ -345,6 +345,10 @@ def setup_logging(command_name: str):
 
     # Initialize OutputManager with the log file
     output_manager.set_log_file(log_file)
+    
+    # Pass config to output_manager
+    config = load_config()
+    output_manager.set_config(config)
 
     # Prevent duplicate handlers if setup_logging is called multiple times
     if logger.handlers:
