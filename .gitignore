@@ -27,3 +27,13 @@ vibe_tools/_version.py
 implementation/run-pids.json
 implementation/logs/
 implementation/costs/usage.csv
+
+# Rust build artifacts (Tauri core)
+frontend/src-tauri/target/
+
+# Tauri generated bundles and artifacts
+frontend/src-tauri/gen/
+frontend/src-tauri/tauri-build/
+
+# Frontend build output
+frontend/dist/
