@@ -302,13 +302,17 @@ def run_agent(
 
             process.wait()
 
-            # For cursor-agent, final_output is the assistant text, but we log the full event stream separately
+            # For cursor-agent, final_output should combine assistant text and any final result text
             if is_cursor_agent:
-                final_output = (
-                    full_result_text
-                    if full_result_text is not None
-                    else "".join(accumulated_assistant_text)
-                )
+                assistant_content = "".join(accumulated_assistant_text)
+                if full_result_text:
+                    if assistant_content:
+                        final_output = assistant_content + "\n\n--- FINAL RESULT ---\n" + full_result_text
+                    else:
+                        final_output = full_result_text
+                else:
+                    final_output = assistant_content
+                
                 # Log both the clean output and the full raw event log
                 log_large_output("agent_output", final_output)
                 log_large_output("agent_raw_events", "\n".join(full_event_log))

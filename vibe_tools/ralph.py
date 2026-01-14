@@ -118,7 +118,7 @@ class RalphLoop:
 
         logger.info(f"📍 Mode: {mode}")
 
-        # 2. Prepare prompt
+        # 2. Prepare prompt template
         try:
             prompt_template = get_prompt("reconciliation_prompt.txt")
         except FileNotFoundError as e:
@@ -130,43 +130,64 @@ class RalphLoop:
             for idx, inst in enumerate(self.instructions, 1):
                 custom_instructions += f"{idx}. {inst}\n"
 
-        prompt = prompt_template.format(
-            name=self.name,
-            mode=mode,
-            desired_file=self.desired_file_name,
-            current_file=self.current_file.name,
-            desired_content=self.desired_content,
-            current_content=current_content,
-            custom_instructions=custom_instructions,
-        )
+        # 3. Iterative Reconciliation
+        config = load_config()
+        max_iterations = config.get("iterations", {}).get("reconciliation", MAX_ITERATIONS)
+        
+        last_output = ""
+        for i in range(1, max_iterations + 1):
+            logger.info(f"🛠️ [{self.name} Loop] Iteration {i}/{max_iterations}")
+            
+            # Update current content from file if it changed
+            if self.current_file.exists():
+                current_content = self.current_file.read_text()
+            else:
+                current_content = "NOT FOUND"
 
-        # 3. Run Agent
-        cmd = get_agent_command(self.agent, prompt)
-        output, code = run_agent(cmd, stream=self.stream)
+            feedback = ""
+            if i > 1:
+                feedback = f"\n\nPREVIOUS ATTEMPT INCOMPLETE OR FAILED. Output was:\n{last_output}\nPlease ensure you update '{self.current_file.name}' correctly and emit the promise."
 
-        if code == 0 and COMPLETION_PROMISE in output:
-            log_success(self.name, "Reconciliation successful.")
-            logger.info(f"✅ {self.name} reconciliation successful.")
+            prompt = prompt_template.format(
+                name=self.name,
+                mode=mode,
+                desired_file=self.desired_file_name,
+                current_file=self.current_file.name,
+                desired_content=self.desired_content,
+                current_content=current_content + feedback,
+                custom_instructions=custom_instructions,
+            )
 
-            # Commit changes if dirty
-            if is_dirty():
-                logger.info(f"💾 Committing changes on {self.branch_name}...")
-                run_command(["git", "add", "."], check=False)
-                run_command(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        f"vibe: reconciliation step '{self.name}' complete",
-                    ],
-                    check=False,
-                )
+            # Run Agent
+            cmd = get_agent_command(self.agent, prompt)
+            output, code = run_agent(cmd, stream=self.stream)
+            last_output = output
 
-            return True
-        else:
-            log_issue(self.name, 1, 1, "Reconciliation failed or incomplete")
-            logger.error(f"❌ {self.name} reconciliation failed or incomplete.")
-            return False
+            if code == 0 and COMPLETION_PROMISE in output:
+                log_success(self.name, "Reconciliation successful.")
+                logger.info(f"✅ {self.name} reconciliation successful.")
+
+                # Commit changes if dirty
+                if is_dirty():
+                    logger.info(f"💾 Committing changes on {self.branch_name}...")
+                    run_command(["git", "add", "."], check=False)
+                    run_command(
+                        [
+                            "git",
+                            "commit",
+                            "-m",
+                            f"vibe: reconciliation step '{self.name}' complete",
+                        ],
+                        check=False,
+                    )
+
+                return True
+            else:
+                logger.warning(f"⚠️ {self.name} iteration {i} incomplete.")
+
+        log_issue(self.name, max_iterations, max_iterations, "Reconciliation failed after max iterations")
+        logger.error(f"❌ {self.name} reconciliation failed or incomplete after {max_iterations} iterations.")
+        return False
 
 
 def debugging_loop(
@@ -440,63 +461,106 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
 
         # 3a. Implementation Step
-        try:
-            prompt_template = get_prompt("implementation_prompt.txt")
-            prompt = prompt_template.format(
-                title=prd.title,
-                description=prd.content,
-                success_criteria=chr(10).join(
-                    ["- " + str(c) for c in success_criteria]
-                ),
-            )
-            cmd = get_agent_command(agent, prompt)
-            output, code = run_agent(cmd, stream=stream)
+        if not prd.impl_code_ready:
+            try:
+                prompt_template = get_prompt("implementation_prompt.txt")
+                
+                success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
+                
+                feedback_context = ""
+                if i > 1 and failure_reason:
+                    feedback_context = f"\n\nPREVIOUS ATTEMPT FAILED:\nReason: {failure_reason}\nContext: {failure_context}\n\nPlease address the issues above in this iteration."
 
-            if code != 0 or COMPLETION_PROMISE not in output:
-                failure_reason = (
-                    f"Agent failed with code {code}"
-                    if code != 0
-                    else "No completion promise"
+                prompt = prompt_template.format(
+                    title=prd.title,
+                    description=prd.content + feedback_context,
+                    success_criteria=success_criteria_str,
                 )
-                failure_context = output
+                cmd = get_agent_command(agent, prompt)
+                output, code = run_agent(cmd, stream=stream)
+
+                if code != 0 or COMPLETION_PROMISE not in output:
+                    failure_reason = (
+                        f"Agent failed with code {code}"
+                        if code != 0
+                        else "No completion promise"
+                    )
+                    failure_context = output
+                    continue
+
+                if is_dirty():
+                    run_command(["git", "add", "."], check=False)
+                    run_command(
+                        ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
+                        check=False,
+                    )
+                
+                # Mark code as ready and persist
+                prd.impl_code_ready = True
+                prd.save()
+            except Exception as e:
+                failure_reason = str(e)
+                failure_context = str(e)
                 continue
-
-            if is_dirty():
-                run_command(["git", "add", "."], check=False)
-                run_command(
-                    ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
-                    check=False,
-                )
-        except Exception as e:
-            failure_reason = str(e)
-            failure_context = str(e)
-            continue
+        else:
+            logger.info("⏩ Implementation code already ready. Skipping.")
 
         # 3b. Quality Gates
         passed_gates = True
         if tests:
-            success_tests, test_summary = debugging_loop(
-                agent, ["test"], stream=stream, iterations=max_debug_iterations
-            )
-            if not success_tests:
-                passed_gates = False
-                failure_reason = "Tests failed"
-                failure_context = test_summary
+            if not prd.impl_tests_passed:
+                success_tests, test_summary = debugging_loop(
+                    agent, ["test"], stream=stream, iterations=max_debug_iterations
+                )
+                if not success_tests:
+                    passed_gates = False
+                    failure_reason = "Tests failed"
+                    failure_context = test_summary
+                else:
+                    prd.impl_tests_passed = True
+                    prd.save()
+            else:
+                logger.info("⏩ Tests already passed. Skipping.")
 
         if passed_gates and review:
-            # Agentic review logic
-            try:
-                review_prompt = f"Review implementation for {prd.title}. Criteria: {success_criteria}"
-                cmd = get_agent_command(agent, review_prompt)
-                output, _ = run_agent(cmd, stream=stream)
-                if "<review>PASSED</review>" not in output:
+            if not prd.impl_review_passed:
+                # Agentic review logic
+                try:
+                    review_template = get_prompt("implementation_review_prompt.txt")
+                    success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
+                    
+                    prompt = review_template.format(
+                        title=prd.title,
+                        description=prd.content,
+                        success_criteria=success_criteria_str,
+                    )
+                    
+                    cmd = get_agent_command(agent, prompt)
+                    output, _ = run_agent(cmd, stream=stream)
+                    if "<review>PASSED</review>" in output:
+                        prd.impl_review_passed = True
+                        prd.save()
+                    else:
+                        passed_gates = False
+                        failure_reason = "Review failed"
+                        failure_context = output
+                except Exception as e:
                     passed_gates = False
-                    failure_reason = "Review failed"
-                    failure_context = output
-            except Exception as e:
-                passed_gates = False
-                failure_reason = f"Review error: {e}"
-                failure_context = str(e)
+                    failure_reason = f"Review error: {e}"
+                    failure_context = str(e)
+            else:
+                logger.info("⏩ Review already passed. Skipping.")
+
+        if passed_gates:
+            success = True
+            break
+        else:
+            # If any gate failed, we might want to reconsider if code is still "ready"
+            # In a loop, if tests fail, the agent might have modified code that now needs re-implementation or fixing.
+            # However, the loop itself handles re-implementation in the next iteration.
+            # For now, let's reset the ready flags if a gate fails so the next iteration re-runs the necessary steps.
+            prd.reset_progress()
+            prd.save()
 
         if passed_gates:
             success = True
