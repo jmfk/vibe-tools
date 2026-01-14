@@ -104,14 +104,21 @@ fn get_workspace_root() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
+async fn run_vibe_command(window: Window, _state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    let mut child = Command::new("vibe")
-        .arg(&command)
-        .args(args)
+    let mut cmd = Command::new("vibe");
+    
+    // If command is "vibe", we just use the args. 
+    // Otherwise we use command as the first arg.
+    if command != "vibe" {
+        cmd.arg(&command);
+    }
+    cmd.args(args);
+    
+    let mut child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

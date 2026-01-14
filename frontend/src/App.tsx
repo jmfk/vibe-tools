@@ -1497,36 +1497,97 @@ const MonitorView = ({ root }: { root: string }) => {
 };
 
 const RunnerView = ({ onRun }: { onRun: (cmd: string) => void }) => {
+  const [params, setParams] = useState<Record<string, string>>({});
+  
   const commands = [
-    { id: 'status', name: 'vibe status', description: 'Show project status' },
-    { id: 'prd-list', name: 'vibe prd list', description: 'List all PRDs' },
-    { id: 'issue-list', name: 'vibe issue list', description: 'List active issues' },
-    { id: 'test', name: 'vibe testing run', description: 'Run project tests' },
-    { id: 'cost', name: 'vibe cost', description: 'Show current cost' }
+    { id: 'architect', name: 'vibe architect', description: 'Start an architecture planning session', params: ['agent'] },
+    { id: 'pm', name: 'vibe pm', description: 'Run the Product Manager loop', params: ['agent'] },
+    { id: 'test', name: 'vibe testing', description: 'Run agent-driven tests', params: ['agent'] },
+    { id: 'implement', name: 'vibe implement', description: 'Run implementation loop', params: ['agent', 'plan'] },
+    { id: 'status', name: 'vibe status', description: 'Show project status', params: [] },
+    { id: 'prd-list', name: 'vibe prd list', description: 'List all PRDs', params: [] },
+    { id: 'issue-list', name: 'vibe issue list', description: 'List active issues', params: [] },
+    { id: 'cost', name: 'vibe cost', description: 'Show current cost', params: [] }
   ];
 
-  const handleRun = (cmd: string) => {
-    const [base, ...args] = cmd.split(' ');
-    invoke('run_vibe_command', { command: args[0], args: args.slice(1) }).catch(console.error);
+  const handleRun = (cmd: string, cmdParams: string[]) => {
+    const args: string[] = [];
+    
+    // Add global options first
+    const globalOptions = ['agent', 'stream', 'verbose'];
+    globalOptions.forEach(p => {
+      if (params[p]) {
+        args.push(`--${p}`);
+        args.push(params[p]);
+      }
+    });
+
+    const [base, ...rest] = cmd.split(' ');
+    // If it's something like 'vibe testing', we want 'testing' to be the subcommand
+    if (rest.length > 0) {
+      args.push(...rest);
+    }
+    
+    // Add command-specific parameters
+    cmdParams.forEach(p => {
+      if (!globalOptions.includes(p) && params[p]) {
+        args.push(`--${p}`);
+        args.push(params[p]);
+      }
+    });
+    
+    invoke('run_vibe_command', { command: 'vibe', args }).catch(console.error);
     onRun(cmd);
+  };
+
+  const updateParam = (param: string, value: string) => {
+    setParams(prev => ({ ...prev, [param]: value }));
   };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-zinc-100">Runner</h2>
-      <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-zinc-100">Command Launcher</h2>
+        <button 
+          onClick={() => invoke('run_vibe_command', { command: 'kill', args: ['--yes'] })}
+          className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md text-xs font-bold transition-colors"
+        >
+          <Trash2 size={14} /> Stop All Processes
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {commands.map((cmd) => (
-          <div key={cmd.id} className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <div>
-              <div className="font-mono text-blue-400 font-medium">{cmd.name}</div>
-              <div className="text-xs text-zinc-500 mt-1">{cmd.description}</div>
+          <div key={cmd.id} className="flex flex-col p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="font-mono text-blue-400 font-bold text-sm">{cmd.name}</div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">{cmd.description}</div>
+              </div>
+              <button 
+                onClick={() => handleRun(cmd.name, cmd.params)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 text-zinc-950 rounded-md font-bold text-xs hover:bg-white transition-colors"
+              >
+                <PlayCircle size={14} /> Run
+              </button>
             </div>
-            <button 
-              onClick={() => handleRun(cmd.name)}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-950 rounded-md font-semibold text-sm hover:bg-white transition-colors"
-            >
-              <PlayCircle size={16} /> Run
-            </button>
+            
+            {cmd.params.length > 0 && (
+              <div className="space-y-2 mt-2 pt-2 border-t border-zinc-800">
+                {cmd.params.map(p => (
+                  <div key={p} className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase font-bold text-zinc-600 tracking-wider">{p}</label>
+                    <input 
+                      type="text" 
+                      placeholder={`Enter ${p}...`}
+                      value={params[p] || ''}
+                      onChange={(e) => updateParam(p, e.target.value)}
+                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1534,34 +1595,148 @@ const RunnerView = ({ onRun }: { onRun: (cmd: string) => void }) => {
   );
 };
 
-const TestingView = () => (
-  <div className="space-y-6">
-    <h2 className="text-xl font-bold text-zinc-100">Testing</h2>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {[
-        { name: 'Unit Tests', status: 'Passed', count: 42, time: '1.2s' },
-        { name: 'Integration Tests', status: 'Failed', count: 12, time: '4.5s' },
-        { name: 'E2E Tests', status: 'Pending', count: 5, time: '--' }
-      ].map((test) => (
-        <div key={test.name} className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-          <div className="flex items-center justify-between mb-4">
-            <span className="font-semibold text-zinc-200">{test.name}</span>
-            <span className={cn(
-              "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
-              test.status === 'Passed' ? "bg-green-500/10 text-green-500" :
-              test.status === 'Failed' ? "bg-red-500/10 text-red-500" : "bg-zinc-800 text-zinc-500"
-            )}>
-              {test.status}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs text-zinc-500">
-            <div className="flex items-center gap-1"><Database size={12} /><span>{test.count} tests</span></div>
-            <div className="flex items-center gap-1"><Activity size={12} /><span>{test.time}</span></div>
-          </div>
+const TestingView = () => {
+  const [tests, setTests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
+
+  useEffect(() => {
+    invoke<string>('get_workspace_root').then(root => {
+      setWorkspaceRoot(root);
+      loadTests(root);
+    });
+
+    const unlisten = listen('file-changed', (event: any) => {
+      if (event.payload.path.endsWith('testing.yaml')) {
+        loadTests(workspaceRoot);
+      }
+    });
+
+    return () => {
+      unlisten.then(f => f());
+    };
+  }, [workspaceRoot]);
+
+  const loadTests = async (root: string) => {
+    try {
+      const path = `${root}/implementation/testing.yaml`;
+      const content = await invoke<string>('read_file_content', { path });
+      const data: any = yaml.load(content);
+      if (data && data.tests) {
+        setTests(data.tests);
+      }
+      setLoading(false);
+    } catch (e) {
+      console.error('Error loading tests:', e);
+      setLoading(false);
+    }
+  };
+
+  const updateStepStatus = async (testId: string, stepId: string, status: string) => {
+    try {
+      await invoke('run_vibe_command', { 
+        command: 'testing', 
+        args: ['step', testId, stepId, status] 
+      });
+      // Test will be reloaded via file-changed event
+    } catch (e) {
+      console.error('Error updating step status:', e);
+    }
+  };
+
+  if (loading) {
+    return <div className="h-full flex items-center justify-center text-zinc-500 animate-pulse">Loading test board...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-zinc-100">Interactive Test Board</h2>
+        <div className="flex gap-2 text-xs">
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-zinc-600" /> Pending</span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> In Progress</span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /> Passed</span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500" /> Failed</span>
         </div>
-      ))}
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {tests.map((test) => (
+          <div key={test.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col shadow-lg">
+            <div className="p-4 border-b border-zinc-800 bg-zinc-800/30">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-mono text-zinc-500 font-bold">{test.id}</span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                  test.status === 'passed' ? "bg-green-500/10 text-green-500" :
+                  test.status === 'failed' ? "bg-red-500/10 text-red-500" :
+                  test.status === 'in_progress' ? "bg-blue-500/10 text-blue-500" : "bg-zinc-800 text-zinc-500"
+                )}>
+                  {test.status}
+                </span>
+              </div>
+              <h3 className="font-bold text-zinc-100 leading-tight">{test.title}</h3>
+              <p className="text-[11px] text-zinc-500 mt-1 line-clamp-2">{test.description}</p>
+            </div>
+            
+            <div className="flex-1 p-4 space-y-3">
+              {test.steps.map((step: any, idx: number) => (
+                <div key={step.id} className="flex gap-3 group">
+                  <div className="flex flex-col items-center">
+                    <button 
+                      onClick={() => {
+                        const nextStatus = step.status === 'passed' ? 'pending' : 'passed';
+                        updateStepStatus(test.id, step.id, nextStatus);
+                      }}
+                      className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                        step.status === 'passed' ? "bg-green-500 border-green-500 text-zinc-950" :
+                        step.status === 'failed' ? "bg-red-500 border-red-500 text-zinc-950" :
+                        step.status === 'in_progress' ? "bg-blue-500 border-blue-500 text-zinc-950" : "bg-transparent border-zinc-700 hover:border-zinc-500"
+                      )}
+                    >
+                      {step.status === 'passed' && <CheckCircle2 size={12} strokeWidth={3} />}
+                      {step.status === 'failed' && <AlertCircle size={12} strokeWidth={3} />}
+                      {step.status === 'in_progress' && <Clock size={12} strokeWidth={3} />}
+                    </button>
+                    {idx < test.steps.length - 1 && <div className="w-0.5 flex-1 bg-zinc-800 my-1" />}
+                  </div>
+                  <div className="flex-1 min-w-0 pb-1">
+                    <div className={cn(
+                      "text-xs transition-colors",
+                      step.status === 'passed' ? "text-zinc-500 line-through" : "text-zinc-300"
+                    )}>
+                      {step.text}
+                    </div>
+                    <div className="flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => updateStepStatus(test.id, step.id, 'in_progress')}
+                        className="text-[9px] font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest"
+                      >
+                        Start
+                      </button>
+                      <button 
+                        onClick={() => updateStepStatus(test.id, step.id, 'failed')}
+                        className="text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-widest"
+                      >
+                        Fail
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {tests.length === 0 && (
+          <div className="col-span-full h-48 flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-xl">
+             <TestTube size={32} className="mb-2 opacity-20" />
+             <p className="text-sm">No interactive tests found in implementation/testing.yaml</p>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default App;
