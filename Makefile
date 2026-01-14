@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-desktop test test-backend test-desktop test-frontend test-core install-backend install-frontend install-deps dev-desktop lint lint-backend lint-frontend clean logs
+.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core install install-backend install-frontend dev-desktop lint lint-backend lint-frontend clean logs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -8,8 +8,11 @@ help: ## Display this help message
 # Build Targets
 build: install-backend build-desktop ## Build the entire project (CLI and Desktop)
 
+build-cli: install-backend ## Install the Python CLI in editable mode
+	pip install -e .
+
 build-desktop: ## Build the production Tauri desktop application
-	cd frontend && cargo tauri build
+	cd frontend && npm run tauri build
 
 # Test Targets
 test: test-backend test-desktop ## Run all tests (CLI and Desktop)
@@ -26,16 +29,16 @@ test-core: ## Run Rust-specific Cargo tests
 	cd frontend/src-tauri && cargo test
 
 # Development Targets
-install-backend: ## Install Python backend dependencies in editable mode
+install: install-backend install-frontend ## Install all dependencies for development
+
+install-backend: ## Install Python backend dependencies
 	pip install -e .
 
 install-frontend: ## Install Node.js frontend dependencies
 	cd frontend && npm install
 
-install-deps: install-backend install-frontend ## Install all dependencies for development
-
 dev-desktop: ## Start the Tauri development environment
-	cd frontend && cargo tauri dev
+	cd frontend && npm run tauri dev
 
 # Linting & Quality Targets
 lint: lint-backend lint-frontend ## Run all linters (CLI and Frontend)

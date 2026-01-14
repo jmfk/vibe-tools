@@ -395,7 +395,10 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
         "git": {"status": False, "message": "Not installed"},
         "gh": {"status": False, "message": "Not installed"},
         "gemini": {"status": False, "message": "API Key missing"},
-        "agent": {"status": False, "message": "No agent found (cursor-agent or claude)"},
+        "agent": {
+            "status": False,
+            "message": "No agent found (cursor-agent or claude)",
+        },
     }
 
     # 1. Check Git
@@ -405,15 +408,21 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
         if name.strip() and email.strip():
             results["git"] = {"status": True, "message": f"Found ({name.strip()})"}
         else:
-            results["git"] = {"status": False, "message": "Git installed but not configured (user.name/email)"}
-    
+            results["git"] = {
+                "status": False,
+                "message": "Git installed but not configured (user.name/email)",
+            }
+
     # 2. Check GitHub CLI
     if is_tool_available("gh"):
         stdout, code = run_command(["gh", "auth", "status"], check=False)
         if code == 0 and "Logged in" in stdout:
             results["gh"] = {"status": True, "message": "Logged in"}
         else:
-            results["gh"] = {"status": False, "message": "Installed but not authenticated"}
+            results["gh"] = {
+                "status": False,
+                "message": "Installed but not authenticated",
+            }
 
     # 3. Check Gemini API Key
     api_key = get_google_api_key()
@@ -426,7 +435,7 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
         agents.append("cursor-agent")
     if is_tool_available("claude"):
         agents.append("claude")
-    
+
     if agents:
         results["agent"] = {"status": True, "message": f"Found: {', '.join(agents)}"}
 
@@ -436,29 +445,43 @@ def check_prerequisites() -> Dict[str, Dict[str, Any]]:
 def guide_setup():
     """Interactively guides the user to set up missing prerequisites."""
     click.echo(click.style("\n🔍 Checking system prerequisites...", fg="cyan"))
-    
+
     while True:
         prereqs = check_prerequisites()
         all_pass = True
-        
+
         click.echo("")
         for key, info in prereqs.items():
-            icon = click.style("✅", fg="green") if info["status"] else click.style("❌", fg="red")
+            icon = (
+                click.style("✅", fg="green")
+                if info["status"]
+                else click.style("❌", fg="red")
+            )
             click.echo(f"  {icon} {key.upper():<10} : {info['message']}")
             if not info["status"]:
                 all_pass = False
 
         if all_pass:
-            click.echo(click.style("\n✨ All prerequisites met!", fg="green", bold=True))
+            click.echo(
+                click.style("\n✨ All prerequisites met!", fg="green", bold=True)
+            )
             return True
 
-        click.echo(click.style("\n⚠️  Some prerequisites are missing or misconfigured.", fg="yellow"))
-        
+        click.echo(
+            click.style(
+                "\n⚠️  Some prerequisites are missing or misconfigured.", fg="yellow"
+            )
+        )
+
         if not prereqs["git"]["status"]:
             if prereqs["git"]["message"] == "Not installed":
-                click.echo("  - Git is required. Please install it: https://git-scm.com/")
+                click.echo(
+                    "  - Git is required. Please install it: https://git-scm.com/"
+                )
             else:
-                if click.confirm("  - Configure Git user name and email now?", default=True):
+                if click.confirm(
+                    "  - Configure Git user name and email now?", default=True
+                ):
                     name = click.prompt("    Enter your name")
                     email = click.prompt("    Enter your email")
                     run_command(["git", "config", "--global", "user.name", name])
@@ -485,13 +508,20 @@ def guide_setup():
             click.echo("    Install cursor-agent: npm install -g @cursor-agent/cli")
             click.echo("    Or Claude Code: npm install -g @anthropic-ai/claude-code")
 
-        if not click.confirm("\nPrerequisites are still missing. Try again after fixing?", default=True):
+        if not click.confirm(
+            "\nPrerequisites are still missing. Try again after fixing?", default=True
+        ):
             return False
 
 
 def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
     """Sync the Makefile with the development environment and architecture specifications."""
-    from vibe_tools.utils import ARCHITECTURE_SPEC, DEV_SPEC, run_agent, get_agent_command
+    from vibe_tools.utils import (
+        ARCHITECTURE_SPEC,
+        DEV_SPEC,
+        run_agent,
+        get_agent_command,
+    )
 
     if not DEV_SPEC.exists():
         click.echo(f"⚠️  {DEV_SPEC} not found. Skipping Makefile sync.")
@@ -500,8 +530,10 @@ def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
     click.echo("🔄 Syncing Makefile with project specifications...")
 
     dev_spec_content = DEV_SPEC.read_text()
-    arch_spec_content = ARCHITECTURE_SPEC.read_text() if ARCHITECTURE_SPEC.exists() else ""
-    
+    arch_spec_content = (
+        ARCHITECTURE_SPEC.read_text() if ARCHITECTURE_SPEC.exists() else ""
+    )
+
     # Check if Makefile exists, if not use template
     makefile_path = pathlib.Path("Makefile")
     current_makefile = ""
@@ -509,6 +541,7 @@ def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
         current_makefile = makefile_path.read_text()
     else:
         from vibe_tools.templates import TEMPLATES
+
         current_makefile = TEMPLATES.get("Makefile", "")
 
     prompt = f"""You are a Makefile Expert and Project Scaffolder. 
@@ -557,31 +590,37 @@ Output ONLY the raw Makefile content.
         # Extraction logic: find the first .PHONY or first target
         # If the agent is messy, we try to find the cleanest block
         clean_output = output.strip()
-        
+
         # Remove any leading/trailing garbage common in messy LLM outputs
         if "--- FINAL RESULT ---" in clean_output:
             clean_output = clean_output.split("--- FINAL RESULT ---")[-1].strip()
-            
+
         if "```" in clean_output:
             # Extract content between code fences if present
-            match = re.search(r"```(?:makefile)?\s*([\s\S]*?)\s*```", clean_output, re.IGNORECASE)
+            match = re.search(
+                r"```(?:makefile)?\s*([\s\S]*?)\s*```", clean_output, re.IGNORECASE
+            )
             if match:
                 clean_output = match.group(1).strip()
             else:
                 # Fallback: just strip the fences
-                clean_output = clean_output.replace("```makefile", "").replace("```", "").strip()
-        
+                clean_output = (
+                    clean_output.replace("```makefile", "").replace("```", "").strip()
+                )
+
         # Final sanitization: ensure it looks like a Makefile (starts with .PHONY or a target)
         lines = clean_output.splitlines()
         valid_start = -1
         for i, line in enumerate(lines):
-            if line.startswith(".PHONY:") or (":" in line and not line.startswith("\t") and not line.startswith(" ")):
+            if line.startswith(".PHONY:") or (
+                ":" in line and not line.startswith("\t") and not line.startswith(" ")
+            ):
                 valid_start = i
                 break
-        
+
         if valid_start != -1:
             clean_output = "\n".join(lines[valid_start:]).strip()
-            
+
         makefile_path.write_text(clean_output)
         click.echo("✅ Makefile updated successfully.")
     else:
@@ -669,7 +708,9 @@ def llm(ctx):
                 "\n💡 Hint: Your API key might be invalid. Run 'vibe config api' to reset it."
             )
         elif "module" in str(e).lower():
-            click.echo("\n💡 Hint: Ensure 'google-genai' is installed in your environment.")
+            click.echo(
+                "\n💡 Hint: Ensure 'google-genai' is installed in your environment."
+            )
 
 
 @setup_cli.command(name="dspy", hidden=True)
@@ -882,21 +923,23 @@ def install_deps(
     if run_all or only_frontend:
         if pathlib.Path("frontend/package.json").exists():
             click.echo("Found frontend/package.json. Installing npm dependencies...")
-            
+
             # Ensure TypeScript configuration exists if missing
             tsconfig = pathlib.Path("frontend/tsconfig.json")
             tsconfig_node = pathlib.Path("frontend/tsconfig.node.json")
-            
+
             if not tsconfig.exists():
                 click.echo("Creating missing frontend/tsconfig.json...")
                 tsconfig.write_text(TEMPLATES.get("tsconfig.json", ""))
-                
+
             if not tsconfig_node.exists():
                 click.echo("Creating missing frontend/tsconfig.node.json...")
                 tsconfig_node.write_text(TEMPLATES.get("tsconfig.node.json", ""))
 
             # Using --legacy-peer-deps to handle common React 18 ecosystem conflicts
-            run_command(["npm", "install", "--prefix", "frontend", "--legacy-peer-deps"])
+            run_command(
+                ["npm", "install", "--prefix", "frontend", "--legacy-peer-deps"]
+            )
 
 
 @setup_cli.command()
@@ -1005,7 +1048,9 @@ def env(python_version):
     click.echo('  [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"')
     click.echo('  eval "$(pyenv init --path)"')
     click.echo('  eval "$(pyenv init -)"')
-    click.echo('  # Note: Avoid "pyenv virtualenv-init" on macOS to prevent fork exhaustion.')
+    click.echo(
+        '  # Note: Avoid "pyenv virtualenv-init" on macOS to prevent fork exhaustion.'
+    )
 
 
 @setup_cli.command()
@@ -1106,10 +1151,22 @@ def scaffold(ctx):
     click.echo("\n--- Development Environment Scaffolding Setup ---")
 
     # Warning for non-k8s projects
-    click.echo(click.style("⚠️  Warning: This command is optimized for Kubernetes (k8s) environments.", fg="yellow", bold=True))
-    click.echo("It will generate build instructions and logging infrastructure (Loki/Grafana/Stern)")
-    click.echo("focused on containerized workflows. If you are building a CLI or Tauri project,")
-    click.echo("you should manually configure your 'product/dev_environment.md' instead.")
+    click.echo(
+        click.style(
+            "⚠️  Warning: This command is optimized for Kubernetes (k8s) environments.",
+            fg="yellow",
+            bold=True,
+        )
+    )
+    click.echo(
+        "It will generate build instructions and logging infrastructure (Loki/Grafana/Stern)"
+    )
+    click.echo(
+        "focused on containerized workflows. If you are building a CLI or Tauri project,"
+    )
+    click.echo(
+        "you should manually configure your 'product/dev_environment.md' instead."
+    )
 
     # Ensure project structure
     ensure_infrastructure()
@@ -1121,10 +1178,13 @@ def scaffold(ctx):
     # Check if dev_environment.md already exists
     if DEV_SPEC.exists():
         click.echo(f"\n✅ {DEV_SPEC} already exists.")
-        if not click.confirm("Regenerate dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)", default=False):
+        if not click.confirm(
+            "Regenerate dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)",
+            default=False,
+        ):
             click.echo("Aborted.")
             return
-        
+
         # Regenerate
         _generate_dev_spec(agent, stream)
     else:
@@ -1151,7 +1211,9 @@ def scaffold(ctx):
         click.echo("   Continuing with scaffold, but logging will not be available.")
     except Exception as e:
         click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
-        click.echo("   Continuing with scaffold, but logging may not be fully configured.")
+        click.echo(
+            "   Continuing with scaffold, but logging may not be fully configured."
+        )
 
     # Sync Makefile with the newly generated dev_environment.md
     sync_makefile(agent=agent, stream=stream)
@@ -1434,7 +1496,12 @@ def _install_stern() -> bool:
                 if result[1] == 0:
                     # Make executable and install
                     binary_path.chmod(0o755)
-                    install_cmd = ["sudo", "mv", str(binary_path), "/usr/local/bin/stern"]
+                    install_cmd = [
+                        "sudo",
+                        "mv",
+                        str(binary_path),
+                        "/usr/local/bin/stern",
+                    ]
                     result = run_command(install_cmd, check=False)
                     if result[1] == 0:
                         click.echo("  ✅ Stern installed successfully")
@@ -1480,7 +1547,9 @@ def _ensure_helm_installed() -> bool:
                 return True
     else:
         click.echo("  💡 Install Helm manually:")
-        click.echo("     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+        click.echo(
+            "     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+        )
 
     # Verify
     result = run_command(["helm", "version"], check=False)
@@ -1498,9 +1567,7 @@ def _setup_helm_repos() -> bool:
 
     for repo_name, repo_url in repos:
         click.echo(f"  📦 Adding Helm repo: {repo_name}...")
-        result = run_command(
-            ["helm", "repo", "add", repo_name, repo_url], check=False
-        )
+        result = run_command(["helm", "repo", "add", repo_name, repo_url], check=False)
         if result[1] != 0:
             # Repo might already exist, try update
             if "already exists" in result[0].lower():
@@ -1531,9 +1598,7 @@ def _deploy_loki_stack() -> bool:
 
     # Create namespace if it doesn't exist
     click.echo(f"  📦 Creating namespace: {namespace}...")
-    result = run_command(
-        ["kubectl", "create", "namespace", namespace], check=False
-    )
+    result = run_command(["kubectl", "create", "namespace", namespace], check=False)
     if result[1] != 0 and "already exists" not in result[0].lower():
         click.echo(f"  ⚠️  Failed to create namespace: {result[0]}")
         return False
@@ -1598,12 +1663,28 @@ def _deploy_loki_stack() -> bool:
             # Show pod logs for debugging
             click.echo("  📋 Checking Loki pod status...")
             result = run_command(
-                ["kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/name=loki"],
+                [
+                    "kubectl",
+                    "get",
+                    "pods",
+                    "-n",
+                    namespace,
+                    "-l",
+                    "app.kubernetes.io/name=loki",
+                ],
                 check=False,
             )
             click.echo(result[0])
             result = run_command(
-                ["kubectl", "logs", "-n", namespace, "-l", "app.kubernetes.io/name=loki", "--tail=50"],
+                [
+                    "kubectl",
+                    "logs",
+                    "-n",
+                    namespace,
+                    "-l",
+                    "app.kubernetes.io/name=loki",
+                    "--tail=50",
+                ],
                 check=False,
             )
             if result[1] == 0:
@@ -1618,7 +1699,11 @@ def _deploy_loki_stack() -> bool:
     click.echo("  📦 Deploying Promtail...")
     promtail_values = {
         "config": {
-            "clients": [{"url": f"http://loki.{namespace}.svc.cluster.local:3100/loki/api/v1/push"}],
+            "clients": [
+                {
+                    "url": f"http://loki.{namespace}.svc.cluster.local:3100/loki/api/v1/push"
+                }
+            ],
             "serverPort": 3101,
             "positions": {"filename": "/tmp/positions.yaml"},
         },
@@ -1711,12 +1796,28 @@ def _deploy_loki_stack() -> bool:
             # Show pod logs for debugging
             click.echo("  📋 Checking Grafana pod status...")
             result = run_command(
-                ["kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/name=grafana"],
+                [
+                    "kubectl",
+                    "get",
+                    "pods",
+                    "-n",
+                    namespace,
+                    "-l",
+                    "app.kubernetes.io/name=grafana",
+                ],
                 check=False,
             )
             click.echo(result[0])
             result = run_command(
-                ["kubectl", "logs", "-n", namespace, "-l", "app.kubernetes.io/name=grafana", "--tail=50"],
+                [
+                    "kubectl",
+                    "logs",
+                    "-n",
+                    namespace,
+                    "-l",
+                    "app.kubernetes.io/name=grafana",
+                    "--tail=50",
+                ],
                 check=False,
             )
             if result[1] == 0:
@@ -1897,8 +1998,12 @@ def _ensure_kubectl_installed() -> bool:
             return False
     else:
         click.echo("  💡 Install kubectl manually:")
-        click.echo("     curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl")
-        click.echo("     sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl")
+        click.echo(
+            "     curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        )
+        click.echo(
+            "     sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl"
+        )
         return False
 
     # Verify installation
@@ -1952,7 +2057,12 @@ def _install_kind() -> bool:
                 result = run_command(download_cmd, check=False)
                 if result[1] == 0:
                     binary_path.chmod(0o755)
-                    install_cmd = ["sudo", "mv", str(binary_path), "/usr/local/bin/kind"]
+                    install_cmd = [
+                        "sudo",
+                        "mv",
+                        str(binary_path),
+                        "/usr/local/bin/kind",
+                    ]
                     result = run_command(install_cmd, check=False)
                     if result[1] == 0:
                         click.echo("  ✅ Kind installed successfully")
@@ -2006,6 +2116,7 @@ def _install_k3d() -> bool:
         try:
             # Use subprocess directly for shell command with pipe
             import subprocess
+
             result = subprocess.run(
                 "curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
                 shell=True,
@@ -2071,7 +2182,12 @@ def _install_minikube() -> bool:
                 result = run_command(download_cmd, check=False)
                 if result[1] == 0:
                     binary_path.chmod(0o755)
-                    install_cmd = ["sudo", "install", str(binary_path), "/usr/local/bin/minikube"]
+                    install_cmd = [
+                        "sudo",
+                        "install",
+                        str(binary_path),
+                        "/usr/local/bin/minikube",
+                    ]
                     result = run_command(install_cmd, check=False)
                     if result[1] == 0:
                         click.echo("  ✅ Minikube installed successfully")
@@ -2206,7 +2322,9 @@ def _setup_logging_infrastructure():
     # Check if Kubernetes cluster is available
     if not has_k8s_cluster():
         click.echo("  ⚠️  Kubernetes cluster not available.")
-        click.echo("     Logging infrastructure requires a local Kubernetes cluster (kind/k3d/minikube).")
+        click.echo(
+            "     Logging infrastructure requires a local Kubernetes cluster (kind/k3d/minikube)."
+        )
 
         # Check if kubectl is installed
         if not _ensure_kubectl_installed():
@@ -2245,7 +2363,9 @@ def _setup_logging_infrastructure():
                 default_choice = "1"
         else:
             default_choice = "1"
-            click.echo("\n  No cluster tools found. Kind will be installed (recommended).")
+            click.echo(
+                "\n  No cluster tools found. Kind will be installed (recommended)."
+            )
 
         choice = click.prompt(
             "\n  Which Kubernetes cluster type should we install?",
@@ -2264,7 +2384,9 @@ def _setup_logging_infrastructure():
                 "minikube": _install_minikube,
             }
             if not install_funcs[selected_tool]():
-                click.echo(f"  ❌ Failed to install {selected_tool}. Please install it manually and re-run scaffold.")
+                click.echo(
+                    f"  ❌ Failed to install {selected_tool}. Please install it manually and re-run scaffold."
+                )
                 return
 
         # Create the cluster
@@ -2275,12 +2397,16 @@ def _setup_logging_infrastructure():
             "minikube": _create_minikube_cluster,
         }
         if not create_funcs[selected_tool]():
-            click.echo(f"  ❌ Failed to create {selected_tool} cluster. Please check the error messages above.")
+            click.echo(
+                f"  ❌ Failed to create {selected_tool} cluster. Please check the error messages above."
+            )
             return
 
         # Verify cluster is now accessible
         if not has_k8s_cluster():
-            click.echo("  ❌ Cluster was created but is not accessible. Please check your setup.")
+            click.echo(
+                "  ❌ Cluster was created but is not accessible. Please check your setup."
+            )
             return
 
         click.echo("  ✅ Kubernetes cluster is ready!")
@@ -2288,14 +2414,20 @@ def _setup_logging_infrastructure():
     # Install Stern
     click.echo("\n📦 Installing Stern for log streaming...")
     if not _install_stern():
-        click.echo("  ⚠️  Stern installation failed, but continuing with other components...")
+        click.echo(
+            "  ⚠️  Stern installation failed, but continuing with other components..."
+        )
 
     # Ensure Helm is installed
     click.echo("\n📦 Ensuring Helm is installed...")
     if not _ensure_helm_installed():
-        click.echo("  ❌ Helm is required for logging infrastructure. Please install it manually.")
+        click.echo(
+            "  ❌ Helm is required for logging infrastructure. Please install it manually."
+        )
         click.echo("     macOS: brew install helm")
-        click.echo("     Linux: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash")
+        click.echo(
+            "     Linux: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+        )
         raise click.ClickException("Helm installation failed")
 
     # Setup Helm repos
@@ -2313,13 +2445,19 @@ def _setup_logging_infrastructure():
     # Get Grafana credentials
     credentials = _get_grafana_credentials()
     click.echo("\n✅ Logging infrastructure deployed successfully!")
-    click.echo(f"   Grafana credentials: username={credentials['username']}, password={credentials['password']}")
-    click.echo("   Access Grafana: kubectl port-forward svc/grafana -n monitoring 3000:3000")
+    click.echo(
+        f"   Grafana credentials: username={credentials['username']}, password={credentials['password']}"
+    )
+    click.echo(
+        "   Access Grafana: kubectl port-forward svc/grafana -n monitoring 3000:3000"
+    )
     click.echo("   Then open: http://localhost:3000")
 
     # Validate setup
     if not _validate_logging_setup():
-        click.echo("  ⚠️  Logging setup validation had issues, but components are deployed")
+        click.echo(
+            "  ⚠️  Logging setup validation had issues, but components are deployed"
+        )
 
 
 if __name__ == "__main__":
