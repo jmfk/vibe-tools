@@ -115,7 +115,8 @@ CRITICAL REQUIREMENTS:
 1. The output MUST be a valid YAML dictionary (key-value pairs).
 2. If any keys or values contain special characters like colons (":"), brackets, or dashes, they MUST be properly quoted.
 3. Example of a common error to fix: 'Key: With: Colons: value' should be '"Key: With: Colons": "value"'.
-4. Do NOT include any markdown formatting, just the raw YAML.
+4. Example of another common error: nested lists without a parent key. Fix these by converting to mappings or merging into a single list element.
+5. Do NOT include any markdown formatting, just the raw YAML.
 """
         try:
             fixed_output = run_llm(fix_prompt, model="gemini-3-flash", debug=debug)
