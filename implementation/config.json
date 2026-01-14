@@ -3,9 +3,9 @@
     "review": true,
     "tests": true,
     "coverage": true,
-    "auto_merge": true,
+    "auto_merge": false,
     "include_html_logs": false,
-    "automerge_branch": "staging",
+    "automerge_branch": "main",
     "no_branch_switch": true,
     "fast": true
   },
