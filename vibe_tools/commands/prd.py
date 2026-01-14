@@ -188,41 +188,41 @@ def register_prd(cli):
             except Exception:
                 click.echo(f"{i}. {f.name}")
 
-    click.echo("\nOptions: [q]uit, [m]ove <idx> to top, [s]tart <idx>, [a]dd dep <idx> <dep_id>")
-    choice = click.prompt("Selection", type=str, default="q")
+        click.echo("\nOptions: [q]uit, [m]ove <idx> to top, [s]tart <idx>, [a]dd dep <idx> <dep_id>")
+        choice = click.prompt("Selection", type=str, default="q")
 
-    if choice.startswith("m "):
-        try:
-            idx = int(choice.split()[1]) - 1
-            if 0 <= idx < len(backlog):
-                selected = backlog[idx]
-                p = load_prd(selected)
-                p.metadata["priority"] = 0
-                new_name = f"000-{selected.name}"
-                selected.rename(PRODUCT_BACKLOG_DIR / new_name)
-                click.echo(f"Moved {p.id} to top.")
-        except (ValueError, IndexError):
-            click.echo("Invalid index.")
-    elif choice.startswith("a "):
-        try:
-            parts = choice.split()
-            if len(parts) < 4:
-                click.echo("Usage: a dep <idx> <dep_id>")
-                return
-            idx = int(parts[2]) - 1
-            dep_id = parts[3].upper()
-            if 0 <= idx < len(backlog):
-                selected_file = backlog[idx]
-                p = load_prd(selected_file)
-                if dep_id not in p.depends_on:
-                    p.depends_on.append(dep_id)
-                    p.save()
-                    click.echo(f"✅ Added dependency {dep_id} to {p.id}")
-                else:
-                    click.echo(f"ℹ️  {p.id} already depends on {dep_id}")
-        except (ValueError, IndexError):
-            click.echo("Invalid index.")
-    elif choice.startswith("s "):
+        if choice.startswith("m "):
+            try:
+                idx = int(choice.split()[1]) - 1
+                if 0 <= idx < len(backlog):
+                    selected = backlog[idx]
+                    p = load_prd(selected)
+                    p.metadata["priority"] = 0
+                    new_name = f"000-{selected.name}"
+                    selected.rename(PRODUCT_BACKLOG_DIR / new_name)
+                    click.echo(f"Moved {p.id} to top.")
+            except (ValueError, IndexError):
+                click.echo("Invalid index.")
+        elif choice.startswith("a "):
+            try:
+                parts = choice.split()
+                if len(parts) < 4:
+                    click.echo("Usage: a dep <idx> <dep_id>")
+                    return
+                idx = int(parts[2]) - 1
+                dep_id = parts[3].upper()
+                if 0 <= idx < len(backlog):
+                    selected_file = backlog[idx]
+                    p = load_prd(selected_file)
+                    if dep_id not in p.depends_on:
+                        p.depends_on.append(dep_id)
+                        p.save()
+                        click.echo(f"✅ Added dependency {dep_id} to {p.id}")
+                    else:
+                        click.echo(f"ℹ️  {p.id} already depends on {dep_id}")
+            except (ValueError, IndexError):
+                click.echo("Invalid index.")
+        elif choice.startswith("s "):
             try:
                 idx = int(choice.split()[1]) - 1
                 if 0 <= idx < len(backlog):
@@ -261,7 +261,8 @@ def register_prd(cli):
             except (ValueError, IndexError):
                 click.echo("Invalid index.")
 
-    @prd.command(name="stop")    def stop_prd():
+    @prd.command(name="stop")
+    def stop_prd():
         """Move the current in-progress PRD back to the backlog."""
         in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
         if not in_progress:

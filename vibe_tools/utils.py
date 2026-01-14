@@ -42,12 +42,7 @@ PLANNING_BACKLOG_DIR = PRODUCT_BACKLOG_DIR
 PLANNING_HISTORY_DIR = PRODUCT_HISTORY_DIR
 PLANNING_REJECTED_DIR = PRODUCT_DIR / "rejected"
 
-# Implementation PRDs (YAML)
-PRD_DIR = VIBE_PROJECT_DIR / "prds"
-PRD_PROCESSING_DIR = PRD_DIR / "processing"
-PRD_DONE_DIR = PRD_DIR / "done"
-PRD_FAILED_DIR = PRD_DIR / "failed"
-
+# Implementation state
 PROJECT_STATE_FILE = VIBE_PROJECT_DIR / "state.json"
 STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
 LOGS_DIR = VIBE_PROJECT_DIR / "logs"
@@ -433,11 +428,33 @@ def safe_yaml_dump(data: Any) -> str:
     return yaml.safe_dump(data, sort_keys=False)
 
 
-def collect_prd_files() -> List[pathlib.Path]:
-    """Collects all machine-readable PRD YAML files."""
-    if not PRD_DIR.exists():
-        return []
-    return sorted(list(PRD_DIR.glob("*.yaml")))
+def collect_all_prd_info() -> List[Dict[str, Any]]:
+    """Collects status information for all PRDs (Markdown only)."""
+    prds = {}
+
+    # Look for human specs in product/
+    if PLANNING_DIR.exists():
+        for f in PLANNING_DIR.rglob("*.md"):
+            name = f.stem
+            if name in [
+                "architecture",
+                "infrastructure",
+                "cicd",
+                "testing",
+                "dev_environment",
+                "project-overview",
+                "project_overview",
+            ]:
+                continue
+            prds[name] = {
+                "name": name,
+                "has_md": True,
+                "md_path": f,
+                "has_yaml": False,
+                "yaml_path": None,
+            }
+
+    return sorted(list(prds.values()), key=lambda x: x["name"])
 
 
 def reset_prd_state(project_name: str) -> List[str]:
@@ -495,7 +512,6 @@ def ensure_gitignore(patterns: List[str]):
 def ensure_project_structure():
     """Ensures the essential project directory structure exists."""
     ensure_dir(VIBE_PROJECT_DIR)
-    ensure_dir(PRD_DIR)
     ensure_dir(LOGS_DIR)
     ensure_dir(COSTS_DIR)
     ensure_dir(VIBE_DATA_DIR)
@@ -560,61 +576,6 @@ def get_cursor_api_key() -> Optional[str]:
     return os.environ.get("CURSOR_API_KEY")
 
 
-def collect_all_prd_info() -> List[Dict[str, Any]]:
-    """Collects status information for all PRDs (Markdown and YAML)."""
-    prds = {}
-
-    # 1. Look for human specs in product/
-    if PLANNING_DIR.exists():
-        for f in PLANNING_DIR.rglob("*.md"):
-            name = f.stem
-            if name in [
-                "architecture",
-                "infrastructure",
-                "cicd",
-                "testing",
-                "dev_environment",
-                "project-overview",
-                "project_overview",
-            ]:
-                continue
-            prds[name] = {
-                "name": name,
-                "has_md": True,
-                "md_path": f,
-                "has_yaml": False,
-                "yaml_path": None,
-            }
-
-    # 2. Look for machine specs in implementation/prds/
-    if PRD_DIR.exists():
-        for f in PRD_DIR.rglob("*.yaml"):
-            # Strip 'prd_' prefix if it exists to match with human spec name
-            name = f.stem
-            clean_name = name
-            if name.startswith("prd_"):
-                clean_name = name[4:]
-            
-            # Also handle vXX-XXX_ prefix
-            match = re.search(r"v\d+-\d+_(.+)", clean_name)
-            if match:
-                clean_name = match.group(1)
-
-            if clean_name in prds:
-                prds[clean_name]["has_yaml"] = True
-                prds[clean_name]["yaml_path"] = f
-            else:
-                prds[clean_name] = {
-                    "name": clean_name,
-                    "has_md": False,
-                    "md_path": None,
-                    "has_yaml": True,
-                    "yaml_path": f,
-                }
-
-    return sorted(list(prds.values()), key=lambda x: x["name"])
-
-
 def get_vibe_status_report() -> str:
     """Generates a comprehensive status report for the project."""
     import click
@@ -676,9 +637,7 @@ def get_vibe_status_report() -> str:
 
         for info in prd_info:
             name = info["name"]
-            prd_stem = (
-                info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
-            )
+            prd_stem = info["md_path"].stem
 
             if prd_stem in completed_prds or name in completed_prds:
                 done_count += 1
@@ -690,9 +649,7 @@ def get_vibe_status_report() -> str:
         report.append("  Recent PRDs:")
         for info in prd_info[-5:]:
             name = info["name"]
-            prd_stem = (
-                info["yaml_path"].stem if info["has_yaml"] else info["md_path"].stem
-            )
+            prd_stem = info["md_path"].stem
 
             if prd_stem in completed_prds or name in completed_prds:
                 status = click.style("✅", fg="green")
@@ -982,7 +939,6 @@ def setup_vibe_test_env(monkeypatch):
     # Create new directories for instructions and specs
     ensure_dir(INSTRUCTIONS_DIR)
     ensure_dir(pathlib.Path("product"))
-    ensure_dir(PRD_DIR)
     ensure_dir(LOGS_DIR)
     ensure_dir(COSTS_DIR)
     ensure_dir(VIBE_DATA_DIR)
@@ -1428,6 +1384,7 @@ def command_exists(cmd):
 
 def is_tool_available(tool: str) -> bool:
     """Checks if a tool is available in the system PATH."""
+    import shutil
     return shutil.which(tool) is not None
 
 
@@ -1482,22 +1439,6 @@ def get_instructions_context():
         return ""
 
     return "INSTRUCTIONS:\n" + "\n\n".join(sections)
-
-
-def get_latest_context_file(pattern):
-    """Finds the latest file matching the pattern in PRD_DIR recursively."""
-    # Handle the pattern to be more flexible (e.g. "infra_*.yaml" -> "prd_infra_*.yaml")
-    search_pattern = pattern
-    if not search_pattern.startswith("prd_") and not search_pattern.startswith("*"):
-        search_pattern = f"prd_{search_pattern}"
-
-    files = list(PRD_DIR.rglob(search_pattern))
-    if not files:
-        return "NOT FOUND"
-
-    # Sort by name (which includes the ## prefix)
-    latest = sorted(files)[-1]
-    return latest.read_text()
 
 
 def is_merged(branch_name):
@@ -1573,82 +1514,6 @@ def load_global_servers() -> Dict[str, Any]:
 def save_global_servers(servers: Dict[str, Any]):
     """Saves server definitions to the global servers file."""
     GLOBAL_SERVERS_FILE.write_text(json.dumps(servers, indent=2))
-
-
-def get_prd_inconsistencies():
-    """Returns a list of PRDs where MD location and YAML location don't match."""
-    inconsistencies = []
-    
-    # 1. Get all PRD info
-    prd_info = collect_all_prd_info()
-    
-    for info in prd_info:
-        if not info["has_md"] or not info["has_yaml"]:
-            continue
-            
-        md_path = info["md_path"]
-        yaml_path = info["yaml_path"]
-        
-        # Determine expected YAML base dir based on MD location
-        if PLANNING_HISTORY_DIR in md_path.parents or md_path.parent == PLANNING_HISTORY_DIR:
-            expected_base = PRD_DONE_DIR
-        elif PLANNING_REJECTED_DIR in md_path.parents or md_path.parent == PLANNING_REJECTED_DIR:
-            expected_base = PRD_FAILED_DIR
-        else:
-            expected_base = PRD_PROCESSING_DIR
-            
-        if expected_base not in yaml_path.parents and yaml_path.parent != expected_base:
-            inconsistencies.append({
-                "name": info["name"],
-                "md_path": md_path,
-                "yaml_path": yaml_path,
-                "expected_base": expected_base,
-                "current_base": yaml_path.parent
-            })
-            
-    return inconsistencies
-
-
-def fix_prd_inconsistencies(inconsistencies, prefer_yaml=True):
-    """Fixes PRD location inconsistencies by moving YAML files and updating state.json."""
-    if not inconsistencies:
-        return
-        
-    state = load_project_state()
-    completed_prds = set(state.get("completed_prds", []))
-    
-    for inc in inconsistencies:
-        yaml_path = inc["yaml_path"]
-        expected_base = inc["expected_base"]
-        
-        # 1. Move the YAML file
-        ensure_dir(expected_base)
-        target_path = expected_base / yaml_path.name
-        
-        if not target_path.exists():
-            logger.info(f"Moving {yaml_path.name} from {yaml_path.parent} to {expected_base}")
-            shutil.move(str(yaml_path), str(target_path))
-        else:
-            logger.warning(f"Target path {target_path} already exists. Deleting source {yaml_path}")
-            yaml_path.unlink()
-            
-        # 2. Update state.json completed_prds list
-        prd_id = target_path.stem
-        
-        if expected_base == PRD_DONE_DIR:
-            completed_prds.add(prd_id)
-            # Also update plan status if it exists
-            if prd_id in state.get("plans", {}):
-                state["plans"][prd_id]["status"] = "completed"
-        else:
-            if prd_id in completed_prds:
-                completed_prds.remove(prd_id)
-            # Reset plan status if it exists and was completed
-            if prd_id in state.get("plans", {}) and state["plans"][prd_id].get("status") == "completed":
-                state["plans"][prd_id]["status"] = "pending"
-
-    state["completed_prds"] = sorted(list(completed_prds))
-    save_project_state(state)
 
 
 def check_plan_dependencies(plan_id, all_plans):
@@ -1746,31 +1611,6 @@ def update_state_phase(phase_id, status, project_name=None):
 def parse_prd_filename(filename):
     """Placeholder for parsing a PRD filename."""
     return {"name": filename}
-
-
-def update_md_implementation_status(md_path, version, sequence, yaml_path):
-    """Updates the MD file with its normalized implementation status."""
-    if not md_path or not md_path.exists():
-        return
-
-    try:
-        # Use local import to avoid circular dependency
-        from vibe_tools.prds import load_prd
-        
-        prd = load_prd(md_path)
-        
-        # Determine implementation ID and YAML name
-        implementation_id = f"v{version}-{sequence:03d}"
-        yaml_name = yaml_path.name if hasattr(yaml_path, "name") else str(yaml_path)
-
-        prd.metadata["implementation_id"] = implementation_id
-        prd.metadata["implementation_yaml"] = yaml_name
-        prd.status = "normalized"
-        
-        prd.save()
-
-    except Exception as e:
-        logger.warning(f"Could not update MD status for {md_path}: {e}")
 
 
 def open_in_editor(path):

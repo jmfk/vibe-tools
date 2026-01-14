@@ -81,9 +81,6 @@ def register_init(cli):
         click.echo(
             f"  {click.style('vibe pm', fg='magenta'):<20} Phase 1: Refine PRDs and product specs"
         )
-        click.echo(
-            f"  {click.style('vibe normalize', fg='yellow'):<20} Phase 2: Standardize all specs into machine-readable YAML"
-        )
         click.echo("\nRun 'vibe status' at any time to see your project progress.")
 
     cli.add_command(init)
