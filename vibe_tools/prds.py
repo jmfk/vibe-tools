@@ -146,7 +146,7 @@ class PRD:
             type=prd_type,
             status=frontmatter.get("status", "backlog"),
             group=frontmatter.get("group"),
-            depends_on=frontmatter.get("depends_on", []),
+            depends_on=frontmatter.get("depends_on") or [],
             created_at=frontmatter.get("created_at", datetime.datetime.now().isoformat()),
             updated_at=frontmatter.get("updated_at", datetime.datetime.now().isoformat()),
             metadata=frontmatter,

@@ -359,7 +359,8 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         # Check dependencies
         state = load_project_state()
         completed = set(state.get("completed_prds", []))
-        missing_deps = [d for d in prd.depends_on if d not in completed]
+        deps = prd.depends_on or []
+        missing_deps = [d for d in deps if d not in completed]
         if missing_deps:
             logger.warning(
                 f"⚠️ PRD {prd.id} has missing dependencies: {', '.join(missing_deps)}. Skipping."
