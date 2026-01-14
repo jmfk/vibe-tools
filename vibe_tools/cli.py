@@ -313,6 +313,10 @@ def _build_reconciliation(ctx, force):
     # Run actual build commands from Makefile or dev_environment.yaml
     click.echo("Running build commands...")
 
+    # Sync Makefile before building to ensure we have the latest targets
+    from vibe_tools.setup import sync_makefile
+    sync_makefile(agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False))
+
     # Try to run make build if Makefile exists
     makefile = pathlib.Path("Makefile")
     if makefile.exists():

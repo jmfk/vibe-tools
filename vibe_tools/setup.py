@@ -488,6 +488,77 @@ def guide_setup():
             return False
 
 
+def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
+    """Sync the Makefile with the development environment specification."""
+    from vibe_tools.utils import DEV_SPEC, run_agent, get_agent_command
+
+    if not DEV_SPEC.exists():
+        click.echo(f"⚠️  {DEV_SPEC} not found. Skipping Makefile sync.")
+        return
+
+    click.echo("🔄 Syncing Makefile with development environment specification...")
+
+    dev_spec_content = DEV_SPEC.read_text()
+    
+    # Check if Makefile exists, if not use template
+    makefile_path = pathlib.Path("Makefile")
+    current_makefile = ""
+    if makefile_path.exists():
+        current_makefile = makefile_path.read_text()
+    else:
+        from vibe_tools.templates import TEMPLATES
+        current_makefile = TEMPLATES.get("Makefile", "")
+
+    prompt = f"""You are a Makefile Expert. 
+Your task is to update or generate the project's Makefile based on the provided development environment specification.
+
+DEVELOPMENT ENVIRONMENT SPECIFICATION:
+---
+{dev_spec_content}
+---
+
+CURRENT MAKEFILE:
+---
+{current_makefile}
+---
+
+TASK:
+1. Identify all components (backend, frontend, etc.) and their build, test, and start commands from the specification.
+2. Update the Makefile to include targets for each component:
+   - Build targets (e.g., build-backend, build-frontend)
+   - Test targets (e.g., test-backend, test-frontend)
+   - Development/Start targets (e.g., dev, start, stop)
+   - Linting targets
+   - Any other targets mentioned in the spec (logs, clean, etc.)
+3. Ensure there is a 'test' target that runs all relevant test suites.
+4. Ensure there is a 'build' target that runs all relevant build steps.
+5. PRESERVE existing targets if they are already correct, but prioritize the specification.
+6. Use standard Makefile syntax.
+7. Output the FULL content of the updated Makefile. Do NOT include markdown code fences or explanations.
+
+Output ONLY the raw Makefile content.
+"""
+
+    cmd = get_agent_command(agent, prompt)
+    output, code = run_agent(cmd, stream=stream)
+
+    if code == 0 and output.strip():
+        # Clean output (remove code fences if present)
+        clean_output = output.strip()
+        if clean_output.startswith("```"):
+            lines = clean_output.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            clean_output = "\n".join(lines).strip()
+            
+        makefile_path.write_text(clean_output)
+        click.echo("✅ Makefile updated successfully.")
+    else:
+        click.echo("❌ Failed to sync Makefile.")
+
+
 @click.group()
 def setup_cli():
     """Setup and configuration tools for vibe."""
@@ -732,6 +803,9 @@ def install_deps():
     """Logic to install required Python and Frontend dependencies."""
     # Ensure basic infrastructure is present
     ensure_infrastructure()
+
+    # Sync Makefile from dev_env before installing if it exists
+    sync_makefile()
 
     # If we are on main branch, switch to a dependencies branch
     current_branch, _ = run_command(["git", "branch", "--show-current"], check=False)
@@ -1025,6 +1099,9 @@ def scaffold(ctx):
     except Exception as e:
         click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
         click.echo("   Continuing with scaffold, but logging may not be fully configured.")
+
+    # Sync Makefile with the newly generated dev_environment.md
+    sync_makefile(agent=agent, stream=stream)
 
     click.echo("\n✅ Development environment scaffolding complete.")
     click.echo("Next steps:")
