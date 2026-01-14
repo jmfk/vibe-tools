@@ -2,6 +2,7 @@ import sys
 import threading
 import pathlib
 import json
+import logging
 from typing import List, Optional, Any, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,6 +13,7 @@ class OutputMessage:
     timestamp: datetime
     level: str
     message: str
+    source: str = "vibe"
     data: Optional[Any] = None
 
 
@@ -50,9 +52,14 @@ class OutputManager:
         level: str = "info",
         data: Optional[Any] = None,
         flush: bool = False,
+        source: str = "vibe",
     ):
         out_msg = OutputMessage(
-            timestamp=datetime.now(), level=level, message=str(message), data=data
+            timestamp=datetime.now(),
+            level=level,
+            message=str(message),
+            data=data,
+            source=source,
         )
 
         with self._lock:
@@ -94,21 +101,37 @@ class OutputManager:
         else:
             level_fmt = f"**{level_upper}**"
 
-        message_content = out_msg.message
-        if "\n" in message_content:
-            # Multi-line message as blockquote
-            message_content = "\n" + "\n".join(
-                [f"> {line}" for line in message_content.splitlines()]
-            )
+        # Determine callout type based on source
+        # source="vibe": > [!NOTE]
+        # source="llm": > [!TIP]
+        # source="agent": > [!IMPORTANT]
+        callout_type = "NOTE"
+        if out_msg.source == "llm":
+            callout_type = "TIP"
+        elif out_msg.source == "agent":
+            callout_type = "IMPORTANT"
 
-        md_entry = f"[{timestamp_str}] {level_fmt}: {message_content}\n"
+        message_content = out_msg.message
+        
+        # Format the entry with callout
+        md_entry = f"> [!{callout_type}]\n"
+        md_entry += f"> [{timestamp_str}] {level_fmt}\n>\n"
+
+        for line in message_content.splitlines():
+            md_entry += f"> {line}\n"
 
         if out_msg.data:
             try:
                 data_str = json.dumps(out_msg.data, indent=2)
-                md_entry += f"\n```json\n{data_str}\n```\n"
+                md_entry += f">\n> ```json\n"
+                for line in data_str.splitlines():
+                    md_entry += f"> {line}\n"
+                md_entry += f"> ```\n"
             except (TypeError, ValueError):
-                md_entry += f"\n```\n{str(out_msg.data)}\n```\n"
+                md_entry += f">\n> ```\n"
+                for line in str(out_msg.data).splitlines():
+                    md_entry += f"> {line}\n"
+                md_entry += f"> ```\n"
 
         md_entry += "\n---\n"
 
@@ -123,6 +146,24 @@ class OutputManager:
             return list(self._history)
 
 
+class OutputManagerHandler(logging.Handler):
+    """Logging handler that redirects records to an OutputManager."""
+    def __init__(self, manager: OutputManager):
+        super().__init__()
+        self.manager = manager
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            level = record.levelname.lower()
+            if level == "critical":
+                level = "error"
+            # Standard logger calls are treated as "vibe" source
+            self.manager.log(msg, level=level, source="vibe")
+        except Exception:
+            self.handleError(record)
+
+
 output_manager = OutputManager()
 
 
@@ -130,21 +171,21 @@ def out_print(message: str, level: str = "info", **kwargs):
     output_manager.log(message, level=level, **kwargs)
 
 
-def out_info(message: str, **kwargs):
-    output_manager.log(message, level="info", **kwargs)
+def out_info(message: str, source: str = "vibe", **kwargs):
+    output_manager.log(message, level="info", source=source, **kwargs)
 
 
-def out_warn(message: str, **kwargs):
-    output_manager.log(message, level="warning", **kwargs)
+def out_warn(message: str, source: str = "vibe", **kwargs):
+    output_manager.log(message, level="warning", source=source, **kwargs)
 
 
-def out_error(message: str, **kwargs):
-    output_manager.log(message, level="error", **kwargs)
+def out_error(message: str, source: str = "vibe", **kwargs):
+    output_manager.log(message, level="error", source=source, **kwargs)
 
 
-def out_success(message: str, **kwargs):
-    output_manager.log(message, level="success", **kwargs)
+def out_success(message: str, source: str = "vibe", **kwargs):
+    output_manager.log(message, level="success", source=source, **kwargs)
 
 
-def out_debug(message: str, **kwargs):
-    output_manager.log(message, level="debug", **kwargs)
+def out_debug(message: str, source: str = "vibe", **kwargs):
+    output_manager.log(message, level="debug", source=source, **kwargs)
