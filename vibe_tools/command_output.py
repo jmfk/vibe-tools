@@ -3,7 +3,9 @@ import threading
 import pathlib
 import json
 import logging
-from typing import List, Optional, Any, Callable
+import html
+import re
+from typing import List, Optional, Any, Callable, Dict
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -25,6 +27,11 @@ class OutputManager:
         self._print_to_stdout: bool = True
         self._log_file: Optional[pathlib.Path] = None
         self._md_log_file: Optional[pathlib.Path] = None
+        self._config: Dict[str, Any] = {}
+
+    def set_config(self, config: Dict[str, Any]):
+        """Sets the configuration for the output manager."""
+        self._config = config
 
     def set_gui_callback(self, callback: Optional[Callable[[OutputMessage], None]]):
         self._gui_callback = callback
@@ -119,6 +126,29 @@ class OutputManager:
 
         for line in message_content.splitlines():
             md_entry += f"> {line}\n"
+
+        # Handle EVENT: ... -> See ... and include HTML logs if enabled
+        include_html = self._config.get("ralph", {}).get("include_html_logs", False)
+        if include_html and "EVENT:" in message_content and "-> See" in message_content:
+            # Extract the path from "EVENT: event_name -> See path"
+            match = re.search(r"EVENT: (.*?) -> See (.*)$", message_content)
+            if match:
+                event_name = match.group(1).strip()
+                ref_path_str = match.group(2).strip()
+                ref_path = pathlib.Path(ref_path_str)
+                
+                if ref_path.exists():
+                    try:
+                        content = ref_path.read_text(encoding="utf-8")
+                        escaped_content = html.escape(content).replace("\n", "<br/>")
+                        
+                        md_entry += ">\n"
+                        md_entry += "> <details>\n"
+                        md_entry += f"> <summary>{event_name}</summary>\n"
+                        md_entry += f"> {escaped_content}\n"
+                        md_entry += "> </details>\n"
+                    except Exception as e:
+                        md_entry += f">\n> *Could not include content: {e}*\n"
 
         if out_msg.data:
             try:

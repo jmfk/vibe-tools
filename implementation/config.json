@@ -4,6 +4,7 @@
     "tests": true,
     "coverage": true,
     "auto_merge": true,
+    "include_html_logs": false,
     "automerge_branch": "staging",
     "no_branch_switch": true,
     "fast": true
