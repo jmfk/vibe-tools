@@ -67,7 +67,8 @@
   "version": "1.2",
   "next_sequence": 1,
   "completed_prds": [
-    "PRD-37"
+    "PRD-37",
+    "PRD-38"
   ],
   "plans": {}
 }

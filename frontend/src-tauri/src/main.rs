@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::fs;
-use std::path::PathBuf;
-use std::sync::mpsc;
+use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use notify::{Watcher, RecursiveMode, Config};
-use tauri::{Manager, Window};
+use tauri::{Manager, Window, State};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio::fs::File;
 
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 
@@ -19,6 +21,16 @@ struct FileEntry {
 struct FileChangeEvent {
     path: String,
     kind: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct LogLine {
+    file: String,
+    content: String,
+}
+
+struct AppState {
+    workspace_root: PathBuf,
 }
 
 #[tauri::command]
@@ -203,11 +215,82 @@ fn move_file(from: String, to: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn tail_log_file(window: Window, path: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    let file_name = path_buf.file_name().unwrap_or_default().to_string_lossy().into_owned();
+
+    tokio::spawn(async move {
+        let mut file = match File::open(&path_buf).await {
+            Ok(f) => f,
+            Err(_) => return,
+        };
+
+        // Seek to end of file first
+        let _ = file.seek(SeekFrom::End(0)).await;
+        let mut buffer = [0u8; 8192];
+
+        loop {
+            match file.read(&mut buffer).await {
+                Ok(0) => {
+                    // Wait for more content
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Ok(n) => {
+                    let content = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    window.emit("new-log-line", LogLine {
+                        file: file_name.clone(),
+                        content,
+                    }).unwrap();
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn list_logs(root: String) -> Result<Vec<FileEntry>, String> {
+    let logs_dir = Path::new(&root).join("implementation").join("logs");
+    if !logs_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(logs_dir).map_err(|e| e.to_string())?;
+    let mut files = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        if metadata.is_file() {
+            files.push(FileEntry {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                path: entry.path().to_string_lossy().into_owned(),
+                is_dir: false,
+            });
+        }
+    }
+
+    // Sort by name descending (most recent first if timestamped)
+    files.sort_by(|a, b| b.name.cmp(&a.name));
+
+    Ok(files)
+}
+
 fn main() {
     let workspace_root = get_workspace_root().unwrap_or_else(|_| ".".into());
     let workspace_root_path = PathBuf::from(&workspace_root);
 
     tauri::Builder::default()
+        .manage(AppState {
+            workspace_root: workspace_root_path.clone(),
+        })
         .setup(move |app| {
             let handle = app.handle();
             let (tx, rx) = mpsc::channel();
@@ -222,8 +305,18 @@ fn main() {
                     match res {
                         Ok(event) => {
                             if let Some(path) = event.paths.first() {
+                                let path_str = path.to_string_lossy().into_owned();
+                                
+                                // Specific handling for logs
+                                if path_str.contains("implementation/logs") {
+                                    handle.emit_all("log-file-changed", FileChangeEvent {
+                                        path: path_str.clone(),
+                                        kind: format!("{:?}", event.kind),
+                                    }).unwrap();
+                                }
+
                                 handle.emit_all("file-changed", FileChangeEvent {
-                                    path: path.to_string_lossy().into_owned(),
+                                    path: path_str,
                                     kind: format!("{:?}", event.kind),
                                 }).unwrap();
                             }
@@ -247,7 +340,9 @@ fn main() {
             get_total_cost,
             open_in_cursor,
             update_artifact_meta,
-            move_file
+            move_file,
+            list_logs,
+            tail_log_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
