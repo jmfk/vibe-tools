@@ -14,6 +14,10 @@ dependencies = [
     "prompt_toolkit",
 ]
 
+[project.scripts]
+vibe = "vibe_tools.cli:cli"
+vibe-setup = "vibe_tools.setup:setup_cli"
+
 [project.optional-dependencies]
 test = [
     "pytest",
