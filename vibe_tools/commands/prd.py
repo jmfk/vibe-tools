@@ -22,6 +22,71 @@ from vibe_tools.pm import InteractivePM
 from vibe_tools.prds import load_prd, PRD
 
 
+def _get_all_prds() -> List[PRD]:
+    all_files = list(PRODUCT_DIR.rglob("*.md"))
+    prds = []
+    for f in all_files:
+        try:
+            prds.append(load_prd(f))
+        except Exception:
+            continue
+    return prds
+
+
+def _check_and_suggest_dependencies(prd: PRD, all_prds: List[PRD], completed: List[str]):
+    missing = [d for d in prd.depends_on if d not in completed]
+    if not missing:
+        return True
+
+    click.echo(
+        click.style(f"\n⚠️  PRD {prd.id} depends on: {', '.join(missing)}", fg="yellow")
+    )
+
+    for dep_id in missing:
+        dep_prd = next((p for p in all_prds if p.id == dep_id), None)
+        if not dep_prd:
+            click.echo(f"❌ Dependency {dep_id} not found in any PRD files.")
+            continue
+
+        # Check where it is
+        status = dep_prd.status
+        path = dep_prd.path
+
+        if status == "done":
+            # Should already be in completed, but double check
+            continue
+        elif status == "in_progress":
+            click.echo(f"ℹ️  {dep_id} is already IN PROGRESS.")
+        elif status in ["backlog", "inbox"]:
+            if click.confirm(
+                f"👉 {dep_id} is in {status.upper()}. Would you like to start it first?"
+            ):
+                # Recursively check its dependencies
+                if _check_and_suggest_dependencies(dep_prd, all_prds, completed):
+                    # Start this dependency
+                    # Check if anything else is in progress
+                    in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
+                    if in_progress:
+                        for f in in_progress:
+                            p_to_stop = load_prd(f)
+                            p_to_stop.status = "backlog"
+                            p_to_stop.save(PRODUCT_BACKLOG_DIR / f.name)
+                            f.unlink()
+
+                    dep_prd.status = "in_progress"
+                    new_path = PRODUCT_IN_PROGRESS_DIR / dep_prd.path.name
+                    dep_prd.save(new_path)
+                    dep_prd.path.unlink()
+                    click.echo(f"✅ Started {dep_id}. Run 'vibe implement' to begin.")
+                    return False  # We started a dependency instead
+        else:
+            click.echo(
+                f"⚠️  {dep_id} has status '{status}' at {path}. Please resolve this dependency manually."
+            )
+
+    return True
+
+
 def _print_prd_line(path: pathlib.Path):
     try:
         p = load_prd(path)
@@ -118,33 +183,60 @@ def register_prd(cli):
         for i, f in enumerate(backlog, 1):
             try:
                 p = load_prd(f)
-                click.echo(f"{i}. [{p.id}] {p.title}")
+                deps_str = f" (deps: {', '.join(p.depends_on)})" if p.depends_on else ""
+                click.echo(f"{i}. [{p.id}] {p.title}{deps_str}")
             except Exception:
                 click.echo(f"{i}. {f.name}")
 
-        click.echo("\nOptions: [q]uit, [m]ove <idx> to top, [s]tart <idx>")
-        choice = click.prompt("Selection", type=str, default="q")
-        
-        if choice.startswith("m "):
+    click.echo("\nOptions: [q]uit, [m]ove <idx> to top, [s]tart <idx>, [a]dd dep <idx> <dep_id>")
+    choice = click.prompt("Selection", type=str, default="q")
+
+    if choice.startswith("m "):
+        try:
+            idx = int(choice.split()[1]) - 1
+            if 0 <= idx < len(backlog):
+                selected = backlog[idx]
+                p = load_prd(selected)
+                p.metadata["priority"] = 0
+                new_name = f"000-{selected.name}"
+                selected.rename(PRODUCT_BACKLOG_DIR / new_name)
+                click.echo(f"Moved {p.id} to top.")
+        except (ValueError, IndexError):
+            click.echo("Invalid index.")
+    elif choice.startswith("a "):
+        try:
+            parts = choice.split()
+            if len(parts) < 4:
+                click.echo("Usage: a dep <idx> <dep_id>")
+                return
+            idx = int(parts[2]) - 1
+            dep_id = parts[3].upper()
+            if 0 <= idx < len(backlog):
+                selected_file = backlog[idx]
+                p = load_prd(selected_file)
+                if dep_id not in p.depends_on:
+                    p.depends_on.append(dep_id)
+                    p.save()
+                    click.echo(f"✅ Added dependency {dep_id} to {p.id}")
+                else:
+                    click.echo(f"ℹ️  {p.id} already depends on {dep_id}")
+        except (ValueError, IndexError):
+            click.echo("Invalid index.")
+    elif choice.startswith("s "):
             try:
                 idx = int(choice.split()[1]) - 1
                 if 0 <= idx < len(backlog):
-                    selected = backlog[idx]
-                    # Simple way to move to top in sorted list: rename with prefix
-                    # But we want to avoid prefixing if possible.
-                    # For now let's just use a hidden priority in frontmatter.
-                    p = load_prd(selected)
-                    p.metadata["priority"] = 0 # Future use
-                    # For now, we'll just rename the file to something that sorts first
-                    new_name = f"000-{selected.name}"
-                    selected.rename(PRODUCT_BACKLOG_DIR / new_name)
-                    click.echo(f"Moved {p.id} to top.")
-            except (ValueError, IndexError):
-                click.echo("Invalid index.")
-        elif choice.startswith("s "):
-            try:
-                idx = int(choice.split()[1]) - 1
-                if 0 <= idx < len(backlog):
+                    selected_file = backlog[idx]
+                    p = load_prd(selected_file)
+                    
+                    # Check dependencies
+                    state = load_project_state()
+                    completed = state.get("completed_prds", [])
+                    all_prds = _get_all_prds()
+                    
+                    if not _check_and_suggest_dependencies(p, all_prds, completed):
+                        return
+
                     # Check if anything else is in progress
                     in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
                     if in_progress:
@@ -152,7 +244,6 @@ def register_prd(cli):
                         if click.confirm(
                             f"⚠️  PRD {curr_p.id} is already in progress. Move it back to backlog?"
                         ):
-                            # Stop current
                             for f in in_progress:
                                 p_to_stop = load_prd(f)
                                 p_to_stop.status = "backlog"
@@ -162,18 +253,15 @@ def register_prd(cli):
                             click.echo("Aborted.")
                             return
 
-                    selected = backlog[idx]
-                    p = load_prd(selected)
                     p.status = "in_progress"
-                    new_path = PRODUCT_IN_PROGRESS_DIR / selected.name
+                    new_path = PRODUCT_IN_PROGRESS_DIR / selected_file.name
                     p.save(new_path)
-                    selected.unlink()
+                    selected_file.unlink()
                     click.echo(f"Started {p.id}. Run 'vibe implement' to begin.")
             except (ValueError, IndexError):
                 click.echo("Invalid index.")
 
-    @prd.command(name="stop")
-    def stop_prd():
+    @prd.command(name="stop")    def stop_prd():
         """Move the current in-progress PRD back to the backlog."""
         in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
         if not in_progress:
