@@ -1,0 +1,12 @@
+/Users/jmfk/code/vibe-tools/frontend/src-tauri/target/debug/deps/ignore-2be789a17c2d9c10.d: /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/lib.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/default_types.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/dir.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/gitignore.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/overrides.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/pathutil.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/types.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/walk.rs
+
+/Users/jmfk/code/vibe-tools/frontend/src-tauri/target/debug/deps/libignore-2be789a17c2d9c10.rmeta: /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/lib.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/default_types.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/dir.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/gitignore.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/overrides.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/pathutil.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/types.rs /Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/walk.rs
+
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/lib.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/default_types.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/dir.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/gitignore.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/overrides.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/pathutil.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/types.rs:
+/Users/jmfk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ignore-0.4.25/src/walk.rs:
