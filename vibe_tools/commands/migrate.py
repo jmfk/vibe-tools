@@ -116,7 +116,8 @@ def run_reconciliation(quiet=False):
     # Update dependencies to use new IDs
     for prd in new_prds:
         new_deps = []
-        for dep in prd.depends_on:
+        deps = prd.depends_on or []
+        for dep in deps:
             if dep in id_map:
                 new_deps.append(id_map[dep])
             elif f"prd_{dep}" in id_map:

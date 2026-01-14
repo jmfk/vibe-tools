@@ -49,7 +49,8 @@ def _get_all_prds() -> List[PRD]:
 
 
 def _check_and_suggest_dependencies(prd: PRD, all_prds: List[PRD], completed: List[str]):
-    missing = [d for d in prd.depends_on if d not in completed]
+    deps = prd.depends_on or []
+    missing = [d for d in deps if d not in completed]
     if not missing:
         return True
 
@@ -426,6 +427,7 @@ def register_prd(cli):
                 try:
                     target_prd = load_prd(target_prd_file)
                     dep_prd = load_prd(dep_file)
+                    if target_prd.depends_on is None: target_prd.depends_on = []
                     if dep_prd.id == target_prd.id: state["message"] = "❌ A PRD cannot depend on itself."
                     elif dep_prd.id in target_prd.depends_on: state["message"] = f"ℹ️ Already depends on {dep_prd.id}."
                     else:
