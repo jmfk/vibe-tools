@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
@@ -29,8 +30,30 @@ struct LogLine {
     content: String,
 }
 
+struct LogBuffer {
+    lines: VecDeque<String>,
+    max_size: usize,
+}
+
+impl LogBuffer {
+    fn new(max_size: usize) -> Self {
+        Self {
+            lines: VecDeque::with_capacity(max_size),
+            max_size,
+        }
+    }
+
+    fn push(&mut self, line: String) {
+        if self.lines.len() >= self.max_size {
+            self.lines.pop_front();
+        }
+        self.lines.push_back(line);
+    }
+}
+
 struct AppState {
     workspace_root: PathBuf,
+    terminal_buffers: Mutex<HashMap<String, LogBuffer>>,
 }
 
 #[tauri::command]
@@ -81,7 +104,7 @@ fn get_workspace_root() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn run_vibe_command(window: Window, command: String, args: Vec<String>) -> Result<(), String> {
+async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -97,19 +120,34 @@ async fn run_vibe_command(window: Window, command: String, args: Vec<String>) ->
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
 
-    let window_clone = window.clone();
+    let window_stdout = window.clone();
+    let handle_stdout = window.app_handle();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = reader.next_line().await {
-            window_clone.emit("log-line", line).unwrap();
+            {
+                let state = handle_stdout.state::<AppState>();
+                let mut buffers = state.terminal_buffers.lock().unwrap();
+                let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
+                buffer.push(line.clone());
+            }
+            window_stdout.emit("log-line", line).unwrap();
         }
     });
 
-    let window_clone = window.clone();
+    let window_stderr = window.clone();
+    let handle_stderr = window.app_handle();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = reader.next_line().await {
-            window_clone.emit("log-line", format!("ERR: {}", line)).unwrap();
+            let formatted_line = format!("ERR: {}", line);
+            {
+                let state = handle_stderr.state::<AppState>();
+                let mut buffers = state.terminal_buffers.lock().unwrap();
+                let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
+                buffer.push(formatted_line.clone());
+            }
+            window_stderr.emit("log-line", formatted_line).unwrap();
         }
     });
 
@@ -119,6 +157,16 @@ async fn run_vibe_command(window: Window, command: String, args: Vec<String>) ->
     });
 
     Ok(())
+}
+
+#[tauri::command]
+fn get_terminal_buffer(state: State<'_, AppState>, session: String) -> Result<Vec<String>, String> {
+    let buffers = state.terminal_buffers.lock().unwrap();
+    if let Some(buffer) = buffers.get(&session) {
+        Ok(buffer.lines.iter().cloned().collect())
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -290,6 +338,7 @@ fn main() {
     tauri::Builder::default()
         .manage(AppState {
             workspace_root: workspace_root_path.clone(),
+            terminal_buffers: Mutex::new(HashMap::new()),
         })
         .setup(move |app| {
             let handle = app.handle();
@@ -342,7 +391,8 @@ fn main() {
             update_artifact_meta,
             move_file,
             list_logs,
-            tail_log_file
+            tail_log_file,
+            get_terminal_buffer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
