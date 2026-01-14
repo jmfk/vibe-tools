@@ -73,35 +73,35 @@ class PRD:
         self.metadata["service"] = value
 
     @property
-    280|    def impl_code_ready(self) -> bool:
-    281|        return self.metadata.get("impl_code_ready", False)
-    282|
-    283|    @impl_code_ready.setter
-    284|    def impl_code_ready(self, value: bool):
-    285|        self.metadata["impl_code_ready"] = value
-    286|
-    287|    @property
-    288|    def impl_tests_passed(self) -> bool:
-    289|        return self.metadata.get("impl_tests_passed", False)
-    290|
-    291|    @impl_tests_passed.setter
-    292|    def impl_tests_passed(self, value: bool):
-    293|        self.metadata["impl_tests_passed"] = value
-    294|
-    295|    @property
-    296|    def impl_review_passed(self) -> bool:
-    297|        return self.metadata.get("impl_review_passed", False)
-    298|
-    299|    @impl_review_passed.setter
-    300|    def impl_review_passed(self, value: bool):
-    301|        self.metadata["impl_review_passed"] = value
-    302|
-    303|    def reset_progress(self):
-    304|        self.impl_code_ready = False
-    305|        self.impl_tests_passed = False
-    306|        self.impl_review_passed = False
-    307|
-    308|    def get_hash(self) -> str:
+    def impl_code_ready(self) -> bool:
+        return self.metadata.get("impl_code_ready", False)
+
+    @impl_code_ready.setter
+    def impl_code_ready(self, value: bool):
+        self.metadata["impl_code_ready"] = value
+
+    @property
+    def impl_tests_passed(self) -> bool:
+        return self.metadata.get("impl_tests_passed", False)
+
+    @impl_tests_passed.setter
+    def impl_tests_passed(self, value: bool):
+        self.metadata["impl_tests_passed"] = value
+
+    @property
+    def impl_review_passed(self) -> bool:
+        return self.metadata.get("impl_review_passed", False)
+
+    @impl_review_passed.setter
+    def impl_review_passed(self, value: bool):
+        self.metadata["impl_review_passed"] = value
+
+    def reset_progress(self):
+        self.impl_code_ready = False
+        self.impl_tests_passed = False
+        self.impl_review_passed = False
+
+    def get_hash(self) -> str:
         import hashlib
         return hashlib.sha256(self.content.encode()).hexdigest()
 
