@@ -46,6 +46,7 @@ from vibe_tools.utils import (
     switch_to_main,
     safe_yaml_load,
     safe_yaml_dump,
+    is_branch_switching_enabled,
 )
 
 MAX_ITERATIONS = 10
@@ -275,6 +276,9 @@ def debugging_loop(
 
 def check_automerge_sync(config) -> bool:
     """Verifies that the automerge branch is up to date with the main branch."""
+    if not is_branch_switching_enabled():
+        return True
+
     auto_merge = config.get("ralph", {}).get("auto_merge", False)
     if not auto_merge:
         return True
@@ -587,7 +591,8 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
             merge_branches(branch_name, automerge_branch)
 
-        switch_to_main()
+        if is_branch_switching_enabled():
+            switch_to_main()
         return True
     else:
         logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
@@ -641,7 +646,8 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         prd.save(PRODUCT_BACKLOG_DIR / backlog_filename)
         prd.path.unlink()
 
-        switch_to_main()
+        if is_branch_switching_enabled():
+            switch_to_main()
         return False
 
 

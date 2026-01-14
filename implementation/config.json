@@ -5,6 +5,7 @@
     "coverage": true,
     "auto_merge": true,
     "automerge_branch": "staging",
+    "no_branch_switch": true,
     "fast": true
   },
   "default_budget": 5.0,

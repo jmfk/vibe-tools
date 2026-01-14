@@ -10,7 +10,8 @@ from vibe_tools.utils import (
     get_prompt,
     get_agent_command,
     run_agent,
-    logger
+    logger,
+    is_branch_switching_enabled
 )
 
 
@@ -125,7 +126,10 @@ def set_branch_base(branch: str, base: str):
 
 def merge_branches(src: str, dst: str):
     """Merges src branch into dst branch and updates lineage."""
-    from vibe_tools.utils import get_main_branch, load_project_state, run_command, save_project_state
+    from vibe_tools.utils import get_main_branch, load_project_state, run_command, save_project_state, is_branch_switching_enabled
+
+    if not is_branch_switching_enabled():
+        click.echo(f"⚠️ Branch switching is disabled. Merge from {src} to {dst} might fail if not on the correct branch.")
 
     click.echo(f"🔄 Merging {click.style(src, fg='cyan')} into {click.style(dst, fg='cyan')}...")
 
@@ -231,6 +235,10 @@ def _switch_to_branch(
     branch_name, agent, project_name, parent_branch=None, stream=False
 ):
     """Robustly switches to a feature branch, using AI rescue if needed."""
+    if not is_branch_switching_enabled():
+        logger.info(f"Branch switching is disabled. Staying on current branch instead of switching to '{branch_name}'.")
+        return
+
     import sys
     from vibe_tools import utils
     if parent_branch is None:
