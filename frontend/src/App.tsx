@@ -1158,16 +1158,113 @@ const ExplorerView = ({ root }: { root: string }) => {
   );
 };
 
+interface LogEntry {
+  id: string;
+  timestamp?: string;
+  level: 'INFO' | 'DEBUG' | 'ERROR' | 'NONE';
+  message: string;
+  details?: string[];
+}
+
+const LogLineComponent = ({ entry }: { entry: LogEntry }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasDetails = entry.details && entry.details.length > 0;
+
+  const levelColors = {
+    INFO: 'text-blue-400',
+    DEBUG: 'text-zinc-500',
+    ERROR: 'text-red-400',
+    NONE: 'text-zinc-300'
+  };
+
+  return (
+    <div className={cn(
+      "group border-l-2 py-0.5 pl-2 transition-colors",
+      entry.level === 'ERROR' ? "border-red-900/50 bg-red-900/10" : 
+      entry.level === 'INFO' ? "border-blue-900/50" : "border-transparent hover:border-zinc-800"
+    )}>
+      <div className="flex items-start gap-2">
+        {hasDetails && (
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="mt-1 p-0.5 hover:bg-zinc-800 rounded transition-colors"
+          >
+            {isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
+          </button>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            {entry.level !== 'NONE' && (
+              <span className={cn("text-[10px] font-bold px-1 rounded bg-zinc-800", levelColors[entry.level])}>
+                {entry.level}
+              </span>
+            )}
+            {entry.timestamp && <span className="text-[10px] text-zinc-600 font-mono">{entry.timestamp}</span>}
+          </div>
+          <div className={cn("whitespace-pre-wrap break-all", hasDetails ? "cursor-pointer" : "")} onClick={() => hasDetails && setIsExpanded(!isExpanded)}>
+            <Ansi>{entry.message}</Ansi>
+          </div>
+          {isExpanded && hasDetails && (
+            <div className="mt-2 pl-4 border-l border-zinc-800 space-y-0.5">
+              {entry.details!.map((detail, idx) => (
+                <div key={idx} className="text-zinc-500 text-[11px] whitespace-pre-wrap break-all">
+                  <Ansi>{detail}</Ansi>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MonitorView = ({ root }: { root: string }) => {
   const [logFiles, setLogFiles] = useState<FileEntry[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
   const [filter, setFilter] = useState('');
+  const [terminalFilter, setTerminalFilter] = useState('');
   const [logLevelFilter, setLogLevelFilter] = useState<'ALL' | 'INFO' | 'DEBUG' | 'ERROR'>('ALL');
   const scrollRef = useRef<HTMLDivElement>(null);
   const terminalScrollRef = useRef<HTMLDivElement>(null);
   const [followTail, setFollowTail] = useState(true);
+
+  const groupLogs = (lines: string[]): LogEntry[] => {
+    const entries: LogEntry[] = [];
+    let currentEntry: LogEntry | null = null;
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      // Simple regex for log levels
+      const levelMatch = line.match(/\[(INFO|DEBUG|ERROR)\]/);
+      const isStackOrJson = line.startsWith('  ') || line.startsWith('\t') || line.startsWith('{') || line.startsWith('}') || line.startsWith('"') || line.startsWith('at ');
+
+      if (levelMatch && !isStackOrJson) {
+        if (currentEntry) entries.push(currentEntry);
+        currentEntry = {
+          id: Math.random().toString(36),
+          level: levelMatch[1] as any,
+          message: line,
+          details: []
+        };
+      } else if (currentEntry && (isStackOrJson || !line.includes('['))) {
+        currentEntry.details!.push(line);
+      } else {
+        if (currentEntry) entries.push(currentEntry);
+        currentEntry = {
+          id: Math.random().toString(36),
+          level: 'NONE',
+          message: line,
+          details: []
+        };
+      }
+    }
+    if (currentEntry) entries.push(currentEntry);
+    return entries;
+  };
 
   const loadLogFiles = async () => {
     try {
@@ -1182,7 +1279,13 @@ const MonitorView = ({ root }: { root: string }) => {
   };
 
   useEffect(() => {
-    if (root) loadLogFiles();
+    if (root) {
+      loadLogFiles();
+      // Load initial terminal buffer
+      invoke<string[]>('get_terminal_buffer', { session: 'main' })
+        .then(setTerminalOutput)
+        .catch(console.error);
+    }
   }, [root]);
 
   useEffect(() => {
@@ -1238,15 +1341,20 @@ const MonitorView = ({ root }: { root: string }) => {
   }, [terminalOutput, followTail]);
 
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const matchesSearch = log.toLowerCase().includes(filter.toLowerCase());
-      const matchesLevel = logLevelFilter === 'ALL' || 
-        (logLevelFilter === 'ERROR' && log.includes('[ERROR]')) ||
-        (logLevelFilter === 'INFO' && log.includes('[INFO]')) ||
-        (logLevelFilter === 'DEBUG' && log.includes('[DEBUG]'));
+    const grouped = groupLogs(logs);
+    return grouped.filter(entry => {
+      const matchesSearch = entry.message.toLowerCase().includes(filter.toLowerCase()) || 
+                           entry.details?.some(d => d.toLowerCase().includes(filter.toLowerCase()));
+      const matchesLevel = logLevelFilter === 'ALL' || entry.level === logLevelFilter;
       return matchesSearch && matchesLevel;
     });
   }, [logs, filter, logLevelFilter]);
+
+  const filteredTerminalOutput = useMemo(() => {
+    return terminalOutput.filter(line => 
+      line.toLowerCase().includes(terminalFilter.toLowerCase())
+    );
+  }, [terminalOutput, terminalFilter]);
 
   return (
     <div className="h-full flex gap-4 overflow-hidden">
@@ -1332,10 +1440,8 @@ const MonitorView = ({ root }: { root: string }) => {
             ref={scrollRef}
             className="flex-1 bg-black/50 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 space-y-0.5"
           >
-            {filteredLogs.map((log, i) => (
-              <div key={i} className="whitespace-pre-wrap break-all border-l-2 border-transparent hover:border-zinc-800 pl-2">
-                <Ansi>{log}</Ansi>
-              </div>
+            {filteredLogs.map((entry) => (
+              <LogLineComponent key={entry.id} entry={entry} />
             ))}
             {filteredLogs.length === 0 && (
               <div className="h-full flex items-center justify-center text-zinc-600 italic">
@@ -1348,10 +1454,22 @@ const MonitorView = ({ root }: { root: string }) => {
         {/* Terminal Output */}
         <div className="flex-1 flex flex-col bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
           <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/80 flex items-center justify-between">
-            <h2 className="text-[10px] font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
-              <Terminal size={12} />
-              Terminal Output
-            </h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-[10px] font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
+                <Terminal size={12} />
+                Terminal Output
+              </h2>
+              <div className="relative">
+                <Search className="absolute left-2 top-1.5 text-zinc-600" size={10} />
+                <input 
+                  type="text" 
+                  placeholder="Search terminal..."
+                  value={terminalFilter}
+                  onChange={(e) => setTerminalFilter(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-800 rounded px-6 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
+                />
+              </div>
+            </div>
             <button onClick={() => setTerminalOutput([])} className="text-zinc-600 hover:text-zinc-400">
               <Trash2 size={12} />
             </button>
@@ -1360,13 +1478,15 @@ const MonitorView = ({ root }: { root: string }) => {
             ref={terminalScrollRef}
             className="flex-1 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 bg-black"
           >
-            {terminalOutput.map((line, i) => (
+            {filteredTerminalOutput.map((line, i) => (
               <div key={i} className="whitespace-pre-wrap break-all leading-relaxed">
                 <Ansi>{line}</Ansi>
               </div>
             ))}
-            {terminalOutput.length === 0 && (
-              <div className="text-zinc-700 italic text-[11px]">Awaiting command output...</div>
+            {filteredTerminalOutput.length === 0 && (
+              <div className="text-zinc-700 italic text-[11px]">
+                {terminalOutput.length === 0 ? "Awaiting command output..." : "No matches found"}
+              </div>
             )}
             <div className="inline-block w-1.5 h-3.5 bg-zinc-700 ml-1 animate-pulse translate-y-0.5" />
           </div>
