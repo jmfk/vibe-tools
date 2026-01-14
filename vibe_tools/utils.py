@@ -988,7 +988,7 @@ def perform_basic_init():
             "ralph": {"review": True, "tests": True, "auto_merge": False},
             "default_budget": 5.0,
             "verbose": False,
-            "coverage_targets": {"backend": 85, "frontend": 85, "infra": 85},
+            "coverage_targets": {"backend": 85, "frontend": 85, "tauri": 85, "infra": 85},
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
         out_success(f"✅ Created default configuration: {CONFIG_FILE}")
