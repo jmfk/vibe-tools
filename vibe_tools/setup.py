@@ -978,6 +978,12 @@ def scaffold(ctx):
 
     click.echo("\n--- Development Environment Scaffolding Setup ---")
 
+    # Warning for non-k8s projects
+    click.echo(click.style("⚠️  Warning: This command is optimized for Kubernetes (k8s) environments.", fg="yellow", bold=True))
+    click.echo("It will generate build instructions and logging infrastructure (Loki/Grafana/Stern)")
+    click.echo("focused on containerized workflows. If you are building a CLI or Tauri project,")
+    click.echo("you should manually configure your 'product/dev_environment.md' instead.")
+
     # Ensure project structure
     ensure_infrastructure()
 
@@ -987,12 +993,13 @@ def scaffold(ctx):
 
     # Check if dev_environment.md already exists
     if DEV_SPEC.exists():
-        click.echo(f"✅ {DEV_SPEC} already exists.")
-        if not click.confirm("Regenerate dev_environment.md?", default=False):
-            click.echo("Skipping dev_environment.md generation.")
-        else:
-            # Regenerate
-            _generate_dev_spec(agent, stream)
+        click.echo(f"\n✅ {DEV_SPEC} already exists.")
+        if not click.confirm("Regenerate dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)", default=False):
+            click.echo("Aborted.")
+            return
+        
+        # Regenerate
+        _generate_dev_spec(agent, stream)
     else:
         # Generate dev_environment.md from architecture
         if not ARCHITECTURE_SPEC.exists():
