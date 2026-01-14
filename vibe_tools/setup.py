@@ -490,16 +490,17 @@ def guide_setup():
 
 
 def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
-    """Sync the Makefile with the development environment specification."""
-    from vibe_tools.utils import DEV_SPEC, run_agent, get_agent_command
+    """Sync the Makefile with the development environment and architecture specifications."""
+    from vibe_tools.utils import ARCHITECTURE_SPEC, DEV_SPEC, run_agent, get_agent_command
 
     if not DEV_SPEC.exists():
         click.echo(f"⚠️  {DEV_SPEC} not found. Skipping Makefile sync.")
         return
 
-    click.echo("🔄 Syncing Makefile with development environment specification...")
+    click.echo("🔄 Syncing Makefile with project specifications...")
 
     dev_spec_content = DEV_SPEC.read_text()
+    arch_spec_content = ARCHITECTURE_SPEC.read_text() if ARCHITECTURE_SPEC.exists() else ""
     
     # Check if Makefile exists, if not use template
     makefile_path = pathlib.Path("Makefile")
@@ -510,12 +511,16 @@ def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
         from vibe_tools.templates import TEMPLATES
         current_makefile = TEMPLATES.get("Makefile", "")
 
-    prompt = f"""You are a Makefile Expert. 
-Your task is to generate a clean, professional Makefile based on the development environment specification.
+    prompt = f"""You are a Makefile Expert and Project Scaffolder. 
+Your task is to generate a clean, professional Makefile that focuses on build, test, lint, and development environment management.
 
-DEVELOPMENT ENVIRONMENT SPECIFICATION:
+RELEVANT SPECIFICATIONS:
 ---
+DEVELOPMENT ENVIRONMENT:
 {dev_spec_content}
+
+ARCHITECTURE & CORE COMMANDS:
+{arch_spec_content}
 ---
 
 CURRENT MAKEFILE (for reference only):
@@ -524,20 +529,23 @@ CURRENT MAKEFILE (for reference only):
 ---
 
 TASK:
-1. Create a definitive Makefile that includes all necessary targets described in the specification.
-2. Mandatory sections to include (if relevant to the spec):
-   - .PHONY declaration for all targets
-   - Build targets (e.g., build-backend, build-desktop)
-   - Test targets (e.g., test-backend, test-frontend)
-   - Development targets (e.g., dev, dev-desktop, install-backend)
-   - Linting targets
-   - Utility targets (e.g., clean, logs)
-3. Ensure a top-level 'test' target exists that runs all component tests.
-4. Ensure a top-level 'build' target exists that runs all component builds.
-5. CRITICAL: Avoid any redundancy. Each target should appear exactly once.
-6. CRITICAL: Do NOT simply append to the current Makefile. Use it as reference for existing logic, but produce a fresh, unified output that reflects the specification.
-7. Use standard Makefile syntax (tabs for indentation).
-8. Output ONLY the raw Makefile content. No markdown code fences, no explanations, no '```makefile' tags, no '--- FINAL RESULT ---' headers.
+1. Create a definitive Makefile that includes targets for building, testing, and running the development environment.
+2. Mandatory sections to include:
+   - .PHONY declaration for all targets.
+   - Build targets (e.g., build, build-cli, build-desktop).
+   - Test targets (e.g., test, test-cli, test-desktop).
+   - Development targets (e.g., dev, dev-desktop, install-deps).
+   - Linting & Quality targets.
+   - Utility targets (e.g., clean, logs).
+3. EXCLUDE: Do NOT add simple wrappers for 'vibe' commands (e.g., do not add 'pm: vibe pm'). These are already available via the CLI.
+4. Ensure a top-level 'help' target exists that dynamically lists all targets using '##' comments.
+5. Set 'help' as the default target (via '.DEFAULT_GOAL := help').
+6. All targets MUST have a '##' description on the same line to be picked up by the help command.
+7. Target Naming: Use concise, intuitive names.
+8. CRITICAL: Avoid any redundancy. Each target should appear exactly once.
+9. CRITICAL: Do NOT simply append to the current Makefile. Produce a fresh, unified output.
+10. Use standard Makefile syntax (tabs for indentation).
+11. Output ONLY the raw Makefile content. No markdown code fences, no '```makefile' tags, no headers.
 
 Output ONLY the raw Makefile content.
 """
