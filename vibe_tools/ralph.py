@@ -349,6 +349,20 @@ def generate_prd_plan() -> bool:
     return True
 
 
+def _restore_prd_to_next(prd: PRD):
+    """Helper to restore a PRD from in_progress back to next."""
+    if not prd or not prd.path:
+        return
+    
+    # Only move if it's actually in the in_progress directory and exists
+    if "in_progress" in str(prd.path) and prd.path.exists():
+        logger.info(f"♻️ Restoring PRD {prd.id} ({prd.title}) to 'next' directory...")
+        next_path = PRODUCT_NEXT_DIR / prd.path.name
+        prd.status = "backlog"  # Reset status so it can be picked up again
+        prd.save(next_path)
+        prd.path.unlink()
+
+
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Unified implementation loop working on Markdown PRDs in product/."""
     from vibe_tools.utils import ensure_project_structure
@@ -362,70 +376,63 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         return False
 
     prd: Optional[PRD] = None
-    if in_progress_files:
-        prd = load_prd(in_progress_files[0])
-        logger.info(f"📍 Resuming PRD: {prd.title} ({prd.id})")
-    else:
-        # 1. Try to pick from 'next' directory (planned for implementation)
-        next_files = sorted(list(PRODUCT_NEXT_DIR.glob("*.md")))
-        if next_files:
-            selected_file = next_files[0]
-            prd = load_prd(selected_file)
-            logger.info(f"🚀 Picking next planned PRD: {prd.title} ({prd.id})")
+    try:
+        if in_progress_files:
+            prd = load_prd(in_progress_files[0])
+            logger.info(f"📍 Resuming PRD: {prd.title} ({prd.id})")
         else:
-            # 2. Fallback to backlog
-            backlog_files = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
-            if not backlog_files:
-                logger.info("ℹ️ No PRDs in 'next' or backlog.")
-                return True
+            # 1. Try to pick from 'next' directory (planned for implementation)
+            next_files = sorted(list(PRODUCT_NEXT_DIR.glob("*.md")))
+            if next_files:
+                selected_file = next_files[0]
+                prd = load_prd(selected_file)
+                logger.info(f"🚀 Picking next planned PRD: {prd.title} ({prd.id})")
+            else:
+                # 2. Fallback to backlog
+                backlog_files = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
+                if not backlog_files:
+                    logger.info("ℹ️ No PRDs in 'next' or backlog.")
+                    return True
 
-            selected_file = backlog_files[0]
-            prd = load_prd(selected_file)
-            logger.info(f"🚀 Starting PRD from backlog: {prd.title} ({prd.id})")
+                selected_file = backlog_files[0]
+                prd = load_prd(selected_file)
+                logger.info(f"🚀 Starting PRD from backlog: {prd.title} ({prd.id})")
 
-        # Check dependencies
-        state = load_project_state()
-        completed = set(state.get("completed_prds", []))
-        deps = prd.depends_on or []
-        missing_deps = [d for d in deps if d not in completed]
-        if missing_deps:
-            logger.warning(
-                f"⚠️ PRD {prd.id} has missing dependencies: {', '.join(missing_deps)}. Skipping."
-            )
+            # Check dependencies
+            state = load_project_state()
+            completed = set(state.get("completed_prds", []))
+            deps = prd.depends_on or []
+            missing_deps = [d for d in deps if d not in completed]
+            if missing_deps:
+                logger.warning(
+                    f"⚠️ PRD {prd.id} has missing dependencies: {', '.join(missing_deps)}. Skipping."
+                )
+                return False
+
+            # Move to in_progress
+            new_path = PRODUCT_IN_PROGRESS_DIR / prd.path.name
+            prd.status = "in_progress"
+            prd.save(new_path)
+            prd.path.unlink()
+            prd.path = new_path
+
+        # 2. In-Memory Normalization
+        logger.info(f"🔄 Normalizing {prd.id} in-memory...")
+        try:
+            plan_data = normalize_to_data(prd.content, prd.id)
+        except Exception as e:
+            logger.error(f"❌ Normalization crashed: {e}")
+            plan_data = None
+
+        if not plan_data:
+            logger.error("❌ Normalization failed. Please check the PRD content.")
+            _restore_prd_to_next(prd)
             return False
 
-        # Move to in_progress
-        new_path = PRODUCT_IN_PROGRESS_DIR / selected_file.name
-        prd.status = "in_progress"
-        prd.save(new_path)
-        selected_file.unlink()
-        prd.path = new_path
-
-    # 2. In-Memory Normalization
-    logger.info(f"🔄 Normalizing {prd.id} in-memory...")
-    try:
-        plan_data = normalize_to_data(prd.content, prd.id)
-    except Exception as e:
-        logger.error(f"❌ Normalization crashed: {e}")
-        plan_data = None
-
-    if not plan_data:
-        logger.error("❌ Normalization failed. Please check the PRD content.")
-        # Move back to next if normalization fails, so it can be tried again after fixing
-        next_path = PRODUCT_NEXT_DIR / prd.path.name
-        prd.status = "backlog"  # Reset status for 'next'
-        prd.save(next_path)
-        prd.path.unlink()
-        return False
-
-    # 3. Setup Implementation
-    if not check_automerge_sync(config):
-        # Move back to next if sync fails
-        next_path = PRODUCT_NEXT_DIR / prd.path.name
-        prd.status = "backlog"
-        prd.save(next_path)
-        prd.path.unlink()
-        return False
+        # 3. Setup Implementation
+        if not check_automerge_sync(config):
+            _restore_prd_to_next(prd)
+            return False
 
     iterations_config = config.get("iterations", {})
     max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
@@ -577,6 +584,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         final_path = PRODUCT_HISTORY_DIR / prd.path.name
         prd.save(final_path)
         prd.path.unlink()
+        prd.path = final_path
 
         # Update state
         state = load_project_state()
@@ -643,12 +651,21 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         )
 
         backlog_filename = prd.path.name
-        prd.save(PRODUCT_BACKLOG_DIR / backlog_filename)
+        new_backlog_path = PRODUCT_BACKLOG_DIR / backlog_filename
+        prd.save(new_backlog_path)
         prd.path.unlink()
+        prd.path = new_backlog_path
 
         if is_branch_switching_enabled():
             switch_to_main()
         return False
+    except KeyboardInterrupt:
+        logger.warning(f"\n⚠️ Process interrupted. Restoring state for PRD {prd.id if prd else 'unknown'}...")
+        if prd:
+            _restore_prd_to_next(prd)
+        if is_branch_switching_enabled():
+            switch_to_main()
+        raise
 
 
 def issue_solve_loop(issue, agent: str, stream: bool = False) -> bool:
