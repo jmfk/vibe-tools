@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Ansi from 'ansi-to-react';
 import { 
   MessageSquare, 
   Files, 
@@ -22,7 +23,11 @@ import {
   User as UserIcon,
   Tag,
   ArrowRight,
-  Split
+  Split,
+  History,
+  Trash2,
+  RefreshCw,
+  Eye
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -329,6 +334,9 @@ const YAMLTreeView = ({ data, level = 0 }: { data: any, level?: number }) => {
 const VibeView = ({ root }: { root: string }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
+  const [specTree, setSpecTree] = useState<TreeItem[]>([]);
+  const [issueTree, setIssueTree] = useState<TreeItem[]>([]);
   const [content, setContent] = useState('');
   const [yamlData, setYamlData] = useState<any>(null);
   const [markdownContent, setMarkdownContent] = useState('');
@@ -958,7 +966,7 @@ const App: React.FC = () => {
           <div className="absolute inset-0 p-6 overflow-y-auto">
             {activeTab === 'vibe' && <VibeView root={workspaceRoot} />}
             {activeTab === 'explorer' && <ExplorerView root={workspaceRoot} />}
-            {activeTab === 'monitor' && <MonitorView />}
+            {activeTab === 'monitor' && <MonitorView root={workspaceRoot} />}
             {activeTab === 'runner' && <RunnerView onRun={(cmd) => {
               setActiveTab('monitor');
             }} />}
@@ -1150,37 +1158,219 @@ const ExplorerView = ({ root }: { root: string }) => {
   );
 };
 
-const MonitorView = () => {
+const MonitorView = ({ root }: { root: string }) => {
+  const [logFiles, setLogFiles] = useState<FileEntry[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [filter, setFilter] = useState('');
+  const [logLevelFilter, setLogLevelFilter] = useState<'ALL' | 'INFO' | 'DEBUG' | 'ERROR'>('ALL');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const terminalScrollRef = useRef<HTMLDivElement>(null);
+  const [followTail, setFollowTail] = useState(true);
+
+  const loadLogFiles = async () => {
+    try {
+      const files = await invoke<FileEntry[]>('list_logs', { root });
+      setLogFiles(files);
+      if (files.length > 0 && !selectedFile) {
+        setSelectedFile(files[0].path);
+      }
+    } catch (e) {
+      console.error('Error loading log files:', e);
+    }
+  };
 
   useEffect(() => {
-    const unlisten = listen('log-line', (event: any) => {
-      setLogs(prev => [...prev, event.payload].slice(-10000));
+    if (root) loadLogFiles();
+  }, [root]);
+
+  useEffect(() => {
+    const unlisten = listen('log-file-changed', () => {
+      loadLogFiles();
     });
     return () => { unlisten.then(f => f()); };
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (selectedFile) {
+      // Clear logs when switching files
+      setLogs([]);
+      // Start tailing
+      invoke('tail_log_file', { path: selectedFile }).catch(console.error);
+      // Also load initial content
+      invoke<string>('read_file_content', { path: selectedFile })
+        .then(content => {
+          setLogs(content.split('\n').filter(l => l.length > 0));
+        })
+        .catch(console.error);
+    }
+  }, [selectedFile]);
+
+  useEffect(() => {
+    const unlistenNewLog = listen('new-log-line', (event: any) => {
+      const payload = event.payload as { file: string, content: string };
+      if (selectedFile?.endsWith(payload.file)) {
+        setLogs(prev => [...prev, ...payload.content.split('\n').filter(l => l.length > 0)].slice(-5000));
+      }
+    });
+
+    const unlistenTerminal = listen('log-line', (event: any) => {
+      setTerminalOutput(prev => [...prev, event.payload as string].slice(-5000));
+    });
+
+    return () => { 
+      unlistenNewLog.then(f => f()); 
+      unlistenTerminal.then(f => f());
+    };
+  }, [selectedFile]);
+
+  useEffect(() => {
+    if (followTail && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [logs, followTail]);
+
+  useEffect(() => {
+    if (followTail && terminalScrollRef.current) {
+      terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
+    }
+  }, [terminalOutput, followTail]);
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const matchesSearch = log.toLowerCase().includes(filter.toLowerCase());
+      const matchesLevel = logLevelFilter === 'ALL' || 
+        (logLevelFilter === 'ERROR' && log.includes('[ERROR]')) ||
+        (logLevelFilter === 'INFO' && log.includes('[INFO]')) ||
+        (logLevelFilter === 'DEBUG' && log.includes('[DEBUG]'));
+      return matchesSearch && matchesLevel;
+    });
+  }, [logs, filter, logLevelFilter]);
 
   return (
-    <div className="h-full flex flex-col space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-100">Monitor</h2>
-        <button onClick={() => setLogs([])} className="px-2 py-1 bg-zinc-800 rounded text-xs hover:bg-zinc-700">Clear</button>
+    <div className="h-full flex gap-4 overflow-hidden">
+      {/* Session/File Sidebar */}
+      <div className="w-64 flex flex-col gap-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 overflow-hidden">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Log Sessions</h3>
+          <button onClick={loadLogFiles} className="text-zinc-500 hover:text-zinc-300">
+            <RefreshCw size={12} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto space-y-1 pr-2">
+          {logFiles.map(file => (
+            <button
+              key={file.path}
+              onClick={() => setSelectedFile(file.path)}
+              className={cn(
+                "w-full text-left px-2 py-2 rounded text-[11px] transition-colors truncate flex items-center gap-2",
+                selectedFile === file.path 
+                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+              )}
+            >
+              <FileText size={14} className={cn(selectedFile === file.path ? "text-blue-400" : "text-zinc-600")} />
+              <span className="truncate">{file.name}</span>
+            </button>
+          ))}
+          {logFiles.length === 0 && (
+            <div className="text-center py-8 text-zinc-600 text-xs">No logs found</div>
+          )}
+        </div>
       </div>
-      <div 
-        ref={scrollRef}
-        className="flex-1 bg-black border border-zinc-800 rounded-lg font-mono text-sm p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800"
-      >
-        {logs.map((log, i) => (
-          <div key={i} className={cn(log.startsWith('ERR:') ? "text-red-400" : "text-zinc-300")}>{log}</div>
-        ))}
-        <div className="animate-pulse inline-block w-2 h-4 bg-zinc-700 ml-1 translate-y-1" />
+
+      {/* Main Content Areas */}
+      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+        {/* Log Viewer */}
+        <div className="flex-[2] flex flex-col bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                <Activity size={16} className="text-blue-400" />
+                Log Viewer
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2 text-zinc-600" size={12} />
+                  <input 
+                    type="text" 
+                    placeholder="Filter logs..."
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 rounded px-7 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
+                  />
+                </div>
+                <select
+                  value={logLevelFilter}
+                  onChange={(e) => setLogLevelFilter(e.target.value as any)}
+                  className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-400 focus:outline-none"
+                >
+                  <option value="ALL">All Levels</option>
+                  <option value="INFO">INFO</option>
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setFollowTail(!followTail)}
+                className={cn(
+                  "px-2 py-1 rounded text-[10px] font-medium transition-colors border",
+                  followTail ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-zinc-900 text-zinc-500 border-zinc-800"
+                )}
+              >
+                Follow Tail
+              </button>
+              <button onClick={() => setLogs([])} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+          <div 
+            ref={scrollRef}
+            className="flex-1 bg-black/50 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 space-y-0.5"
+          >
+            {filteredLogs.map((log, i) => (
+              <div key={i} className="whitespace-pre-wrap break-all border-l-2 border-transparent hover:border-zinc-800 pl-2">
+                <Ansi>{log}</Ansi>
+              </div>
+            ))}
+            {filteredLogs.length === 0 && (
+              <div className="h-full flex items-center justify-center text-zinc-600 italic">
+                {logs.length === 0 ? "No log content yet..." : "No logs match your filter"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Terminal Output */}
+        <div className="flex-1 flex flex-col bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+          <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/80 flex items-center justify-between">
+            <h2 className="text-[10px] font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
+              <Terminal size={12} />
+              Terminal Output
+            </h2>
+            <button onClick={() => setTerminalOutput([])} className="text-zinc-600 hover:text-zinc-400">
+              <Trash2 size={12} />
+            </button>
+          </div>
+          <div 
+            ref={terminalScrollRef}
+            className="flex-1 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 bg-black"
+          >
+            {terminalOutput.map((line, i) => (
+              <div key={i} className="whitespace-pre-wrap break-all leading-relaxed">
+                <Ansi>{line}</Ansi>
+              </div>
+            ))}
+            {terminalOutput.length === 0 && (
+              <div className="text-zinc-700 italic text-[11px]">Awaiting command output...</div>
+            )}
+            <div className="inline-block w-1.5 h-3.5 bg-zinc-700 ml-1 animate-pulse translate-y-0.5" />
+          </div>
+        </div>
       </div>
     </div>
   );
