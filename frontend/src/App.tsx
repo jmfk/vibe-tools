@@ -213,33 +213,66 @@ const FrontmatterCard = ({ data }: { data: any }) => {
 
 const IssueTimeline = ({ content }: { content: string }) => {
   const lines = content.split('\n');
-  const timelineItems: { date: string, text: string, type: 'investigation' | 'solution' }[] = [];
+  const timelineItems: { date: string, text: string, type: 'investigation' | 'solution' | 'history' | 'status' }[] = [];
   
-  let currentType: 'investigation' | 'solution' | null = null;
+  let currentType: 'investigation' | 'solution' | 'history' | null = null;
   for (const line of lines) {
-    if (line.includes('## Investigation Notes')) currentType = 'investigation';
-    else if (line.includes('## Solution Notes')) currentType = 'solution';
-    else if (currentType && line.trim().startsWith('- [')) {
-      const match = line.match(/- \[(.*?)\] (.*)/);
+    const trimmedLine = line.trim();
+    if (trimmedLine.includes('## Investigation Notes')) currentType = 'investigation';
+    else if (trimmedLine.includes('## Solution Notes')) currentType = 'solution';
+    else if (trimmedLine.includes('## Implementation History')) currentType = 'history';
+    else if (currentType && trimmedLine.startsWith('- [')) {
+      const match = trimmedLine.match(/- \[(.*?)\] (.*)/);
       if (match) {
         timelineItems.push({ date: match[1], text: match[2], type: currentType });
+      }
+    } else if (currentType === 'history' && trimmedLine.startsWith('### ')) {
+      const match = trimmedLine.match(/### (.*)/);
+      if (match) {
+        timelineItems.push({ date: match[1], text: 'Implementation update', type: 'history' });
+      }
+    } else if (trimmedLine.startsWith('- Agent started') || trimmedLine.startsWith('- Agent finished')) {
+      const match = trimmedLine.match(/- Agent (started|finished) (.*) mode at (.*)/);
+      if (match) {
+        timelineItems.push({ 
+          date: match[3], 
+          text: `Agent ${match[1]} ${match[2]}`, 
+          type: 'status' 
+        });
       }
     }
   }
 
   if (timelineItems.length === 0) return null;
 
+  // Sort by date if possible
+  const sortedItems = [...timelineItems].sort((a, b) => {
+    try {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    } catch (e) {
+      return 0;
+    }
+  });
+
   return (
     <div className="mt-8 pt-8 border-t border-zinc-800">
-      <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Update Timeline</h3>
-      <div className="space-y-4">
-        {timelineItems.map((item, i) => (
-          <div key={i} className="flex gap-4">
-            <div className="w-32 flex-shrink-0 text-[10px] font-mono text-zinc-500 pt-1">{item.date}</div>
-            <div className="flex-1">
+      <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Event Timeline</h3>
+      <div className="relative ml-2 border-l border-zinc-800 pl-6 space-y-6">
+        {sortedItems.map((item, i) => (
+          <div key={i} className="relative">
+            <div className={cn(
+              "absolute -left-[31px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-zinc-950",
+              item.type === 'investigation' ? "bg-blue-500" : 
+              item.type === 'solution' ? "bg-emerald-500" :
+              item.type === 'status' ? "bg-purple-500" : "bg-zinc-500"
+            )} />
+            <div className="text-[10px] font-mono text-zinc-500 mb-1">{item.date}</div>
+            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-3">
               <div className={cn(
                 "text-[10px] font-bold uppercase mb-1",
-                item.type === 'investigation' ? "text-blue-400" : "text-emerald-400"
+                item.type === 'investigation' ? "text-blue-400" : 
+                item.type === 'solution' ? "text-emerald-400" :
+                item.type === 'status' ? "text-purple-400" : "text-zinc-400"
               )}>
                 {item.type}
               </div>
@@ -252,6 +285,47 @@ const IssueTimeline = ({ content }: { content: string }) => {
   );
 };
 
+const YAMLTreeView = ({ data, level = 0 }: { data: any, level?: number }) => {
+  if (data === null || data === undefined) return <span className="text-zinc-500 italic">null</span>;
+  
+  if (typeof data !== 'object') {
+    return <span className="text-blue-400">{String(data)}</span>;
+  }
+
+  if (Array.isArray(data)) {
+    return (
+      <div className="space-y-1">
+        {data.map((item, i) => (
+          <div key={i} className="flex gap-2">
+            <span className="text-zinc-600 font-mono">-</span>
+            <div className="flex-1">
+              <YAMLTreeView data={item} level={level + 1} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key} className="flex flex-col">
+          <div className="flex items-baseline gap-2">
+            <span className="text-zinc-500 font-mono text-[10px] uppercase tracking-wider font-bold">{key}:</span>
+            {typeof value !== 'object' && <YAMLTreeView data={value} />}
+          </div>
+          {typeof value === 'object' && value !== null && (
+            <div className="ml-4 mt-1 border-l border-zinc-800 pl-4">
+              <YAMLTreeView data={value} level={level + 1} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const VibeView = ({ root }: { root: string }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
@@ -259,6 +333,7 @@ const VibeView = ({ root }: { root: string }) => {
   const [yamlData, setYamlData] = useState<any>(null);
   const [markdownContent, setMarkdownContent] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'active' | 'pending' | 'completed'>('all');
   const [showSpecSplit, setShowSpecSplit] = useState(false);
 
   useEffect(() => {
@@ -270,7 +345,6 @@ const VibeView = ({ root }: { root: string }) => {
   const loadArtifacts = async () => {
     try {
       const all: Artifact[] = [];
-      const tree: Record<string, TreeItem[]> = { prd: [], spec: [], issue: [] };
       
       const scan = async (dir: string, type: 'prd' | 'spec' | 'issue', baseDir: string): Promise<TreeItem[]> => {
         const items: TreeItem[] = [];
@@ -342,16 +416,13 @@ const VibeView = ({ root }: { root: string }) => {
         return items;
       };
 
-      const [prdTree, specTree] = await Promise.all([
+      const [prdTree, specTree, issueTreeRaw] = await Promise.all([
         scan(`${root}/product`, 'prd', `${root}/product`),
         scan(`${root}/implementation`, 'spec', `${root}/implementation`),
+        scan(`${root}/issues`, 'issue', `${root}/issues`),
       ]);
 
       // Separate issues from PRDs for the dedicated "issue" category
-      const issuesOnly = all.filter(a => a.type === 'issue');
-      
-      // We still want a tree for issues. Since they are mixed in product/, 
-      // we'll filter the prdTree to only include issues for the "issue" section.
       const filterTreeForType = (items: TreeItem[], type: string): TreeItem[] => {
         return items.map(item => {
           if (item.is_dir) {
@@ -363,30 +434,37 @@ const VibeView = ({ root }: { root: string }) => {
       };
 
       setArtifacts(all);
-      // We'll use the raw prdTree for PRDs (it might still show issues if we don't filter them out)
-      // Actually, let's filter them for clarity
       setPrdTree(filterTreeForType(prdTree, 'prd'));
       setSpecTree(specTree);
-      setIssueTree(filterTreeForType(prdTree, 'issue'));
+      setIssueTree([...filterTreeForType(prdTree, 'issue'), ...issueTreeRaw]);
 
     } catch (err) {
       console.error('Error loading artifacts:', err);
     }
   };
 
-  const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
-  const [specTree, setSpecTree] = useState<TreeItem[]>([]);
-  const [issueTree, setIssueTree] = useState<TreeItem[]>([]);
-
   const filteredArtifacts = useMemo(() => {
-    if (!searchQuery) return [];
-    return artifacts.filter(a => 
-      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.relPath?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.owner?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [artifacts, searchQuery]);
+    let result = artifacts;
+    
+    if (searchQuery) {
+      result = result.filter(a => 
+        a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.relPath?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.owner?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    if (filterType === 'active') {
+      result = result.filter(a => a.type === 'issue' && a.status === 'in_progress');
+    } else if (filterType === 'pending') {
+      result = result.filter(a => (a.type === 'prd' || a.type === 'issue') && (a.status === 'backlog' || a.status === 'draft' || a.status === 'todo'));
+    } else if (filterType === 'completed') {
+      result = result.filter(a => a.status === 'completed' || a.status === 'done' || a.status === 'history');
+    }
+
+    return result;
+  }, [artifacts, searchQuery, filterType]);
 
   useEffect(() => {
     if (selectedArtifact) {
@@ -470,19 +548,43 @@ const VibeView = ({ root }: { root: string }) => {
     <div className="flex h-full gap-6 overflow-hidden">
       {/* Sidebar */}
       <div className="w-64 flex flex-col gap-4 overflow-hidden">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
-          <input 
-            type="text" 
-            placeholder="Search artifacts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-md py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+        <div className="flex flex-col gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
+            <input 
+              type="text" 
+              placeholder="Search artifacts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-md py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'all', label: 'All', icon: <Files size={12} /> },
+              { id: 'active', label: 'Active', icon: <Activity size={12} /> },
+              { id: 'pending', label: 'Pending', icon: <Clock size={12} /> },
+              { id: 'completed', label: 'Done', icon: <CheckCircle2 size={12} /> },
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setFilterType(f.id as any)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors whitespace-nowrap border",
+                  filterType === f.id 
+                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20" 
+                    : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                )}
+              >
+                {f.icon}
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-1 pr-2">
-          {searchQuery ? (
+          {searchQuery || filterType !== 'all' ? (
             <div className="space-y-1">
                {filteredArtifacts.map(artifact => (
                 <button
@@ -616,8 +718,8 @@ const VibeView = ({ root }: { root: string }) => {
 
             {selectedArtifact.type === 'spec' && showSpecSplit ? (
               <div className="grid grid-cols-2 gap-6">
-                <div className="bg-black/50 border border-zinc-800 rounded-lg p-4 font-mono text-xs overflow-x-auto">
-                  <pre>{content}</pre>
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 overflow-x-auto">
+                  <YAMLTreeView data={yamlData} />
                 </div>
                 <div className="prose prose-invert max-w-none">
                   <MarkdownRenderer content={markdownContent || "*No documentation found in product/*"} />
@@ -626,8 +728,8 @@ const VibeView = ({ root }: { root: string }) => {
             ) : (
               <div className="prose prose-invert max-w-none">
                 {selectedArtifact.type === 'spec' ? (
-                   <div className="bg-black/50 border border-zinc-800 rounded-lg p-4 font-mono text-xs overflow-x-auto">
-                    <pre>{content}</pre>
+                   <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-8 overflow-x-auto">
+                    <YAMLTreeView data={yamlData} />
                   </div>
                 ) : (
                   <MarkdownRenderer content={markdownContent} />
