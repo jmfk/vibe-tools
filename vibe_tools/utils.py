@@ -347,6 +347,15 @@ def setup_logging(command_name: str):
     stream_handler.setFormatter(console_formatter)
     logger.addHandler(stream_handler)
 
+    # OutputManager handler (captures logger.info, etc. to MD log)
+    from vibe_tools.command_output import OutputManagerHandler
+
+    om_handler = OutputManagerHandler(output_manager)
+    om_handler.setLevel(logging.INFO)
+    # Don't set a formatter here, let the handler use the raw message or
+    # we'll get double formatting in MD log.
+    logger.addHandler(om_handler)
+
     return logger
 
 
@@ -1385,6 +1394,7 @@ def command_exists(cmd):
 def is_tool_available(tool: str) -> bool:
     """Checks if a tool is available in the system PATH."""
     import shutil
+
     return shutil.which(tool) is not None
 
 
@@ -1534,25 +1544,25 @@ def is_phase_completed(phase_id, project_name=None):
 def log_issue(tag, *args):
     """Placeholder for logging an issue."""
     message = " ".join(str(a) for a in args)
-    logger.error(f"ISSUE: [{tag}] {message}")
+    out_error(f"ISSUE: [{tag}] {message}", source="vibe")
 
 
 def log_start(tag, *args):
     """Placeholder for logging the start of an action."""
     message = " ".join(str(a) for a in args)
     if message:
-        logger.info(f"START: [{tag}] {message}")
+        out_info(f"START: [{tag}] {message}", source="vibe")
     else:
-        logger.info(f"START: {tag}")
+        out_info(f"START: {tag}", source="vibe")
 
 
 def log_success(tag, *args):
     """Placeholder for logging the success of an action."""
     message = " ".join(str(a) for a in args)
     if message:
-        logger.info(f"SUCCESS: [{tag}] {message}")
+        out_success(f"SUCCESS: [{tag}] {message}", source="vibe")
     else:
-        logger.info(f"SUCCESS: {tag}")
+        out_success(f"SUCCESS: {tag}", source="vibe")
 
 
 verbose_logger = None
@@ -1575,9 +1585,9 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
         client = genai.Client(api_key=api_key)
 
         if debug:
-            out_debug(f"\n--- DEBUG: LLM PROMPT ({model}) ---")
-            out_debug(prompt)
-            out_debug("--- END DEBUG ---\n")
+            out_debug(f"\n--- DEBUG: LLM PROMPT ({model}) ---", source="llm")
+            out_debug(prompt, source="llm")
+            out_debug("--- END DEBUG ---\n", source="llm")
 
         response = client.models.generate_content(
             model=model,
@@ -1588,9 +1598,9 @@ def run_llm(prompt, model="gemini-3-flash", debug=False):
         log_large_output(f"llm_response_{model}", response.text)
 
         if debug:
-            out_debug("\n--- DEBUG: LLM RESPONSE ---")
-            out_debug(response.text)
-            out_debug("--- END DEBUG ---\n")
+            out_debug("\n--- DEBUG: LLM RESPONSE ---", source="llm")
+            out_debug(response.text, source="llm")
+            out_debug("--- END DEBUG ---\n", source="llm")
 
         return response.text
     except Exception as e:
