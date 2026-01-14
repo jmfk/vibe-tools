@@ -83,13 +83,13 @@ def _run_normalization_llm(
     clean_output = output.strip()
 
     # Robust extraction: find the first yaml or ``` block
-    yaml_match = re.search(r"```(?:yaml)?\n([\s\S]*?)\n```", clean_output)
+    yaml_match = re.search(r"```(?:yaml)?\s*?\n?([\s\S]*?)\n?```", clean_output)
     if yaml_match:
         clean_output = yaml_match.group(1).strip()
     elif clean_output.startswith("```"):
         # Fallback for simple fence if regex didn't catch it
         lines = clean_output.splitlines()
-        if lines[0].startswith("```"):
+        if lines and lines[0].startswith("```"):
             lines = lines[1:]
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
@@ -100,18 +100,22 @@ def _run_normalization_llm(
         data = safe_yaml_load(clean_output)
         if data is None or not isinstance(data, dict):
             raise yaml.YAMLError("Output is not a valid YAML dictionary")
-    except yaml.YAMLError as e:
+    except (yaml.YAMLError, Exception) as e:
         logger.warning(f"⚠️ Invalid YAML generated: {e}")
         out_info(f"🔄 Attempting to fix YAML using Gemini...")
 
-        fix_prompt = f"""The following YAML is invalid:
+        fix_prompt = f"""The following content was intended to be a YAML dictionary but is invalid or not a dictionary:
 ---
 {clean_output}
 ---
 Error: {e}
 
 Please fix the YAML formatting issues and return ONLY the valid YAML content.
-Ensure all string values with special characters are properly quoted.
+CRITICAL REQUIREMENTS:
+1. The output MUST be a valid YAML dictionary (key-value pairs).
+2. If any keys or values contain special characters like colons (":"), brackets, or dashes, they MUST be properly quoted.
+3. Example of a common error to fix: 'Key: With: Colons: value' should be '"Key: With: Colons": "value"'.
+4. Do NOT include any markdown formatting, just the raw YAML.
 """
         try:
             fixed_output = run_llm(fix_prompt, model="gemini-3-flash", debug=debug)
@@ -119,24 +123,28 @@ Ensure all string values with special characters are properly quoted.
                 raise ValueError("Fixed output from LLM is empty.")
 
             fixed_output = fixed_output.strip()
-            yaml_match_fixed = re.search(r"```(?:yaml)?\n([\s\S]*?)\n```", fixed_output)
+            # Robust extraction for fixed output as well
+            yaml_match_fixed = re.search(r"```(?:yaml)?\s*?\n?([\s\S]*?)\n?```", fixed_output)
             if yaml_match_fixed:
                 fixed_output = yaml_match_fixed.group(1).strip()
             elif fixed_output.startswith("```"):
                 lines = fixed_output.splitlines()
-                if lines[0].startswith("```"):
+                if lines and lines[0].startswith("```"):
                     lines = lines[1:]
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 fixed_output = "\n".join(lines).strip()
 
             data = safe_yaml_load(fixed_output)
-            if data is None:
+            if data is None or not isinstance(data, dict):
+                logger.error(f"❌ Fixed YAML is still not a valid dictionary.")
                 data = {}
-            out_success(f"✅ Successfully fixed YAML")
+            else:
+                out_success(f"✅ Successfully fixed YAML")
         except Exception as fix_err:
             logger.error(f"❌ Failed to fix YAML: {fix_err}")
-            data = safe_yaml_load(clean_output) or {}
+            # If we still can't get a dict, return empty dict or try to recover what we can
+            data = {}
 
     return data, 0
 

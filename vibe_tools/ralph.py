@@ -375,13 +375,28 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
     # 2. In-Memory Normalization
     logger.info(f"🔄 Normalizing {prd.id} in-memory...")
-    plan_data = normalize_to_data(prd.content, prd.id)
+    try:
+        plan_data = normalize_to_data(prd.content, prd.id)
+    except Exception as e:
+        logger.error(f"❌ Normalization crashed: {e}")
+        plan_data = None
+
     if not plan_data:
         logger.error("❌ Normalization failed. Please check the PRD content.")
+        # Move back to next if normalization fails, so it can be tried again after fixing
+        next_path = PRODUCT_NEXT_DIR / prd.path.name
+        prd.status = "backlog"  # Reset status for 'next'
+        prd.save(next_path)
+        prd.path.unlink()
         return False
 
     # 3. Setup Implementation
     if not check_automerge_sync(config):
+        # Move back to next if sync fails
+        next_path = PRODUCT_NEXT_DIR / prd.path.name
+        prd.status = "backlog"
+        prd.save(next_path)
+        prd.path.unlink()
         return False
 
     iterations_config = config.get("iterations", {})
