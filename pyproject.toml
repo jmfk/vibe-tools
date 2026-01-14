@@ -11,6 +11,7 @@ dependencies = [
     "pyyaml",
     "rich",
     "pydantic",
+    "prompt_toolkit",
 ]
 
 [project.optional-dependencies]

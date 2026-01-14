@@ -170,9 +170,8 @@ class InteractivePM:
             if hasattr(readline, "set_auto_history"):
                 readline.set_auto_history(True)
             if "libedit" in readline.__doc__:
-                readline.parse_and_bind("bind ^I menu-complete")
-                readline.parse_and_bind('bind "\033[Z" backward-menu-complete')
-                readline.parse_and_bind('bind "^Q" "/r\n"')
+                readline.parse_and_bind("bind ^I complete")
+                readline.parse_and_bind('bind -s "^Q" "/r\n"')
                 readline.parse_and_bind("bind -e")
             else:
                 readline.parse_and_bind("tab: menu-complete")
