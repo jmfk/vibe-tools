@@ -434,231 +434,231 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             _restore_prd_to_next(prd)
             return False
 
-    iterations_config = config.get("iterations", {})
-    max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
-    max_debug_iterations = iterations_config.get("debug", 5)
+        iterations_config = config.get("iterations", {})
+        max_impl_iterations = iterations_config.get("implementation", MAX_ITERATIONS)
+        max_debug_iterations = iterations_config.get("debug", 5)
 
-    ralph_config = config.get("ralph", {})
-    review = ralph_config.get("review", True)
-    tests = ralph_config.get("tests", True)
+        ralph_config = config.get("ralph", {})
+        review = ralph_config.get("review", True)
+        tests = ralph_config.get("tests", True)
 
-    branch_name = f"feature/{prd.id.lower()}"
-    parent_branch = get_main_branch()
+        branch_name = f"feature/{prd.id.lower()}"
+        parent_branch = get_main_branch()
 
-    # Extract success criteria
-    capabilities = plan_data.get("CAPABILITIES", {})
-    success_criteria = []
-    if isinstance(capabilities, dict):
-        for k, v in capabilities.items():
-            if isinstance(v, list):
-                success_criteria.extend(v)
-            else:
-                success_criteria.append(str(v))
-    elif isinstance(capabilities, list):
-        success_criteria.extend(capabilities)
-
-    if not success_criteria:
-        success_criteria = ["Implement all capabilities defined in the PRD."]
-
-    _switch_to_branch(
-        branch_name, agent, prd.id, parent_branch=parent_branch, stream=stream
-    )
-
-    success = False
-    failure_reason = ""
-    failure_context = ""
-
-    for i in range(1, max_impl_iterations + 1):
-        logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
-
-        # 3a. Implementation Step
-        if not prd.impl_code_ready:
-            try:
-                prompt_template = get_prompt("implementation_prompt.txt")
-                
-                success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
-                
-                feedback_context = ""
-                if i > 1 and failure_reason:
-                    feedback_context = f"\n\nPREVIOUS ATTEMPT FAILED:\nReason: {failure_reason}\nContext: {failure_context}\n\nPlease address the issues above in this iteration."
-
-                prompt = prompt_template.format(
-                    title=prd.title,
-                    description=prd.content + feedback_context,
-                    success_criteria=success_criteria_str,
-                )
-                cmd = get_agent_command(agent, prompt)
-                output, code = run_agent(cmd, stream=stream)
-
-                if code != 0 or COMPLETION_PROMISE not in output:
-                    failure_reason = (
-                        f"Agent failed with code {code}"
-                        if code != 0
-                        else "No completion promise"
-                    )
-                    failure_context = output
-                    continue
-
-                if is_dirty():
-                    run_command(["git", "add", "."], check=False)
-                    run_command(
-                        ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
-                        check=False,
-                    )
-                
-                # Mark code as ready and persist
-                prd.impl_code_ready = True
-                prd.save()
-            except Exception as e:
-                failure_reason = str(e)
-                failure_context = str(e)
-                continue
-        else:
-            logger.info("⏩ Implementation code already ready. Skipping.")
-
-        # 3b. Quality Gates
-        passed_gates = True
-        if tests:
-            if not prd.impl_tests_passed:
-                success_tests, test_summary = debugging_loop(
-                    agent, ["test"], stream=stream, iterations=max_debug_iterations
-                )
-                if not success_tests:
-                    passed_gates = False
-                    failure_reason = "Tests failed"
-                    failure_context = test_summary
+        # Extract success criteria
+        capabilities = plan_data.get("CAPABILITIES", {})
+        success_criteria = []
+        if isinstance(capabilities, dict):
+            for k, v in capabilities.items():
+                if isinstance(v, list):
+                    success_criteria.extend(v)
                 else:
-                    prd.impl_tests_passed = True
-                    prd.save()
-            else:
-                logger.info("⏩ Tests already passed. Skipping.")
+                    success_criteria.append(str(v))
+        elif isinstance(capabilities, list):
+            success_criteria.extend(capabilities)
 
-        if passed_gates and review:
-            if not prd.impl_review_passed:
-                # Agentic review logic
+        if not success_criteria:
+            success_criteria = ["Implement all capabilities defined in the PRD."]
+
+        _switch_to_branch(
+            branch_name, agent, prd.id, parent_branch=parent_branch, stream=stream
+        )
+
+        success = False
+        failure_reason = ""
+        failure_context = ""
+
+        for i in range(1, max_impl_iterations + 1):
+            logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
+
+            # 3a. Implementation Step
+            if not prd.impl_code_ready:
                 try:
-                    review_template = get_prompt("implementation_review_prompt.txt")
+                    prompt_template = get_prompt("implementation_prompt.txt")
+                    
                     success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
                     
-                    prompt = review_template.format(
+                    feedback_context = ""
+                    if i > 1 and failure_reason:
+                        feedback_context = f"\n\nPREVIOUS ATTEMPT FAILED:\nReason: {failure_reason}\nContext: {failure_context}\n\nPlease address the issues above in this iteration."
+
+                    prompt = prompt_template.format(
                         title=prd.title,
-                        description=prd.content,
+                        description=prd.content + feedback_context,
                         success_criteria=success_criteria_str,
                     )
-                    
                     cmd = get_agent_command(agent, prompt)
-                    output, _ = run_agent(cmd, stream=stream)
-                    if "<review>PASSED</review>" in output:
-                        prd.impl_review_passed = True
-                        prd.save()
-                    else:
-                        passed_gates = False
-                        failure_reason = "Review failed"
+                    output, code = run_agent(cmd, stream=stream)
+
+                    if code != 0 or COMPLETION_PROMISE not in output:
+                        failure_reason = (
+                            f"Agent failed with code {code}"
+                            if code != 0
+                            else "No completion promise"
+                        )
                         failure_context = output
+                        continue
+
+                    if is_dirty():
+                        run_command(["git", "add", "."], check=False)
+                        run_command(
+                            ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
+                            check=False,
+                        )
+                    
+                    # Mark code as ready and persist
+                    prd.impl_code_ready = True
+                    prd.save()
                 except Exception as e:
-                    passed_gates = False
-                    failure_reason = f"Review error: {e}"
+                    failure_reason = str(e)
                     failure_context = str(e)
+                    continue
             else:
-                logger.info("⏩ Review already passed. Skipping.")
+                logger.info("⏩ Implementation code already ready. Skipping.")
 
-        if passed_gates:
-            success = True
-            break
+            # 3b. Quality Gates
+            passed_gates = True
+            if tests:
+                if not prd.impl_tests_passed:
+                    success_tests, test_summary = debugging_loop(
+                        agent, ["test"], stream=stream, iterations=max_debug_iterations
+                    )
+                    if not success_tests:
+                        passed_gates = False
+                        failure_reason = "Tests failed"
+                        failure_context = test_summary
+                    else:
+                        prd.impl_tests_passed = True
+                        prd.save()
+                else:
+                    logger.info("⏩ Tests already passed. Skipping.")
+
+            if passed_gates and review:
+                if not prd.impl_review_passed:
+                    # Agentic review logic
+                    try:
+                        review_template = get_prompt("implementation_review_prompt.txt")
+                        success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
+                        
+                        prompt = review_template.format(
+                            title=prd.title,
+                            description=prd.content,
+                            success_criteria=success_criteria_str,
+                        )
+                        
+                        cmd = get_agent_command(agent, prompt)
+                        output, _ = run_agent(cmd, stream=stream)
+                        if "<review>PASSED</review>" in output:
+                            prd.impl_review_passed = True
+                            prd.save()
+                        else:
+                            passed_gates = False
+                            failure_reason = "Review failed"
+                            failure_context = output
+                    except Exception as e:
+                        passed_gates = False
+                        failure_reason = f"Review error: {e}"
+                        failure_context = str(e)
+                else:
+                    logger.info("⏩ Review already passed. Skipping.")
+
+            if passed_gates:
+                success = True
+                break
+            else:
+                # If any gate failed, we might want to reconsider if code is still "ready"
+                # In a loop, if tests fail, the agent might have modified code that now needs re-implementation or fixing.
+                # However, the loop itself handles re-implementation in the next iteration.
+                # For now, let's reset the ready flags if a gate fails so the next iteration re-runs the necessary steps.
+                prd.reset_progress()
+                prd.save()
+
+            if passed_gates:
+                success = True
+                break
+
+        # 4. Finalize
+        if success:
+            logger.info(f"✅ PRD {prd.id} completed successfully.")
+            prd.status = "done"
+            final_path = PRODUCT_HISTORY_DIR / prd.path.name
+            prd.save(final_path)
+            prd.path.unlink()
+            prd.path = final_path
+
+            # Update state
+            state = load_project_state()
+            if prd.id not in state["completed_prds"]:
+                state["completed_prds"].append(prd.id)
+            save_project_state(state)
+
+            # Auto-merge if enabled
+            if ralph_config.get("auto_merge", False):
+                automerge_branch = get_automerge_branch(config)
+                from vibe_tools.branches import merge_branches
+
+                merge_branches(branch_name, automerge_branch)
+
+            if is_branch_switching_enabled():
+                switch_to_main()
+            return True
         else:
-            # If any gate failed, we might want to reconsider if code is still "ready"
-            # In a loop, if tests fail, the agent might have modified code that now needs re-implementation or fixing.
-            # However, the loop itself handles re-implementation in the next iteration.
-            # For now, let's reset the ready flags if a gate fails so the next iteration re-runs the necessary steps.
-            prd.reset_progress()
-            prd.save()
+            logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
 
-        if passed_gates:
-            success = True
-            break
-
-    # 4. Finalize
-    if success:
-        logger.info(f"✅ PRD {prd.id} completed successfully.")
-        prd.status = "done"
-        final_path = PRODUCT_HISTORY_DIR / prd.path.name
-        prd.save(final_path)
-        prd.path.unlink()
-        prd.path = final_path
-
-        # Update state
-        state = load_project_state()
-        if prd.id not in state["completed_prds"]:
-            state["completed_prds"].append(prd.id)
-        save_project_state(state)
-
-        # Auto-merge if enabled
-        if ralph_config.get("auto_merge", False):
-            automerge_branch = get_automerge_branch(config)
-            from vibe_tools.branches import merge_branches
-
-            merge_branches(branch_name, automerge_branch)
-
-        if is_branch_switching_enabled():
-            switch_to_main()
-        return True
-    else:
-        logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
-
-        # 4b. Summarize failure for the new PRD
-        from vibe_tools.utils import run_llm
-        
-        problem_description = f"Implementation of {prd.id} failed with: {failure_reason}"
-        if failure_context:
-            logger.info("🧠 Summarizing failure for the new PRD...")
-            summary_prompt = f"""
-            You are a technical lead. A developer's task failed. 
-            Summarize the following failure logs/feedback into a clear 'Problem Statement' for a new issue PRD.
-            Focus on what went wrong and what needs to be fixed.
+            # 4b. Summarize failure for the new PRD
+            from vibe_tools.utils import run_llm
             
-            Original PRD Title: {prd.title}
-            Failure Reason: {failure_reason}
-            
-            Failure Context:
-            {failure_context}
-            
-            Output ONLY the summarized problem description. Do not include markdown headers if possible, just the text.
-            """
-            summarized = run_llm(summary_prompt)
-            if summarized:
-                problem_description = summarized.strip()
+            problem_description = f"Implementation of {prd.id} failed with: {failure_reason}"
+            if failure_context:
+                logger.info("🧠 Summarizing failure for the new PRD...")
+                summary_prompt = f"""
+                You are a technical lead. A developer's task failed. 
+                Summarize the following failure logs/feedback into a clear 'Problem Statement' for a new issue PRD.
+                Focus on what went wrong and what needs to be fixed.
+                
+                Original PRD Title: {prd.title}
+                Failure Reason: {failure_reason}
+                
+                Failure Context:
+                {failure_context}
+                
+                Output ONLY the summarized problem description. Do not include markdown headers if possible, just the text.
+                """
+                summarized = run_llm(summary_prompt)
+                if summarized:
+                    problem_description = summarized.strip()
 
-        # Create new issue PRD
-        new_issue_id = generate_prd_id(pathlib.Path("product"))
-        issue_title = f"Fix failures in {prd.id}: {prd.title}"
-        new_issue = PRD(
-            id=new_issue_id,
-            title=issue_title,
-            type="ISSUE",
-            status="backlog",
-            content=problem_description,
-        )
-        issue_filename = (
-            f"{new_issue_id}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower())}.md"
-        )
-        new_issue.save(PRODUCT_BACKLOG_DIR / issue_filename)
+            # Create new issue PRD
+            new_issue_id = generate_prd_id(pathlib.Path("product"))
+            issue_title = f"Fix failures in {prd.id}: {prd.title}"
+            new_issue = PRD(
+                id=new_issue_id,
+                title=issue_title,
+                type="ISSUE",
+                status="backlog",
+                content=problem_description,
+            )
+            issue_filename = (
+                f"{new_issue_id}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower())}.md"
+            )
+            new_issue.save(PRODUCT_BACKLOG_DIR / issue_filename)
 
-        # Update current PRD
-        prd.status = "backlog"
-        prd.depends_on.append(new_issue_id)
-        prd.append_history(
-            f"Attempt failed: {failure_reason}. Blocked by {new_issue_id}."
-        )
+            # Update current PRD
+            prd.status = "backlog"
+            prd.depends_on.append(new_issue_id)
+            prd.append_history(
+                f"Attempt failed: {failure_reason}. Blocked by {new_issue_id}."
+            )
 
-        backlog_filename = prd.path.name
-        new_backlog_path = PRODUCT_BACKLOG_DIR / backlog_filename
-        prd.save(new_backlog_path)
-        prd.path.unlink()
-        prd.path = new_backlog_path
+            backlog_filename = prd.path.name
+            new_backlog_path = PRODUCT_BACKLOG_DIR / backlog_filename
+            prd.save(new_backlog_path)
+            prd.path.unlink()
+            prd.path = new_backlog_path
 
-        if is_branch_switching_enabled():
-            switch_to_main()
-        return False
+            if is_branch_switching_enabled():
+                switch_to_main()
+            return False
     except KeyboardInterrupt:
         logger.warning(f"\n⚠️ Process interrupted. Restoring state for PRD {prd.id if prd else 'unknown'}...")
         if prd:
