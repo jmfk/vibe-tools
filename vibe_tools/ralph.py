@@ -7,7 +7,7 @@ import datetime
 import pathlib
 import sys
 import re
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import yaml
 import click
@@ -24,6 +24,7 @@ from vibe_tools.utils import (
     INFRA_SPEC,
     TESTING_SPEC,
     PRODUCT_BACKLOG_DIR,
+    PRODUCT_NEXT_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
     get_agent_command,
@@ -338,16 +339,22 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         prd = load_prd(in_progress_files[0])
         logger.info(f"📍 Resuming PRD: {prd.title} ({prd.id})")
     else:
-        # Select from backlog
-        backlog_files = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
-        if not backlog_files:
-            logger.info("ℹ️ No PRDs in backlog.")
-            return True
+        # 1. Try to pick from 'next' directory (planned for implementation)
+        next_files = sorted(list(PRODUCT_NEXT_DIR.glob("*.md")))
+        if next_files:
+            selected_file = next_files[0]
+            prd = load_prd(selected_file)
+            logger.info(f"🚀 Picking next planned PRD: {prd.title} ({prd.id})")
+        else:
+            # 2. Fallback to backlog
+            backlog_files = sorted(list(PRODUCT_BACKLOG_DIR.glob("*.md")))
+            if not backlog_files:
+                logger.info("ℹ️ No PRDs in 'next' or backlog.")
+                return True
 
-        # In a real CLI we might prompt, here we'll take the first one
-        # but let's assume we want to guide the user to 'vibe prd plan'
-        selected_file = backlog_files[0]
-        prd = load_prd(selected_file)
+            selected_file = backlog_files[0]
+            prd = load_prd(selected_file)
+            logger.info(f"🚀 Starting PRD from backlog: {prd.title} ({prd.id})")
 
         # Check dependencies
         state = load_project_state()
@@ -360,7 +367,6 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             return False
 
         # Move to in_progress
-        logger.info(f"🚀 Starting PRD: {prd.title} ({prd.id})")
         new_path = PRODUCT_IN_PROGRESS_DIR / selected_file.name
         prd.status = "in_progress"
         prd.save(new_path)

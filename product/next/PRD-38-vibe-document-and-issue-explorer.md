@@ -69,11 +69,12 @@ This feature provides the visualization layer for the planning and management ar
 id: PRD-38
 title: Vibe Document and Issue Explorer
 type: FEATURE
-status: backlog
+status: planned
 group: null
-depends_on: []
+depends_on:
+- PRD-37
 created_at: 2026-01-13
-updated_at: '2026-01-13T23:56:53.345885'
+updated_at: '2026-01-14T12:09:52.912452'
 owner: Core Platform
 implementation_id: v01-470
 implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
