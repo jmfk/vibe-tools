@@ -72,9 +72,86 @@ interface Artifact {
   status?: string;
   owner?: string;
   lastUpdated?: string;
+  relPath?: string;
+  id?: string;
+}
+
+interface TreeItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  children?: TreeItem[];
+  artifact?: Artifact;
+  type?: 'prd' | 'spec' | 'issue';
 }
 
 // --- Components ---
+
+const SidebarTree = ({ 
+  items, 
+  level = 0, 
+  selectedPath, 
+  onSelect 
+}: { 
+  items: TreeItem[], 
+  level?: number, 
+  selectedPath?: string, 
+  onSelect: (artifact: Artifact) => void 
+}) => {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (path: string) => {
+    setExpanded(prev => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {items.map(item => (
+        <div key={item.path}>
+          {item.is_dir ? (
+            <div>
+              <button
+                onClick={() => toggle(item.path)}
+                className="w-full text-left px-2 py-1.5 rounded text-xs transition-colors hover:bg-zinc-800 flex items-center gap-1.5 text-zinc-500 font-medium"
+                style={{ paddingLeft: `${level * 12 + 8}px` }}
+              >
+                {expanded[item.path] ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
+                <Folder size={14} className="text-zinc-600" />
+                <span className="truncate">{item.name}</span>
+              </button>
+              {expanded[item.path] && item.children && (
+                <SidebarTree 
+                  items={item.children} 
+                  level={level + 1} 
+                  selectedPath={selectedPath} 
+                  onSelect={onSelect} 
+                />
+              )}
+            </div>
+          ) : (
+            item.artifact && (
+              <button
+                onClick={() => onSelect(item.artifact!)}
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
+                  selectedPath === item.path 
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                )}
+                style={{ paddingLeft: `${level * 12 + 24}px` }}
+              >
+                {item.artifact.type === 'prd' ? <FileText size={14} className="text-purple-500/50" /> :
+                 item.artifact.type === 'spec' ? <Database size={14} className="text-blue-500/50" /> :
+                 <AlertCircle size={14} className="text-emerald-500/50" />}
+                <span className="truncate">{item.name}</span>
+              </button>
+            )
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const Mermaid = ({ chart }: { chart: string }) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -193,16 +270,32 @@ const VibeView = ({ root }: { root: string }) => {
   const loadArtifacts = async () => {
     try {
       const all: Artifact[] = [];
+      const tree: Record<string, TreeItem[]> = { prd: [], spec: [], issue: [] };
       
-      const scan = async (dir: string, type: 'prd' | 'spec' | 'issue') => {
+      const scan = async (dir: string, type: 'prd' | 'spec' | 'issue', baseDir: string): Promise<TreeItem[]> => {
+        const items: TreeItem[] = [];
         try {
           const entries = await invoke<FileEntry[]>('list_directory', { path: dir });
           for (const f of entries) {
             if (f.is_dir) {
-              await scan(f.path, type);
+              const children = await scan(f.path, type, baseDir);
+              if (children.length > 0) {
+                items.push({
+                  name: f.name,
+                  path: f.path,
+                  is_dir: true,
+                  children: children.sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
+                });
+              }
             } else if (f.name.endsWith('.md') || f.name.endsWith('.yaml')) {
               let status = '';
               let owner = '';
+              let artifactType = type;
+              let artifactId = f.name.split('-').slice(0, 2).join('-'); // Default for PRD-XXX or ISSUE-YYYY
+              if (f.name.startsWith('ISSUE-')) {
+                artifactId = f.name.split('-').slice(0, 5).join('-'); // ISSUE-YYYY-MM-DD-NNN
+              }
+              
               try {
                 const raw = await invoke<string>('read_file_content', { path: f.path });
                 if (f.name.endsWith('.md')) {
@@ -211,30 +304,89 @@ const VibeView = ({ root }: { root: string }) => {
                     const parsed: any = yaml.load(match[1]);
                     status = parsed.status || '';
                     owner = parsed.owner || parsed.agent || '';
+                    if (parsed.id) artifactId = parsed.id;
+                    if (parsed.type === 'ISSUE') artifactType = 'issue';
                   }
                 } else if (f.name.endsWith('.yaml')) {
                   const parsed: any = yaml.load(raw);
                   status = parsed.status || '';
                   owner = parsed.owner || '';
+                  if (parsed.id) artifactId = parsed.id;
                 }
               } catch (e) {}
-              all.push({ name: f.name, path: f.path, type, status, owner });
+
+              const artifact: Artifact = { 
+                name: f.name, 
+                path: f.path, 
+                type: artifactType, 
+                status, 
+                owner,
+                id: artifactId,
+                relPath: f.path.replace(root, '')
+              };
+              
+              // Only add if it matches the requested type in the scan (unless it was promoted to issue)
+              if (artifactType === type || (type === 'prd' && artifactType === 'issue')) {
+                all.push(artifact);
+                items.push({
+                  name: f.name,
+                  path: f.path,
+                  is_dir: false,
+                  artifact: artifact,
+                  type: artifactType
+                });
+              }
             }
           }
         } catch (e) {}
+        return items;
       };
 
-      await Promise.all([
-        scan(`${root}/product`, 'prd'),
-        scan(`${root}/implementation`, 'spec'),
-        scan(`${root}/issues`, 'issue')
+      const [prdTree, specTree] = await Promise.all([
+        scan(`${root}/product`, 'prd', `${root}/product`),
+        scan(`${root}/implementation`, 'spec', `${root}/implementation`),
       ]);
 
+      // Separate issues from PRDs for the dedicated "issue" category
+      const issuesOnly = all.filter(a => a.type === 'issue');
+      
+      // We still want a tree for issues. Since they are mixed in product/, 
+      // we'll filter the prdTree to only include issues for the "issue" section.
+      const filterTreeForType = (items: TreeItem[], type: string): TreeItem[] => {
+        return items.map(item => {
+          if (item.is_dir) {
+            const children = filterTreeForType(item.children || [], type);
+            return children.length > 0 ? { ...item, children } : null;
+          }
+          return item.type === type ? item : null;
+        }).filter(Boolean) as TreeItem[];
+      };
+
       setArtifacts(all);
+      // We'll use the raw prdTree for PRDs (it might still show issues if we don't filter them out)
+      // Actually, let's filter them for clarity
+      setPrdTree(filterTreeForType(prdTree, 'prd'));
+      setSpecTree(specTree);
+      setIssueTree(filterTreeForType(prdTree, 'issue'));
+
     } catch (err) {
       console.error('Error loading artifacts:', err);
     }
   };
+
+  const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
+  const [specTree, setSpecTree] = useState<TreeItem[]>([]);
+  const [issueTree, setIssueTree] = useState<TreeItem[]>([]);
+
+  const filteredArtifacts = useMemo(() => {
+    if (!searchQuery) return [];
+    return artifacts.filter(a => 
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.relPath?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.owner?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [artifacts, searchQuery]);
 
   useEffect(() => {
     if (selectedArtifact) {
@@ -259,14 +411,27 @@ const VibeView = ({ root }: { root: string }) => {
             try {
               const data = yaml.load(raw);
               setYamlData(data);
-              // Try to find corresponding markdown in product/
+              // Try to find corresponding markdown in product/ recursively
               const baseName = selectedArtifact.name.replace('.yaml', '');
-              // Look for PRD or matching MD
-              const prdPath = `${root}/product/${baseName}.md`;
-              try {
+              
+              const findMd = async (dir: string): Promise<string | null> => {
+                const entries = await invoke<FileEntry[]>('list_directory', { path: dir });
+                for (const e of entries) {
+                  if (e.is_dir) {
+                    const found = await findMd(e.path);
+                    if (found) return found;
+                  } else if (e.name === `${baseName}.md` || e.name === `${baseName}.yaml.md`) {
+                    return e.path;
+                  }
+                }
+                return null;
+              };
+
+              const prdPath = await findMd(`${root}/product`);
+              if (prdPath) {
                 const md = await invoke<string>('read_file_content', { path: prdPath });
                 setMarkdownContent(md);
-              } catch (e) {
+              } else {
                 setMarkdownContent('');
               }
             } catch (e) {
@@ -278,12 +443,28 @@ const VibeView = ({ root }: { root: string }) => {
     }
   }, [selectedArtifact]);
 
-  const filteredArtifacts = artifacts.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.owner?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleOpenInCursor = () => {
+    if (selectedArtifact) {
+      invoke('open_in_cursor', { path: selectedArtifact.path }).catch(console.error);
+    }
+  };
+
+  const runVibeAction = async (cmd: string, args: string[]) => {
+    try {
+      if (cmd === 'issue' && args[0] === 'status' && args[2] === 'history') {
+        const id = args[1];
+        const newPath = `${root}/product/history/${selectedArtifact?.name}`;
+        await invoke('move_file', { from: selectedArtifact?.path, to: newPath });
+        await invoke('run_vibe_command', { command: 'issue', args: ['status', id, 'done'] });
+        setSelectedArtifact(null);
+      } else {
+        await invoke('run_vibe_command', { command: cmd, args });
+      }
+      setTimeout(loadArtifacts, 500);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
     <div className="flex h-full gap-6 overflow-hidden">
@@ -301,27 +482,42 @@ const VibeView = ({ root }: { root: string }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-1 pr-2">
-          {['prd', 'spec', 'issue'].map(type => (
-            <div key={type} className="mb-4">
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">
-                {type}s
-              </div>
-              {filteredArtifacts.filter(a => a.type === type).map(artifact => (
+          {searchQuery ? (
+            <div className="space-y-1">
+               {filteredArtifacts.map(artifact => (
                 <button
                   key={artifact.path}
                   onClick={() => setSelectedArtifact(artifact)}
                   className={cn(
-                    "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate",
+                    "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
                     selectedArtifact?.path === artifact.path 
                       ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                   )}
                 >
-                  {artifact.name}
+                  {artifact.type === 'prd' ? <FileText size={14} className="text-purple-500/50" /> :
+                   artifact.type === 'spec' ? <Database size={14} className="text-blue-500/50" /> :
+                   <AlertCircle size={14} className="text-emerald-500/50" />}
+                  <span className="truncate">{artifact.name}</span>
                 </button>
               ))}
             </div>
-          ))}
+          ) : (
+            <>
+              <div className="mb-6">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">PRDs</div>
+                <SidebarTree items={prdTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+              </div>
+              <div className="mb-6">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">System Specs</div>
+                <SidebarTree items={specTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+              </div>
+              <div className="mb-6">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">Issues</div>
+                <SidebarTree items={issueTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -339,7 +535,7 @@ const VibeView = ({ root }: { root: string }) => {
                   )}>
                     {selectedArtifact.type}
                   </span>
-                  <span className="text-zinc-500 text-xs font-mono">{selectedArtifact.path.replace(root, '')}</span>
+                  <span className="text-zinc-500 text-xs font-mono">{selectedArtifact.relPath}</span>
                 </div>
                 <h1 className="text-2xl font-bold text-zinc-100">{selectedArtifact.name}</h1>
               </div>
@@ -357,7 +553,10 @@ const VibeView = ({ root }: { root: string }) => {
                     <Split size={18} />
                   </button>
                 )}
-                <button className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs font-medium text-zinc-200 transition-colors">
+                <button 
+                  onClick={handleOpenInCursor}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs font-medium text-zinc-200 transition-colors"
+                >
                   Open in Cursor
                 </button>
               </div>
@@ -366,11 +565,52 @@ const VibeView = ({ root }: { root: string }) => {
             <FrontmatterCard data={yamlData} />
 
             {selectedArtifact.type === 'issue' && (
-              <div className="mb-6 flex gap-2">
-                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest self-center mr-2">Quick Actions:</div>
-                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Move to History</button>
-                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Assign Agent</button>
-                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Link PRD</button>
+              <div className="mb-6 flex flex-wrap gap-y-3 gap-x-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Status:</div>
+                  <select 
+                    value={selectedArtifact.status}
+                    onChange={(e) => runVibeAction('issue', ['status', selectedArtifact.id || '', e.target.value])}
+                    className="bg-zinc-800 border border-zinc-700 rounded text-[10px] px-2 py-1 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {['backlog', 'in_progress', 'completed', 'history'].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Agent:</div>
+                  <select 
+                    value={selectedArtifact.owner}
+                    onChange={(e) => runVibeAction('issue', ['assign', selectedArtifact.id || '', e.target.value])}
+                    className="bg-zinc-800 border border-zinc-700 rounded text-[10px] px-2 py-1 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Unassigned</option>
+                    {['Architect', 'PM', 'Developer'].map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Quick Actions:</div>
+                  <button 
+                    onClick={() => runVibeAction('issue', ['status', selectedArtifact.id || '', 'history'])}
+                    className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300 transition-colors"
+                  >
+                    Move to History
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const prdId = prompt('Enter PRD ID to link to:');
+                      if (prdId) runVibeAction('issue', ['link', selectedArtifact.id || '', prdId]);
+                    }}
+                    className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300 transition-colors"
+                  >
+                    Link PRD
+                  </button>
+                </div>
               </div>
             )}
 

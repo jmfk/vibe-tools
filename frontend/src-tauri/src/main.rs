@@ -150,6 +150,59 @@ async fn get_total_cost() -> Result<f64, String> {
     Ok(cost)
 }
 
+#[tauri::command]
+fn open_in_cursor(path: String) -> Result<(), String> {
+    use std::process::Command;
+    #[cfg(target_os = "windows")]
+    let cmd = "cursor.cmd";
+    #[cfg(not(target_os = "windows"))]
+    let cmd = "cursor";
+
+    Command::new(cmd)
+        .arg(path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn update_artifact_meta(path: String, status: Option<String>, owner: Option<String>) -> Result<(), String> {
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let match_fm = content.match_indices("---\n").collect::<Vec<_>>();
+    if match_fm.len() >= 2 {
+        let start = match_fm[0].0 + 4;
+        let end = match_fm[1].0;
+        let fm_str = &content[start..end];
+        let mut data: serde_yaml::Value = serde_yaml::from_str(fm_str).map_err(|e| e.to_string())?;
+        
+        if let Some(s) = status {
+            data["status"] = serde_yaml::Value::String(s);
+        }
+        if let Some(o) = owner {
+            if data.as_mapping().unwrap().contains_key("agent") {
+                data["agent"] = serde_yaml::Value::String(o);
+            } else {
+                data["owner"] = serde_yaml::Value::String(o);
+            }
+        }
+        
+        let new_fm = serde_yaml::to_string(&data).map_err(|e| e.to_string())?;
+        let new_content = format!("---\n{}---\n{}", new_fm.trim_start_matches("---\n"), &content[end+4..]);
+        fs::write(path, new_content).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn move_file(from: String, to: String) -> Result<(), String> {
+    let to_path = PathBuf::from(&to);
+    if let Some(parent) = to_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::rename(from, to).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     let workspace_root = get_workspace_root().unwrap_or_else(|_| ".".into());
     let workspace_root_path = PathBuf::from(&workspace_root);
@@ -191,7 +244,10 @@ fn main() {
             get_workspace_root,
             run_vibe_command,
             get_active_agents,
-            get_total_cost
+            get_total_cost,
+            open_in_cursor,
+            update_artifact_meta,
+            move_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
