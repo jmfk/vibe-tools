@@ -272,20 +272,32 @@ register_all_commands(cli)
     is_flag=True,
     help="Force build even if dev_environment.yaml and dev_environment-current.yaml are identical.",
 )
+@click.option(
+    "--makefile",
+    "only_makefile",
+    is_flag=True,
+    help="Only synchronize the Makefile.",
+)
 @click.pass_context
-def build(ctx, force):
+def build(ctx, force, only_makefile):
     """Build the application and verify it runs."""
     if ctx.invoked_subcommand is None:
-        _build_reconciliation(ctx, force)
+        _build_reconciliation(ctx, force, only_makefile)
 
 
-def _build_reconciliation(ctx, force):
+def _build_reconciliation(ctx, force, only_makefile=False):
     """Build the application and verify it runs."""
     if not DEV_SPEC.exists():
         click.echo(f"❌ {DEV_SPEC} not found.")
         click.echo(
             "   Please run 'vibe config scaffold' first to generate development environment scaffolding."
         )
+        return
+
+    # 1. Sync Makefile
+    if only_makefile:
+        from vibe_tools.setup import sync_makefile
+        sync_makefile(agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False))
         return
 
     # Normalize dev_environment.md just-in-time
