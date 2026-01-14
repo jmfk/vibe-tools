@@ -170,7 +170,7 @@ class RalphLoop:
 
 def debugging_loop(
     agent: str, targets: List[str], stream: bool = False, iterations: int = 5
-) -> bool:
+) -> Tuple[bool, str]:
     """Runs a set of test targets in a loop until they pass or max iterations reached."""
     from vibe_tools.testing import ProjectTester
 
@@ -179,6 +179,8 @@ def debugging_loop(
     cost_logger = CostLogger(config)
 
     log_start("debug_loop", f"Running targets: {', '.join(targets)}")
+    
+    last_summary = "Tests failed but no summary was generated."
 
     for i in range(1, iterations + 1):
         logger.info(
@@ -191,7 +193,7 @@ def debugging_loop(
 
         if tests_passed:
             log_success("debug_loop", f"Targets {', '.join(targets)} passed!")
-            return True
+            return True, ""
 
         # Parse individual failures and re-run to get clean output
         failures = tester.parse_failures(test_output)
@@ -211,15 +213,15 @@ def debugging_loop(
         else:
             agent_test_output = test_output
 
-        summary = tester.get_summary(failed_targets)
-        log_issue("debug_loop", i, iterations, summary)
+        last_summary = tester.get_summary(failed_targets)
+        log_issue("debug_loop", i, iterations, last_summary)
         logger.warning(f"❌ Targets failed. Asking {agent} to fix...")
 
         try:
             prompt_template = get_prompt("test_fix_prompt.txt")
         except FileNotFoundError as e:
             logger.error(f"Error: {e}")
-            return False
+            return False, str(e)
 
         prompt = prompt_template.format(test_output=agent_test_output)
         cmd = get_agent_command(agent, prompt)
@@ -246,7 +248,7 @@ def debugging_loop(
     logger.error(
         f"❌ Failed to fix {', '.join(targets)} after {iterations} iterations."
     )
-    return False
+    return False, last_summary
 
 
 def check_automerge_sync(config) -> bool:
@@ -408,6 +410,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
 
     success = False
     failure_reason = ""
+    failure_context = ""
 
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
@@ -431,6 +434,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     if code != 0
                     else "No completion promise"
                 )
+                failure_context = output
                 continue
 
             if is_dirty():
@@ -441,16 +445,19 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 )
         except Exception as e:
             failure_reason = str(e)
+            failure_context = str(e)
             continue
 
         # 3b. Quality Gates
         passed_gates = True
         if tests:
-            if not debugging_loop(
+            success_tests, test_summary = debugging_loop(
                 agent, ["test"], stream=stream, iterations=max_debug_iterations
-            ):
+            )
+            if not success_tests:
                 passed_gates = False
                 failure_reason = "Tests failed"
+                failure_context = test_summary
 
         if passed_gates and review:
             # Agentic review logic
@@ -461,9 +468,11 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                 if "<review>PASSED</review>" not in output:
                     passed_gates = False
                     failure_reason = "Review failed"
+                    failure_context = output
             except Exception as e:
                 passed_gates = False
                 failure_reason = f"Review error: {e}"
+                failure_context = str(e)
 
         if passed_gates:
             success = True
@@ -495,6 +504,29 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
     else:
         logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
 
+        # 4b. Summarize failure for the new PRD
+        from vibe_tools.utils import run_llm
+        
+        problem_description = f"Implementation of {prd.id} failed with: {failure_reason}"
+        if failure_context:
+            logger.info("🧠 Summarizing failure for the new PRD...")
+            summary_prompt = f"""
+            You are a technical lead. A developer's task failed. 
+            Summarize the following failure logs/feedback into a clear 'Problem Statement' for a new issue PRD.
+            Focus on what went wrong and what needs to be fixed.
+            
+            Original PRD Title: {prd.title}
+            Failure Reason: {failure_reason}
+            
+            Failure Context:
+            {failure_context}
+            
+            Output ONLY the summarized problem description. Do not include markdown headers if possible, just the text.
+            """
+            summarized = run_llm(summary_prompt)
+            if summarized:
+                problem_description = summarized.strip()
+
         # Create new issue PRD
         new_issue_id = generate_prd_id(pathlib.Path("product"))
         issue_title = f"Fix failures in {prd.id}: {prd.title}"
@@ -503,7 +535,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             title=issue_title,
             type="ISSUE",
             status="backlog",
-            content=f"Implementation of {prd.id} failed with: {failure_reason}",
+            content=problem_description,
         )
         issue_filename = (
             f"{new_issue_id}-{re.sub(r'[^a-z0-9]+', '-', issue_title.lower())}.md"
