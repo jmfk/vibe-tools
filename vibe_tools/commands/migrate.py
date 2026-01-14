@@ -10,10 +10,6 @@ from vibe_tools.utils import (
     PRODUCT_BACKLOG_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
-    PRD_DIR,
-    PRD_DONE_DIR,
-    PRD_FAILED_DIR,
-    PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
     PROJECT_STATE_FILE,
     ensure_project_structure,
@@ -159,15 +155,6 @@ def run_reconciliation(quiet=False):
     if ISSUES_DIR.exists():
         shutil.rmtree(ISSUES_DIR)
     
-    # Remove old PRD directories in implementation/
-    if PRD_DIR.exists():
-        # Keep PRD_DIR but clear contents
-        for item in PRD_DIR.iterdir():
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
-
     # Clear old markdown files that were migrated
     for md_dir in legacy_md_dirs:
         if not md_dir.exists(): continue

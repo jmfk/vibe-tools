@@ -29,7 +29,6 @@ def test_perform_basic_init_logic(tmp_path, monkeypatch):
     project_dir = tmp_path / "implementation"
     monkeypatch.setattr("vibe_tools.utils.VIBE_PROJECT_DIR", project_dir)
     monkeypatch.setattr("vibe_tools.utils.CONFIG_FILE", project_dir / "config.json")
-    monkeypatch.setattr("vibe_tools.utils.PRD_DIR", project_dir / "prds")
     monkeypatch.setattr("vibe_tools.utils.LOGS_DIR", project_dir / "logs")
     monkeypatch.setattr("vibe_tools.utils.COSTS_DIR", project_dir / "costs")
     monkeypatch.setattr("vibe_tools.utils.VIBE_DATA_DIR", project_dir / "data")
@@ -42,7 +41,6 @@ def test_perform_basic_init_logic(tmp_path, monkeypatch):
 
     assert project_dir.exists()
     assert (project_dir / "config.json").exists()
-    assert (project_dir / "prds").exists()
     assert (project_dir / "instructions").exists()
 
 

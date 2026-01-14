@@ -17,7 +17,7 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
         click.echo(f"Directory {directory} does not exist.")
         return
 
-    files = sorted(list(directory.glob("*.yaml")) + list(directory.glob("*.md")))
+    files = sorted(list(directory.glob("*.md")))
     if search_term:
         files = [f for f in files if search_term.lower() in f.name.lower()]
 
@@ -47,8 +47,8 @@ def find_prd(prd_id: str):
         if exact.exists():
             return exact
 
-        # Try with extensions
-        for ext in [".yaml", ".md"]:
+        # Try with extension
+        for ext in [".md"]:
             f = folder / f"{prd_id}{ext}"
             if f.exists():
                 return f

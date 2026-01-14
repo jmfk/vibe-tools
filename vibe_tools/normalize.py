@@ -14,13 +14,8 @@ from vibe_tools.utils import (
     PLANNING_HISTORY_DIR,
     PLANNING_INBOX_DIR,
     PLANNING_REJECTED_DIR,
-    PRD_DIR,
-    PRD_DONE_DIR,
-    PRD_FAILED_DIR,
-    PRD_PROCESSING_DIR,
     VIBE_PROJECT_DIR,
     check_dependencies,
-    collect_prd_files,
     enable_console_debug,
     ensure_dir,
     get_file_hash,
@@ -35,7 +30,6 @@ from vibe_tools.utils import (
     safe_yaml_load,
     safe_yaml_dump,
     parse_prd_filename,
-    update_md_implementation_status,
     out_debug,
     out_error,
     out_info,
@@ -177,7 +171,7 @@ def normalize_prd(
     auto_overwrite: bool = False,
     debug: bool = False,
 ):
-    """Normalize PRDs from product/ into implementation/prds/."""
+    """Validate PRD normalization from product/ without writing to disk."""
     from vibe_tools.cli import load_config
     config = load_config()
     cost_logger = CostLogger(config)
@@ -205,26 +199,15 @@ def normalize_prd(
         out_info("No PRDs found to normalize.")
         return
 
-    ensure_dir(PRD_PROCESSING_DIR)
-
     for f in files:
-        out_info(f"🔄 Normalizing {f.name}...")
+        out_info(f"🔄 Validating normalization for {f.name}...")
         
-        # Determine target path
-        rel_path = f.relative_to(DEFAULT_SPECS_DIR)
-        target_yaml = PRD_PROCESSING_DIR / rel_path.with_suffix(".yaml")
-        ensure_dir(target_yaml.parent)
-
-        # Skip if already exists and not auto_overwrite
-        if target_yaml.exists() and not auto_overwrite:
-            if not click.confirm(f"⚠️  {target_yaml.name} already exists. Overwrite?"):
-                continue
-
-        # Run normalization
+        # Run normalization in-memory
         data = normalize_to_data(f.read_text(), f.stem, debug=debug)
         
         if data:
-            target_yaml.write_text(safe_yaml_dump(data))
-            out_success(f"✅ Normalized to {target_yaml}")
+            out_success(f"✅ Normalization valid for {f.name}")
+            if debug:
+                out_debug(f"\n--- YAML OUTPUT ---\n{safe_yaml_dump(data)}--- END YAML ---\n")
         else:
             out_error(f"❌ Failed to normalize {f.name}")
