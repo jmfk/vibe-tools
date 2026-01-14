@@ -11,28 +11,13 @@ vibe-tools is built around a modular, CLI-first architecture that separates conc
 ├── vibe_tools/              # Core Python package
 │   ├── cli.py              # Main CLI entry point and command registration
 │   ├── utils.py            # Core utilities, path definitions, and helpers
-│   ├── ralph.py            # Ralph agent integration and reconciliation loops
-│   ├── architect.py        # Interactive architecture manager
-│   ├── pm.py               # Interactive product manager
-│   ├── normalize.py        # PRD normalization engine
-│   ├── coverage.py         # Test coverage improvement loops
-│   ├── fixer.py            # Test fixing automation
-│   ├── cost.py             # Cost tracking and logging
-│   ├── servers.py          # Local server management
-│   ├── setup.py            # Service configuration
-│   ├── testing.py          # Test execution utilities
-│   ├── templates.py         # File templates
-│   └── commands/           # Individual command implementations
-│       ├── __init__.py     # Command registration
-│       ├── architect.py
-│       ├── pm.py
-│       ├── normalize.py
-│       ├── implement.py
-│       ├── coverage.py
-│       └── ... (30+ command modules)
+│   ├── ... (other modules)
+├── src-tauri/               # Tauri desktop application (Rust + Frontend)
+│   ├── src/                # Rust backend logic
+│   ├── ui/                 # Frontend implementation (React/TypeScript)
+│   └── tauri.conf.json     # Tauri configuration
 ├── product/                  # Human-readable specifications
 │   ├── architecture.md     # System architecture spec
-│   ├── infrastructure.md   # Infrastructure spec
 │   └── *.md                # Feature PRDs
 ├── prompts/                # AI prompt templates
 │   ├── ralph_base_prompt.txt
@@ -113,13 +98,12 @@ Tracks LLM usage costs:
 - Google Sheets integration (optional)
 - Session cost reporting
 
-### 7. Server Management (`vibe_tools/servers.py`)
+### 7. Desktop Application (Tauri)
 
-Manages local development servers via Docker:
-- Service definitions (Postgres, Redis, RabbitMQ, etc.)
-- Container lifecycle (install, start, stop, remove)
-- Port mapping and configuration
-- Global server configuration storage
+The desktop application provides a graphical interface for the vibe-tools ecosystem:
+- **Tauri Core**: Rust-based backend that handles system interactions and calls Python CLI functions.
+- **Frontend**: React-based UI for visualizing project status, PRDs, and logs.
+- **Sidecar/Command Execution**: Interaction with the Python CLI to perform actions.
 
 ## Data Flow
 
@@ -133,12 +117,8 @@ flowchart TD
     C -->|No| E[Create prd_*.yaml in prds/]
     D --> F[Used as context in all agent prompts]
     E --> G[Loaded into project state]
-    G --> H[vibe implement]
+    G --> H[vibe implement or Desktop App]
     H --> I[Ralph agent executes]
-    I --> J[Reconciliation loop]
-    J --> K{Success?}
-    K -->|Yes| L[Commit changes]
-    K -->|No| M[Retry or report issue]
 ```
 
 ### Reconciliation Loop
@@ -171,13 +151,11 @@ flowchart TD
     F --> G[Switch to plan branch]
     G --> H[Run reconciliation loops]
     H --> I[Architecture Setup]
-    I --> J[Infrastructure]
-    J --> K[CI/CD]
-    K --> L[Testing]
-    L --> M[Implementation]
-    M --> N{All loops successful?}
-    N -->|Yes| O[Complete]
-    N -->|No| P[Report issues]
+    I --> J[Testing]
+    J --> K[Implementation]
+    K --> L{All loops successful?}
+    L -->|Yes| M[Complete]
+    L -->|No| N[Report issues]
 ```
 
 ## File Organization Conventions

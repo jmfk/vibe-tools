@@ -55,14 +55,13 @@ These commands represent the main development lifecycle phases.
 - Options:
   - `--import-code`: Import existing codebase during setup
 
-**`vibe-setup <service>`**
-- Configure service connections
-- Services: `postgres`, `redis`, `rabbitmq`, `elasticsearch`, `s3-linode`, `s3-aws`, `imgproxy`, `api`, `google`, `test`
+**`vibe-setup <option>`**
+- Configure tool settings and API keys
+- Options: `api`, `google`, `test`
 - Examples:
   ```bash
-  vibe-setup postgres
   vibe-setup api
-  vibe-setup test  # Verify all configured services
+  vibe-setup test  # Verify configuration
   ```
 
 #### Phase 4: Dependencies
@@ -78,23 +77,11 @@ These commands represent the main development lifecycle phases.
 - Runs reconciliation loops for architecture, infrastructure, CI/CD, testing, and implementation
 - See [Ralph Integration](06-ralph-integration.md) for details
 
-#### Phase 6: Infrastructure
-
-**`vibe infra`**
-- Infrastructure reconciliation for production and live-staging environments
-- Ensures infrastructure matches infrastructure spec
-
-#### Phase 7: Testing
+#### Phase 6: Testing
 
 **`vibe testing`**
 - Testing reconciliation
 - Ensures integration and regression tests pass
-
-#### Phase 8: Deployment
-
-**`vibe deploy`**
-- Deployment phase
-- Handles deployment to target environments
 
 ### Supporting Tools
 
@@ -192,33 +179,17 @@ These commands represent the main development lifecycle phases.
 - Use the agent to resolve git history/conflicts across the branch stack
 - Automatically resolves merge conflicts
 
-#### Infrastructure Management
-
-**`vibe-servers <command> [service]`**
-- Manage local development servers via Docker
-- Commands:
-  - `list`: List supported servers and their status
-  - `install <service>`: Pull and run Docker container for a service
-  - `start [service]`: Start one or all servers
-  - `stop [service]`: Stop one or all servers
-  - `logs [service]`: View logs for one or all servers
-  - `status`: Show detailed status and port mappings
-  - `remove <service>`: Remove a service container
-- Services: `postgres`, `redis`, `rabbitmq`, `elasticsearch`, `mailhog`, `minio-linode`, `minio-aws`, `imgproxy`
-- Examples:
-  ```bash
-  vibe-servers list
-  vibe-servers install postgres
-  vibe-servers start redis
-  vibe-servers logs
-  ```
-
 #### Initialization
 
 **`vibe init`**
 - Interactive guided project initialization
 - Sets up project structure, templates, and directories
 - Guides through initial setup scenarios
+
+#### Desktop App
+
+**`cargo tauri dev`**
+- Run the desktop app in development mode
 
 #### Utility Commands
 
@@ -229,14 +200,14 @@ These commands represent the main development lifecycle phases.
 
 Commands are displayed in a specific order in help output:
 
-1. Phase commands (architect, pm, normalize, setup, deps, implement, build, run, start, stop, run-status, infra, testing, cicd, deploy)
+1. Phase commands (architect, pm, normalize, setup, deps, implement, testing)
 2. Supporting tools (history, status, cost, stats, docs, memory, rerun, implemented, ps, kill, test-fix, coverage, branch, branches, branch-resolve, billing-groups, demo-data, init)
 
 ## Command Dependencies
 
 Many commands check for dependencies before execution:
 
-- `normalize` requires: architecture and infrastructure specs
+- `normalize` requires: architecture spec
 - `implement` requires: normalized PRDs, setup, dependencies
 - `testing` requires: implementation completion
 

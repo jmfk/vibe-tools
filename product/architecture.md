@@ -12,12 +12,18 @@ The project follows a **CLI-First** philosophy. We prioritize terminal interacti
 
 ## 2. Tech Stack
 
-### 2.1 Backend
+### 2.1 Backend (CLI & Core Logic)
 - **Language**: Python 3.11
-- **CLI**: Click (for a robust command-line interface)
+- **CLI Framework**: Click
 - **AI Orchestration**: `google-genai` for structured LLM interactions
+- **Distribution**: `pipx` for global CLI access
 
-### 2.2 AI & Tooling
+### 2.2 Desktop GUI
+- **Framework**: Tauri (Rust + Frontend)
+- **Frontend**: React/TypeScript
+- **Interactions**: Calls Python CLI functions/logic via Tauri sidecars or command execution.
+
+### 2.3 AI & Tooling
 - **Vibe CLI**: Unified command-line interface (`vibe`) for all developer workflows.
 - **Prompts**: Version-controlled AI prompts in `prompts/`.
 
@@ -34,22 +40,19 @@ The project follows a **CLI-First** philosophy. We prioritize terminal interacti
 └── frontend/        # Frontend implementation (where applicable)
 ```
 
-## 4. Development Lifecycle (8-Phase)
-The core of the project's operation follows an 8-phase lifecycle, driven by the `vibe` CLI:
+## 4. Development Lifecycle (Core Phases)
+The project's operation follows a set of core phases, driven by the `vibe` CLI and the Desktop App:
 
 1.  **Normalize**: `vibe normalize` - Convert high-level PRDs into machine-readable implementation plans.
 2.  **Setup**: `vibe setup` - Initialize the project environment and reconcile architecture.
-3.  **Deps**: `vibe deps` - Manage and install project dependencies.
+3.  **Deps**: `vibe deps` - Manage and install project dependencies (Python & Node/Rust).
 4.  **Implement**: `vibe implement` - Execute the main implementation loop using AI agents.
-5.  **Infra**: `vibe infra` - Provision and manage production infrastructure. (Optional: only needed if the project requires cloud deployment).
-6.  **Testing**: `vibe testing` - Run test suites and improve coverage.
-7.  **CICD**: `vibe cicd` - Configure and run continuous integration and deployment pipelines.
-8.  **Deploy**: `vibe deploy` - Deploy the application to target environments.
+5.  **Testing**: `vibe testing` - Run test suites and improve coverage.
 
 ## 5. Core Commands
 
 ### 5.1 Project Management
-- `vibe architect`: Generate or update core specifications (architecture, infra, etc.). Note: `infrastructure.md` is optional.
+- `vibe architect`: Generate or update core specifications (architecture, etc.).
 - `vibe pm`: Interactive session for managing PRDs and project backlog.
 - `vibe status`: Comprehensive report of project progress and system health.
 - `vibe sync`: Synchronize local issues and PRDs with GitHub.
@@ -62,7 +65,6 @@ The core of the project's operation follows an 8-phase lifecycle, driven by the 
 - `vibe cost`: Report estimated LLM and infrastructure costs.
 - `vibe monitor`: Real-time monitoring of active agents and processes.
 - `vibe config`: Configure API keys and global service settings.
-- `vibe servers`: Manage local development servers via Docker.
 
 ## 6. Key Design Patterns
 - **CLI-First Workflow**: All tasks are driven by the unified `vibe` command.

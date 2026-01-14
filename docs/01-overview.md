@@ -2,18 +2,18 @@
 
 ## System Purpose
 
-vibe-tools is a CLI-first development automation system designed to maximize development velocity using AI-assisted tooling. It provides a comprehensive set of commands for managing the entire software development lifecycle, from requirements gathering to implementation, testing, and deployment.
+vibe-tools is a CLI-first development automation system designed to maximize development velocity using AI-assisted tooling. It provides a comprehensive set of commands for managing the entire software development lifecycle, from requirements gathering to implementation and testing.
 
 ## Philosophy
 
-The system follows a **CLI-First** philosophy, prioritizing terminal interactions and automated developer workflows. All infrastructure and common tasks are driven through command-line interfaces, enabling developers to work efficiently without switching between multiple tools or interfaces.
+The system follows a **CLI-First** philosophy with a Desktop companion, prioritizing terminal interactions and automated developer workflows while providing a rich GUI for visualization and complex management tasks.
 
 ## Key Features
 
 - **PRD-Driven Development**: Changes start with Product Requirements Documents (PRDs) in `product/`, which are normalized into machine-readable YAML plans
-- **AI Agent Integration**: Seamless integration with Cursor Ralph and other AI agents for automated implementation
+- **AI Agent Integration**: Seamless integration with AI agents for automated implementation
+- **Desktop Dashboard**: Tauri-based desktop app for project overview and management
 - **Interactive Tools**: Built-in interactive shells for architecture (`vibe architect`) and product management (`vibe pm`)
-- **Infrastructure Management**: Automated setup and management of local development servers (Postgres, Redis, RabbitMQ, etc.)
 - **Cost Tracking**: Built-in LLM cost tracking with Google Sheets integration
 - **Test Coverage Automation**: Automated loops for improving test coverage and fixing failing tests
 - **Reconciliation Loops**: Automated reconciliation between desired and actual system state
@@ -23,14 +23,17 @@ The system follows a **CLI-First** philosophy, prioritizing terminal interaction
 ### Installation
 
 ```bash
-pip install -e .
+pipx install -e .
 ```
 
 This installs the following CLI commands:
 - `vibe` - Main command-line interface
-- `vibe-setup` - Service configuration tool
-- `vibe-servers` - Local server management
-- `vibe-staging` - Staging environment management
+- `vibe-setup` - Tool configuration
+
+To run the Desktop app:
+```bash
+cargo tauri dev
+```
 
 ### Initial Setup
 
@@ -43,20 +46,7 @@ This installs the following CLI commands:
    ```bash
    vibe-setup api
    ```
-   This configures API keys for Google Gemini/DSPy and other LLM providers.
-
-3. **Configure Google Sheets (optional):**
-   ```bash
-   vibe-setup google
-   ```
-   This enables cost logging to Google Sheets.
-
-4. **Set up local services:**
-   ```bash
-   vibe-setup postgres
-   vibe-setup redis
-   # ... other services as needed
-   ```
+   This configures API keys for Google Gemini and other LLM providers.
 
 ### Basic Usage
 
@@ -92,9 +82,10 @@ vibe coverage
 ```
 /
 ├── vibe_tools/      # Core automation logic and CLI
-├── product/           # Markdown PRDs and specifications
+├── src-tauri/       # Desktop application (Rust + Frontend)
+├── product/         # Markdown PRDs and specifications
 ├── prompts/         # AI prompt templates
-├── implementation/         # Architecture and infrastructure definitions (YAML)
+├── implementation/  # Generated and runtime data
 │   ├── prds/        # Normalized PRD YAML files
 │   ├── logs/        # Execution logs
 │   ├── costs/       # Cost tracking data
