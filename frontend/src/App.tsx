@@ -190,44 +190,55 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {!leftSidebarOpen && (
-        <button 
-          onClick={() => setLeftSidebarOpen(true)}
-          className="fixed left-0 top-1/2 -translate-y-1/2 bg-zinc-900 border border-zinc-800 border-l-0 rounded-r-md p-1 hover:text-zinc-100 z-10"
-        >
-          <ChevronRight size={18} />
-        </button>
-      )}
-
       {/* Main Area: Dynamic Workspaces */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-zinc-800 flex items-center px-4 bg-zinc-900/80 backdrop-blur-sm">
-          <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
-            <TabButton 
-              active={activeTab === 'explorer'} 
-              onClick={() => setActiveTab('explorer')}
-              icon={<Files size={16} />}
-              label="Explorer"
-            />
-            <TabButton 
-              active={activeTab === 'monitor'} 
-              onClick={() => setActiveTab('monitor')}
-              icon={<Activity size={16} />}
-              label="Monitor"
-            />
-            <TabButton 
-              active={activeTab === 'runner'} 
-              onClick={() => setActiveTab('runner')}
-              icon={<PlayCircle size={16} />}
-              label="Runner"
-            />
-            <TabButton 
-              active={activeTab === 'testing'} 
-              onClick={() => setActiveTab('testing')}
-              icon={<TestTube size={16} />}
-              label="Testing"
-            />
+        <header className="h-14 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-20">
+          <div className="flex items-center gap-4 overflow-hidden">
+            {!leftSidebarOpen && (
+              <button 
+                onClick={() => setLeftSidebarOpen(true)}
+                className="p-2 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100 transition-all border border-zinc-800"
+                title="Expand Chat"
+              >
+                <ChevronRight size={18} />
+              </button>
+            )}
+            <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
+              <TabButton 
+                active={activeTab === 'explorer'} 
+                onClick={() => setActiveTab('explorer')}
+                icon={<Files size={16} />}
+                label="Explorer"
+              />
+              <TabButton 
+                active={activeTab === 'monitor'} 
+                onClick={() => setActiveTab('monitor')}
+                icon={<Activity size={16} />}
+                label="Monitor"
+              />
+              <TabButton 
+                active={activeTab === 'runner'} 
+                onClick={() => setActiveTab('runner')}
+                icon={<PlayCircle size={16} />}
+                label="Runner"
+              />
+              <TabButton 
+                active={activeTab === 'testing'} 
+                onClick={() => setActiveTab('testing')}
+                icon={<TestTube size={16} />}
+                label="Testing"
+              />
+            </div>
           </div>
+          {!rightSidebarOpen && (
+            <button 
+              onClick={() => setRightSidebarOpen(true)}
+              className="p-2 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100 transition-all border border-zinc-800"
+              title="Expand Meta Info"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          )}
         </header>
 
         <main className="flex-1 overflow-hidden relative">
@@ -302,15 +313,6 @@ const App: React.FC = () => {
           </section>
         </div>
       </div>
-
-      {!rightSidebarOpen && (
-        <button 
-          onClick={() => setRightSidebarOpen(true)}
-          className="fixed right-0 top-1/2 -translate-y-1/2 bg-zinc-900 border border-zinc-800 border-r-0 rounded-l-md p-1 hover:text-zinc-100 z-10"
-        >
-          <ChevronLeft size={18} />
-        </button>
-      )}
     </div>
   );
 };

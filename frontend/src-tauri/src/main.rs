@@ -1,12 +1,12 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
-use notify::{Watcher, RecursiveMode, Config, Event};
+use notify::{Watcher, RecursiveMode, Config};
 use tauri::{Manager, Window};
 
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[derive(serde::Serialize, Clone)]
 struct FileEntry {
@@ -104,7 +104,7 @@ async fn run_vibe_command(window: Window, command: String, args: Vec<String>) ->
     Ok(())
 }
 
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct AgentProcess {
     pid: i32,
     command: String,

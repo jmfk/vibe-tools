@@ -32,6 +32,7 @@ implementation/costs/usage.csv
 frontend/src-tauri/target/
 
 # Tauri generated bundles and artifacts
+frontend/src-tauri/implementation/
 frontend/src-tauri/gen/
 frontend/src-tauri/tauri-build/
 
