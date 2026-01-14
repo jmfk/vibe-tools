@@ -130,3 +130,4 @@ Timestamp,PRD,Phase,Iteration,Agent,Model,Input Tokens,Output Tokens,Cost (USD),
 2026-01-13 15:35:04,PRD-38-vibe-document-and-issue-explorer,normalize,1,gemini,gemini-2.0-flash-exp,750,352,0.001102,normalizing_prd
 2026-01-13 15:35:15,PRD-37-tauri-dashboard-core,normalize,1,gemini,gemini-2.0-flash-exp,1028,957,0.001985,normalizing_prd
 2026-01-14 00:00:47,architecture,normalize,1,gemini,gemini-2.0-flash-exp,1126,622,0.001748,normalizing_prd
+2026-01-14 13:10:17,PRD-37,normalize,1,gemini,gemini-2.0-flash-exp,973,609,0.001582,normalizing_prd
