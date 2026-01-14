@@ -18,16 +18,16 @@ The vibe-tools development environment is designed for a CLI-first and Desktop-i
 - **Build commands**: 
   - Frontend: `npm install` (in `frontend/`)
   - Tauri Core: `cargo build` (in `frontend/src-tauri/`)
-  - Tauri Bundle: `cargo tauri build` or `cargo tauri dev`
+  - Tauri Bundle: `npm run tauri build` or `npm run tauri dev`
 - **Testing**:
   - Frontend: `npm test` (Vitest)
-  - Core: `cargo test` (Rust)
+  - Core: `cd frontend/src-tauri && cargo test`
 - **Dependencies**: 
   - Rust (latest stable)
   - Node.js 20+
-  - Tauri CLI
+  - Tauri CLI (via npm)
 - **Build outputs**: Native desktop application.
-- **Verification**: Run `cargo tauri dev` to launch the development version.
+- **Verification**: Run `npm run tauri dev` to launch the development version.
 
 ## 3. Development Environment Setup
 
@@ -56,11 +56,11 @@ Installation is handled via the `install.sh` script, which:
 
 ### 4.2 Desktop App Development
 - `make install-frontend`: Install npm dependencies.
-- `make dev-desktop`: Start the Tauri development environment (`cargo tauri dev`).
-- `make build-desktop`: Build the production desktop application.
+- `make dev-desktop`: Start the Tauri development environment (`npm run tauri dev`).
+- `make build-desktop`: Build the production desktop application (`npm run tauri build`).
 - `make test-desktop`: Run both Vitest (frontend) and Cargo tests (Rust core).
 - `make test-frontend`: Run frontend-specific Vitest tests.
-- `make test-core`: Run Rust-specific Cargo tests.
+- `make test-core`: Run Rust-specific Cargo tests (`cd frontend/src-tauri && cargo test`).
 
 ### 4.3 General
 - `make test`: Run all tests (CLI & Desktop).

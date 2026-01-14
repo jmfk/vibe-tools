@@ -828,13 +828,23 @@ def ensure_infrastructure():
         VIBE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def install_deps():
+def install_deps(
+    only_makefile: bool = False,
+    only_python: bool = False,
+    only_frontend: bool = False,
+):
     """Logic to install required Python and Frontend dependencies."""
+    # If any specific flag is set, we only run those
+    run_all = not (only_makefile or only_python or only_frontend)
+
+    # 1. Sync Makefile
+    if run_all or only_makefile:
+        sync_makefile()
+        if only_makefile:
+            return
+
     # Ensure basic infrastructure is present
     ensure_infrastructure()
-
-    # Sync Makefile from dev_env before installing if it exists
-    sync_makefile()
 
     # If we are on main branch, switch to a dependencies branch
     current_branch, _ = run_command(["git", "branch", "--show-current"], check=False)
@@ -855,24 +865,38 @@ def install_deps():
 
     click.echo("\n--- Installing Dependencies ---")
 
-    # 1. Always install essential tools for the loop
-    click.echo("Installing essential tools (ruff, pytest, mypy)...")
-    run_command(
-        ["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"]
-    )
+    # 2. Always install essential tools for the loop
+    if run_all or only_python:
+        click.echo("Installing essential tools (ruff, pytest, mypy)...")
+        run_command(["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"])
 
-    # 2. Project-specific Python dependencies
-    if pathlib.Path("pyproject.toml").exists():
-        click.echo("Found pyproject.toml. Installing in editable mode...")
-        run_command(["pip", "install", "-e", "."])
-    elif pathlib.Path("requirements.txt").exists():
-        click.echo("Found requirements.txt. Installing...")
-        run_command(["pip", "install", "-r", "requirements.txt"])
+        # Project-specific Python dependencies
+        if pathlib.Path("pyproject.toml").exists():
+            click.echo("Found pyproject.toml. Installing in editable mode...")
+            run_command(["pip", "install", "-e", "."])
+        elif pathlib.Path("requirements.txt").exists():
+            click.echo("Found requirements.txt. Installing...")
+            run_command(["pip", "install", "-r", "requirements.txt"])
 
     # 3. Frontend dependencies
-    if pathlib.Path("frontend/package.json").exists():
-        click.echo("Found frontend/package.json. Installing npm dependencies...")
-        run_command(["npm", "install", "--prefix", "frontend"])
+    if run_all or only_frontend:
+        if pathlib.Path("frontend/package.json").exists():
+            click.echo("Found frontend/package.json. Installing npm dependencies...")
+            
+            # Ensure TypeScript configuration exists if missing
+            tsconfig = pathlib.Path("frontend/tsconfig.json")
+            tsconfig_node = pathlib.Path("frontend/tsconfig.node.json")
+            
+            if not tsconfig.exists():
+                click.echo("Creating missing frontend/tsconfig.json...")
+                tsconfig.write_text(TEMPLATES.get("tsconfig.json", ""))
+                
+            if not tsconfig_node.exists():
+                click.echo("Creating missing frontend/tsconfig.node.json...")
+                tsconfig_node.write_text(TEMPLATES.get("tsconfig.node.json", ""))
+
+            # Using --legacy-peer-deps to handle common React 18 ecosystem conflicts
+            run_command(["npm", "install", "--prefix", "frontend", "--legacy-peer-deps"])
 
 
 @setup_cli.command()

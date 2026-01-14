@@ -14,8 +14,14 @@ from vibe_tools.utils import (
 
 def register_infra(cli):
     @click.command()
+    @click.option(
+        "--spec",
+        "only_spec",
+        is_flag=True,
+        help="Only generate or update the infrastructure specification.",
+    )
     @click.pass_context
-    def infra(ctx):
+    def infra(ctx, only_spec):
         """Phase 6: Infrastructure reconciliation for production and live-staging environments.
 
         Sets up infrastructure for production and live-staging systems (Kubernetes, cloud platforms, etc.).
@@ -33,9 +39,9 @@ def register_infra(cli):
             return
 
         # Ensure infrastructure spec exists
-        if not INFRA_SPEC.exists():
+        if not INFRA_SPEC.exists() or only_spec:
             # generate from PRDs if it doesn't exist
-            click.echo(f"📝 Generating {INFRA_SPEC} from PRDs...")
+            click.echo(f"📝 Generating/Updating {INFRA_SPEC} from PRDs...")
             generate_infrastructure_spec(
                 agent=ctx.obj.get("agent", "cursor-agent"),
             )
@@ -43,6 +49,8 @@ def register_infra(cli):
                 click.echo(
                     "❌ Failed to generate infrastructure spec. Please create infrastructure.md manually."
                 )
+                return
+            if only_spec:
                 return
 
         # Normalize infrastructure.md just-in-time
