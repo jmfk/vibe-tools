@@ -59,7 +59,6 @@
     }
   },
   "branch_lineage": {
-    "staging": "feature/prd-37",
     "issue/ISSUE-2026-01-10-001": "issue/ISSUE-2026-01-10-002",
     "issue/ISSUE-2026-01-10-002": "main"
   },

@@ -278,7 +278,7 @@ def is_branch_switching_enabled() -> bool:
 
     # Fallback to config
     config = load_config()
-    if config.get("no_branch_switch"):
+    if config.get("no_branch_switch") or config.get("ralph", {}).get("no_branch_switch"):
         return False
 
     return True
