@@ -13,6 +13,7 @@ class ProjectTester:
     def __init__(self, backend_root=".", frontend_root="frontend"):
         self.backend_root = pathlib.Path(backend_root)
         self.frontend_root = pathlib.Path(frontend_root)
+        self.tauri_root = self.frontend_root / "src-tauri"
         self.makefile = pathlib.Path("Makefile")
 
     def has_make_target(self, target):
@@ -64,6 +65,31 @@ class ProjectTester:
 
         return None
 
+    def discover_tauri_test_cmd(self):
+        """Discovers the command to run tauri (Rust) tests."""
+        if self.has_make_target("tauri-test"):
+            return ["make", "tauri-test"]
+
+        if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
+            # Run cargo test in the tauri directory
+            return ["cargo", "test", "--manifest-path", str(self.tauri_root / "Cargo.toml")]
+
+        return None
+
+    def discover_backend_lint_cmd(self):
+        """Discovers the command to run backend lint."""
+        if self.has_make_target("lint-backend") or self.has_make_target("lint"):
+            return ["make", "lint-backend"] if self.has_make_target("lint-backend") else ["make", "lint"]
+
+        # Fallback to ruff if available
+        try:
+            subprocess.run(["ruff", "--version"], capture_output=True, check=True)
+            return ["ruff", "check", "vibe_tools", "tests"]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+        return None
+
     def discover_frontend_lint_cmd(self):
         """Discovers the command to run frontend lint."""
         if self.has_make_target("frontend-lint"):
@@ -71,6 +97,16 @@ class ProjectTester:
 
         if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
             return ["npm", "--prefix", str(self.frontend_root), "run", "lint"]
+
+        return None
+
+    def discover_tauri_lint_cmd(self):
+        """Discovers the command to run tauri lint (clippy)."""
+        if self.has_make_target("tauri-lint"):
+            return ["make", "tauri-lint"]
+
+        if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
+            return ["cargo", "clippy", "--manifest-path", str(self.tauri_root / "Cargo.toml"), "--", "-D", "warnings"]
 
         return None
 
@@ -143,6 +179,11 @@ class ProjectTester:
         vitest_matches = re.findall(r"(?:FAIL|❯)\s+([^\s]+\.test\.[jt]sx?)(?:\s+>\s+(.+))?", output)
         failures.extend([{"id": f"{m[0]} - {m[1] if m[1] else 'Unknown Test'}", "file": m[0], "name": m[1] if m[1] else "", "type": "frontend"} for m in vitest_matches])
 
+        # Cargo (Tauri) failures
+        # Example: test tests::some_test ... FAILED
+        cargo_matches = re.findall(r"test\s+([^\s]+)\s+\.\.\.\s+FAILED", output)
+        failures.extend([{"id": m, "name": m, "type": "tauri"} for m in cargo_matches])
+
         return failures
 
     def run_single_test(self, failure):
@@ -170,6 +211,14 @@ class ProjectTester:
             output, code = run_command(cmd, check=False)
             log_large_output(f"test_frontend_{test_name}", output)
             return output, code == 0
+        elif failure["type"] == "tauri":
+            test_name = failure["name"]
+            logger.info(f"Running single tauri test: {test_name}")
+            # cargo test --manifest-path frontend/src-tauri/Cargo.toml -- <test_name>
+            cmd = ["cargo", "test", "--manifest-path", str(self.tauri_root / "Cargo.toml"), "--", test_name]
+            output, code = run_command(cmd, check=False)
+            log_large_output(f"test_tauri_{test_name}", output)
+            return output, code == 0
 
         return "Unknown test type", False
 
@@ -180,8 +229,10 @@ class ProjectTester:
             targets = [
                 "test-backend",
                 "test-frontend",
+                "test-tauri",
                 "lint-backend",
                 "lint-frontend",
+                "lint-tauri",
             ]
 
         # Inject CI=true to prevent interactive hangs
@@ -202,26 +253,42 @@ class ProjectTester:
             return "No relevant tests to run.", True, []
 
         def run_target(target):
+            cmd = None
             if self.has_make_target(target):
                 logger.info(f"Running target: make {target}")
+                cmd = ["make", target]
+            else:
+                # Try discovery
+                if target == "test-backend" or target == "test":
+                    cmd = self.discover_backend_test_cmd()
+                elif target == "test-frontend":
+                    cmd = self.discover_frontend_test_cmd()
+                elif target == "test-tauri":
+                    cmd = self.discover_tauri_test_cmd()
+                elif target == "lint-backend" or target == "lint":
+                    cmd = self.discover_backend_lint_cmd()
+                elif target == "lint-frontend":
+                    cmd = self.discover_frontend_lint_cmd()
+                elif target == "lint-tauri":
+                    cmd = self.discover_tauri_lint_cmd()
+                elif target == "coverage":
+                    cmd = self.discover_coverage_cmd()
+
+            if cmd:
+                logger.info(f"Running command: {' '.join(cmd)}")
                 # We need to pass the env to subprocess.run. 
-                # Since run_command doesn't take env, we'll need to wrap it or modify it.
-                # Actually, run_command doesn't take env as a parameter.
-                # Let's check run_command again.
-                
-                # If I can't change run_command, I can set it in os.environ before calling it.
                 original_env = os.environ.copy()
                 try:
                     os.environ["CI"] = "true"
                     os.environ["VITE_CI"] = "true"
-                    output, code = run_command(["make", target], check=False)
+                    output, code = run_command(cmd, check=False)
                 finally:
                     # Restore original env
                     for k in ["CI", "VITE_CI"]:
                         if k in original_env:
                             os.environ[k] = original_env[k]
-                    else:
-                        os.environ.pop(k, None)
+                        else:
+                            os.environ.pop(k, None)
 
                 log_large_output(f"test_target_{target}", output)
 
@@ -285,7 +352,10 @@ class ProjectTester:
             for f in changed_files
         )
         has_frontend_changes = any(
-            f.startswith("frontend/") for f in changed_files
+            f.startswith("frontend/") and not f.startswith("frontend/src-tauri/") for f in changed_files
+        )
+        has_tauri_changes = any(
+            f.startswith("frontend/src-tauri/") for f in changed_files
         )
 
         for target in targets:
@@ -295,8 +365,11 @@ class ProjectTester:
             elif "frontend" in target:
                 if has_frontend_changes:
                     filtered.append(target)
+            elif "tauri" in target:
+                if has_tauri_changes:
+                    filtered.append(target)
             elif target == "test" or target == "coverage":
-                if has_backend_changes or has_frontend_changes:
+                if has_backend_changes or has_frontend_changes or has_tauri_changes:
                     filtered.append(target)
             else:
                 # If we don't know, play it safe and include it

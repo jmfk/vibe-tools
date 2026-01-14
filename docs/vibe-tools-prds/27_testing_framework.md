@@ -21,10 +21,12 @@ N/A - CLI command.
 - **Test Discovery**: 
   - Discovers backend tests (pytest, make test)
   - Discovers frontend tests (jest, vitest, npm test)
+  - Discovers Tauri tests (cargo test in src-tauri)
   - Detects test directories and files
 - **Test Runner Detection**: 
   - Checks for Makefile targets
   - Checks for package.json scripts
+  - Checks for Cargo.toml (for Tauri/Rust)
   - Checks for test runner executables
   - Falls back to standard commands
 - **Configuration**: 

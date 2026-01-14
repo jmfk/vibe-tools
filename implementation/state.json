@@ -35,7 +35,7 @@
       ]
     },
     "testing": {
-      "status": "pending",
+      "status": "completed",
       "hash": null,
       "depends_on": [
         "infra"

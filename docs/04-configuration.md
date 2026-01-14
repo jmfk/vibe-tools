@@ -35,6 +35,7 @@ The main configuration file is automatically created and updated when running se
   "coverage_targets": {
     "backend": 85,
     "frontend": 85,
+    "tauri": 85,
     "infra": 85
   },
   "services": {
@@ -108,6 +109,9 @@ The main configuration file is automatically created and updated when running se
 
 **`coverage_targets.frontend`** (integer, default: `85`)
 - Target test coverage percentage for frontend code
+
+**`coverage_targets.tauri`** (integer, default: `85`)
+- Target test coverage percentage for Tauri (Rust) code
 
 **`coverage_targets.infra`** (integer, default: `85`)
 - Target test coverage percentage for infrastructure code

@@ -97,6 +97,28 @@ def test_discover_frontend_lint_cmd(tmp_path):
     ]
 
 
+def test_discover_tauri_test_cmd(tmp_path):
+    tester = ProjectTester()
+    tester.makefile = tmp_path / "Makefile"
+
+    # 1. Makefile has target
+    tester.makefile.write_text("tauri-test:\n\techo test")
+    assert tester.discover_tauri_test_cmd() == ["make", "tauri-test"]
+
+    # 2. Cargo.toml exists
+    tester.makefile.unlink()
+    tester.frontend_root = tmp_path / "frontend"
+    tester.tauri_root = tester.frontend_root / "src-tauri"
+    tester.tauri_root.mkdir(parents=True)
+    (tester.tauri_root / "Cargo.toml").write_text("[package]")
+    assert tester.discover_tauri_test_cmd() == [
+        "cargo",
+        "test",
+        "--manifest-path",
+        str(tester.tauri_root / "Cargo.toml"),
+    ]
+
+
 def test_run_tests_with_failures(tmp_path):
     tester = ProjectTester()
     tester.makefile = tmp_path / "Makefile"
@@ -107,7 +129,7 @@ def test_run_tests_with_failures(tmp_path):
     with patch("vibe_tools.testing.run_command") as mock_run:
         # One pass, one fail
         mock_run.side_effect = [("pass", 0), ("fail", 1)]
-        output, passed, env_failures, failed_targets = tester.run_tests()
+        output, passed, env_failures, failed_targets = tester.run_tests(targets=["test-backend", "test-frontend"])
         assert not passed
         assert "TARGET: test-backend" in output
         assert "TARGET: test-frontend" in output
