@@ -326,6 +326,8 @@ def generate_prd_plan() -> bool:
 
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Unified implementation loop working on Markdown PRDs in product/."""
+    from vibe_tools.utils import ensure_project_structure
+    ensure_project_structure()
     config = load_config()
 
     # 1. Check for PRD in progress

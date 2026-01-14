@@ -31,10 +31,12 @@ _session_runs: List[Dict[str, Any]] = []
 
 class CostLogger:
     def __init__(self, config_data: dict):
+        from vibe_tools.utils import ensure_dir, COSTS_DIR
         self.config = config_data
         self.google_sheet_id = config_data.get("google_sheet_id")
         self.use_google_sheets = config_data.get("use_google_sheets", False)
         self.enabled_google = self.use_google_sheets and bool(self.google_sheet_id)
+        ensure_dir(COSTS_DIR)
 
     def estimate_tokens(self, text: str) -> int:
         """Estimates token count (~4 chars per token)."""
