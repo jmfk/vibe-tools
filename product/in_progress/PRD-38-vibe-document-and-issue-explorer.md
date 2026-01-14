@@ -74,7 +74,7 @@ group: null
 depends_on:
 - PRD-37
 created_at: 2026-01-13
-updated_at: '2026-01-14T19:42:18.087798'
+updated_at: '2026-01-14T19:47:06.136094'
 owner: Core Platform
 implementation_id: v01-470
 implementation_yaml: v01-470_38_vibe_document_and_issue_explorer.yaml
