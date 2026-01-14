@@ -22,6 +22,7 @@ The project follows a **CLI-First** philosophy. We prioritize terminal interacti
 - **Framework**: Tauri (Rust + Frontend)
 - **Frontend**: React/TypeScript
 - **Interactions**: Calls Python CLI functions/logic via Tauri sidecars or command execution.
+- **Testing**: Dual-test approach using **Vitest** for the React frontend and **Cargo test** for the Rust backend commands.
 
 ### 2.3 AI & Tooling
 - **Vibe CLI**: Unified command-line interface (`vibe`) for all developer workflows.
