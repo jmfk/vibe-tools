@@ -480,7 +480,23 @@ def reset_prd_state(project_name: str) -> List[str]:
         state["started_prds"].remove(project_name)
         messages.append(f"Removed '{project_name}' from started PRDs.")
 
-    # 2. Reset plan status in state.json
+    # 2. Reset progress flags in the PRD file itself if possible
+    from vibe_tools.prds import load_prd, PRODUCT_DIR
+    potential_files = list(PRODUCT_DIR.rglob(f"*{project_name}*.md"))
+    if not potential_files:
+        # Fallback to stem match if full name doesn't match
+        potential_files = [f for f in PRODUCT_DIR.rglob("*.md") if project_name in f.name]
+    
+    if len(potential_files) == 1:
+        try:
+            prd = load_prd(potential_files[0])
+            prd.reset_progress()
+            prd.save()
+            messages.append(f"Reset implementation progress flags for '{prd.id}'.")
+        except Exception as e:
+            messages.append(f"Could not reset PRD progress flags: {e}")
+
+    # 3. Reset plan status in state.json
     plans = state.get("plans", {})
     if project_name in plans:
         plans[project_name]["status"] = "pending"
@@ -646,6 +662,8 @@ def get_vibe_status_report() -> str:
         done_count = 0
         total_count = len(prd_info)
 
+        from vibe_tools.prds import load_prd
+
         for info in prd_info:
             name = info["name"]
             prd_stem = info["md_path"].stem
@@ -661,15 +679,32 @@ def get_vibe_status_report() -> str:
         for info in prd_info[-5:]:
             name = info["name"]
             prd_stem = info["md_path"].stem
+            md_path = info["md_path"]
+
+            prd_obj = None
+            try:
+                prd_obj = load_prd(md_path)
+            except Exception:
+                pass
 
             if prd_stem in completed_prds or name in completed_prds:
                 status = click.style("✅", fg="green")
-            elif prd_stem in started_prds or name in started_prds:
+                progress_str = ""
+            elif prd_stem in started_prds or name in started_prds or (prd_obj and prd_obj.status == "in_progress"):
                 status = click.style("⏳", fg="blue")
+                if prd_obj:
+                    p_parts = []
+                    if prd_obj.impl_code_ready: p_parts.append("C")
+                    if prd_obj.impl_tests_passed: p_parts.append("T")
+                    if prd_obj.impl_review_passed: p_parts.append("R")
+                    progress_str = f" ({','.join(p_parts)})" if p_parts else " (started)"
+                else:
+                    progress_str = " (started)"
             else:
                 status = click.style("⚪", fg="white", dim=True)
+                progress_str = ""
 
-            report.append(f"    {status} {name}")
+            report.append(f"    {status} {name}{progress_str}")
 
     # 4. Implementation Plans
     report.append(click.style("\nIMPLEMENTATION PLANS:", fg="yellow", bold=True))
