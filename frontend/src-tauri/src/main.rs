@@ -49,6 +49,11 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
+fn read_file_content(path: String) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_workspace_root() -> Result<String, String> {
     let mut curr = std::env::current_dir().map_err(|e| e.to_string())?;
     loop {
@@ -182,6 +187,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             list_directory, 
+            read_file_content,
             get_workspace_root,
             run_vibe_command,
             get_active_agents,

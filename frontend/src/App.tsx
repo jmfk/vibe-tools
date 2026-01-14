@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   MessageSquare, 
   Files, 
@@ -12,7 +12,17 @@ import {
   Database,
   Folder,
   FileText,
-  Send
+  Send,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Link as LinkIcon,
+  User as UserIcon,
+  Tag,
+  ArrowRight,
+  Split
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -21,12 +31,21 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/tauri';
 import { listen } from '@tauri-apps/api/event';
+import yaml from 'js-yaml';
+import mermaid from 'mermaid';
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+  fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+});
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Tab = 'explorer' | 'monitor' | 'runner' | 'testing';
+type Tab = 'vibe' | 'explorer' | 'monitor' | 'runner' | 'testing';
 
 interface FileEntry {
   name: string;
@@ -46,8 +65,356 @@ interface AgentProcess {
   tracked: boolean;
 }
 
+interface Artifact {
+  name: string;
+  path: string;
+  type: 'prd' | 'spec' | 'issue';
+  status?: string;
+  owner?: string;
+  lastUpdated?: string;
+}
+
+// --- Components ---
+
+const Mermaid = ({ chart }: { chart: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState('');
+
+  useEffect(() => {
+    if (chart) {
+      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+      mermaid.render(id, chart).then(({ svg }) => {
+        setSvg(svg);
+      }).catch(err => {
+        console.error('Mermaid render error:', err);
+      });
+    }
+  }, [chart]);
+
+  return <div className="mermaid-container my-4 overflow-x-auto bg-zinc-900/50 p-4 rounded-lg border border-zinc-800" dangerouslySetInnerHTML={{ __html: svg }} />;
+};
+
+const MarkdownRenderer = ({ content }: { content: string }) => {
+  return (
+    <ReactMarkdown 
+      remarkPlugins={[remarkGfm]} 
+      rehypePlugins={[rehypeHighlight]}
+      components={{
+        code({ node, inline, className, children, ...props }: any) {
+          const match = /language-(\w+)/.exec(className || '');
+          if (!inline && match && match[1] === 'mermaid') {
+            return <Mermaid chart={String(children).replace(/\n$/, '')} />;
+          }
+          return (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        }
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+};
+
+const FrontmatterCard = ({ data }: { data: any }) => {
+  if (!data) return null;
+  return (
+    <div className="bg-zinc-900/80 border border-zinc-800 rounded-lg p-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+      {Object.entries(data).map(([key, value]: [string, any]) => (
+        <div key={key}>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">{key}</div>
+          <div className="text-sm text-zinc-200 font-medium">
+            {typeof value === 'string' ? value : JSON.stringify(value)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const IssueTimeline = ({ content }: { content: string }) => {
+  const lines = content.split('\n');
+  const timelineItems: { date: string, text: string, type: 'investigation' | 'solution' }[] = [];
+  
+  let currentType: 'investigation' | 'solution' | null = null;
+  for (const line of lines) {
+    if (line.includes('## Investigation Notes')) currentType = 'investigation';
+    else if (line.includes('## Solution Notes')) currentType = 'solution';
+    else if (currentType && line.trim().startsWith('- [')) {
+      const match = line.match(/- \[(.*?)\] (.*)/);
+      if (match) {
+        timelineItems.push({ date: match[1], text: match[2], type: currentType });
+      }
+    }
+  }
+
+  if (timelineItems.length === 0) return null;
+
+  return (
+    <div className="mt-8 pt-8 border-t border-zinc-800">
+      <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Update Timeline</h3>
+      <div className="space-y-4">
+        {timelineItems.map((item, i) => (
+          <div key={i} className="flex gap-4">
+            <div className="w-32 flex-shrink-0 text-[10px] font-mono text-zinc-500 pt-1">{item.date}</div>
+            <div className="flex-1">
+              <div className={cn(
+                "text-[10px] font-bold uppercase mb-1",
+                item.type === 'investigation' ? "text-blue-400" : "text-emerald-400"
+              )}>
+                {item.type}
+              </div>
+              <div className="text-sm text-zinc-300">{item.text}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const VibeView = ({ root }: { root: string }) => {
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [content, setContent] = useState('');
+  const [yamlData, setYamlData] = useState<any>(null);
+  const [markdownContent, setMarkdownContent] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSpecSplit, setShowSpecSplit] = useState(false);
+
+  useEffect(() => {
+    if (root) {
+      loadArtifacts();
+    }
+  }, [root]);
+
+  const loadArtifacts = async () => {
+    try {
+      const all: Artifact[] = [];
+      
+      const scan = async (dir: string, type: 'prd' | 'spec' | 'issue') => {
+        try {
+          const entries = await invoke<FileEntry[]>('list_directory', { path: dir });
+          for (const f of entries) {
+            if (f.is_dir) {
+              await scan(f.path, type);
+            } else if (f.name.endsWith('.md') || f.name.endsWith('.yaml')) {
+              let status = '';
+              let owner = '';
+              try {
+                const raw = await invoke<string>('read_file_content', { path: f.path });
+                if (f.name.endsWith('.md')) {
+                  const match = raw.match(/^---\n([\s\S]*?)\n---\n/);
+                  if (match) {
+                    const parsed: any = yaml.load(match[1]);
+                    status = parsed.status || '';
+                    owner = parsed.owner || parsed.agent || '';
+                  }
+                } else if (f.name.endsWith('.yaml')) {
+                  const parsed: any = yaml.load(raw);
+                  status = parsed.status || '';
+                  owner = parsed.owner || '';
+                }
+              } catch (e) {}
+              all.push({ name: f.name, path: f.path, type, status, owner });
+            }
+          }
+        } catch (e) {}
+      };
+
+      await Promise.all([
+        scan(`${root}/product`, 'prd'),
+        scan(`${root}/implementation`, 'spec'),
+        scan(`${root}/issues`, 'issue')
+      ]);
+
+      setArtifacts(all);
+    } catch (err) {
+      console.error('Error loading artifacts:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedArtifact) {
+      invoke<string>('read_file_content', { path: selectedArtifact.path })
+        .then(async (raw) => {
+          setContent(raw);
+          if (selectedArtifact.type === 'prd' || selectedArtifact.type === 'issue') {
+            const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+            if (match) {
+              try {
+                setYamlData(yaml.load(match[1]));
+                setMarkdownContent(match[2]);
+              } catch (e) {
+                setYamlData(null);
+                setMarkdownContent(raw);
+              }
+            } else {
+              setYamlData(null);
+              setMarkdownContent(raw);
+            }
+          } else if (selectedArtifact.type === 'spec') {
+            try {
+              const data = yaml.load(raw);
+              setYamlData(data);
+              // Try to find corresponding markdown in product/
+              const baseName = selectedArtifact.name.replace('.yaml', '');
+              // Look for PRD or matching MD
+              const prdPath = `${root}/product/${baseName}.md`;
+              try {
+                const md = await invoke<string>('read_file_content', { path: prdPath });
+                setMarkdownContent(md);
+              } catch (e) {
+                setMarkdownContent('');
+              }
+            } catch (e) {
+              setYamlData(null);
+            }
+          }
+        })
+        .catch(console.error);
+    }
+  }, [selectedArtifact]);
+
+  const filteredArtifacts = artifacts.filter(a => 
+    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.owner?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="flex h-full gap-6 overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-64 flex flex-col gap-4 overflow-hidden">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
+          <input 
+            type="text" 
+            placeholder="Search artifacts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-md py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-1 pr-2">
+          {['prd', 'spec', 'issue'].map(type => (
+            <div key={type} className="mb-4">
+              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">
+                {type}s
+              </div>
+              {filteredArtifacts.filter(a => a.type === type).map(artifact => (
+                <button
+                  key={artifact.path}
+                  onClick={() => setSelectedArtifact(artifact)}
+                  className={cn(
+                    "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate",
+                    selectedArtifact?.path === artifact.path 
+                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                  )}
+                >
+                  {artifact.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto min-w-0 bg-zinc-900/30 rounded-xl border border-zinc-800/50 p-6">
+        {selectedArtifact ? (
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold uppercase",
+                    selectedArtifact.type === 'prd' ? "bg-purple-500/10 text-purple-400" :
+                    selectedArtifact.type === 'spec' ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
+                  )}>
+                    {selectedArtifact.type}
+                  </span>
+                  <span className="text-zinc-500 text-xs font-mono">{selectedArtifact.path.replace(root, '')}</span>
+                </div>
+                <h1 className="text-2xl font-bold text-zinc-100">{selectedArtifact.name}</h1>
+              </div>
+              
+              <div className="flex gap-2">
+                {selectedArtifact.type === 'spec' && (
+                  <button 
+                    onClick={() => setShowSpecSplit(!showSpecSplit)}
+                    className={cn(
+                      "p-2 rounded border transition-colors",
+                      showSpecSplit ? "bg-blue-600 border-blue-500 text-white" : "bg-zinc-800 border-zinc-700 text-zinc-400"
+                    )}
+                    title="Side-by-side View"
+                  >
+                    <Split size={18} />
+                  </button>
+                )}
+                <button className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs font-medium text-zinc-200 transition-colors">
+                  Open in Cursor
+                </button>
+              </div>
+            </div>
+
+            <FrontmatterCard data={yamlData} />
+
+            {selectedArtifact.type === 'issue' && (
+              <div className="mb-6 flex gap-2">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest self-center mr-2">Quick Actions:</div>
+                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Move to History</button>
+                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Assign Agent</button>
+                <button className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-medium text-zinc-300">Link PRD</button>
+              </div>
+            )}
+
+            {selectedArtifact.type === 'spec' && showSpecSplit ? (
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-black/50 border border-zinc-800 rounded-lg p-4 font-mono text-xs overflow-x-auto">
+                  <pre>{content}</pre>
+                </div>
+                <div className="prose prose-invert max-w-none">
+                  <MarkdownRenderer content={markdownContent || "*No documentation found in product/*"} />
+                </div>
+              </div>
+            ) : (
+              <div className="prose prose-invert max-w-none">
+                {selectedArtifact.type === 'spec' ? (
+                   <div className="bg-black/50 border border-zinc-800 rounded-lg p-4 font-mono text-xs overflow-x-auto">
+                    <pre>{content}</pre>
+                  </div>
+                ) : (
+                  <MarkdownRenderer content={markdownContent} />
+                )}
+              </div>
+            )}
+
+            {selectedArtifact.type === 'issue' && <IssueTimeline content={content} />}
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-zinc-500">
+            <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center mb-4">
+              <Files size={32} className="text-zinc-600" />
+            </div>
+            <h3 className="text-lg font-medium text-zinc-300">Select an artifact to view</h3>
+            <p className="text-sm mt-1">Browse PRDs, System Specs, and Issues from the sidebar</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- Main App ---
+
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('explorer');
+  const [activeTab, setActiveTab] = useState<Tab>('vibe');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
@@ -56,7 +423,7 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'Architect',
-      content: "Hello! I am the Architect agent. I've initialized the Tauri Dashboard Core. You can now explore files, monitor logs, and run commands from this interface."
+      content: "Hello! I am the Architect agent. I've initialized the Vibe Explorer. You can now browse PRDs, System Specs, and Issues in a structured environment."
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -162,9 +529,7 @@ const App: React.FC = () => {
             {['/status', '/prd list', '/issue list', '/test'].map(cmd => (
               <button 
                 key={cmd}
-                onClick={() => {
-                  setInputValue(cmd);
-                }}
+                onClick={() => setInputValue(cmd)}
                 className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 px-2 py-1 rounded transition-colors border border-zinc-700"
               >
                 {cmd}
@@ -204,11 +569,17 @@ const App: React.FC = () => {
               </button>
             )}
             <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
+               <TabButton 
+                active={activeTab === 'vibe'} 
+                onClick={() => setActiveTab('vibe')}
+                icon={<LayoutDashboard size={16} />}
+                label="Vibe Explorer"
+              />
               <TabButton 
                 active={activeTab === 'explorer'} 
                 onClick={() => setActiveTab('explorer')}
                 icon={<Files size={16} />}
-                label="Explorer"
+                label="File Explorer"
               />
               <TabButton 
                 active={activeTab === 'monitor'} 
@@ -243,11 +614,11 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-hidden relative">
           <div className="absolute inset-0 p-6 overflow-y-auto">
+            {activeTab === 'vibe' && <VibeView root={workspaceRoot} />}
             {activeTab === 'explorer' && <ExplorerView root={workspaceRoot} />}
             {activeTab === 'monitor' && <MonitorView />}
             {activeTab === 'runner' && <RunnerView onRun={(cmd) => {
               setActiveTab('monitor');
-              // Trigger command execution logic in MonitorView would be better via shared state or event
             }} />}
             {activeTab === 'testing' && <TestingView />}
           </div>
@@ -263,8 +634,8 @@ const App: React.FC = () => {
       >
         <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold text-zinc-100">
-            <LayoutDashboard size={18} className="text-purple-400" />
-            <span>Meta Info</span>
+            <Activity size={18} className="text-purple-400" />
+            <span>Project Pulse</span>
           </div>
           <button onClick={() => setRightSidebarOpen(false)} className="hover:text-zinc-100">
             <ChevronRight size={18} />
@@ -277,7 +648,7 @@ const App: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-400">Branch</span>
-                <span className="text-zinc-200 font-mono text-xs">feature/prd-37</span>
+                <span className="text-zinc-200 font-mono text-xs truncate ml-2">feature/prd-38</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-400">Environment</span>
@@ -328,7 +699,7 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label }) =
   <button 
     onClick={onClick}
     className={cn(
-      "flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-sm font-medium",
+      "flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-sm font-medium whitespace-nowrap",
       active 
         ? "bg-zinc-800 text-zinc-100" 
         : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
@@ -366,7 +737,6 @@ const ExplorerView = ({ root }: { root: string }) => {
 
   useEffect(() => {
     const unlisten = listen('file-changed', (event: any) => {
-      // Refresh if the changed file is in the current directory or a child
       const changedPath = event.payload.path;
       if (changedPath.startsWith(currentPath)) {
         refreshFiles();
@@ -376,10 +746,8 @@ const ExplorerView = ({ root }: { root: string }) => {
   }, [currentPath]);
 
   const navigateUp = () => {
-    // Handle both / and \ as separators
     const parts = currentPath.split(/[/\\]/);
     if (parts.length > 1) {
-      // Remove trailing empty part if any
       if (parts[parts.length - 1] === '') parts.pop();
       parts.pop();
       const newPath = parts.join('/') || '/';
@@ -390,7 +758,7 @@ const ExplorerView = ({ root }: { root: string }) => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-100">Explorer</h2>
+        <h2 className="text-xl font-bold text-zinc-100">File Explorer</h2>
         <div className="text-xs text-zinc-500 font-mono truncate max-w-md">
           {currentPath}
         </div>
@@ -434,9 +802,6 @@ const ExplorerView = ({ root }: { root: string }) => {
               </div>
             ))
           )}
-          {!loading && files.length === 0 && (
-            <div className="p-8 text-center text-zinc-600 italic">No files found</div>
-          )}
         </div>
       </div>
     </div>
@@ -449,7 +814,7 @@ const MonitorView = () => {
 
   useEffect(() => {
     const unlisten = listen('log-line', (event: any) => {
-      setLogs(prev => [...prev, event.payload].slice(-10000)); // Keep last 10k lines
+      setLogs(prev => [...prev, event.payload].slice(-10000));
     });
     return () => { unlisten.then(f => f()); };
   }, []);
@@ -464,28 +829,14 @@ const MonitorView = () => {
     <div className="h-full flex flex-col space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-zinc-100">Monitor</h2>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setLogs([])}
-            className="px-2 py-1 bg-zinc-800 rounded text-xs hover:bg-zinc-700"
-          >
-            Clear
-          </button>
-        </div>
+        <button onClick={() => setLogs([])} className="px-2 py-1 bg-zinc-800 rounded text-xs hover:bg-zinc-700">Clear</button>
       </div>
       <div 
         ref={scrollRef}
         className="flex-1 bg-black border border-zinc-800 rounded-lg font-mono text-sm p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800"
       >
-        {logs.length === 0 && (
-          <div className="text-zinc-600 italic">Waiting for logs...</div>
-        )}
         {logs.map((log, i) => (
-          <div key={i} className={cn(
-            log.startsWith('ERR:') ? "text-red-400" : "text-zinc-300"
-          )}>
-            {log}
-          </div>
+          <div key={i} className={cn(log.startsWith('ERR:') ? "text-red-400" : "text-zinc-300")}>{log}</div>
         ))}
         <div className="animate-pulse inline-block w-2 h-4 bg-zinc-700 ml-1 translate-y-1" />
       </div>
@@ -504,13 +855,7 @@ const RunnerView = ({ onRun }: { onRun: (cmd: string) => void }) => {
 
   const handleRun = (cmd: string) => {
     const [base, ...args] = cmd.split(' ');
-    // Assuming 'vibe' is the base command, we strip it because run_vibe_command expects the subcommand
-    const subCommand = args[0];
-    const subArgs = args.slice(1);
-    
-    invoke('run_vibe_command', { command: subCommand, args: subArgs })
-      .catch(console.error);
-    
+    invoke('run_vibe_command', { command: args[0], args: args.slice(1) }).catch(console.error);
     onRun(cmd);
   };
 
@@ -528,8 +873,7 @@ const RunnerView = ({ onRun }: { onRun: (cmd: string) => void }) => {
               onClick={() => handleRun(cmd.name)}
               className="flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-950 rounded-md font-semibold text-sm hover:bg-white transition-colors"
             >
-              <PlayCircle size={16} />
-              Run
+              <PlayCircle size={16} /> Run
             </button>
           </div>
         ))}
@@ -559,14 +903,8 @@ const TestingView = () => (
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-zinc-500">
-            <div className="flex items-center gap-1">
-              <Database size={12} />
-              <span>{test.count} tests</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Activity size={12} />
-              <span>{test.time}</span>
-            </div>
+            <div className="flex items-center gap-1"><Database size={12} /><span>{test.count} tests</span></div>
+            <div className="flex items-center gap-1"><Activity size={12} /><span>{test.time}</span></div>
           </div>
         </div>
       ))}
