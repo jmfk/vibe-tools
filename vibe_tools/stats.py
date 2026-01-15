@@ -152,7 +152,23 @@ def get_date_range(period: str) -> Tuple[datetime.datetime, datetime.datetime]:
     now = datetime.datetime.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    if period == "month":
+    if period == "today":
+        return today, now
+    elif period == "yesterday":
+        start = today - datetime.timedelta(days=1)
+        end = today - datetime.timedelta(seconds=1)
+        return start, end
+    elif period == "week":
+        # Monday is 0, Sunday is 6
+        start = today - datetime.timedelta(days=today.weekday())
+        return start, now
+    elif period == "prev-week":
+        # Start of last week (Monday)
+        this_week_start = today - datetime.timedelta(days=today.weekday())
+        start = this_week_start - datetime.timedelta(days=7)
+        end = this_week_start - datetime.timedelta(seconds=1)
+        return start, end
+    elif period == "month":
         start = today.replace(day=1)
         return start, now
     elif period == "prev-month":

@@ -44,6 +44,18 @@ def register_usage(cli):
     @click.option("--start-date", help="Start date (YYYY-MM-DD).")
     @click.option("--end-date", help="End date (YYYY-MM-DD).")
     @click.option(
+        "--today", "period", flag_value="today", help="Use today's range."
+    )
+    @click.option(
+        "--yesterday", "period", flag_value="yesterday", help="Use yesterday's range."
+    )
+    @click.option(
+        "--week", "period", flag_value="week", help="Use current week range."
+    )
+    @click.option(
+        "--prev-week", "period", flag_value="prev-week", help="Use previous week range."
+    )
+    @click.option(
         "--month", "period", flag_value="month", help="Use current month range."
     )
     @click.option(
