@@ -141,3 +141,6 @@ Timestamp,PRD,Phase,Iteration,Agent,Model,Input Tokens,Output Tokens,Cost (USD),
 2026-01-15 10:51:44,N/A,debug_loop,1,cursor-agent,gemini-3-flash,932,0,0.000093,fixing_test
 2026-01-15 10:54:32,N/A,debug_loop,2,cursor-agent,gemini-3-flash,948,559,0.000318,fixing_test
 2026-01-15 10:55:40,PRD-042,normalize,1,gemini,gemini-2.0-flash-exp,1080,873,0.001953,normalizing_prd
+2026-01-15 11:04:13,N/A,debug_loop,1,cursor-agent,gemini-3-flash,534,0,0.000053,fixing_test
+2026-01-15 11:05:42,N/A,debug_loop,2,cursor-agent,gemini-3-flash,932,0,0.000093,fixing_test
+2026-01-15 11:07:56,N/A,debug_loop,3,cursor-agent,gemini-3-flash,932,248,0.000192,fixing_test

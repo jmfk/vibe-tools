@@ -1,6 +1,7 @@
 import click
 from vibe_tools.utils import get_agent_processes, cleanup_stale_processes
 
+
 @click.command()
 @click.option("--clean", is_flag=True, help="Clean up stale agent processes.")
 def monitor(clean):
@@ -26,6 +27,7 @@ def monitor(clean):
         name = proc.get("name", "unknown")
         status = proc.get("status", "unknown")
         click.echo(f"  - [{pid}] {name} ({status})")
+
 
 def register_monitor(cli):
     cli.add_command(monitor)

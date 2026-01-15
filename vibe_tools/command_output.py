@@ -55,22 +55,34 @@ class OutputManager:
         self._stop_listener = threading.Event()
         self._listener_thread: Optional[threading.Thread] = None
         self._real_stdout = sys.stdout
+        self._final_code = 0
+        self._final_data = {}
+
+    def set_final_result(self, code: int, data: Dict[str, Any] = None):
+        self._final_code = code
+        if data:
+            self._final_data.update(data)
+
+    def get_final_result(self) -> Tuple[int, Dict[str, Any]]:
+        return self._final_code, self._final_data
 
     def set_server_mode(self, enabled: bool):
         self._server_mode = enabled
         if enabled:
             self._print_to_stdout = False
             self._real_stdout = sys.stdout
-            # Use stderr for actual stdout prints, but keep our JSON on the real stdout
-            sys.stdout = sys.stderr
+            # Use JSONStream to capture any direct prints to stdout
+            sys.stdout = JSONStream(self)
             self.start_stdin_listener()
 
     def start_stdin_listener(self):
         if self._listener_thread and self._listener_thread.is_alive():
             return
-        
+
         self._stop_listener.clear()
-        self._listener_thread = threading.Thread(target=self._stdin_listener_loop, daemon=True)
+        self._listener_thread = threading.Thread(
+            target=self._stdin_listener_loop, daemon=True
+        )
         self._listener_thread.start()
 
     def _stdin_listener_loop(self):
@@ -78,17 +90,19 @@ class OutputManager:
             line = sys.stdin.readline()
             if not line:
                 break
-            
+
             try:
                 data = json.loads(line)
                 msg_type = data.get("type")
-                
+
                 if msg_type == "cancel":
                     # Handle cancellation
+                    import os
                     from vibe_tools.agent import agent_manager
+
                     agent_manager.cleanup_session()
-                    # We might also want to exit the whole process
-                    sys.exit(0)
+                    # Exit the whole process immediately
+                    os._exit(0)
                 elif msg_type == "input":
                     value = data.get("value")
                     with self._lock:
@@ -108,7 +122,7 @@ class OutputManager:
         if self._server_mode:
             if prompt_message:
                 self.emit_server_message("prompt", {"message": prompt_message})
-            
+
             self._input_event.wait()
             with self._lock:
                 if self._input_queue:
@@ -119,6 +133,7 @@ class OutputManager:
             return ""
         else:
             import click
+
             return click.prompt(prompt_message) if prompt_message else input()
 
     def emit_server_message(self, msg_type: str, data: Dict[str, Any]):
@@ -159,6 +174,7 @@ class OutputManager:
         data: Optional[Any] = None,
         flush: bool = False,
         source: str = "vibe",
+        traceback: Optional[str] = None,
     ):
         out_msg = OutputMessage(
             timestamp=datetime.now(),
@@ -172,13 +188,26 @@ class OutputManager:
             self._history.append(out_msg)
 
         if self._server_mode:
-            self.emit_server_message("log", {
-                "level": level,
-                "source": source,
-                "message": str(message),
-                "timestamp": out_msg.timestamp.isoformat(),
-                "data": data
-            })
+            if level == "error":
+                self.emit_server_message(
+                    "error",
+                    {
+                        "message": str(message),
+                        "traceback": traceback,
+                        "timestamp": out_msg.timestamp.isoformat(),
+                    },
+                )
+            else:
+                self.emit_server_message(
+                    "log",
+                    {
+                        "level": level,
+                        "source": source,
+                        "message": str(message),
+                        "timestamp": out_msg.timestamp.isoformat(),
+                        "data": data,
+                    },
+                )
 
         if self._print_to_stdout:
             if flush:
@@ -227,7 +256,7 @@ class OutputManager:
             callout_type = "IMPORTANT"
 
         message_content = out_msg.message
-        
+
         # Format the entry with callout
         md_entry = f"> [!{callout_type}]\n"
         md_entry += f"> [{timestamp_str}] {level_fmt}\n>\n"
@@ -244,12 +273,12 @@ class OutputManager:
                 event_name = match.group(1).strip()
                 ref_path_str = match.group(2).strip()
                 ref_path = pathlib.Path(ref_path_str)
-                
+
                 if ref_path.exists():
                     try:
                         content = ref_path.read_text(encoding="utf-8")
                         escaped_content = html.escape(content).replace("\n", "<br/>")
-                        
+
                         md_entry += ">\n"
                         md_entry += "> <details>\n"
                         md_entry += f"> <summary>{event_name}</summary>\n"
@@ -286,6 +315,7 @@ class OutputManager:
 
 class OutputManagerHandler(logging.Handler):
     """Logging handler that redirects records to an OutputManager."""
+
     def __init__(self, manager: OutputManager):
         super().__init__()
         self.manager = manager
@@ -317,8 +347,8 @@ def out_warn(message: str, source: str = "vibe", **kwargs):
     output_manager.log(message, level="warning", source=source, **kwargs)
 
 
-def out_error(message: str, source: str = "vibe", **kwargs):
-    output_manager.log(message, level="error", source=source, **kwargs)
+def out_error(message: str, source: str = "vibe", traceback: Optional[str] = None, **kwargs):
+    output_manager.log(message, level="error", source=source, traceback=traceback, **kwargs)
 
 
 def out_success(message: str, source: str = "vibe", **kwargs):
@@ -331,12 +361,9 @@ def out_debug(message: str, source: str = "vibe", **kwargs):
 
 def out_status(phase: str, status: str, progress: int = 0, **kwargs):
     """Emits a status update message (primarily for server mode)."""
-    output_manager.emit_server_message("status", {
-        "phase": phase,
-        "status": status,
-        "progress": progress,
-        **kwargs
-    })
+    output_manager.emit_server_message(
+        "status", {"phase": phase, "status": status, "progress": progress, **kwargs}
+    )
 
 
 def vibe_prompt(message: str, **kwargs) -> str:

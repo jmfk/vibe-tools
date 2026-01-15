@@ -57,9 +57,11 @@ def register_infra(cli):
         click.echo(f"🔄 Normalizing {INFRA_SPEC.name} in-memory...")
         infra_data = normalize_to_data(INFRA_SPEC.read_text(), "infrastructure")
         if not infra_data:
-            click.echo("❌ Normalization failed. Please check the content of infrastructure.md.")
+            click.echo(
+                "❌ Normalization failed. Please check the content of infrastructure.md."
+            )
             return
-        
+
         infra_yaml = safe_yaml_dump(infra_data)
 
         # Run infrastructure reconciliation

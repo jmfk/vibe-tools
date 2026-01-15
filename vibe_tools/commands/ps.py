@@ -11,6 +11,7 @@ def register_ps(cli):
         processes = get_agent_processes()
         if json_format:
             import json
+
             click.echo(json.dumps(processes))
             return
 
@@ -23,5 +24,8 @@ def register_ps(cli):
         for p in processes:
             tracked = "Yes" if p.get("tracked", True) else "No"
             chat_id = p.get("chat_id") or "N/A"
-            click.echo(f"{p['pid']:<10} {tracked:<10} {chat_id:<20} {p['command'][:100]}")
+            click.echo(
+                f"{p['pid']:<10} {tracked:<10} {chat_id:<20} {p['command'][:100]}"
+            )
+
     cli.add_command(ps)

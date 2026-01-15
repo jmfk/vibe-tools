@@ -33,4 +33,5 @@ def register_docs(cli):
         # Using a milder code theme for syntax highlighting
         md = Markdown(content, code_theme="friendly")
         console.print(md)
+
     cli.add_command(docs)

@@ -12,18 +12,25 @@ from vibe_tools.utils import LOGS_DIR, logger
 def get_log_files() -> List[pathlib.Path]:
     if not LOGS_DIR.exists():
         return []
-    return sorted(list(LOGS_DIR.glob("*.log")), key=lambda p: p.stat().st_mtime, reverse=True)
+    return sorted(
+        list(LOGS_DIR.glob("*.log")), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+
 
 def redact_content(content: str) -> str:
     """Simple redaction for common secrets."""
     # Redact common secret patterns
     patterns = [
-        (r'(?i)(api_key|password|token|secret|key|auth|credential)["\']?\s*[:=]\s*["\']?([^"\'\s,;}]+)["\']?', r'\1: [REDACTED]'),
-        (r'(?i)(bearer|token)\s+([^"\'\s,;}]+)', r'\1 [REDACTED]'),
+        (
+            r'(?i)(api_key|password|token|secret|key|auth|credential)["\']?\s*[:=]\s*["\']?([^"\'\s,;}]+)["\']?',
+            r"\1: [REDACTED]",
+        ),
+        (r'(?i)(bearer|token)\s+([^"\'\s,;}]+)', r"\1 [REDACTED]"),
     ]
     for pattern, replacement in patterns:
         content = re.sub(pattern, replacement, content)
     return content
+
 
 def cluster_errors(lines: List[str]) -> List[str]:
     """Very basic clustering of error lines."""
@@ -41,6 +48,7 @@ def cluster_errors(lines: List[str]) -> List[str]:
     # Sort by frequency
     sorted_clusters = sorted(clusters.items(), key=lambda x: x[1], reverse=True)
     return [f"({count}x) {text}" for text, count in sorted_clusters[:5]]
+
 
 def register_investigate(cli):
     @click.command(name="investigate")
@@ -60,7 +68,9 @@ def register_investigate(cli):
         evidence = ""
         clustered = []
         if log_files:
-            click.echo(f"Found {len(log_files)} log files. Analyzing latest: {log_files[0].name}")
+            click.echo(
+                f"Found {len(log_files)} log files. Analyzing latest: {log_files[0].name}"
+            )
             try:
                 all_lines = log_files[0].read_text().splitlines()
                 content = all_lines[-100:]
@@ -79,12 +89,18 @@ def register_investigate(cli):
                 logger.error(f"Failed to read logs: {e}")
 
         title = click.prompt("\nIssue Title")
-        severity = click.prompt("Severity", type=click.Choice(["low", "medium", "high", "critical"]), default="medium")
+        severity = click.prompt(
+            "Severity",
+            type=click.Choice(["low", "medium", "high", "critical"]),
+            default="medium",
+        )
         service = service or click.prompt("Service", default="core")
 
         summary = click.prompt("Summary (Markdown supported)")
         if clustered and not summary:
-            summary = "Potential errors detected:\n" + "\n".join([f"- {c}" for c in clustered])
+            summary = "Potential errors detected:\n" + "\n".join(
+                [f"- {c}" for c in clustered]
+            )
 
         reproduction = click.prompt("Reproduction Steps", default="N/A")
         expected = click.prompt("Expected Behavior", default="N/A")
@@ -92,15 +108,16 @@ def register_investigate(cli):
         acceptance = click.prompt("Acceptance Criteria", default="Fix the issue.")
 
         from vibe_tools.utils import PRODUCT_DIR, PLANNING_INBOX_DIR
+
         issue_id = generate_prd_id(PRODUCT_DIR)
         now = datetime.datetime.now().isoformat()
 
         # Create sanitized filename
-        safe_title = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+        safe_title = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
         filename = f"{issue_id}-{safe_title}.md"
         if len(filename) > 64:
             filename = filename[:60] + ".md"
-        
+
         target_path = PLANNING_INBOX_DIR / filename
 
         content = f"# {title}\n\n"
@@ -116,8 +133,10 @@ def register_investigate(cli):
             content += f"## Evidence\n```\n{evidence}\n```\n\n"
         if acceptance:
             content += f"## Acceptance Criteria\n{acceptance}\n\n"
-        
-        content += f"## Investigation Notes\n- Created via `vibe investigate` on {now}\n"
+
+        content += (
+            f"## Investigation Notes\n- Created via `vibe investigate` on {now}\n"
+        )
 
         prd = PRD(
             id=issue_id,
@@ -136,7 +155,7 @@ def register_investigate(cli):
                 "actual_behavior": actual,
                 "acceptance_criteria": acceptance,
             },
-            path=target_path
+            path=target_path,
         )
 
         prd.save()

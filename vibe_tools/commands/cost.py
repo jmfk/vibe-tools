@@ -12,9 +12,10 @@ def register_cost(cli):
         total = get_total_cost()
         if json_format:
             import json
+
             click.echo(json.dumps({"total_cost": total}))
             return
-        
+
         config = load_config()
         use_google = config.get("use_google_sheets", False)
         sheet_id = config.get("google_sheet_id")
@@ -26,4 +27,5 @@ def register_cost(cli):
             click.echo(f"Google Sheets Logging: ENABLED (ID: {sheet_id})")
         else:
             click.echo("Google Sheets Logging: DISABLED")
+
     cli.add_command(cost)

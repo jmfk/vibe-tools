@@ -218,9 +218,9 @@ class PRDWriter:
 
     def _ensure_dspy_available(self) -> None:
         """Check if google-genai library is installed."""
-        try:
-            from google import genai
-        except ImportError:
+        import importlib.util
+
+        if importlib.util.find_spec("google.genai") is None:
             raise click.ClickException(
                 "The `google-genai` library is required but not found. Please install it."
             )
@@ -261,6 +261,7 @@ class PRDWriter:
             }
         except Exception as e:
             from vibe_tools.utils import logger
+
             logger.error(f"Gemini execution failed: {e}")
             raise click.ClickException(
                 f"Failed to process requirements with Gemini: {e}"

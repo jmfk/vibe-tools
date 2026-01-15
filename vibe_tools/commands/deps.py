@@ -31,4 +31,5 @@ def register_deps(cli):
             only_frontend=only_frontend,
         )
         click.echo("✅ Dependencies process completed.")
+
     cli.add_command(deps)

@@ -2,6 +2,9 @@ import atexit
 import logging
 import os
 import pathlib
+import sys
+import traceback
+import builtins
 from typing import List
 
 import click
@@ -39,12 +42,71 @@ from vibe_tools.utils import (
 # Load environment variables from .env file at startup
 load_dotenv(find_dotenv() or ".env")
 
+# Global check for server mode to monkeypatch early
+if "--server" in sys.argv:
+    from vibe_tools.command_output import output_manager
+    import builtins
+
+    output_manager.set_server_mode(True)
+
+    # Monkeypatch click.prompt
+    def server_prompt(
+        text,
+        default=None,
+        hide_input=False,
+        confirmation_prompt=False,
+        type=None,
+        value_proc=None,
+        prompt_suffix=": ",
+        show_default=True,
+        err=False,
+        show_choices=True,
+    ):
+        return output_manager.get_input(text)
+
+    click.prompt = server_prompt
+
+    # Also monkeypatch confirm
+    def server_confirm(
+        text,
+        default=False,
+        abort=False,
+        prompt_suffix=": ",
+        show_default=True,
+        err=False,
+    ):
+        res = output_manager.get_input(f"{text} (y/n)")
+        return res.lower() in ("y", "yes", "true", "1")
+
+    click.confirm = server_confirm
+
+    # Monkeypatch builtins.input
+    def server_input(prompt=""):
+        return output_manager.get_input(prompt)
+
+    builtins.input = server_input
+
+
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 SPECS_DIR = pathlib.Path("product")
 
 
 class OrderedGroup(click.Group):
     """Custom Click Group to order commands in the help menu."""
+
+    def __call__(self, *args, **kwargs):
+        try:
+            return super().__call__(*args, **kwargs)
+        except Exception as e:
+            if "--server" in sys.argv:
+                from vibe_tools.command_output import out_error, output_manager
+                import traceback
+
+                out_error(str(e), traceback=traceback.format_exc())
+                output_manager.set_final_result(1)
+                # Ensure the exit handler knows it failed
+                sys.exit(1)
+            raise
 
     def list_commands(self, ctx: click.Context) -> List[str]:
         # Define the desired order of commands
@@ -135,48 +197,46 @@ class OrderedGroup(click.Group):
 @click.version_option(version=__version__)
 @click.pass_context
 def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
-    if server:
-        output_manager.set_server_mode(True)
-        # Monkeypatch click.prompt
-        import click
-        original_prompt = click.prompt
-        def server_prompt(text, default=None, hide_input=False, confirmation_prompt=False, type=None, value_proc=None, prompt_suffix=': ', show_default=True, err=False, show_choices=True):
-            return output_manager.get_input(text)
-        click.prompt = server_prompt
-        # Also monkeypatch confirm
-        def server_confirm(text, default=False, abort=False, prompt_suffix=': ', show_default=True, err=False):
-            res = output_manager.get_input(f"{text} (y/n)")
-            return res.lower() in ('y', 'yes', 'true', '1')
-        click.confirm = server_confirm
-    
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
 
     def emit_final_result():
         # This will be called at exit
-        # Check if there was an exception? 
+        # Check if there was an exception?
         # Click handles most of it.
         pass
-    
+
     # Register session cost reporting at exit
     atexit.register(finalize_cost_report)
 
     if server:
+
         def server_exit_handler():
             # If we're here, the command finished
-            output_manager.emit_server_message("result", {"code": 0, "data": {}})
+            # Flush any remaining output in JSONStream
+            try:
+                sys.stdout.flush()
+            except Exception:
+                pass
+            code, data = output_manager.get_final_result()
+            output_manager.emit_server_message("result", {"code": code, "data": data})
+
         atexit.register(server_exit_handler)
 
     # Ensure files are in the right place
-    from vibe_tools.utils import migrate_to_project_dir, get_project_root, GlobalProjectRegistry
+    from vibe_tools.utils import (
+        migrate_to_project_dir,
+        get_project_root,
+        GlobalProjectRegistry,
+    )
 
     # Auto-detect project root and change CWD if found in registry
     project_root = get_project_root()
     if project_root != pathlib.Path.cwd():
         os.chdir(project_root)
         logger.debug(f"Changed CWD to project root: {project_root}")
-    
+
     # Update last active if found in registry
     project = GlobalProjectRegistry.get_project_by_path(str(pathlib.Path.cwd()))
     if project:
@@ -319,26 +379,31 @@ def _build_reconciliation(ctx, force, only_makefile=False):
     # 1. Sync Makefile
     if only_makefile:
         from vibe_tools.setup import sync_makefile
-        sync_makefile(agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False))
+
+        sync_makefile(
+            agent=ctx.obj.get("agent", "cursor-agent"),
+            stream=ctx.obj.get("stream", False),
+        )
         return
 
     # Normalize dev_environment.md just-in-time
     click.echo(f"🔄 Normalizing {DEV_SPEC.name} in-memory...")
     dev_data = normalize_to_data(DEV_SPEC.read_text(), "dev_environment")
     if not dev_data:
-        click.echo("❌ Normalization failed. Please check the content of dev_environment.md.")
+        click.echo(
+            "❌ Normalization failed. Please check the content of dev_environment.md."
+        )
         return
-    
+
     dev_yaml = safe_yaml_dump(dev_data)
     import hashlib
+
     dev_hash = hashlib.sha256(dev_yaml.encode()).hexdigest()
 
     # Check if dev_environment.md and dev_environment-current.yaml are identical (skip if so, unless forced)
     if not force and DEV_ENV_CURRENT.exists():
         if dev_hash == get_file_hash(DEV_ENV_CURRENT):
-            click.echo(
-                "✅ Development environment is up-to-date. Skipping build."
-            )
+            click.echo("✅ Development environment is up-to-date. Skipping build.")
             click.echo("   Use --force to rebuild anyway.")
             return
 
@@ -349,7 +414,10 @@ def _build_reconciliation(ctx, force, only_makefile=False):
 
     # Sync Makefile before building to ensure we have the latest targets
     from vibe_tools.setup import sync_makefile
-    sync_makefile(agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False))
+
+    sync_makefile(
+        agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False)
+    )
 
     # Try to run make build if Makefile exists
     makefile = pathlib.Path("Makefile")

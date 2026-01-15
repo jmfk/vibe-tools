@@ -10,10 +10,10 @@ def register_rerun(cli):
         """Reset a PRD's state and branch to allow rerunning."""
         # Try to find the PRD file in product/
         prd_file = None
-        
+
         # Search recursively for the MD file
         potential_files = list(PRODUCT_DIR.rglob(f"*{prd_id}*.md"))
-        
+
         if len(potential_files) == 1:
             prd_file = potential_files[0]
         elif len(potential_files) > 1:

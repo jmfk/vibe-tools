@@ -239,9 +239,7 @@ def run_agent(
                             for content in content_list:
                                 if content.get("type") == "text":
                                     text = content.get("text", "")
-                            log_large_output(
-                                "user", json.dumps(content_list, indent=2)
-                            )
+                            log_large_output("user", json.dumps(content_list, indent=2))
 
                         elif event_type == "assistant":
                             out_print("🤖 Assistant!", flush=True, source="agent")
@@ -281,7 +279,9 @@ def run_agent(
                             else:
                                 if stream:
                                     out_print(
-                                        f"\n❌ Error: {full_result_text}", flush=True, source="agent"
+                                        f"\n❌ Error: {full_result_text}",
+                                        flush=True,
+                                        source="agent",
                                     )
 
                     except json.JSONDecodeError:
@@ -300,12 +300,16 @@ def run_agent(
                 assistant_content = "".join(accumulated_assistant_text)
                 if full_result_text:
                     if assistant_content:
-                        final_output = assistant_content + "\n\n--- FINAL RESULT ---\n" + full_result_text
+                        final_output = (
+                            assistant_content
+                            + "\n\n--- FINAL RESULT ---\n"
+                            + full_result_text
+                        )
                     else:
                         final_output = full_result_text
                 else:
                     final_output = assistant_content
-                
+
                 # Log both the clean output and the full raw event log
                 log_large_output("agent_output", final_output)
                 log_large_output("agent_raw_events", "\n".join(full_event_log))
@@ -405,7 +409,9 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
         else:
             failure = result.get("failure", {})
             code = failure.get("exitCode", "unknown")
-            out_print(f"❌ Command failed (Exit code: {code}).", flush=True, source="agent")
+            out_print(
+                f"❌ Command failed (Exit code: {code}).", flush=True, source="agent"
+            )
     elif "globToolCall" in tool_call:
         result = tool_call.get("globToolCall", {}).get("result", {})
         success = result.get("success")

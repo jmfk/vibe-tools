@@ -102,6 +102,7 @@ class PRD:
 
     def get_hash(self) -> str:
         import hashlib
+
         return hashlib.sha256(self.content.encode()).hexdigest()
 
     @classmethod
@@ -120,7 +121,11 @@ class PRD:
         # 2. Try new bottom-of-file metadata
         if "<!-- vibe-id:" in text or "<summary>Metadata</summary>" in text:
             # Extract YAML from <details> block
-            yaml_match = re.search(r"<details>\s*<summary>Metadata</summary>\s*```yaml\s*(.*?)\s*```\s*</details>", text, re.DOTALL)
+            yaml_match = re.search(
+                r"<details>\s*<summary>Metadata</summary>\s*```yaml\s*(.*?)\s*```\s*</details>",
+                text,
+                re.DOTALL,
+            )
             if yaml_match:
                 bottom_yaml = yaml_match.group(1)
                 new_fm = safe_yaml_load(bottom_yaml)
@@ -135,9 +140,18 @@ class PRD:
                 frontmatter["id"] = id_match.group(1).strip()
 
             # Clean content/history from the bottom metadata block
-            content = re.sub(r"\n*---\s*<details>.*?</details>\s*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL).strip()
-            content = re.sub(r"\n*---\s*<details>.*?</details>", "", content, flags=re.DOTALL).strip()
-            content = re.sub(r"\n*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL).strip()
+            content = re.sub(
+                r"\n*---\s*<details>.*?</details>\s*<!-- vibe-id: .*? -->",
+                "",
+                content,
+                flags=re.DOTALL,
+            ).strip()
+            content = re.sub(
+                r"\n*---\s*<details>.*?</details>", "", content, flags=re.DOTALL
+            ).strip()
+            content = re.sub(
+                r"\n*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL
+            ).strip()
 
         # Extract history section if exists
         if "## Implementation History" in content:
@@ -175,12 +189,16 @@ class PRD:
             status=frontmatter.get("status", "backlog"),
             group=frontmatter.get("group"),
             depends_on=frontmatter.get("depends_on") or [],
-            created_at=frontmatter.get("created_at", datetime.datetime.now().isoformat()),
-            updated_at=frontmatter.get("updated_at", datetime.datetime.now().isoformat()),
+            created_at=frontmatter.get(
+                "created_at", datetime.datetime.now().isoformat()
+            ),
+            updated_at=frontmatter.get(
+                "updated_at", datetime.datetime.now().isoformat()
+            ),
             metadata=frontmatter,
             content=content,
             history=history,
-            path=path
+            path=path,
         )
 
     def to_markdown(self) -> str:
@@ -200,27 +218,27 @@ class PRD:
                 data[k] = v
 
         frontmatter = safe_yaml_dump(data)
-        
+
         # New format: No frontmatter at the top. Metadata at the bottom.
         text = ""
         if not self.content.startswith("# "):
             text += f"# {self.title}\n\n"
         text += self.content.strip()
-        
+
         if self.history:
             text += f"\n\n## Implementation History\n\n{self.history.strip()}"
-        
+
         # Append metadata at the end
         text += f"\n\n---\n<details>\n<summary>Metadata</summary>\n\n```yaml\n{frontmatter.strip()}\n```\n</details>\n"
         text += f"\n<!-- vibe-id: {self.id} -->\n"
-        
+
         return text
 
     def save(self, path: Optional[pathlib.Path] = None):
         target_path = path or self.path
         if not target_path:
             raise ValueError("No path provided to save PRD")
-        
+
         self.updated_at = datetime.datetime.now().isoformat()
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(self.to_markdown())
@@ -242,7 +260,7 @@ class PRD:
             "TYPE": self.type,
             "DEPENDS_ON": self.depends_on,
             "METADATA": self.metadata,
-            "CONTENT": self.content
+            "CONTENT": self.content,
         }
 
 
@@ -260,14 +278,16 @@ def generate_prd_id(base_dir: pathlib.Path) -> str:
         match = re.search(r"PRD-(\d+)", f.name)
         if match:
             max_id = max(max_id, int(match.group(1)))
-    
+
     return f"PRD-{max_id + 1:03d}"
 
 
 # --- Compatibility Shims for Legacy Commands ---
 
+
 class PRDMetadata:
     """Legacy PRDMetadata shim."""
+
     def __init__(self, path: pathlib.Path):
         self.path = path
         self.prd = load_prd(path) if path.exists() else None
@@ -275,32 +295,54 @@ class PRDMetadata:
         self.content = self.prd.content if self.prd else ""
 
     @property
-    def title(self): return self.prd.title if self.prd else self.path.stem
+    def title(self):
+        return self.prd.title if self.prd else self.path.stem
+
     @property
-    def github_issue_number(self): return self.sync_info.get('issue_number')
+    def github_issue_number(self):
+        return self.sync_info.get("issue_number")
+
     @github_issue_number.setter
-    def github_issue_number(self, val): self.sync_info['issue_number'] = val
+    def github_issue_number(self, val):
+        self.sync_info["issue_number"] = val
+
     @property
-    def github_discussion_url(self): return self.sync_info.get('discussion_url')
+    def github_discussion_url(self):
+        return self.sync_info.get("discussion_url")
+
     @github_discussion_url.setter
-    def github_discussion_url(self, val): self.sync_info['discussion_url'] = val
+    def github_discussion_url(self, val):
+        self.sync_info["discussion_url"] = val
+
     @property
-    def last_synced_at(self): return self.sync_info.get('last_synced_at')
+    def last_synced_at(self):
+        return self.sync_info.get("last_synced_at")
+
     @last_synced_at.setter
-    def last_synced_at(self, val): self.sync_info['last_synced_at'] = val
+    def last_synced_at(self, val):
+        self.sync_info["last_synced_at"] = val
+
     @property
-    def sync_hash(self): return self.sync_info.get('sync_hash')
+    def sync_hash(self):
+        return self.sync_info.get("sync_hash")
+
     @sync_hash.setter
-    def sync_hash(self, val): self.sync_info['sync_hash'] = val
+    def sync_hash(self, val):
+        self.sync_info["sync_hash"] = val
 
     def save(self):
         if self.prd:
             self.prd.metadata = self.sync_info
             self.prd.save()
-    def to_markdown(self): return self.prd.to_markdown() if self.prd else ""
+
+    def to_markdown(self):
+        return self.prd.to_markdown() if self.prd else ""
+
     def get_hash(self):
         import hashlib
+
         return hashlib.sha256(self.content.encode()).hexdigest()
+
 
 def get_prd_metadata(path: pathlib.Path) -> PRDMetadata:
     return PRDMetadata(path)

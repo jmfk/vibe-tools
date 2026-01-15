@@ -2,9 +2,11 @@ import json
 import subprocess
 import sys
 
+
 def run_command(command):
     result = subprocess.run(command, capture_output=True, text=True)
     return result.stdout.strip(), result.returncode
+
 
 def get_repo_info():
     # Get owner/name from git remote
@@ -12,7 +14,7 @@ def get_repo_info():
     if code != 0:
         print("Error: Not a git repository.")
         sys.exit(1)
-    
+
     url = stdout
     if "github.com" not in url:
         print("Error: Not a GitHub repository.")
@@ -25,9 +27,10 @@ def get_repo_info():
     else:
         parts = url.split("github.com/")
         repo = parts[1].replace(".git", "")
-    
+
     owner, name = repo.split("/")
     return owner, name
+
 
 def fetch_discussions(owner, name):
     all_discussions = []
@@ -52,10 +55,20 @@ def fetch_discussions(owner, name):
           }
         }
         """
-        cmd = ["gh", "api", "graphql", "-f", f"query={query}", "-f", f"owner={owner}", "-f", f"name={name}"]
+        cmd = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-f",
+            f"owner={owner}",
+            "-f",
+            f"name={name}",
+        ]
         if after:
             cmd.extend(["-f", f"after={after}"])
-            
+
         stdout, code = run_command(cmd)
         if code != 0:
             print(f"Error fetching discussions: {stdout}")
@@ -68,6 +81,7 @@ def fetch_discussions(owner, name):
         after = discs["pageInfo"]["endCursor"]
 
     return all_discussions
+
 
 def delete_discussion(discussion_id, title):
     print(f"Deleting: {title} ({discussion_id})")
@@ -83,10 +97,11 @@ def delete_discussion(discussion_id, title):
     if code != 0:
         print(f"Failed to delete {title}: {stdout}")
 
+
 def main():
     owner, name = get_repo_info()
     discussions = fetch_discussions(owner, name)
-    
+
     if not discussions:
         print("No discussions found.")
         return
@@ -94,8 +109,9 @@ def main():
     print(f"Found {len(discussions)} discussions. Starting deletion...")
     for d in discussions:
         delete_discussion(d["id"], d["title"])
-    
+
     print("Done.")
+
 
 if __name__ == "__main__":
     main()

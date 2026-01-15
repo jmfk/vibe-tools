@@ -30,10 +30,11 @@ def run_reconciliation(quiet=False):
 
     # 1. Collect all initiatives
     all_prds: List[PRD] = []
-    
+
     # 1a. Migrate Legacy Issues
     if ISSUES_DIR.exists():
-        if not quiet: click.echo("📋 Migrating legacy issues...")
+        if not quiet:
+            click.echo("📋 Migrating legacy issues...")
         for issue_file in ISSUES_DIR.rglob("ISSUE-*.md"):
             try:
                 # We use the old Issue.from_markdown logic indirectly via PRD.from_markdown
@@ -44,26 +45,37 @@ def run_reconciliation(quiet=False):
                     prd.status = "done"
                 all_prds.append(prd)
             except Exception as e:
-                if not quiet: click.echo(f"  ⚠️  Failed to load issue {issue_file.name}: {e}")
+                if not quiet:
+                    click.echo(f"  ⚠️  Failed to load issue {issue_file.name}: {e}")
 
     # 1b. Migrate Legacy PRDs (Markdown)
     legacy_md_dirs = [
         PRODUCT_DIR / "backlog",
         PRODUCT_DIR / "inbox",
         PRODUCT_DIR / "history",
-        PRODUCT_DIR / "rejected"
+        PRODUCT_DIR / "rejected",
     ]
-    if not quiet: click.echo("📁 Migrating legacy markdown PRDs...")
+    if not quiet:
+        click.echo("📁 Migrating legacy markdown PRDs...")
     for md_dir in legacy_md_dirs:
-        if not md_dir.exists(): continue
+        if not md_dir.exists():
+            continue
         for md_file in md_dir.glob("*.md"):
             # Avoid system files
-            if md_file.stem in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "setup", "project_overview"]:
+            if md_file.stem in [
+                "architecture",
+                "infrastructure",
+                "cicd",
+                "testing",
+                "dev_environment",
+                "setup",
+                "project_overview",
+            ]:
                 continue
-            
+
             try:
                 prd = load_prd(md_file)
-                
+
                 # Enforce status based on directory even if skipping full migration
                 if "history" in str(md_dir):
                     prd.status = "done"
@@ -77,12 +89,13 @@ def run_reconciliation(quiet=False):
                         prd.save()
                         continue
             except Exception as e:
-                if not quiet: click.echo(f"  ⚠️  Failed to load PRD {md_file.name}: {e}")
+                if not quiet:
+                    click.echo(f"  ⚠️  Failed to load PRD {md_file.name}: {e}")
 
     # 2. Build Dependency Graph and Sort
     # We want to assign IDs in a stable way, ideally topological or by date
     # For now, we'll sort by creation date or existing sequence if possible
-    
+
     def sort_key(p: PRD):
         # Try to extract sequence from old PRD format v01-010
         match = re.search(r"v\d+-(\d+)", p.id)
@@ -97,9 +110,9 @@ def run_reconciliation(quiet=False):
     all_prds.sort(key=sort_key)
 
     # 3. Assign New IDs and Map Dependencies
-    id_map = {} # old_id -> new_id
+    id_map = {}  # old_id -> new_id
     new_prds: List[PRD] = []
-    
+
     for i, prd in enumerate(all_prds, 1):
         old_id = prd.id
         new_id = f"PRD-{i:03d}"
@@ -122,10 +135,13 @@ def run_reconciliation(quiet=False):
         prd.depends_on = new_deps
 
     # 4. Save to New Structure
-    if not quiet: click.echo("💾 Saving migrated PRDs to product/...")
+    if not quiet:
+        click.echo("💾 Saving migrated PRDs to product/...")
     for prd in new_prds:
-        target_dir = PRODUCT_HISTORY_DIR if prd.status == "done" else PRODUCT_BACKLOG_DIR
-        
+        target_dir = (
+            PRODUCT_HISTORY_DIR if prd.status == "done" else PRODUCT_BACKLOG_DIR
+        )
+
         # Enforce status based on directory during migration
         if target_dir == PRODUCT_HISTORY_DIR:
             prd.status = "done"
@@ -136,25 +152,36 @@ def run_reconciliation(quiet=False):
         # Truncate filename if too long
         if len(filename) > 64:
             filename = filename[:60] + ".md"
-        
+
         target_path = target_dir / filename
         prd.save(target_path)
-        
+
         # If it was originally elsewhere, we'll cleanup later
-        if not quiet: click.echo(f"  ✅ {prd.id} -> {target_path.relative_to(PRODUCT_DIR)}")
+        if not quiet:
+            click.echo(f"  ✅ {prd.id} -> {target_path.relative_to(PRODUCT_DIR)}")
 
     # 5. Cleanup Old Files
-    if not quiet: click.echo("🧹 Cleaning up old files...")
-    
+    if not quiet:
+        click.echo("🧹 Cleaning up old files...")
+
     # Remove old issues dir
     if ISSUES_DIR.exists():
         shutil.rmtree(ISSUES_DIR)
-    
+
     # Clear old markdown files that were migrated
     for md_dir in legacy_md_dirs:
-        if not md_dir.exists(): continue
+        if not md_dir.exists():
+            continue
         for md_file in md_dir.glob("*.md"):
-            if not md_file.name.startswith("PRD-") and md_file.stem not in ["architecture", "infrastructure", "cicd", "testing", "dev_environment", "setup", "project_overview"]:
+            if not md_file.name.startswith("PRD-") and md_file.stem not in [
+                "architecture",
+                "infrastructure",
+                "cicd",
+                "testing",
+                "dev_environment",
+                "setup",
+                "project_overview",
+            ]:
                 md_file.unlink()
 
     # 6. Update state.json
@@ -162,23 +189,24 @@ def run_reconciliation(quiet=False):
     # Plans are now based on PRD-NNN IDs
     new_plans = {}
     completed_prds = []
-    
+
     for prd in new_prds:
         new_plans[prd.id] = {
             "title": prd.title,
             "status": prd.status,
             "type": prd.type,
-            "depends_on": prd.depends_on
+            "depends_on": prd.depends_on,
         }
         if prd.status == "done":
             completed_prds.append(prd.id)
-            
+
     state["plans"] = new_plans
     state["completed_prds"] = completed_prds
     state["next_sequence"] = len(new_prds) + 1
     save_project_state(state)
 
-    if not quiet: click.echo("✅ Migration and reconciliation complete.")
+    if not quiet:
+        click.echo("✅ Migration and reconciliation complete.")
 
 
 def register_migrate(cli):

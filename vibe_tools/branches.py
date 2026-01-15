@@ -11,7 +11,7 @@ from vibe_tools.utils import (
     get_agent_command,
     run_agent,
     logger,
-    is_branch_switching_enabled
+    is_branch_switching_enabled,
 )
 
 
@@ -22,7 +22,9 @@ def display_branches_table():
     main_branch = get_main_branch()
 
     # Get local branches
-    stdout, code = run_command(["git", "branch", "--format=%(refname:short)"], check=False)
+    stdout, code = run_command(
+        ["git", "branch", "--format=%(refname:short)"], check=False
+    )
     if code != 0:
         click.echo("❌ Failed to list git branches.")
         return
@@ -87,12 +89,16 @@ def display_branches_table():
             depends_on = ", ".join(deps) if deps else "-"
 
             # Use parent_branch from plan if available
-            parent_branch = plan_info.get("parent_branch") or branch_lineage.get(branch, "-")
+            parent_branch = plan_info.get("parent_branch") or branch_lineage.get(
+                branch, "-"
+            )
 
             is_merged_into_main = is_merged(branch)
             merged = "[green]✅[/green]" if is_merged_into_main else "[red]❌[/red]"
 
-            table.add_row(branch_display, plan_id, status, depends_on, parent_branch, merged)
+            table.add_row(
+                branch_display, plan_id, status, depends_on, parent_branch, merged
+            )
         else:
             # Branch exists but not tied to a known vibe plan
             table.add_row(branch_display, "-", "-", "-", parent_branch, "-")
@@ -117,27 +123,42 @@ def set_branch_base(branch: str, base: str):
     if plan_id and plan_id in state.get("plans", {}):
         state["plans"][plan_id]["parent_branch"] = base
     elif branch in state.get("plans", {}):
-         state["plans"][branch]["parent_branch"] = base
+        state["plans"][branch]["parent_branch"] = base
 
     from vibe_tools.utils import save_project_state
+
     save_project_state(state)
-    click.echo(f"✅ Set base for {click.style(branch, fg='cyan')} to {click.style(base, fg='blue')}")
+    click.echo(
+        f"✅ Set base for {click.style(branch, fg='cyan')} to {click.style(base, fg='blue')}"
+    )
 
 
 def merge_branches(src: str, dst: str):
     """Merges src branch into dst branch and updates lineage."""
-    from vibe_tools.utils import get_main_branch, load_project_state, run_command, save_project_state, is_branch_switching_enabled
+    from vibe_tools.utils import (
+        get_main_branch,
+        load_project_state,
+        run_command,
+        save_project_state,
+        is_branch_switching_enabled,
+    )
 
     if not is_branch_switching_enabled():
-        click.echo(f"⚠️ Branch switching is disabled. Merge from {src} to {dst} might fail if not on the correct branch.")
+        click.echo(
+            f"⚠️ Branch switching is disabled. Merge from {src} to {dst} might fail if not on the correct branch."
+        )
 
-    click.echo(f"🔄 Merging {click.style(src, fg='cyan')} into {click.style(dst, fg='cyan')}...")
+    click.echo(
+        f"🔄 Merging {click.style(src, fg='cyan')} into {click.style(dst, fg='cyan')}..."
+    )
 
     # 1. Ensure dst exists, if not create it from main
     _, code = run_command(["git", "rev-parse", "--verify", dst], check=False)
     if code != 0:
         main_branch = get_main_branch()
-        click.echo(f"🌿 Destination branch {click.style(dst, fg='cyan')} does not exist. Creating from {click.style(main_branch, fg='blue')}...")
+        click.echo(
+            f"🌿 Destination branch {click.style(dst, fg='cyan')} does not exist. Creating from {click.style(main_branch, fg='blue')}..."
+        )
         run_command(["git", "checkout", main_branch], check=False)
         run_command(["git", "checkout", "-b", dst], check=False)
         # Switch back to src to perform the merge from the right context if needed,
@@ -178,11 +199,18 @@ def merge_branches(src: str, dst: str):
 
 def investigate_git_lineage():
     """Heuristically reconstruct branch lineage from git history."""
-    from vibe_tools.utils import get_main_branch, load_project_state, run_command, save_project_state
+    from vibe_tools.utils import (
+        get_main_branch,
+        load_project_state,
+        run_command,
+        save_project_state,
+    )
 
     click.echo("🔍 Investigating git history to reconstruct lineage...")
 
-    stdout, code = run_command(["git", "branch", "--format=%(refname:short)"], check=False)
+    stdout, code = run_command(
+        ["git", "branch", "--format=%(refname:short)"], check=False
+    )
     if code != 0:
         return
 
@@ -205,10 +233,14 @@ def investigate_git_lineage():
                 continue
 
             # Get the merge base
-            base_sha, code = run_command(["git", "merge-base", branch, other], check=False)
+            base_sha, code = run_command(
+                ["git", "merge-base", branch, other], check=False
+            )
             if code == 0 and base_sha:
                 # Get the date of the merge base commit
-                date_str, _ = run_command(["git", "show", "-s", "--format=%ct", base_sha], check=False)
+                date_str, _ = run_command(
+                    ["git", "show", "-s", "--format=%ct", base_sha], check=False
+                )
                 if date_str:
                     date_val = int(date_str)
                     if date_val > best_base_date:
@@ -236,11 +268,14 @@ def _switch_to_branch(
 ):
     """Robustly switches to a feature branch, using AI rescue if needed."""
     if not is_branch_switching_enabled():
-        logger.info(f"Branch switching is disabled. Staying on current branch instead of switching to '{branch_name}'.")
+        logger.info(
+            f"Branch switching is disabled. Staying on current branch instead of switching to '{branch_name}'."
+        )
         return
 
     import sys
     from vibe_tools import utils
+
     if parent_branch is None:
         parent_branch = get_main_branch()
 
@@ -300,4 +335,3 @@ def _switch_to_branch(
                 f"Agent was unable to resolve git conflict. Final error: {final_output}"
             )
             sys.exit(1)
-

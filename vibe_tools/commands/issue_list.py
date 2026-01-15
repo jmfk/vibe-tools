@@ -8,6 +8,7 @@ from vibe_tools.prds import load_prd
 def list_issues_impl(status, severity, service, search, full, search_query):
     """Internal implementation of issue listing."""
     from vibe_tools.utils import PRODUCT_DIR
+
     prds = []
     if PRODUCT_DIR.exists():
         for f in PRODUCT_DIR.rglob("*.md"):
@@ -68,16 +69,29 @@ def list_issues_impl(status, severity, service, search, full, search_query):
         for issue in filtered_issues:
             service_str = issue.service or "N/A"
             severity_str = issue.severity or "N/A"
-            click.echo(f"{issue.id:<15} {issue.status:<12} {severity_str:<10} {service_str:<15} {issue.title}")
+            click.echo(
+                f"{issue.id:<15} {issue.status:<12} {severity_str:<10} {service_str:<15} {issue.title}"
+            )
+
 
 def register_issue_list(issue_group):
     options = [
-        click.option("--status", type=click.Choice(["backlog", "in_progress", "blocked", "done"]), help="Filter by status"),
-        click.option("--severity", type=click.Choice(["low", "medium", "high", "critical"]), help="Filter by severity"),
+        click.option(
+            "--status",
+            type=click.Choice(["backlog", "in_progress", "blocked", "done"]),
+            help="Filter by status",
+        ),
+        click.option(
+            "--severity",
+            type=click.Choice(["low", "medium", "high", "critical"]),
+            help="Filter by severity",
+        ),
         click.option("--service", help="Filter by service name"),
-        click.option("--search", "-s", help="Search title or body content (regex support)"),
+        click.option(
+            "--search", "-s", help="Search title or body content (regex support)"
+        ),
         click.option("--full", "-v", is_flag=True, help="Display detailed view"),
-        click.argument("search_query", required=False)
+        click.argument("search_query", required=False),
     ]
 
     def add_options(f):

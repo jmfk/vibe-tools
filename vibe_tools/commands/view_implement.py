@@ -28,7 +28,13 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
     end_idx = start_idx + batch_size
     batch = files[start_idx:end_idx]
 
-    click.echo(click.style(f"\n--- PRDs in {directory.name} (Page {page}/{total_pages}) ---", fg="cyan", bold=True))
+    click.echo(
+        click.style(
+            f"\n--- PRDs in {directory.name} (Page {page}/{total_pages}) ---",
+            fg="cyan",
+            bold=True,
+        )
+    )
     if not batch:
         click.echo("  No PRDs found.")
         return
@@ -38,6 +44,7 @@ def list_prds(directory: pathlib.Path, search_term: str = None, page: int = 1):
 
     if total_pages > 1:
         click.echo(f"\nUse '--page' to see other pages (Total items: {len(files)})")
+
 
 def find_prd(prd_id: str):
     """Finds a PRD file by ID or partial name across all PRD folders."""
@@ -59,6 +66,7 @@ def find_prd(prd_id: str):
             return matches[0]
     return None
 
+
 @click.group(invoke_without_command=True)
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 @click.option("--page", "-p", default=1, help="Page number.")
@@ -69,12 +77,14 @@ def i(ctx, search, page):
         # Default to listing backlog
         list_prds(BACKLOG_DIR, search, page)
 
+
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 @click.option("--page", "-p", default=1, help="Page number.")
 def inbox(search, page):
     """List PRDs in the inbox."""
     list_prds(INBOX_DIR, search, page)
+
 
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
@@ -83,12 +93,14 @@ def backlog(search, page):
     """List PRDs in the backlog."""
     list_prds(BACKLOG_DIR, search, page)
 
+
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 @click.option("--page", "-p", default=1, help="Page number.")
 def history(search, page):
     """List implemented PRDs in history."""
     list_prds(HISTORY_DIR, search, page)
+
 
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
@@ -97,6 +109,7 @@ def rejected(search, page):
     """List dismissed PRDs in rejected."""
     list_prds(REJECTED_DIR, search, page)
 
+
 @i.command()
 @click.option("--search", "-s", help="Search term to filter PRDs.")
 def all(search):
@@ -104,9 +117,12 @@ def all(search):
     for folder in [INBOX_DIR, BACKLOG_DIR, HISTORY_DIR, REJECTED_DIR]:
         list_prds(folder, search)
 
+
 @i.command()
 @click.argument("prd_id")
-@click.argument("target", type=click.Choice(["inbox", "backlog", "history", "rejected"]))
+@click.argument(
+    "target", type=click.Choice(["inbox", "backlog", "history", "rejected"])
+)
 def move(prd_id, target):
     """Move a PRD to a different status folder."""
     target_map = {
@@ -129,8 +145,10 @@ def move(prd_id, target):
         return
 
     import shutil
+
     shutil.move(str(source_file), str(target_path))
     click.echo(f"✅ Moved {source_file.name} to {target}")
+
 
 @i.command()
 @click.argument("prd_id")
@@ -143,8 +161,10 @@ def dismiss(prd_id):
 
     target_path = REJECTED_DIR / source_file.name
     import shutil
+
     shutil.move(str(source_file), str(target_path))
     click.echo(f"✅ Dismissed {source_file.name} to rejected")
+
 
 @i.command()
 @click.argument("prd_id")
@@ -156,6 +176,7 @@ def edit(prd_id):
         return
 
     open_in_editor(source_file)
+
 
 def register_view_implement(cli):
     cli.add_command(i)

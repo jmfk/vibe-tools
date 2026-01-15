@@ -68,21 +68,32 @@ def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
     start_iteration = saved_state["iteration"] if saved_state else 1
 
     if saved_state:
-        logger.info(f"[RESTART] Resuming Test and Fix loop at iteration {start_iteration}")
+        logger.info(
+            f"[RESTART] Resuming Test and Fix loop at iteration {start_iteration}"
+        )
 
     tester = ProjectTester()
 
     for i in range(start_iteration, max_iterations + 1):
-        logger.info(f"\n[TEST_FIX LOOP] [PHASE: test-all] (Iteration {i}/{max_iterations})")
+        logger.info(
+            f"\n[TEST_FIX LOOP] [PHASE: test-all] (Iteration {i}/{max_iterations})"
+        )
 
         test_output, tests_passed, env_failures, failed_targets = run_tests(fast=fast)
 
         if env_failures:
-            log_issue("test_fix", i, max_iterations, f"Environment failure: {', '.join(env_failures)}")
+            log_issue(
+                "test_fix",
+                i,
+                max_iterations,
+                f"Environment failure: {', '.join(env_failures)}",
+            )
             logger.error(
                 f"❌ ENVIRONMENT FAILURE DETECTED: Commands missing for targets: {', '.join(env_failures)}"
             )
-            logger.error("Please ensure your environment is set up correctly (npm install, etc.).")
+            logger.error(
+                "Please ensure your environment is set up correctly (npm install, etc.)."
+            )
             sys.exit(127)
 
         if tests_passed:
@@ -96,7 +107,9 @@ def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
         num_failures = len(failures)
 
         if num_failures > 0:
-            logger.info(f"❌ {num_failures} individual test failures detected. Fixing them one by one...")
+            logger.info(
+                f"❌ {num_failures} individual test failures detected. Fixing them one by one..."
+            )
 
             for idx, failure in enumerate(failures, 1):
                 test_id = failure["id"]
@@ -111,7 +124,9 @@ def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
 
                 # Get the relevant output for just this test if possible, or use full output
                 # For now, we'll provide the specific test we want fixed
-                specific_prompt = f"SPECIFIC TARGET: Fix failing test '{test_id}'\n\n{prompt_base}"
+                specific_prompt = (
+                    f"SPECIFIC TARGET: Fix failing test '{test_id}'\n\n{prompt_base}"
+                )
                 prompt = specific_prompt.replace("{test_output}", test_output)
 
                 cmd = get_agent_command(agent, prompt)
@@ -141,7 +156,9 @@ def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
             # No specific test failures parsed (maybe linting or generic error)
             summary = tester.get_summary(failed_targets)
             log_issue("test_fix", i, max_iterations, summary)
-            logger.info(f"❌ Targets failed but no specific tests parsed. [PHASE: fix] Asking {agent} to fix all...")
+            logger.info(
+                f"❌ Targets failed but no specific tests parsed. [PHASE: fix] Asking {agent} to fix all..."
+            )
 
             try:
                 prompt_base = get_prompt("test_fix_prompt.txt")
@@ -166,7 +183,9 @@ def run_test_fix_loop(agent="cursor-agent", fast=False, stream=False):
         save_state(i + 1, test_output)
 
         if i == max_iterations:
-            logger.error(f"FAILED: Could not fix all errors within {max_iterations} iterations.")
+            logger.error(
+                f"FAILED: Could not fix all errors within {max_iterations} iterations."
+            )
             sys.exit(1)
 
     logger.info("--- Test and Fix Loop Finished ---")

@@ -278,7 +278,9 @@ def is_branch_switching_enabled() -> bool:
 
     # Fallback to config
     config = load_config()
-    if config.get("no_branch_switch") or config.get("ralph", {}).get("no_branch_switch"):
+    if config.get("no_branch_switch") or config.get("ralph", {}).get(
+        "no_branch_switch"
+    ):
         return False
 
     return True
@@ -345,7 +347,7 @@ def setup_logging(command_name: str):
 
     # Initialize OutputManager with the log file
     output_manager.set_log_file(log_file)
-    
+
     # Pass config to output_manager
     config = load_config()
     output_manager.set_config(config)
@@ -593,10 +595,10 @@ class GlobalProjectRegistry:
         """Adds or updates a project in the registry."""
         registry = cls.load()
         path = str(pathlib.Path(path).resolve())
-        
+
         # Check if project already exists by path
         existing = next((p for p in registry["projects"] if p["path"] == path), None)
-        
+
         if existing:
             existing["name"] = name
             existing["description"] = description
@@ -606,6 +608,7 @@ class GlobalProjectRegistry:
             registry["last_active_project_id"] = existing["id"]
         else:
             import uuid
+
             new_project = {
                 "id": str(uuid.uuid4()),
                 "name": name,
@@ -617,7 +620,7 @@ class GlobalProjectRegistry:
             }
             registry["projects"].append(new_project)
             registry["last_active_project_id"] = new_project["id"]
-        
+
         cls.save(registry)
 
     @classmethod
@@ -625,7 +628,8 @@ class GlobalProjectRegistry:
         """Removes a project from the registry."""
         registry = cls.load()
         registry["projects"] = [
-            p for p in registry["projects"] 
+            p
+            for p in registry["projects"]
             if p["id"] != name_or_id and p["name"] != name_or_id
         ]
         cls.save(registry)
@@ -640,14 +644,14 @@ class GlobalProjectRegistry:
         """Finds a project by its path or any parent path."""
         registry = cls.load()
         target_path = pathlib.Path(path).resolve()
-        
+
         # Sort projects by path length (deepest first) to match most specific project
         sorted_projects = sorted(
-            registry["projects"], 
-            key=lambda p: len(pathlib.Path(p["path"]).parts), 
-            reverse=True
+            registry["projects"],
+            key=lambda p: len(pathlib.Path(p["path"]).parts),
+            reverse=True,
         )
-        
+
         for project in sorted_projects:
             project_path = pathlib.Path(project["path"]).resolve()
             try:
@@ -1093,7 +1097,12 @@ def perform_basic_init():
             "ralph": {"review": True, "tests": True, "auto_merge": False},
             "default_budget": 5.0,
             "verbose": False,
-            "coverage_targets": {"backend": 85, "frontend": 85, "tauri": 85, "infra": 85},
+            "coverage_targets": {
+                "backend": 85,
+                "frontend": 85,
+                "tauri": 85,
+                "infra": 85,
+            },
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
         out_success(f"✅ Created default configuration: {CONFIG_FILE}")
@@ -1581,7 +1590,7 @@ def get_project_root() -> pathlib.Path:
     project = GlobalProjectRegistry.get_project_by_path(str(pathlib.Path.cwd()))
     if project:
         return pathlib.Path(project["path"])
-    
+
     # 2. Fallback to git root
     try:
         curr = pathlib.Path.cwd()
@@ -1590,7 +1599,7 @@ def get_project_root() -> pathlib.Path:
                 return parent
     except Exception:
         pass
-        
+
     # 3. Default to CWD
     return pathlib.Path.cwd()
 

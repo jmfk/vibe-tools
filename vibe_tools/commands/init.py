@@ -57,10 +57,12 @@ def register_init(cli):
 
         # Always perform basic initialization first
         perform_basic_init()
-        
+
         # Register project in global registry
         project_name = get_project_name()
-        GlobalProjectRegistry.add_project(project_name, str(pathlib.Path.cwd().resolve()))
+        GlobalProjectRegistry.add_project(
+            project_name, str(pathlib.Path.cwd().resolve())
+        )
 
         if choice == "A":
             click.echo(

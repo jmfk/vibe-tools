@@ -15,6 +15,7 @@ def parse_iso_timestamp(ts: str) -> Optional[datetime.datetime]:
     except Exception:
         return None
 
+
 def parse_registered_timestamp(ts: str) -> Optional[datetime.datetime]:
     """Parse registered timestamp from usage.csv and convert to UTC."""
     try:
@@ -28,6 +29,7 @@ def parse_registered_timestamp(ts: str) -> Optional[datetime.datetime]:
     except Exception:
         return None
 
+
 def normalize_model(model: str) -> str:
     """Normalize model names for comparison."""
     model = model.lower()
@@ -37,6 +39,7 @@ def normalize_model(model: str) -> str:
         return "gemini-3-flash-preview"
     return model
 
+
 def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
     registered_events: List[Dict[str, Any]] = []
     if registered_path.exists():
@@ -45,15 +48,17 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
             for row in reader:
                 ts = parse_registered_timestamp(row["Timestamp"])
                 if ts:
-                    registered_events.append({
-                        "timestamp": ts,
-                        "prd": row["PRD"],
-                        "model": normalize_model(row["Model"]),
-                        "cost": float(row["Cost (USD)"]),
-                        "input": int(row["Input Tokens"]),
-                        "output": int(row["Output Tokens"]),
-                        "matched": False
-                    })
+                    registered_events.append(
+                        {
+                            "timestamp": ts,
+                            "prd": row["PRD"],
+                            "model": normalize_model(row["Model"]),
+                            "cost": float(row["Cost (USD)"]),
+                            "input": int(row["Input Tokens"]),
+                            "output": int(row["Output Tokens"]),
+                            "matched": False,
+                        }
+                    )
 
     exported_events: List[Dict[str, Any]] = []
     if exported_path.exists():
@@ -62,15 +67,19 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
             for row in reader:
                 ts = parse_iso_timestamp(row["Date"])
                 if ts:
-                    exported_events.append({
-                        "timestamp": ts,
-                        "model": normalize_model(row["Model"]),
-                        "cost": float(row["Cost"]),
-                        "input": int(row["Input (w/o Cache Write)"]), # Using this as standard input
-                        "output": int(row["Output Tokens"]),
-                        "kind": row["Kind"],
-                        "matched": False
-                    })
+                    exported_events.append(
+                        {
+                            "timestamp": ts,
+                            "model": normalize_model(row["Model"]),
+                            "cost": float(row["Cost"]),
+                            "input": int(
+                                row["Input (w/o Cache Write)"]
+                            ),  # Using this as standard input
+                            "output": int(row["Output Tokens"]),
+                            "kind": row["Kind"],
+                            "matched": False,
+                        }
+                    )
 
     # Sort both by timestamp
     registered_events.sort(key=lambda x: x["timestamp"])
@@ -89,7 +98,10 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
                 continue
 
             # Check model and time window
-            if reg["model"] == exp["model"] and abs(reg["timestamp"] - exp["timestamp"]) <= time_window:
+            if (
+                reg["model"] == exp["model"]
+                and abs(reg["timestamp"] - exp["timestamp"]) <= time_window
+            ):
                 exp["matched"] = True
                 reg["matched"] = True
                 matches.append((reg, exp))
@@ -124,14 +136,18 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
     if unmatched_registered:
         out_print("\nUNMATCHED REGISTERED EVENTS (In usage.csv but not in export):")
         for reg in unmatched_registered[:10]:
-            out_print(f"  {reg['timestamp']} | {reg['model']} | ${reg['cost']:.4f} | {reg['prd']}")
+            out_print(
+                f"  {reg['timestamp']} | {reg['model']} | ${reg['cost']:.4f} | {reg['prd']}"
+            )
         if len(unmatched_registered) > 10:
             out_print(f"  ... and {len(unmatched_registered) - 10} more")
 
     if unmatched_exported:
         out_print("\nUNMATCHED EXPORTED EVENTS (In export but not in usage.csv):")
         for exp in unmatched_exported[:10]:
-            out_print(f"  {exp['timestamp']} | {exp['model']} | ${exp['cost']:.4f} | {exp['kind']}")
+            out_print(
+                f"  {exp['timestamp']} | {exp['model']} | ${exp['cost']:.4f} | {exp['kind']}"
+            )
         if len(unmatched_exported) > 10:
             out_print(f"  ... and {len(unmatched_exported) - 10} more")
 
@@ -145,15 +161,22 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
     if discrepancies:
         discrepancies.sort(key=lambda x: x[2], reverse=True)
         for reg, exp, diff in discrepancies[:10]:
-            out_print(f"  Match at {reg['timestamp']}: Reg ${reg['cost']:.4f} vs Exp ${exp['cost']:.4f} (Diff: ${diff:.4f})")
+            out_print(
+                f"  Match at {reg['timestamp']}: Reg ${reg['cost']:.4f} vs Exp ${exp['cost']:.4f} (Diff: ${diff:.4f})"
+            )
 
         # Calculate average multiplier
-        multipliers = [exp["cost"] / reg["cost"] for reg, exp in matches if reg["cost"] > 0]
+        multipliers = [
+            exp["cost"] / reg["cost"] for reg, exp in matches if reg["cost"] > 0
+        ]
         if multipliers:
             avg_mult = sum(multipliers) / len(multipliers)
-            out_print(f"\nAverage Cost Multiplier (Exported / Registered): {avg_mult:.2f}x")
+            out_print(
+                f"\nAverage Cost Multiplier (Exported / Registered): {avg_mult:.2f}x"
+            )
     else:
         out_print("  No major discrepancies found in matched events.")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -166,4 +189,3 @@ if __name__ == "__main__":
             out_print("Usage: python reconcile.py <registered_csv> <exported_csv>")
     else:
         reconcile(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]))
-
