@@ -19,6 +19,27 @@ class OutputMessage:
     data: Optional[Any] = None
 
 
+class JSONStream:
+    def __init__(self, manager):
+        self.manager = manager
+        self.buffer = ""
+
+    def write(self, data):
+        if not data:
+            return
+        # sys.stderr.write(f"DEBUG JSONStream write: {repr(data)}\n")
+        self.buffer += data
+        while "\n" in self.buffer:
+            line, self.buffer = self.buffer.split("\n", 1)
+            if line.strip():
+                self.manager.log(line, level="info", source="stdout")
+
+    def flush(self):
+        if self.buffer.strip():
+            self.manager.log(self.buffer, level="info", source="stdout")
+            self.buffer = ""
+
+
 class OutputManager:
     def __init__(self):
         self._history: List[OutputMessage] = []
@@ -28,6 +49,84 @@ class OutputManager:
         self._log_file: Optional[pathlib.Path] = None
         self._md_log_file: Optional[pathlib.Path] = None
         self._config: Dict[str, Any] = {}
+        self._server_mode: bool = False
+        self._input_queue = []
+        self._input_event = threading.Event()
+        self._stop_listener = threading.Event()
+        self._listener_thread: Optional[threading.Thread] = None
+        self._real_stdout = sys.stdout
+
+    def set_server_mode(self, enabled: bool):
+        self._server_mode = enabled
+        if enabled:
+            self._print_to_stdout = False
+            self._real_stdout = sys.stdout
+            # Use stderr for actual stdout prints, but keep our JSON on the real stdout
+            sys.stdout = sys.stderr
+            self.start_stdin_listener()
+
+    def start_stdin_listener(self):
+        if self._listener_thread and self._listener_thread.is_alive():
+            return
+        
+        self._stop_listener.clear()
+        self._listener_thread = threading.Thread(target=self._stdin_listener_loop, daemon=True)
+        self._listener_thread.start()
+
+    def _stdin_listener_loop(self):
+        while not self._stop_listener.is_set():
+            line = sys.stdin.readline()
+            if not line:
+                break
+            
+            try:
+                data = json.loads(line)
+                msg_type = data.get("type")
+                
+                if msg_type == "cancel":
+                    # Handle cancellation
+                    from vibe_tools.agent import agent_manager
+                    agent_manager.cleanup_session()
+                    # We might also want to exit the whole process
+                    sys.exit(0)
+                elif msg_type == "input":
+                    value = data.get("value")
+                    with self._lock:
+                        self._input_queue.append(value)
+                        self._input_event.set()
+                elif msg_type == "prompt_response":
+                    value = data.get("value")
+                    with self._lock:
+                        self._input_queue.append(value)
+                        self._input_event.set()
+            except Exception as e:
+                # In server mode, we should probably log this as an error object
+                if not self._server_mode:
+                    print(f"Error parsing STDIN JSON: {e}", file=sys.stderr)
+
+    def get_input(self, prompt_message: str = None) -> str:
+        if self._server_mode:
+            if prompt_message:
+                self.emit_server_message("prompt", {"message": prompt_message})
+            
+            self._input_event.wait()
+            with self._lock:
+                if self._input_queue:
+                    val = self._input_queue.pop(0)
+                    if not self._input_queue:
+                        self._input_event.clear()
+                    return val
+            return ""
+        else:
+            import click
+            return click.prompt(prompt_message) if prompt_message else input()
+
+    def emit_server_message(self, msg_type: str, data: Dict[str, Any]):
+        if self._server_mode:
+            payload = {"type": msg_type}
+            payload.update(data)
+            self._real_stdout.write(json.dumps(payload) + "\n")
+            self._real_stdout.flush()
 
     def set_config(self, config: Dict[str, Any]):
         """Sets the configuration for the output manager."""
@@ -71,6 +170,15 @@ class OutputManager:
 
         with self._lock:
             self._history.append(out_msg)
+
+        if self._server_mode:
+            self.emit_server_message("log", {
+                "level": level,
+                "source": source,
+                "message": str(message),
+                "timestamp": out_msg.timestamp.isoformat(),
+                "data": data
+            })
 
         if self._print_to_stdout:
             if flush:
@@ -153,15 +261,15 @@ class OutputManager:
         if out_msg.data:
             try:
                 data_str = json.dumps(out_msg.data, indent=2)
-                md_entry += f">\n> ```json\n"
+                md_entry += ">\n> ```json\n"
                 for line in data_str.splitlines():
                     md_entry += f"> {line}\n"
-                md_entry += f"> ```\n"
+                md_entry += "> ```\n"
             except (TypeError, ValueError):
-                md_entry += f">\n> ```\n"
+                md_entry += ">\n> ```\n"
                 for line in str(out_msg.data).splitlines():
                     md_entry += f"> {line}\n"
-                md_entry += f"> ```\n"
+                md_entry += "> ```\n"
 
         md_entry += "\n---\n"
 
@@ -219,3 +327,18 @@ def out_success(message: str, source: str = "vibe", **kwargs):
 
 def out_debug(message: str, source: str = "vibe", **kwargs):
     output_manager.log(message, level="debug", source=source, **kwargs)
+
+
+def out_status(phase: str, status: str, progress: int = 0, **kwargs):
+    """Emits a status update message (primarily for server mode)."""
+    output_manager.emit_server_message("status", {
+        "phase": phase,
+        "status": status,
+        "progress": progress,
+        **kwargs
+    })
+
+
+def vibe_prompt(message: str, **kwargs) -> str:
+    """A wrapper around click.prompt that supports server mode."""
+    return output_manager.get_input(message)

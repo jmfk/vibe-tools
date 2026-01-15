@@ -20,7 +20,6 @@ def register_all_commands(cli):
         kill,
         memory,
         migrate,
-        monitor,
         normalize,
         prd,
         project,

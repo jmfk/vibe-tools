@@ -1,22 +1,16 @@
 import pathlib
 import shutil
-import json
 import re
 import click
-from typing import Dict, List, Set
+from typing import List
 
 from vibe_tools.utils import (
     PRODUCT_DIR,
     PRODUCT_BACKLOG_DIR,
-    PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
-    VIBE_PROJECT_DIR,
-    PROJECT_STATE_FILE,
     ensure_project_structure,
     load_project_state,
     save_project_state,
-    safe_yaml_load,
-    collect_all_prd_info,
 )
 from vibe_tools.prds import PRD, load_prd
 

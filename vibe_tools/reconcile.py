@@ -2,9 +2,9 @@ import csv
 import datetime
 import pathlib
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
-from vibe_tools.command_output import out_info, out_print
+from vibe_tools.command_output import out_print
 
 
 def parse_iso_timestamp(ts: str) -> Optional[datetime.datetime]:
@@ -38,7 +38,7 @@ def normalize_model(model: str) -> str:
     return model
 
 def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
-    registered_events = []
+    registered_events: List[Dict[str, Any]] = []
     if registered_path.exists():
         with open(registered_path, newline="") as f:
             reader = csv.DictReader(f)
@@ -55,7 +55,7 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
                         "matched": False
                     })
 
-    exported_events = []
+    exported_events: List[Dict[str, Any]] = []
     if exported_path.exists():
         with open(exported_path, newline="") as f:
             reader = csv.DictReader(f)

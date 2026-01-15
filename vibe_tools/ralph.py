@@ -3,33 +3,23 @@ Core engine for the modular project lifecycle.
 Includes the Planner Agent, Reconciliation Loops, and Implementation Loop.
 """
 
-import datetime
 import pathlib
-import sys
 import re
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
-import yaml
 import click
 
-from vibe_tools import utils
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.prds import PRD, load_prd, generate_prd_id
 from vibe_tools.normalize import normalize_to_data
 from vibe_tools.branches import _switch_to_branch
 from vibe_tools.utils import (
-    ARCHITECTURE_SPEC,
-    DEV_ENV_CURRENT,
-    CICD_SPEC,
-    INFRA_SPEC,
-    TESTING_SPEC,
     PRODUCT_BACKLOG_DIR,
     PRODUCT_NEXT_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
     get_agent_command,
     get_automerge_branch,
-    get_changed_files,
     get_file_hash,
     get_main_branch,
     get_prompt,
@@ -44,8 +34,6 @@ from vibe_tools.utils import (
     run_command,
     save_project_state,
     switch_to_main,
-    safe_yaml_load,
-    safe_yaml_dump,
     is_branch_switching_enabled,
 )
 

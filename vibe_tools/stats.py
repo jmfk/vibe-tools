@@ -59,7 +59,7 @@ def detect_csv_format(file_path: pathlib.Path) -> str:
 
 def parse_usage_csv(file_path: pathlib.Path) -> Dict[str, Any]:
     """Parse usage.csv format."""
-    data = {
+    data: Dict[str, Any] = {
         "rows": [],
         "total_cost": 0.0,
         "total_input_tokens": 0,
@@ -114,7 +114,7 @@ def parse_usage_csv(file_path: pathlib.Path) -> Dict[str, Any]:
 
 def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
     """Parse usage-events CSV format."""
-    data = {
+    data: Dict[str, Any] = {
         "rows": [],
         "total_cost": 0.0,
         "total_input_tokens": 0,
@@ -206,7 +206,7 @@ def fetch_daily_usage_data(api_key: str, start_date: datetime.datetime, end_date
 
 def fetch_spending_data(api_key: str, search_term: Optional[str] = None, page: int = 1, page_size: int = 100) -> Dict[str, Any]:
     """Fetch spending data from Cursor API."""
-    data = {"page": page, "pageSize": page_size}
+    data: Dict[str, Any] = {"page": page, "pageSize": page_size}
     if search_term:
         data["searchTerm"] = search_term
     return cursor_api_request("POST", "/teams/spend", api_key, data)
@@ -217,7 +217,7 @@ def fetch_usage_events(api_key: str, start_date: datetime.datetime, end_date: da
     """Fetch usage events from Cursor API."""
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
-    data = {
+    data: Dict[str, Any] = {
         "startDate": start_ms,
         "endDate": end_ms,
         "page": page,
@@ -277,7 +277,7 @@ def remove_members_from_group(api_key: str, group_id: str, user_ids: List[str]) 
 
 def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
     """Parse usage events from API response."""
-    data = {
+    data: Dict[str, Any] = {
         "rows": [],
         "total_cost": 0.0,
         "total_input_tokens": 0,
@@ -331,7 +331,7 @@ def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def parse_api_daily_usage(api_data: Dict[str, Any]) -> Dict[str, Any]:
     """Parse daily usage data from API response."""
-    data = {
+    data: Dict[str, Any] = {
         "rows": [],
         "total_cost": 0.0,
         "by_user": defaultdict(lambda: {"count": 0, "cost": 0.0, "total_lines_added": 0, "total_lines_deleted": 0}),

@@ -2,7 +2,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 use notify::{Watcher, RecursiveMode, Config};
 use tauri::{Manager, Window, State};
@@ -54,6 +54,7 @@ impl LogBuffer {
 struct AppState {
     workspace_root: PathBuf,
     terminal_buffers: Mutex<HashMap<String, LogBuffer>>,
+    active_process_stdin: Mutex<Option<tokio::process::ChildStdin>>,
 }
 
 #[tauri::command]
@@ -104,10 +105,29 @@ fn get_workspace_root() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn run_vibe_command(window: Window, _state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
+async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<(), String> {
+    let mut stdin_lock = state.active_process_stdin.lock().unwrap();
+    if let Some(stdin) = stdin_lock.as_mut() {
+        use tokio::io::AsyncWriteExt;
+        stdin.write_all(input.as_bytes()).await.map_err(|e| e.to_string())?;
+        stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
+        stdin.flush().await.map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("No active process".to_string())
+    }
+}
+
+#[tauri::command]
+async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, mut args: Vec<String>) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+
+    // Always add --server for GUI interaction
+    if !args.contains(&"--server".to_string()) {
+        args.push("--server".to_string());
+    }
 
     let mut cmd = Command::new("vibe");
     
@@ -121,17 +141,29 @@ async fn run_vibe_command(window: Window, _state: State<'_, AppState>, command: 
     let mut child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .stdin(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
+    let stdin = child.stdin.take().unwrap();
+
+    {
+        let mut stdin_lock = state.active_process_stdin.lock().unwrap();
+        *stdin_lock = Some(stdin);
+    }
 
     let window_stdout = window.clone();
     let handle_stdout = window.app_handle();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = reader.next_line().await {
+            // Try to parse as JSON for server mode events
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                window_stdout.emit("vibe-server-event", json).unwrap();
+            }
+
             {
                 let state = handle_stdout.state::<AppState>();
                 let mut buffers = state.terminal_buffers.lock().unwrap();
@@ -158,8 +190,13 @@ async fn run_vibe_command(window: Window, _state: State<'_, AppState>, command: 
         }
     });
 
+    let state_finished = state.inner().clone();
     tokio::spawn(async move {
         let status = child.wait().await;
+        {
+            let mut stdin_lock = state_finished.active_process_stdin.lock().unwrap();
+            *stdin_lock = None;
+        }
         window.emit("command-finished", status.map(|s| s.to_string()).ok()).unwrap();
     });
 
@@ -343,14 +380,14 @@ fn get_projects() -> Result<serde_json::Value, String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
     let path = Path::new(&home).join(".vibe-tools").join("projects.json");
     if !path.exists() {
-        return Ok(serde_json::into_value(serde_json::json!({"projects": [], "last_active_project_id": null})).unwrap());
+        return Ok(serde_json::to_value(serde_json::json!({"projects": [], "last_active_project_id": null})).unwrap());
     }
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
     serde_json::from_str(&content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn set_workspace_root(state: State<'_, AppState>, path: String) -> Result<(), String> {
+fn set_workspace_root(_state: State<'_, AppState>, path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("Path does not exist".to_string());
@@ -405,6 +442,7 @@ fn main() {
         .manage(AppState {
             workspace_root: workspace_root_path.clone(),
             terminal_buffers: Mutex::new(HashMap::new()),
+            active_process_stdin: Mutex::new(None),
         })
         .setup(move |app| {
             let handle = app.handle();
@@ -451,6 +489,7 @@ fn main() {
             read_file_content,
             get_workspace_root,
             run_vibe_command,
+            send_vibe_input,
             get_active_agents,
             get_total_cost,
             open_in_cursor,

@@ -2,7 +2,6 @@
 import pathlib
 from typing import Any, Dict, List, Optional
 
-import yaml
 
 from vibe_tools.utils import INFRA_SPEC, INFRA_CURRENT, logger, safe_yaml_load
 from vibe_tools.normalize import normalize_to_data

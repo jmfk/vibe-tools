@@ -103,7 +103,8 @@ class PMCompleter:
         }
 
     def complete(self, text, state):
-        if not readline: return None
+        if not readline:
+            return None
         buffer = readline.get_line_buffer()
 
         if " " not in buffer:
@@ -113,7 +114,8 @@ class PMCompleter:
             return None
 
         parts = buffer.split()
-        if not parts: return None
+        if not parts:
+            return None
 
         cmd = parts[0].lower()
         if buffer.count(" ") == 1 or (buffer.count(" ") > 1 and not text):
@@ -181,8 +183,10 @@ class InteractivePM:
 
             history_file = VIBE_PROJECT_DIR / ".pm_history"
             if history_file.exists():
-                try: readline.read_history_file(str(history_file))
-                except Exception: pass
+                try:
+                    readline.read_history_file(str(history_file))
+                except Exception:
+                    pass
             import atexit
             atexit.register(self._save_readline_history, history_file)
 
@@ -191,14 +195,16 @@ class InteractivePM:
             try:
                 readline.set_history_length(1000)
                 readline.write_history_file(str(history_file))
-            except Exception: pass
+            except Exception:
+                pass
 
     def _load_config(self) -> Dict[str, Any]:
         if PM_CONFIG_FILE.exists():
             try:
                 import json
                 return json.loads(PM_CONFIG_FILE.read_text())
-            except Exception: pass
+            except Exception:
+                pass
         return {"md_editor": None, "code_editor": None}
 
     def _save_config(self):
@@ -262,7 +268,8 @@ class InteractivePM:
 
             try:
                 user_input = await loop.run_in_executor(None, lambda: input(prompt_symbol).strip())
-            except EOFError: break
+            except EOFError:
+                break
             except KeyboardInterrupt:
                 if self.mq.status == "BUSY":
                     click.echo("\n🛑 Interrupting stream...")
@@ -271,22 +278,27 @@ class InteractivePM:
                     click.echo("\n🛑 Use /exit to quit.")
                 continue
 
-            if not user_input: continue
+            if not user_input:
+                continue
 
             if user_input.startswith("/"):
                 if await self._handle_slash_command(user_input):
                     break
                 continue
 
-            if self.pending_prompt: self.pending_prompt += f"\n{user_input}"
-            else: self.pending_prompt = user_input
+            if self.pending_prompt:
+                self.pending_prompt += f"\n{user_input}"
+            else:
+                self.pending_prompt = user_input
 
             self._save_session()
             self._show_prompt_summary()
 
         processor_task.cancel()
-        try: await processor_task
-        except asyncio.CancelledError: pass
+        try:
+            await processor_task
+        except asyncio.CancelledError:
+            pass
 
     async def _process_queue(self):
         while True:
@@ -345,13 +357,16 @@ class InteractivePM:
         self._save_session()
 
     def _handle_file_updates(self, output: str):
-        if "FILE_UPDATE:" not in output: return
+        if "FILE_UPDATE:" not in output:
+            return
         parts = output.split("FILE_UPDATE:")
         for part in parts[1:]:
             lines = part.strip().splitlines()
-            if not lines: continue
+            if not lines:
+                continue
             filename = lines[0].strip()
-            if filename.startswith("product/"): filename = filename[6:]
+            if filename.startswith("product/"):
+                filename = filename[6:]
             content = "\n".join(lines[1:]).strip()
 
             state = load_project_state()
@@ -365,12 +380,15 @@ class InteractivePM:
                 click.echo(click.style(f"✅ Updated {target_path}", fg="green"))
 
     def _show_prompt_summary(self):
-        if not self.pending_prompt: return
+        if not self.pending_prompt:
+            return
         lines = self.pending_prompt.splitlines()
         count = len(lines)
         click.echo(click.style(f"\n📝 Pending Prompt ({count} lines):", fg="yellow", bold=True))
-        for line in lines[:5]: click.echo(f"  {line}")
-        if count > 5: click.echo(f"  ... (+{count-5} more lines)")
+        for line in lines[:5]:
+            click.echo(f"  {line}")
+        if count > 5:
+            click.echo(f"  ... (+{count-5} more lines)")
         click.echo(click.style("Type /s to send, /push to prioritize, or keep typing.\n", dim=True))
 
     async def _handle_slash_command(self, command_str: str) -> bool:
@@ -412,11 +430,15 @@ class InteractivePM:
             self._handle_focus_command(args)
         elif cmd in ["/m", "/mode"]:
             self._handle_mode_command(args)
-        elif cmd == "/ask": self._handle_mode_command("ask")
-        elif cmd == "/agent": self._handle_mode_command("agent")
+        elif cmd == "/ask":
+            self._handle_mode_command("ask")
+        elif cmd == "/agent":
+            self._handle_mode_command("agent")
         elif cmd == "/ls" or cmd == "/list":
-            if args == "memory": self._list_memory()
-            else: self._list_specs()
+            if args == "memory":
+                self._list_memory()
+            else:
+                self._list_specs()
         elif cmd == "/show":
             self._handle_show_command(args)
         elif cmd == "/create":
@@ -448,7 +470,8 @@ class InteractivePM:
         parts = args.split()
         sub = parts[0] if parts else "list"
         if sub == "list":
-            if not self.mq.items: click.echo("Queue is empty.")
+            if not self.mq.items:
+                click.echo("Queue is empty.")
             for i, item in enumerate(self.mq.items):
                 click.echo(f"[{i}] {item[:50]}...")
         elif sub == "clear":
@@ -457,7 +480,8 @@ class InteractivePM:
         elif sub == "remove":
             if len(parts) > 1 and self.mq.remove(int(parts[1])):
                 click.echo(f"Removed item {parts[1]}")
-            else: click.echo("Invalid index.")
+            else:
+                click.echo("Invalid index.")
 
     def _show_help(self):
         click.echo("\nAvailable commands:")
@@ -489,68 +513,88 @@ class InteractivePM:
         if target:
             self.focused_prd = target.name
             click.echo(f"✅ Focused on: {click.style(target.name, fg='cyan', bold=True)}")
-        else: click.echo(f"❌ Not found: {args}")
+        else:
+            click.echo(f"❌ Not found: {args}")
 
     def _handle_mode_command(self, new_mode):
-        if not new_mode: self.mode = "AGENT" if self.mode == "ASK" else "ASK"
-        elif new_mode.upper() in ["ASK", "AGENT"]: self.mode = new_mode.upper()
-        else: click.echo("❌ Usage: /mode [ASK|AGENT]")
+        if not new_mode:
+            self.mode = "AGENT" if self.mode == "ASK" else "ASK"
+        elif new_mode.upper() in ["ASK", "AGENT"]:
+            self.mode = new_mode.upper()
+        else:
+            click.echo("❌ Usage: /mode [ASK|AGENT]")
         color = "green" if self.mode == "ASK" else "red"
         click.echo(f"✅ Mode: {click.style(self.mode, fg=color)}")
 
     def _handle_show_command(self, args):
-        if not args or args.lower() == "product": self._list_specs()
+        if not args or args.lower() == "product":
+            self._list_specs()
         else:
             p = SPECS_DIR / args
-            if not p.suffix: p = p.with_suffix(".md")
+            if not p.suffix:
+                p = p.with_suffix(".md")
             if p.exists():
                 click.echo(f"\n--- {p.name} ---\n{p.read_text()}\n--- END ---")
-            else: click.echo(f"❌ Not found: {args}")
+            else:
+                click.echo(f"❌ Not found: {args}")
 
     def _handle_create_command(self, args):
-        if not args: return click.echo("❌ Usage: /create <name>")
+        if not args:
+            return click.echo("❌ Usage: /create <name>")
         name = args if args.endswith(".md") else args + ".md"
         path = SPECS_DIR / name
-        if path.exists(): return click.echo("❌ Exists.")
+        if path.exists():
+            return click.echo("❌ Exists.")
         ensure_dir(SPECS_DIR)
         path.write_text(f"# {args.title()}\n\n## Summary\n")
         self.focused_prd = name
         click.echo(f"✅ Created: {name}")
 
     def _handle_delete_command(self, args):
-        if not args: return click.echo("❌ Usage: /delete <idx|name>")
+        if not args:
+            return click.echo("❌ Usage: /delete <idx|name>")
         files = sorted(SPECS_DIR.glob("*.md"))
         target = None
         try:
             idx = int(args)
-            if 0 <= idx < len(files): target = files[idx]
+            if 0 <= idx < len(files):
+                target = files[idx]
         except ValueError:
             p = SPECS_DIR / args
-            if not p.suffix: p = p.with_suffix(".md")
-            if p.exists(): target = p
+            if not p.suffix:
+                p = p.with_suffix(".md")
+            if p.exists():
+                target = p
         if target and click.confirm(f"Delete {target.name}?"):
             target.unlink()
-            if self.focused_prd == target.name: self.focused_prd = None
+            if self.focused_prd == target.name:
+                self.focused_prd = None
             click.echo("✅ Deleted.")
 
     def _handle_edit_command(self, path_str):
-        if not path_str: return click.echo("❌ Usage: /edit <path>")
+        if not path_str:
+            return click.echo("❌ Usage: /edit <path>")
         p = pathlib.Path(path_str)
         editor = self.config.get("code_editor") or self.config.get("md_editor")
-        if not editor: return click.echo("❌ No editor configured.")
+        if not editor:
+            return click.echo("❌ No editor configured.")
         subprocess.Popen([editor, str(p)])
 
     def _handle_implemented_command(self):
         state = load_project_state()
         completed = state.get("completed_prds", [])
-        if not completed: return click.echo("None.")
-        for i, p in enumerate(reversed(completed)): click.echo(f"{i+1}. {p}")
+        if not completed:
+            return click.echo("None.")
+        for i, p in enumerate(reversed(completed)):
+            click.echo(f"{i+1}. {p}")
 
     def _handle_ps_command(self):
         procs = get_agent_processes()
-        if not procs: click.echo("None.")
+        if not procs:
+            click.echo("None.")
         else:
-            for p in procs: click.echo(f"{p['pid']} {p['target']} {p['command']}")
+            for p in procs:
+                click.echo(f"{p['pid']} {p['target']} {p['command']}")
 
     def _handle_kill_command(self, args):
         if not args or "all" in args:
@@ -582,8 +626,10 @@ class InteractivePM:
         click.echo(f"Files: {[str(f) for f in self.additional_files]}")
 
     def _build_prompt_with_query(self, query: str) -> str:
-        try: template = get_prompt(self.PROMPT_FILENAME)
-        except: return query
+        try:
+            template = get_prompt(self.PROMPT_FILENAME)
+        except Exception:
+            return query
 
         specs_context = ""
         primary_focus = ""
@@ -591,7 +637,8 @@ class InteractivePM:
             for f in sorted(SPECS_DIR.glob("*.md")):
                 if self.focused_prd == f.name:
                     primary_focus = f"PRIMARY FOCUS: {f.name}\n\n{f.read_text()}"
-                else: specs_context += f"- {f.name}\n"
+                else:
+                    specs_context += f"- {f.name}\n"
 
         state = load_project_state()
         impl = ", ".join(state.get("completed_prds", []))

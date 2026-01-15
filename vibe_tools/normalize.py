@@ -1,41 +1,19 @@
-import datetime
 import pathlib
 import re
-import sys
 from typing import Optional
 
-import click
 import yaml
 
 from vibe_tools.cost import CostLogger
-from vibe_tools.branches import _switch_to_branch
 from vibe_tools.utils import (
-    PLANNING_BACKLOG_DIR,
-    PLANNING_HISTORY_DIR,
-    PLANNING_INBOX_DIR,
-    PLANNING_REJECTED_DIR,
-    VIBE_PROJECT_DIR,
-    check_dependencies,
-    enable_console_debug,
-    ensure_dir,
-    get_file_hash,
-    get_main_branch,
     get_prompt,
-    is_dirty,
-    load_project_state,
     logger,
-    run_command,
-    save_project_state,
-    switch_to_main,
     safe_yaml_load,
     safe_yaml_dump,
-    parse_prd_filename,
     out_debug,
     out_error,
     out_info,
-    out_print,
     out_success,
-    out_warn,
 )
 
 DEFAULT_SPECS_DIR = pathlib.Path("product")
@@ -102,7 +80,7 @@ def _run_normalization_llm(
             raise yaml.YAMLError("Output is not a valid YAML dictionary")
     except (yaml.YAMLError, Exception) as e:
         logger.warning(f"⚠️ Invalid YAML generated: {e}")
-        out_info(f"🔄 Attempting to fix YAML using Gemini...")
+        out_info("🔄 Attempting to fix YAML using Gemini...")
 
         fix_prompt = f"""The following content was intended to be a YAML dictionary but is invalid or not a dictionary:
 ---
@@ -138,10 +116,10 @@ CRITICAL REQUIREMENTS:
 
             data = safe_yaml_load(fixed_output)
             if data is None or not isinstance(data, dict):
-                logger.error(f"❌ Fixed YAML is still not a valid dictionary.")
+                logger.error("❌ Fixed YAML is still not a valid dictionary.")
                 data = {}
             else:
-                out_success(f"✅ Successfully fixed YAML")
+                out_success("✅ Successfully fixed YAML")
         except Exception as fix_err:
             logger.error(f"❌ Failed to fix YAML: {fix_err}")
             # If we still can't get a dict, return empty dict or try to recover what we can
@@ -181,9 +159,6 @@ def normalize_prd(
     debug: bool = False,
 ):
     """Validate PRD normalization from product/ without writing to disk."""
-    from vibe_tools.cli import load_config
-    config = load_config()
-    cost_logger = CostLogger(config)
 
     # 1. Collect PRDs to normalize
     if input_file:

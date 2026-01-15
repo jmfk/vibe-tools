@@ -75,11 +75,14 @@ Similar to IDE project managers (VS Code, Cursor), but tailored for the vibe-too
 id: PRD-041
 title: Global Project Management
 type: FEATURE
-status: in_progress
+status: done
 group: core
 depends_on: []
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T10:41:35.776356'
+updated_at: '2026-01-15T10:55:33.932328'
+impl_code_ready: true
+impl_tests_passed: true
+impl_review_passed: true
 ```
 </details>
 

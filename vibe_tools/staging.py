@@ -5,7 +5,6 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import click
-import yaml
 
 from vibe_tools.servers import get_container_status, get_server_configs
 from vibe_tools.utils import (

@@ -1,7 +1,7 @@
+import atexit
 import json
 import logging
 import os
-import pathlib
 import signal
 import subprocess
 import sys
@@ -9,20 +9,13 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from .utils import (
-    CONFIG_FILE,
-    LOGS_DIR,
     VIBE_PROJECT_DIR,
     ensure_dir,
     is_test_mode,
     load_config,
     log_large_output,
     run_command,
-    out_debug,
-    out_error,
-    out_info,
     out_print,
-    out_success,
-    out_warn,
 )
 
 logger = logging.getLogger("vibe_tools")
@@ -132,7 +125,7 @@ class AgentManager:
 
 
 agent_manager = AgentManager()
-import atexit
+
 
 atexit.register(agent_manager.cleanup_session)
 
@@ -237,21 +230,21 @@ def run_agent(
                         if event_type == "system":
                             model = data.get("model", "unknown")
                             out_print(f"🤖 System: {model}", flush=True, source="agent")
-                            log_large_output(f"system", json.dumps(data, indent=2))
+                            log_large_output("system", json.dumps(data, indent=2))
 
                         elif event_type == "user":
-                            out_print(f"👤 User!", flush=True, source="agent")
+                            out_print("👤 User!", flush=True, source="agent")
                             message = data.get("message", {})
                             content_list = message.get("content", [])
                             for content in content_list:
                                 if content.get("type") == "text":
                                     text = content.get("text", "")
                             log_large_output(
-                                f"user", json.dumps(content_list, indent=2)
+                                "user", json.dumps(content_list, indent=2)
                             )
 
                         elif event_type == "assistant":
-                            out_print(f"🤖 Assistant!", flush=True, source="agent")
+                            out_print("🤖 Assistant!", flush=True, source="agent")
                             message = data.get("message", {})
                             content_list = message.get("content", [])
                             for content in content_list:
@@ -260,7 +253,7 @@ def run_agent(
                                     if text:
                                         accumulated_assistant_text.append(text)
                             log_large_output(
-                                f"assistant", json.dumps(content_list, indent=2)
+                                "assistant", json.dumps(content_list, indent=2)
                             )
 
                         elif event_type == "tool_call":
@@ -379,7 +372,7 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
             total_lines = success.get("totalLines", 0)
             out_print(f"✅ Read {total_lines} lines.", flush=True, source="agent")
         else:
-            out_print(f"🚫 Read failed.", flush=True, source="agent")
+            out_print("🚫 Read failed.", flush=True, source="agent")
     elif "writeToolCall" in tool_call:
         result = tool_call.get("writeToolCall", {}).get("result", {})
         success = result.get("success")
@@ -387,14 +380,14 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
             lines = success.get("linesCreated", 0)
             out_print(f"✅ Wrote {lines} lines.", flush=True, source="agent")
         else:
-            out_print(f"🚫 Write failed.", flush=True, source="agent")
+            out_print("🚫 Write failed.", flush=True, source="agent")
     elif "editToolCall" in tool_call:
         result = tool_call.get("editToolCall", {}).get("result", {})
         success = result.get("success")
         if success:
-            out_print(f"✅ Edit complete.", flush=True, source="agent")
+            out_print("✅ Edit complete.", flush=True, source="agent")
         else:
-            out_print(f"🚫 Edit failed.", flush=True, source="agent")
+            out_print("🚫 Edit failed.", flush=True, source="agent")
     elif "lsToolCall" in tool_call:
         result = tool_call.get("lsToolCall", {}).get("result", {})
         success = result.get("success")
@@ -402,7 +395,7 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
             num_files = success.get("directoryTreeRoot", {}).get("numFiles", 0)
             out_print(f"✅ Found {num_files} files.", flush=True, source="agent")
         else:
-            out_print(f"🚫 List failed.", flush=True, source="agent")
+            out_print("🚫 List failed.", flush=True, source="agent")
     elif "shellToolCall" in tool_call:
         result = tool_call.get("shellToolCall", {}).get("result", {})
         success = result.get("success")
@@ -420,7 +413,7 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
             total = success.get("totalFiles", 0)
             out_print(f"✅ Found {total} matches.", flush=True, source="agent")
         else:
-            out_print(f"🚫 Search failed.", flush=True, source="agent")
+            out_print("🚫 Search failed.", flush=True, source="agent")
     elif "function" in tool_call:
         result = tool_call.get("function", {}).get("result", {})
         out_print(f"🛠️ Done: {result}", flush=True, source="agent")

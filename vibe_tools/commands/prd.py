@@ -1,13 +1,8 @@
 import click
 import pathlib
-import shutil
-import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from vibe_tools.utils import (
-    collect_all_prd_info,
-    load_project_state,
-    reset_prd_state,
     PRODUCT_BACKLOG_DIR,
     PRODUCT_IN_PROGRESS_DIR,
     PRODUCT_HISTORY_DIR,
@@ -15,9 +10,7 @@ from vibe_tools.utils import (
     PLANNING_INBOX_DIR,
     PRODUCT_NEXT_DIR,
     PLANNING_REJECTED_DIR,
-    ensure_dir,
-    logger,
-    save_project_state
+    ensure_dir
 )
 from vibe_tools.pm import InteractivePM
 from vibe_tools.prds import load_prd, PRD
@@ -115,17 +108,26 @@ def _display_prd_list(files: List[pathlib.Path], title: Optional[str] = None):
         try:
             p = load_prd(f)
             display_status = p.status
-            if PLANNING_INBOX_DIR.resolve() == f.parent.resolve(): display_status = "inbox"
-            elif PRODUCT_NEXT_DIR.resolve() == f.parent.resolve(): display_status = "planned"
-            elif PRODUCT_BACKLOG_DIR.resolve() == f.parent.resolve(): display_status = "backlog"
-            elif PRODUCT_IN_PROGRESS_DIR.resolve() == f.parent.resolve(): display_status = "in_progress"
-            elif PRODUCT_HISTORY_DIR.resolve() == f.parent.resolve(): display_status = "done"
+            if PLANNING_INBOX_DIR.resolve() == f.parent.resolve():
+                display_status = "inbox"
+            elif PRODUCT_NEXT_DIR.resolve() == f.parent.resolve():
+                display_status = "planned"
+            elif PRODUCT_BACKLOG_DIR.resolve() == f.parent.resolve():
+                display_status = "backlog"
+            elif PRODUCT_IN_PROGRESS_DIR.resolve() == f.parent.resolve():
+                display_status = "in_progress"
+            elif PRODUCT_HISTORY_DIR.resolve() == f.parent.resolve():
+                display_status = "done"
 
             status_color = "white"
-            if display_status == "done": status_color = "green"
-            elif display_status == "in_progress": status_color = "blue"
-            elif display_status == "planned": status_color = "magenta"
-            elif display_status == "inbox": status_color = "cyan"
+            if display_status == "done":
+                status_color = "green"
+            elif display_status == "in_progress":
+                status_color = "blue"
+            elif display_status == "planned":
+                status_color = "magenta"
+            elif display_status == "inbox":
+                status_color = "cyan"
 
             status_text = Text(display_status.upper(), style=status_color)
             type_text = Text(p.type, style="cyan" if p.type == "FEATURE" else "yellow")
@@ -155,10 +157,14 @@ def register_prd(cli):
         in_progress = list(PRODUCT_IN_PROGRESS_DIR.glob("*.md"))
         history = sorted(list(PRODUCT_HISTORY_DIR.glob("*.md")), reverse=True)
 
-        if in_progress: _display_prd_list(in_progress, "In Progress")
-        if next_items: _display_prd_list(next_items, "Next for Implementation")
-        if backlog: _display_prd_list(backlog, "Backlog")
-        if inbox: _display_prd_list(inbox, "Inbox")
+        if in_progress:
+            _display_prd_list(in_progress, "In Progress")
+        if next_items:
+            _display_prd_list(next_items, "Next for Implementation")
+        if backlog:
+            _display_prd_list(backlog, "Backlog")
+        if inbox:
+            _display_prd_list(inbox, "Inbox")
 
         if all:
             if history: _display_prd_list(history, "History")
