@@ -121,7 +121,7 @@ async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<()
 }
 
 #[tauri::command]
-async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, mut args: Vec<String>) -> Result<(), String> {
+async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
