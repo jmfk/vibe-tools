@@ -35,11 +35,16 @@ import {
   Check,
   Pencil,
   Save,
-  ArrowLeft
+  ArrowLeft,
+  Split,
+  Copy
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import yaml from 'js-yaml';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -228,7 +233,8 @@ const PRDEditor = ({
   onContentChange, 
   onSave, 
   onCancel, 
-  accentColor 
+  accentColor,
+  isDark
 }: { 
   prd: PRD; 
   content: string; 
@@ -236,7 +242,17 @@ const PRDEditor = ({
   onSave: () => void;
   onCancel: () => void;
   accentColor?: string;
+  isDark?: boolean;
 }) => {
+  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split');
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
       <div className="flex items-center justify-between">
@@ -255,25 +271,94 @@ const PRDEditor = ({
             <h3 className="text-sm font-bold text-foreground">{prd.title}</h3>
           </div>
         </div>
-        
-        <button 
-          onClick={onSave}
-          className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-accent/10 hover:brightness-110"
-          style={{ backgroundColor: accentColor }}
-        >
-          <Save size={14} />
-          Save PRD
-        </button>
+
+        <div className="flex items-center gap-2">
+          <div className="flex bg-panel border border-border rounded-lg p-1 mr-4">
+            <button 
+              onClick={() => setViewMode('edit')}
+              className={cn(
+                "p-1.5 rounded transition-all",
+                viewMode === 'edit' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+              )}
+              title="Edit Mode"
+              style={viewMode === 'edit' ? { color: accentColor } : {}}
+            >
+              <Pencil size={14} />
+            </button>
+            <button 
+              onClick={() => setViewMode('split')}
+              className={cn(
+                "p-1.5 rounded transition-all",
+                viewMode === 'split' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+              )}
+              title="Split Mode"
+              style={viewMode === 'split' ? { color: accentColor } : {}}
+            >
+              <Split size={14} />
+            </button>
+            <button 
+              onClick={() => setViewMode('preview')}
+              className={cn(
+                "p-1.5 rounded transition-all",
+                viewMode === 'preview' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+              )}
+              title="Preview Mode"
+              style={viewMode === 'preview' ? { color: accentColor } : {}}
+            >
+              <Eye size={14} />
+            </button>
+          </div>
+
+          <button 
+            onClick={handleCopy}
+            className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors mr-2"
+            title="Copy to Clipboard"
+          >
+            {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
+          </button>
+          
+          <button 
+            onClick={onSave}
+            className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-accent/10 hover:brightness-110"
+            style={{ backgroundColor: accentColor }}
+          >
+            <Save size={14} />
+            Save PRD
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 bg-panel border border-border rounded-xl overflow-hidden flex flex-col">
-        <textarea
-          autoFocus
-          value={content}
-          onChange={(e) => onContentChange(e.target.value)}
-          className="flex-1 w-full bg-transparent p-6 text-sm font-mono leading-relaxed focus:outline-none resize-none scrollbar-thin"
-          placeholder="Write your PRD here..."
-        />
+      <div className="flex-1 bg-panel border border-border rounded-xl overflow-hidden flex min-h-0">
+        {(viewMode === 'edit' || viewMode === 'split') && (
+          <textarea
+            autoFocus
+            value={content}
+            onChange={(e) => onContentChange(e.target.value)}
+            className={cn(
+              "flex-1 w-full bg-transparent p-6 text-sm font-mono leading-relaxed focus:outline-none resize-none scrollbar-thin",
+              viewMode === 'split' && "border-r border-border"
+            )}
+            placeholder="Write your PRD here..."
+          />
+        )}
+        {(viewMode === 'preview' || viewMode === 'split') && (
+          <div className={cn(
+            "flex-1 overflow-y-auto p-6 scrollbar-thin",
+            viewMode === 'split' ? "bg-zinc-900/10" : "bg-transparent"
+          )}>
+            <div className={cn(
+              "prose prose-sm max-w-none transition-colors duration-300",
+              isDark ? "prose-invert" : "prose-zinc"
+            )}>
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]} 
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -283,12 +368,14 @@ export const PlannerBoard = ({
   workspaceRoot, 
   onSelectPRD,
   onRefresh,
-  accentColor
+  accentColor,
+  isDark
 }: { 
   workspaceRoot: string; 
   onSelectPRD: (prd: PRD) => void;
   onRefresh?: () => void;
   accentColor?: string;
+  isDark?: boolean;
 }) => {
   const [prds, setPrds] = useState<PRD[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -596,6 +683,7 @@ updated_at: '${new Date().toISOString()}'
         onSave={handleSavePRD} 
         onCancel={() => setEditingPRD(null)} 
         accentColor={accentColor}
+        isDark={isDark}
       />
     );
   }
@@ -691,9 +779,9 @@ updated_at: '${new Date().toISOString()}'
             </DroppableColumn>
           </div>
 
-          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
+          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4">
             {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
-              <div key={column.id} className="flex flex-col gap-3 min-w-[250px] max-w-[350px]">
+              <div key={column.id} className="flex flex-col gap-3 min-w-[200px] max-w-[350px] shrink-0">
                 <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-80">{column.title}</span>

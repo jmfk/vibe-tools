@@ -1481,6 +1481,7 @@ const App: React.FC = () => {
                       }}
                       onRefresh={loadRegistry}
                       accentColor={accentColor}
+                      isDark={themeColors.isDark}
                     />
                   ) : (
                     <PlannerGraph 
