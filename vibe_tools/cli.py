@@ -54,6 +54,7 @@ if "--server" in sys.argv:
                 payload = json.loads(line)
                 command = payload.get("command")
                 args = payload.get("args", [])
+                settings = payload.get("settings", {})
 
                 # Reconstruct sys.argv for click
                 # Put --server first so it's recognized as a global option
@@ -64,6 +65,18 @@ if "--server" in sys.argv:
                     if arg.startswith("-") and arg != "--server":
                         new_argv.append(arg)
                 
+                # Apply settings from payload as flags
+                if settings.get("debug") or payload.get("debug"):
+                    new_argv.append("--debug")
+                if settings.get("verbose") or payload.get("verbose"):
+                    new_argv.append("--verbose")
+                if settings.get("stream") is not None:
+                    new_argv.append("--stream" if settings.get("stream") else "--no-stream")
+                if settings.get("agent"):
+                    new_argv.extend(["--agent", settings.get("agent")])
+                if settings.get("no_branch_switch"):
+                    new_argv.append("--no-branch-switch")
+
                 if command and command != "vibe":
                     new_argv.append(command)
                 new_argv.extend(args)

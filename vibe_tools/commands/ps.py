@@ -9,10 +9,16 @@ def register_ps(cli):
     def ps(json_format):
         """List active agent processes."""
         processes = get_agent_processes()
-        if json_format:
-            import json
-
-            click.echo(json.dumps(processes))
+        
+        import sys
+        if json_format or "--server" in sys.argv:
+            if "--server" in sys.argv:
+                from vibe_tools.command_output import output_manager
+                output_manager.emit_server_message("ps_result", {"processes": processes})
+            
+            if json_format:
+                import json
+                click.echo(json.dumps(processes))
             return
 
         if not processes:
