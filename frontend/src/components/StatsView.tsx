@@ -36,12 +36,16 @@ interface StatsData {
 
 interface StatsViewProps {
   accentColor: string;
+  isDark: boolean;
 }
 
-const StatCard = ({ title, value, subValue, icon: Icon, accentColor }: { title: string, value: string, subValue?: string, icon: any, accentColor: string }) => (
+const StatCard = ({ title, value, subValue, icon: Icon, accentColor, isDark }: { title: string, value: string, subValue?: string, icon: any, accentColor: string, isDark: boolean }) => (
   <div className="bg-panel border border-border rounded-xl p-5 flex flex-col gap-3 group hover:border-accent/30 transition-all">
     <div className="flex items-center justify-between">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-900 border border-zinc-800 group-hover:border-accent/20 transition-colors">
+      <div className={cn(
+        "w-8 h-8 rounded-lg flex items-center justify-center border group-hover:border-accent/20 transition-colors",
+        isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-100 border-zinc-200"
+      )}>
         <Icon size={16} style={{ color: accentColor }} />
       </div>
       <span className="text-[10px] font-bold text-muted uppercase tracking-widest">{title}</span>
@@ -53,15 +57,18 @@ const StatCard = ({ title, value, subValue, icon: Icon, accentColor }: { title: 
   </div>
 );
 
-const ProgressBar = ({ label, value, max, color, subLabel }: { label: string, value: number, max: number, color: string, subLabel?: string }) => {
+const ProgressBar = ({ label, value, max, color, subLabel, isDark }: { label: string, value: number, max: number, color: string, subLabel?: string, isDark: boolean }) => {
   const percentage = max > 0 ? (value / max) * 100 : 0;
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
-        <span className="text-zinc-300 truncate max-w-[150px]">{label}</span>
+        <span className={cn("truncate max-w-[150px]", isDark ? "text-zinc-300" : "text-zinc-700")}>{label}</span>
         <span className="text-muted">{subLabel || value.toLocaleString()}</span>
       </div>
-      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/50">
+      <div className={cn(
+        "h-1.5 w-full rounded-full overflow-hidden border",
+        isDark ? "bg-zinc-900 border-zinc-800/50" : "bg-zinc-200 border-zinc-300/50"
+      )}>
         <div
           className="h-full transition-all duration-1000 ease-out"
           style={{ width: `${percentage}%`, backgroundColor: color }}
@@ -71,7 +78,7 @@ const ProgressBar = ({ label, value, max, color, subLabel }: { label: string, va
   );
 };
 
-export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<StatsData | null>(null);
   const [period, setPeriod] = useState<string>(() => {
@@ -86,10 +93,14 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
     setLoading(true);
     setPeriod(p);
     try {
-      const flag = p === 'month' ? '--month' :
-        p === 'prev-month' ? '--prev-month' :
-          p === '3-months' ? '--last-3-months' :
-            p === '6-months' ? '--last-6-months' : '--year';
+      const flag = p === 'today' ? '--today' :
+        p === 'yesterday' ? '--yesterday' :
+          p === 'week' ? '--week' :
+            p === 'prev-week' ? '--prev-week' :
+              p === 'month' ? '--month' :
+                p === 'prev-month' ? '--prev-month' :
+                  p === '3-months' ? '--last-3-months' :
+                    p === '6-months' ? '--last-6-months' : '--year';
 
       await invoke('run_vibe_command', {
         command: 'usage',
@@ -162,24 +173,28 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
 
         <div className="flex items-center gap-2 bg-panel border border-border p-1 rounded-xl">
           {[
+            { id: 'today', label: 'Today' },
+            { id: 'yesterday', label: 'Yday' },
+            { id: 'week', label: 'Week' },
+            { id: 'prev-week', label: 'L.Week' },
             { id: 'month', label: 'Month' },
-            { id: 'prev-month', label: 'Previous' },
-            { id: '3-months', label: '3 Months' },
-            { id: '6-months', label: '6 Months' },
+            { id: 'prev-month', label: 'L.Month' },
+            { id: '3-months', label: '3M' },
+            { id: '6-months', label: '6M' },
             { id: 'year', label: 'Year' },
           ].map(p => (
-            <button
-              key={p.id}
-              onClick={() => fetchStats(p.id)}
-              disabled={loading}
-              className={cn(
-                "px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
-                period === p.id
-                  ? "bg-zinc-800 text-white shadow-sm"
-                  : "text-muted hover:text-foreground hover:bg-zinc-800/50"
-              )}
-              style={period === p.id ? { color: accentColor } : {}}
-            >
+                <button
+                  key={p.id}
+                  onClick={() => fetchStats(p.id)}
+                  disabled={loading}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                    period === p.id
+                      ? (isDark ? "bg-zinc-800 text-white shadow-sm" : "bg-zinc-200 text-zinc-900 shadow-sm")
+                      : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/50" : "text-muted hover:text-foreground hover:bg-zinc-200/50")
+                  )}
+                  style={period === p.id ? { color: accentColor } : {}}
+                >
               {p.label}
             </button>
           ))}
@@ -220,6 +235,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
               subValue="USD"
               icon={Coins}
               accentColor="#f59e0b"
+              isDark={isDark}
             />
             <StatCard
               title="Requests"
@@ -227,6 +243,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
               subValue="Total Calls"
               icon={Activity}
               accentColor="#3b82f6"
+              isDark={isDark}
             />
             <StatCard
               title="Input Tokens"
@@ -234,6 +251,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
               subValue="Total Input"
               icon={Cpu}
               accentColor="#8b5cf6"
+              isDark={isDark}
             />
             <StatCard
               title="Output Tokens"
@@ -241,6 +259,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
               subValue="Total Output"
               icon={Zap}
               accentColor="#ec4899"
+              isDark={isDark}
             />
           </div>
 
@@ -262,6 +281,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
                     max={maxModelCost}
                     color={accentColor}
                     subLabel={`$${m.cost.toFixed(3)}`}
+                    isDark={isDark}
                   />
                 ))}
               </div>
@@ -284,6 +304,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
                     max={maxPrdCost}
                     color="#a855f7"
                     subLabel={`$${p.cost.toFixed(3)}`}
+                    isDark={isDark}
                   />
                 )) : (
                   <div className="h-full flex items-center justify-center text-muted italic text-xs py-12">
