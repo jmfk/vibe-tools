@@ -732,13 +732,102 @@ def cleanup_stale_processes() -> List[str]:
 
 
 def get_google_api_key() -> Optional[str]:
-    """Retrieves the Google API key from environment variables."""
-    return os.environ.get("GOOGLE_API_KEY")
+    """Retrieves the Google API key from environment variables or config.json."""
+    # 1. Check environment variables (for backward compatibility and overrides)
+    if os.environ.get("GOOGLE_API_KEY"):
+        return os.environ.get("GOOGLE_API_KEY")
+    
+    # 2. Check config.json
+    config = load_config()
+    current_env = config.get("current_env", "local")
+    envs = config.get("envs", {})
+    env_config = envs.get(current_env, {})
+    return env_config.get("vars", {}).get("GOOGLE_API_KEY")
 
 
 def get_cursor_api_key() -> Optional[str]:
-    """Retrieves the Cursor API key from environment variables."""
-    return os.environ.get("CURSOR_API_KEY")
+    """Retrieves the Cursor API key from environment variables or config.json."""
+    # 1. Check environment variables
+    if os.environ.get("CURSOR_API_KEY"):
+        return os.environ.get("CURSOR_API_KEY")
+    
+    # 2. Check config.json
+    config = load_config()
+    current_env = config.get("current_env", "local")
+    envs = config.get("envs", {})
+    env_config = envs.get(current_env, {})
+    return env_config.get("vars", {}).get("CURSOR_API_KEY")
+
+
+def save_google_api_key(api_key: str):
+    """Saves the Google API key to the config.json current environment."""
+    config = load_config()
+    current_env = config.get("current_env", "local")
+    if "envs" not in config:
+        config["envs"] = {}
+    if current_env not in config["envs"]:
+        # Migrate old 'env' if it exists
+        if "env" in config:
+            config["envs"][current_env] = config["env"]
+            del config["env"]
+        else:
+            config["envs"][current_env] = {}
+    
+    if "vars" not in config["envs"][current_env]:
+        config["envs"][current_env]["vars"] = {}
+    
+    config["envs"][current_env]["vars"]["GOOGLE_API_KEY"] = api_key
+    save_config(config)
+    
+    # Also update current session's environment
+    os.environ["GOOGLE_API_KEY"] = api_key
+
+
+def migrate_env_to_config():
+    """Migrates old 'env' key and .env file content to the new 'envs' structure in config.json."""
+    config = load_config()
+    changed = False
+
+    # 1. Migrate old 'env' key to 'envs.local'
+    if "env" in config and "envs" not in config:
+        config["current_env"] = "local"
+        config["envs"] = {"local": config["env"]}
+        del config["env"]
+        changed = True
+    elif "envs" not in config:
+        config["current_env"] = "local"
+        config["envs"] = {"local": {}}
+        changed = True
+
+    # 2. Migrate .env file content
+    env_file = find_dotenv() or ".env"
+    if os.path.exists(env_file):
+        try:
+            content = pathlib.Path(env_file).read_text()
+            current_env = config.get("current_env", "local")
+            if "vars" not in config["envs"][current_env]:
+                config["envs"][current_env]["vars"] = {}
+            
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip().strip("'").strip('"')
+                    if key and key not in config["envs"][current_env]["vars"]:
+                        config["envs"][current_env]["vars"][key] = value
+                        changed = True
+            
+            # After successful migration, we could rename/delete .env, 
+            # but let's keep it for now and just prioritize config.json
+        except Exception as e:
+            logger.error(f"Error migrating .env to config.json: {e}")
+
+    if changed:
+        save_config(config)
+        logger.info("Successfully migrated environment configuration to config.json")
 
 
 def get_vibe_status_report() -> str:
@@ -973,7 +1062,9 @@ def get_vibe_status_report() -> str:
 def check_env_health() -> bool:
     """Checks if the current environment is healthy and correctly configured."""
     config = load_config()
-    env_config = config.get("env")
+    current_env = config.get("current_env", "local")
+    envs = config.get("envs", {})
+    env_config = envs.get(current_env)
 
     # 1. Check if project package is importable
     project_name = get_project_name()
@@ -1058,7 +1149,7 @@ def setup_project_gitignore():
         ".vibe_config.json",
         "implementation/run-pids.json",
         "implementation/logs/",
-        "implementation/costs/usage.csv",
+        "implementation/costs/",
         "node_modules/",
         "dist/",
         "build/",
@@ -1087,6 +1178,9 @@ def perform_basic_init():
     # First, migrate any existing files from root to implementation/
     migrate_to_project_dir()
 
+    # Migrate environment configuration to config.json
+    migrate_env_to_config()
+
     # Ensure structure exists
     ensure_project_structure()
     ensure_dir(VIBE_PROJECT_DIR)
@@ -1103,6 +1197,9 @@ def perform_basic_init():
                 "tauri": 85,
                 "infra": 85,
             },
+            "setup": {
+                "standalone": True
+            }
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
         out_success(f"✅ Created default configuration: {CONFIG_FILE}")
@@ -1188,24 +1285,41 @@ def get_services():
     return []
 
 
-def test_build_services(debug=False):
-    """Test that services defined in build config can actually start and respond."""
+def test_build_services(debug=False, return_report=False):
+    """Test that services defined in build config can actually start and respond.
+    
+    Returns:
+        If return_report is False: bool (success)
+        If return_report is True: (bool, str) (success, detailed_report)
+    """
+
+    report = []
+    def log_report(msg, level="info"):
+        report.append(msg)
+        if level == "info":
+            logger.info(msg)
+        elif level == "debug":
+            logger.debug(msg)
+        elif level == "warning":
+            logger.warning(msg)
+        elif level == "error":
+            logger.error(msg)
 
     services = get_services()
     if not services:
         logger.debug("No services found to test")
-        logger.info("  ⚠️  No services configured to test")
-        return False
+        log_report("  ⚠️  No services configured to test", "info")
+        return (False, "\n".join(report)) if return_report else False
 
     # Check and fix kubeconfig if skaffold is being used
     if uses_skaffold(services):
-        logger.info("  🔍 Detected skaffold usage, checking kubeconfig...")
+        log_report("  🔍 Detected skaffold usage, checking kubeconfig...", "info")
         if fix_kubeconfig_api_version():
-            logger.info("  ✅ Updated kubeconfig to use v1beta1 API version")
+            log_report("  ✅ Updated kubeconfig to use v1beta1 API version", "info")
         else:
             logger.debug("Kubeconfig API version check completed (no changes needed)")
 
-    logger.info(f"  📋 Found {len(services)} service(s) to test")
+    log_report(f"  📋 Found {len(services)} service(s) to test", "info")
     for service in services:
         service_name = service.get("name", "unknown")
         start_cmd = service.get("start_command", "N/A")
@@ -1303,13 +1417,13 @@ def test_build_services(debug=False):
                         cwd=service.get("working_directory", "."),
                     )
                     started_processes.append((service_name, process))
-                    logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                    log_report(f"  ✓ Started {service_name} (PID: {process.pid})", "info")
                     logger.debug(
                         f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
                     )
                     time.sleep(0.5)  # Give it a moment
                 except Exception as e:
-                    logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                    log_report(f"  ✗ Failed to start {service_name}: {e}", "warning")
                     logger.debug(
                         f"Service {service_name} startup error: {e}", exc_info=True
                     )
@@ -1324,19 +1438,19 @@ def test_build_services(debug=False):
                             cwd=service.get("working_directory", "."),
                         )
                         started_processes.append((service_name, process))
-                        logger.info(f"  ✓ Started {service_name} (PID: {process.pid})")
+                        log_report(f"  ✓ Started {service_name} (PID: {process.pid})", "info")
                         logger.debug(
                             f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
                         )
                         time.sleep(0.5)
                     except Exception as e:
-                        logger.warning(f"  ✗ Failed to start {service_name}: {e}")
+                        log_report(f"  ✗ Failed to start {service_name}: {e}", "warning")
                         logger.debug(
                             f"Service {service_name} startup error: {e}", exc_info=True
                         )
                 else:
-                    logger.warning(
-                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}"
+                    log_report(
+                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}", "warning"
                     )
                     logger.debug(
                         f"Service {service_name}: Command '{cmd_parts[0]}' does not exist in PATH"
@@ -1364,12 +1478,12 @@ def test_build_services(debug=False):
             if process.poll() is not None:
                 # Process has already terminated - skip communicate() to avoid blocking
                 exit_code = process.returncode
-                logger.warning(
-                    f"  ✗ Service {service_name} exited immediately with code {exit_code}"
+                log_report(
+                    f"  ✗ Service {service_name} exited immediately with code {exit_code}", "warning"
                 )
 
         # Check if services are actually running
-        logger.info("  🔍 Checking service status...")
+        log_report("  🔍 Checking service status...", "info")
         tracked_pids = load_pids()
         running_count = 0
         failed_services = []
@@ -1379,8 +1493,8 @@ def test_build_services(debug=False):
             if process.poll() is None:  # Still running
                 is_running = True
                 running_count += 1
-                logger.info(
-                    f"  ✓ {service_name} is running - started process (PID: {process.pid})"
+                log_report(
+                    f"  ✓ {service_name} is running - started process (PID: {process.pid})", "info"
                 )
                 logger.debug(
                     f"Service {service_name} verified running via started process PID {process.pid}"
@@ -1413,7 +1527,7 @@ def test_build_services(debug=False):
                         running_reason = (
                             f"background service ({service_type}, PID: {bg_pid})"
                         )
-                        logger.info(f"  ✓ {service_name} is running - {running_reason}")
+                        log_report(f"  ✓ {service_name} is running - {running_reason}", "info")
                         logger.debug(
                             f"Service {service_name} verified running via background service {service_type} (PID: {bg_pid})"
                         )
@@ -1439,8 +1553,8 @@ def test_build_services(debug=False):
                             is_running = True
                             running_count += 1
                             running_reason = f"main process (PID: {main_pid})"
-                            logger.info(
-                                f"  ✓ {service_name} is running - {running_reason}"
+                            log_report(
+                                f"  ✓ {service_name} is running - {running_reason}", "info"
                             )
                             logger.debug(
                                 f"Service {service_name} verified running via main PID {main_pid}"
@@ -1468,8 +1582,8 @@ def test_build_services(debug=False):
                             is_running = True
                             running_count += 1
                             running_reason = f"process name match: {process_name}"
-                            logger.info(
-                                f"  ✓ {service_name} is running - {running_reason}"
+                            log_report(
+                                f"  ✓ {service_name} is running - {running_reason}", "info"
                             )
                             logger.debug(
                                 f"Service {service_name} found running by process name: {process_name}"
@@ -1488,20 +1602,20 @@ def test_build_services(debug=False):
             if not is_running:
                 failed_services.append(service_name)
                 if not pid_info:
-                    logger.warning(
-                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)"
+                    log_report(
+                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)", "warning"
                     )
                 elif not background_services and not main_pid and not process_name:
-                    logger.warning(
-                        f"  ✗ {service_name} is not running - No PID tracking data available"
+                    log_report(
+                        f"  ✗ {service_name} is not running - No PID tracking data available", "warning"
                     )
                 else:
-                    logger.warning(
-                        f"  ✗ {service_name} is not running - Process not found"
+                    log_report(
+                        f"  ✗ {service_name} is not running - Process not found", "warning"
                     )
 
         # Check if URLs are responding
-        logger.info("  🌐 Checking URL endpoints...")
+        log_report("  🌐 Checking URL endpoints...", "info")
         urls = extract_urls_from_dev_env()
         if not urls:
             logger.debug("No URLs found in build configuration to check")
@@ -1515,35 +1629,35 @@ def test_build_services(debug=False):
             try:
                 if check_url_responds(url):
                     responding_urls += 1
-                    logger.info(f"  ✓ {url_key} ({url}) is responding")
+                    log_report(f"  ✓ {url_key} ({url}) is responding", "info")
                     logger.debug(f"URL {url_key} ({url}) responded successfully")
                 else:
                     failed_urls.append((url_key, url))
-                    logger.warning(f"  ✗ {url_key} ({url}) is not responding")
+                    log_report(f"  ✗ {url_key} ({url}) is not responding", "warning")
                     logger.debug(
                         f"URL {url_key} ({url}) failed to respond (connection timeout or refused)"
                     )
             except Exception as e:
                 failed_urls.append((url_key, url))
-                logger.warning(f"  ✗ {url_key} ({url}) check failed: {e}")
+                log_report(f"  ✗ {url_key} ({url}) check failed: {e}", "warning")
                 logger.debug(f"URL {url_key} ({url}) check error: {e}", exc_info=True)
 
         # Consider success if at least one service is running or one URL is responding
         success = running_count > 0 or responding_urls > 0
 
         # Summary logging - always log
-        logger.info("  📊 Test Summary:")
-        logger.info(f"     Services: {running_count}/{len(services)} running")
+        log_report("  📊 Test Summary:", "info")
+        log_report(f"     Services: {running_count}/{len(services)} running", "info")
         if failed_services:
-            logger.info(f"     Failed services: {', '.join(failed_services)}")
-        logger.info(f"     URLs: {responding_urls}/{len(urls)} responding")
+            log_report(f"     Failed services: {', '.join(failed_services)}", "info")
+        log_report(f"     URLs: {responding_urls}/{len(urls)} responding", "info")
         if failed_urls:
             failed_url_list = [f"{key} ({url})" for key, url in failed_urls]
-            logger.info(f"     Failed URLs: {', '.join(failed_url_list)}")
+            log_report(f"     Failed URLs: {', '.join(failed_url_list)}", "info")
 
         if success:
-            logger.info(
-                "  ✅ Service test PASSED - At least one service or URL is responding"
+            log_report(
+                "  ✅ Service test PASSED - At least one service or URL is responding", "info"
             )
             logger.debug(
                 f"Service test passed: {running_count} service(s) running, {responding_urls} URL(s) responding"
@@ -1557,17 +1671,17 @@ def test_build_services(debug=False):
             elif not urls and running_count == 0:
                 failure_reasons.append("no services running and no URLs configured")
             reason = "; ".join(failure_reasons) if failure_reasons else "unknown"
-            logger.warning(f"  ✗ Service test FAILED - {reason}")
+            log_report(f"  ✗ Service test FAILED - {reason}", "warning")
             logger.debug(
                 f"Service test failed: {running_count} service(s) running, {responding_urls} URL(s) responding"
             )
 
-        return success
+        return (success, "\n".join(report)) if return_report else success
 
     except Exception as e:
-        logger.error(f"  ❌ Error testing services: {e}")
+        log_report(f"  ❌ Error testing services: {e}", "error")
         logger.debug(f"Service test exception: {e}", exc_info=True)
-        return False
+        return (False, "\n".join(report)) if return_report else False
 
 
 def command_exists(cmd):

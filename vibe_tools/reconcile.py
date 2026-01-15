@@ -179,12 +179,14 @@ def reconcile(registered_path: pathlib.Path, exported_path: pathlib.Path):
 
 
 if __name__ == "__main__":
+    from vibe_tools.utils import COSTS_DIR
     if len(sys.argv) < 3:
         # Default to the files mentioned in the prompt if they exist
-        reg = pathlib.Path("stats/usage.csv")
-        exp = pathlib.Path("stats/usage-events-2026-01-06.csv")
-        if reg.exists() and exp.exists():
-            reconcile(reg, exp)
+        reg = COSTS_DIR / "usage.csv"
+        # Find latest usage-events file
+        events_files = sorted(COSTS_DIR.glob("usage-events-*.csv"), reverse=True)
+        if events_files and reg.exists():
+            reconcile(reg, events_files[0])
         else:
             out_print("Usage: python reconcile.py <registered_csv> <exported_csv>")
     else:

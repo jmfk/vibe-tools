@@ -149,6 +149,7 @@ class OrderedGroup(click.Group):
         # Define the desired order of commands based on Phases 0-9
         order = [
             "init",           # Phase 0
+            "start",          # Product Bootstrap
             "setup",          # Phase 1: Reconcile Architecture
             "config",         # Phase 2: Configuration
             "deps",           # Phase 2: Dependencies
@@ -163,17 +164,17 @@ class OrderedGroup(click.Group):
             "status",
             "cost",
             "stats",
+            "usage",
             "docs",
             "memory",
-            "rerun",
             "ps",
             "kill",
             "test-fix",
             "coverage",
+            "billing-groups",
             "demo-data",
             "project",
             "sync",
-            "monitor",
             "history",
         ]
 
@@ -277,6 +278,8 @@ def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
 
     if not is_test_mode():
         migrate_to_project_dir()
+        from vibe_tools.utils import migrate_env_to_config
+        migrate_env_to_config()
 
     config = load_config()
 
@@ -314,6 +317,10 @@ def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
 
     default_budget = config.get("default_budget", 5.0)
     ctx.obj["default_budget"] = default_budget
+
+    if ctx.invoked_subcommand in ["cost", "stats", "usage"]:
+        from vibe_tools.stats import ensure_daily_usage
+        ensure_daily_usage(ctx)
 
     if ctx.invoked_subcommand is None:
         click.echo("vibe-tools configuration:")
