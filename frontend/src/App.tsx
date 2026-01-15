@@ -1325,7 +1325,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {activeTab === 'projects' || (activeTab === 'settings' && !activeProject) ? (
+      <div className="flex-1 flex flex-col min-h-0">
+        {activeTab === 'projects' || (activeTab === 'settings' && !activeProject) ? (
         <div className="flex-1 overflow-y-auto p-8">
           <ProjectManagerView 
             registry={projectRegistry} 
@@ -1503,10 +1504,6 @@ const App: React.FC = () => {
                     />
                   )}
                 </div>
-
-                <div className="shrink-0 -mx-6 -mb-6 mt-4">
-                  <UnifiedLogMonitor accentColor={accentColor} />
-                </div>
               </div>
             )}
             {activeTab === 'issues' && (
@@ -1642,6 +1639,8 @@ const App: React.FC = () => {
         </Panel>
       </PanelGroup>
       )}
+      </div>
+      <UnifiedLogMonitor accentColor={accentColor} />
     </div>
   );
 };
