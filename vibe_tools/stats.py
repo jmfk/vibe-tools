@@ -5,6 +5,7 @@ import io
 import pathlib
 import re
 import time
+import sys
 import webbrowser
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,10 +23,11 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
 
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
-    
+
     from vibe_tools.utils import get_cursor_api_key
+
     api_key = get_cursor_api_key()
-    
+
     if api_key:
         try:
             logger.info(f"📊 Fetching usage events via API...")
@@ -35,9 +37,9 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
         except Exception as e:
             logger.error(f"❌ API download failed: {e}")
             # Fallback to browser method if API fails
-    
+
     url = f"https://cursor.com/api/dashboard/export-usage-events-csv?startDate={start_ms}&endDate={end_ms}&strategy=tokens"
-    
+
     server_mode = "--server" in sys.argv
     if not server_mode:
         click.echo(
@@ -76,11 +78,11 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
 
     if not server_mode:
         click.echo(f"✅ Found downloaded file: {found_file}")
-    
+
     try:
         csv_content = found_file.read_text(encoding="utf-8")
         process_usage_csv(csv_content, agent_name)
-        
+
         # Delete the original downloaded file to keep Downloads clean
         if found_file.exists():
             found_file.unlink()
@@ -140,7 +142,7 @@ def list_usage_files(costs_dir: pathlib.Path) -> List[pathlib.Path]:
     files = []
     for ext in ["*.csv", "*.log"]:
         files.extend(list(costs_dir.glob(ext)))
-    
+
     files.sort(key=lambda p: _extract_date_from_file(p), reverse=True)
     return files
 
@@ -149,7 +151,7 @@ def get_date_range(period: str) -> Tuple[datetime.datetime, datetime.datetime]:
     """Calculate start and end dates for a given period."""
     now = datetime.datetime.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     if period == "month":
         start = today.replace(day=1)
         return start, now
@@ -174,7 +176,11 @@ def get_date_range(period: str) -> Tuple[datetime.datetime, datetime.datetime]:
         return start, now
 
 
-def aggregate_usage_data(files: List[pathlib.Path], start_date: Optional[datetime.datetime] = None, end_date: Optional[datetime.datetime] = None) -> Dict[str, Any]:
+def aggregate_usage_data(
+    files: List[pathlib.Path],
+    start_date: Optional[datetime.datetime] = None,
+    end_date: Optional[datetime.datetime] = None,
+) -> Dict[str, Any]:
     """Parse and merge data from multiple CSV/log files within a date range."""
     aggregated: Dict[str, Any] = {
         "rows": [],
@@ -470,14 +476,14 @@ def fetch_usage_events_csv(
     """Fetch usage events CSV from Cursor."""
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
-    
+
     url = f"https://cursor.com/api/dashboard/export-usage-events-csv?startDate={start_ms}&endDate={end_ms}&strategy=tokens"
-    
+
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
     headers = {
         "Authorization": f"Basic {auth}",
     }
-    
+
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.text
