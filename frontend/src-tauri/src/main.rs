@@ -92,18 +92,21 @@ fn read_file_content(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_workspace_root() -> Result<String, String> {
+async fn get_workspace_root() -> Result<String, String> {
     let mut curr = std::env::current_dir().map_err(|e| e.to_string())?;
-    loop {
+    let mut depth = 0;
+    while depth < 20 {
         if curr.join(".git").exists() || curr.join("pyproject.toml").exists() {
             return Ok(curr.to_string_lossy().into_owned());
         }
         if let Some(parent) = curr.parent() {
             curr = parent.to_path_buf();
+            depth += 1;
         } else {
-            return Ok(std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| ".".into()));
+            break;
         }
     }
+    Ok(std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| ".".into()))
 }
 
 #[tauri::command]
@@ -435,9 +438,8 @@ fn update_project_registry(
     Ok(())
 }
 
-#[tauri::command]
 fn main() {
-    let workspace_root = get_workspace_root().unwrap_or_else(|_| ".".into());
+    let workspace_root = ".".to_string();
     let workspace_root_path = PathBuf::from(&workspace_root);
 
     tauri::Builder::default()
@@ -453,7 +455,13 @@ fn main() {
             let mut watcher = notify::RecommendedWatcher::new(tx, Config::default().with_poll_interval(Duration::from_millis(500)))
                 .expect("Failed to create watcher");
 
-            watcher.watch(&workspace_root_path, RecursiveMode::Recursive).expect("Failed to watch workspace");
+            // Only watch relevant directories to avoid hanging on node_modules
+            for dir in ["product", "implementation", "issues"] {
+                let path = workspace_root_path.join(dir);
+                if path.exists() {
+                    let _ = watcher.watch(&path, RecursiveMode::Recursive);
+                }
+            }
 
             std::thread::spawn(move || {
                 for res in rx {
