@@ -91,6 +91,15 @@ These commands represent the main development lifecycle phases.
 - Display comprehensive system status report
 - Shows: costs, PRDs, servers, logs, configuration
 
+**`vibe usage`**
+- Get Cursor usage and cost statistics
+- Consolidates cost, stats, and download functionality
+- See [Usage Command](13-usage-command.md) for details
+- Options:
+  - `--download`: Download latest usage data from Cursor API
+  - `--report`: Generate a statistics report in `reports/`
+  - `--days`, `--month`, `--prev-month`, etc.: Filter by date range
+
 **`vibe history`**
 - List the status of all PRDs
 - Shows PRD state, branches, and implementation status
@@ -103,18 +112,6 @@ These commands represent the main development lifecycle phases.
 - Kill all active agent processes
 - Options:
   - `--yes, -y`: Automatically confirm kill
-
-#### Cost Management
-
-**`vibe cost`**
-- Display total estimated cost of LLM usage for this project
-- Reads from `implementation/costs/usage.csv`
-- See [Cost Tracking](10-cost-tracking.md) for details
-
-**`vibe stats [--api]`**
-- Display project statistics
-- Options:
-  - `--api`: Fetch data from Cursor API instead of local files
 
 **`vibe billing-groups`**
 - Manage billing groups for cost allocation

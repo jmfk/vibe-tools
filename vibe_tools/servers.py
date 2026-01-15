@@ -100,15 +100,37 @@ def get_server_configs() -> Dict[str, Any]:
     return configs
 
 
+def is_docker_running() -> bool:
+    """Checks if the Docker daemon is running."""
+    import shutil
+    if not shutil.which("docker"):
+        return False
+    # Using a fast check
+    _, code = run_command(["docker", "stats", "--no-stream", "--no-trunc"], check=False)
+    # Actually docker info is better
+    _, code = run_command(["docker", "info"], check=False)
+    return code == 0
+
+
 def get_container_status(container_name: str) -> str:
     """Returns the status of a Docker container."""
     try:
+        # Check if docker is even available first
+        import shutil
+        if not shutil.which("docker"):
+            return "docker_missing"
+
         stdout, code = run_command(
             ["docker", "inspect", "-f", "{{.State.Status}}", container_name],
             check=False,
         )
         if code == 0:
             return stdout.strip()
+        
+        # Check if it failed because daemon is down
+        if "Cannot connect to the Docker daemon" in stdout:
+            return "docker_down"
+            
         return "not_created"
     except Exception:
         return "error"
@@ -120,23 +142,168 @@ def servers_cli():
     pass
 
 
+@servers_cli.command()
+@click.argument("service")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def get_config(service, as_json):
+    """Get the running configuration for a service."""
+    configs = get_server_configs()
+    if service not in configs:
+        if as_json:
+            import json
+            click.echo(json.dumps({"error": f"Unknown service: {service}"}))
+        else:
+            click.echo(f"❌ Unknown service: {service}")
+        return
+
+    config = configs[service]
+    container_name = config["container_name"]
+    
+    import json
+    try:
+        stdout, code = run_command(
+            ["docker", "inspect", container_name],
+            check=False,
+        )
+        if code != 0:
+            if as_json:
+                click.echo(json.dumps({"error": f"Container {container_name} not found"}))
+            else:
+                click.echo(f"❌ Container {container_name} not found")
+            return
+
+        inspect_data = json.loads(stdout)[0]
+        network_settings = inspect_data.get("NetworkSettings", {})
+        ports_data = network_settings.get("Ports", {})
+        
+        # Extract host and port
+        host = "localhost"
+        service_config = {
+            "host": host,
+            "container_name": container_name,
+            "status": inspect_data.get("State", {}).get("Status")
+        }
+
+        # Try to find the primary port
+        default_port = list(config.get("ports", {}).values())[0] if config.get("ports") else None
+        
+        found_ports = {}
+        for container_port_proto, host_bindings in ports_data.items():
+            if host_bindings:
+                host_port = host_bindings[0].get("HostPort")
+                found_ports[container_port_proto] = int(host_port)
+        
+        if found_ports:
+            # If we have multiple ports, try to match the default one
+            if default_port and any(p == default_port for p in found_ports.values()):
+                service_config["port"] = default_port
+            else:
+                # Just take the first one
+                service_config["port"] = list(found_ports.values())[0]
+        
+        # Extract env vars for credentials
+        env_vars = {}
+        for item in inspect_data.get("Config", {}).get("Env", []):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                env_vars[k] = v
+        
+        if "POSTGRES_USER" in env_vars: service_config["user"] = env_vars["POSTGRES_USER"]
+        if "POSTGRES_PASSWORD" in env_vars: service_config["password"] = env_vars["POSTGRES_PASSWORD"]
+        if "MINIO_ROOT_USER" in env_vars: service_config["access_key"] = env_vars["MINIO_ROOT_USER"]
+        if "MINIO_ROOT_PASSWORD" in env_vars: service_config["secret_key"] = env_vars["MINIO_ROOT_PASSWORD"]
+
+        if as_json:
+            click.echo(json.dumps(service_config))
+        else:
+            click.echo(f"Config for {service}:")
+            for k, v in service_config.items():
+                click.echo(f"  {k}: {v}")
+
+    except Exception as e:
+        if as_json:
+            click.echo(json.dumps({"error": str(e)}))
+        else:
+            click.echo(f"❌ Error: {e}")
+
+
+@servers_cli.command()
+@click.argument("service")
+def restart(service):
+    """Restart a development server."""
+    configs = get_server_configs()
+    if service not in configs:
+        click.echo(f"❌ Unknown service: {service}")
+        return
+
+    container_name = configs[service]["container_name"]
+    click.echo(f"Restarting {service}...")
+    stdout, code = run_command(["docker", "restart", container_name], check=False)
+    if code == 0:
+        click.echo(f"✅ {service} restarted.")
+    else:
+        click.echo(f"❌ Failed to restart {service}: {stdout}")
+
+
 @servers_cli.command(name="list")
-def list_servers():
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def list_servers(as_json):
     """List supported servers and their status."""
     configs = get_server_configs()
+    
+    docker_running = is_docker_running()
+    import shutil
+    docker_available = shutil.which("docker") is not None
+
+    if as_json:
+        import json
+        results = []
+        for name, config in configs.items():
+            if not docker_available:
+                status = "docker_missing"
+            elif not docker_running:
+                status = "docker_down"
+            else:
+                status = get_container_status(config["container_name"])
+                
+            results.append({
+                "name": name,
+                "status": status,
+                "container_name": config["container_name"],
+                "description": config["description"],
+                "ports": config.get("ports", {})
+            })
+        click.echo(json.dumps(results))
+        return
+
     click.echo(f"{'Service':<15} {'Status':<15} {'Description'}")
     click.echo("-" * 60)
     for name, config in configs.items():
-        status = get_container_status(config["container_name"])
+        if not docker_available:
+            status = "docker_missing"
+        elif not docker_running:
+            status = "docker_down"
+        else:
+            status = get_container_status(config["container_name"])
+            
         status_display = {
             "running": "✅ Running",
             "exited": "🛑 Stopped",
             "not_created": "⚪ Not Installed",
+            "docker_down": "❌ Docker Down",
+            "docker_missing": "❌ Docker Missing",
         }.get(status, f"❓ {status}")
 
         click.echo(f"{name:<15} {status_display:<15} {config['description']}")
 
-    click.echo("\nRun 'vibe servers install <service>' to set up a new server.")
+    if not docker_running and not as_json:
+        if not docker_available:
+            click.echo("\n❌ Docker is not installed. Please install Docker to use server management features.")
+        else:
+            click.echo("\n❌ Docker daemon is not running. Please start Docker to use server management features.")
+    
+    if not as_json:
+        click.echo("\nRun 'vibe servers install <service>' to set up a new server.")
 
 
 @servers_cli.command()

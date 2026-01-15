@@ -46,7 +46,7 @@ At the end of each command:
 
 View total cost for the project:
 ```bash
-vibe cost
+vibe usage
 ```
 
 Output:
@@ -56,9 +56,9 @@ Total estimated cost: $X.XX USD
 
 ### Detailed Cost Report
 
-View detailed session report in logs:
+Generate a detailed report for the project:
 ```bash
-tail -f implementation/logs/<command>.log
+vibe usage --report
 ```
 
 Report format:
@@ -161,8 +161,8 @@ Budget is checked before automated runs:
 
 **After execution:**
 ```bash
-vibe cost
-vibe stats
+vibe usage
+vibe usage --report
 ```
 
 ## Cost Analysis
@@ -223,7 +223,7 @@ Useful for:
    }
    ```
 
-3. **Review costs regularly**: Check `vibe cost` after major operations
+3. **Review costs regularly**: Check `vibe usage` after major operations
 
 5. **Use fast mode**: `--fast` for test-fix reduces test execution
 

@@ -10,9 +10,24 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Install the package in editable mode
+REM Determine if we should use editable mode (-e)
+set "INSTALL_FLAGS="
+if exist implementation\config.json (
+    for /f "tokens=*" %%a in ('python -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2^>nul') do set "STANDALONE=%%a"
+) else (
+    set "STANDALONE=true"
+)
+
+if "%STANDALONE%"=="false" (
+    set "INSTALL_FLAGS=-e"
+    echo Using editable mode based on config (standalone: false)
+) else (
+    echo Using standalone installation mode (default)
+)
+
+REM Install the package
 echo Installing package...
-pip install -e .
+pip install %INSTALL_FLAGS% .
 
 echo.
 echo --- Installation Complete ---
