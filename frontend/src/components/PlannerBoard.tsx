@@ -10,7 +10,6 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  defaultAnnouncements,
 } from '@dnd-kit/core';
 import { 
   arrayMove, 
@@ -22,16 +21,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { invoke } from '@tauri-apps/api/tauri';
 import { 
-  FileText, 
   MoreVertical, 
   Clock, 
   CheckCircle2, 
   PlayCircle, 
-  Inbox,
-  ArrowRight,
-  Archive,
   User,
-  GripVertical
+  GripVertical,
+  Eye,
+  EyeOff,
+  Plus,
+  X,
+  Check
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -56,22 +56,24 @@ interface Column {
   id: string;
   title: string;
   folder: string;
+  defaultVisible?: boolean;
 }
 
 const COLUMNS: Column[] = [
-  { id: 'inbox', title: 'Inbox', folder: 'product/inbox' },
-  { id: 'backlog', title: 'Backlog', folder: 'product/backlog' },
-  { id: 'next', title: 'Next', folder: 'product/next' },
-  { id: 'in_progress', title: 'In Progress', folder: 'product/in_progress' },
-  { id: 'archive', title: 'Archive', folder: 'product/history' },
+  { id: 'inbox', title: 'Inbox', folder: 'product/inbox', defaultVisible: true },
+  { id: 'backlog', title: 'Backlog', folder: 'product/backlog', defaultVisible: true },
+  { id: 'next', title: 'Next', folder: 'product/next', defaultVisible: true },
+  { id: 'history', title: 'History', folder: 'product/history', defaultVisible: false },
 ];
+
+const IN_PROGRESS_COLUMN: Column = { id: 'in_progress', title: 'In Progress', folder: 'product/in_progress' };
 
 interface SortablePRDCardProps {
   prd: PRD;
   onClick?: (prd: PRD) => void;
 }
 
-const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
+const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & { accentColor?: string }) => {
   const {
     attributes,
     listeners,
@@ -92,7 +94,7 @@ const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "bg-zinc-900 border border-zinc-800 rounded-lg p-3 shadow-sm hover:border-zinc-700 transition-colors cursor-default group relative",
+        "bg-panel border border-border rounded-lg p-3 shadow-sm hover:border-zinc-700 transition-colors cursor-default group relative",
         isDragging && "z-50"
       )}
       onClick={() => onClick?.(prd)}
@@ -100,17 +102,17 @@ const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[10px] font-mono font-bold text-blue-500/80">{prd.id}</span>
+            <span className="text-[10px] font-mono font-bold" style={{ color: accentColor }}>{prd.id}</span>
             {prd.owner && (
-               <div className="flex items-center gap-1 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[8px] text-zinc-400">
+               <div className="flex items-center gap-1 px-1 py-0.5 rounded bg-panel border border-border text-[8px] text-muted">
                 <User size={8} />
                 {prd.owner}
                </div>
             )}
           </div>
-          <h4 className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-snug">{prd.title}</h4>
+          <h4 className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">{prd.title}</h4>
         </div>
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 p-1 -mr-1">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground p-1 -mr-1">
           <GripVertical size={14} />
         </div>
       </div>
@@ -118,17 +120,17 @@ const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {prd.columnId === 'in_progress' ? (
-            <div className="flex items-center gap-1 text-[9px] text-green-400 font-bold uppercase tracking-wider">
-              <div className="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
+            <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: accentColor }}>
+              <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: accentColor }} />
               Implementing
             </div>
-          ) : prd.columnId === 'archive' ? (
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+          ) : prd.columnId === 'history' ? (
+            <div className="flex items-center gap-1 text-[9px] text-muted font-bold uppercase tracking-wider">
               <CheckCircle2 size={10} />
               Done
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-1 text-[9px] text-muted font-bold uppercase tracking-wider">
               <Clock size={10} />
               {prd.columnId}
             </div>
@@ -136,7 +138,7 @@ const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
         </div>
         
         {prd.depends_on && prd.depends_on.length > 0 && (
-          <div className="text-[9px] text-zinc-600 font-medium">
+          <div className="text-[9px] text-muted font-medium opacity-70">
             {prd.depends_on.length} dep{prd.depends_on.length > 1 ? 's' : ''}
           </div>
         )}
@@ -148,14 +150,25 @@ const SortablePRDCard = ({ prd, onClick }: SortablePRDCardProps) => {
 export const PlannerBoard = ({ 
   workspaceRoot, 
   onSelectPRD,
-  onRefresh
+  onRefresh,
+  accentColor
 }: { 
   workspaceRoot: string; 
   onSelectPRD: (prd: PRD) => void;
   onRefresh?: () => void;
+  accentColor?: string;
 }) => {
   const [prds, setPrds] = useState<PRD[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isAddingPRD, setIsAddingPRD] = useState(false);
+  const [newPRDTitle, setNewPRDTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    inbox: true,
+    backlog: true,
+    next: true,
+    history: false
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -172,7 +185,8 @@ export const PlannerBoard = ({
     if (!workspaceRoot) return;
     try {
       const allPRDs: PRD[] = [];
-      for (const col of COLUMNS) {
+      const allCols = [...COLUMNS, IN_PROGRESS_COLUMN];
+      for (const col of allCols) {
         const path = `${workspaceRoot}/${col.folder}`;
         try {
           const entries = await invoke<any[]>('list_directory', { path });
@@ -202,6 +216,14 @@ export const PlannerBoard = ({
         } catch (e) {}
       }
       setPrds(allPRDs);
+      
+      // Auto-show/hide inbox based on content
+      const inboxItems = allPRDs.filter(p => p.columnId === 'inbox');
+      if (inboxItems.length > 0 || isAddingPRD) {
+        setVisibleColumns(prev => ({ ...prev, inbox: true }));
+      } else {
+        setVisibleColumns(prev => ({ ...prev, inbox: false }));
+      }
     } catch (err) {
       console.error('Failed to load PRDs for board:', err);
     }
@@ -210,6 +232,71 @@ export const PlannerBoard = ({
   useEffect(() => {
     loadPRDs();
   }, [workspaceRoot]);
+
+  const handleCreatePRD = async () => {
+    if (!newPRDTitle.trim() || !workspaceRoot || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      // 1. Generate ID
+      let maxId = 0;
+      prds.forEach(p => {
+        const match = p.id.match(/PRD-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxId) maxId = num;
+        }
+      });
+      const newId = `PRD-${(maxId + 1).toString().padStart(3, '0')}`;
+      
+      // 2. Sanitize filename
+      const safeTitle = newPRDTitle.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      const filename = `${newId}-${safeTitle}.md`;
+      const path = `${workspaceRoot}/product/inbox/${filename}`;
+      
+      // 3. Construct content
+      const content = `# ${newPRDTitle}
+
+## Overview
+- **Problem statement**: 
+- **User benefits**: 
+- **Success criteria**: 
+
+---
+<details>
+<summary>Metadata</summary>
+
+\`\`\`yaml
+id: ${newId}
+title: ${newPRDTitle}
+type: FEATURE
+status: inbox
+created_at: '${new Date().toISOString()}'
+updated_at: '${new Date().toISOString()}'
+\`\`\`
+</details>
+
+<!-- vibe-id: ${newId} -->
+`;
+
+      // 4. Write file
+      await invoke('write_file_content', { path, content });
+      
+      // 5. Refresh and cleanup
+      setNewPRDTitle('');
+      setIsAddingPRD(false);
+      setVisibleColumns(prev => ({ ...prev, inbox: true }));
+      await loadPRDs();
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to create PRD:', err);
+      alert('Failed to create PRD. Check console for details.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -225,8 +312,7 @@ export const PlannerBoard = ({
     const activePRD = prds.find(p => p.id === activeId);
     if (!activePRD) return;
 
-    // Find if we are over a column or a card
-    const overColumn = COLUMNS.find(c => c.id === overId);
+    const overColumn = [...COLUMNS, IN_PROGRESS_COLUMN].find(c => c.id === overId);
     const overPRD = prds.find(p => p.id === overId);
 
     const newColumnId = overColumn ? overColumn.id : overPRD?.columnId;
@@ -250,7 +336,7 @@ export const PlannerBoard = ({
     const activePRD = prds.find(p => p.id === activeId);
     if (!activePRD) return;
 
-    const overColumn = COLUMNS.find(c => c.id === overId);
+    const overColumn = [...COLUMNS, IN_PROGRESS_COLUMN].find(c => c.id === overId);
     const overPRD = prds.find(p => p.id === overId);
     const newColumnId = overColumn ? overColumn.id : overPRD?.columnId;
 
@@ -259,13 +345,11 @@ export const PlannerBoard = ({
     const oldColumnId = active.data.current?.columnId;
     
     if (newColumnId !== oldColumnId) {
-      const targetColumn = COLUMNS.find(c => c.id === newColumnId)!;
+      const targetColumn = [...COLUMNS, IN_PROGRESS_COLUMN].find(c => c.id === newColumnId)!;
       const newPath = `${workspaceRoot}/${targetColumn.folder}/${activePRD.filename}`;
       
       try {
-        // Handle logic & constraints
         if (newColumnId === 'in_progress') {
-          // Check if another PRD is already in progress
           const alreadyInProgress = prds.find(p => p.columnId === 'in_progress' && p.id !== activeId);
           if (alreadyInProgress) {
             alert('Only one PRD can be In Progress at a time.');
@@ -275,20 +359,17 @@ export const PlannerBoard = ({
           
           await invoke('move_file', { from: activePRD.path, to: newPath });
           await invoke('update_artifact_meta', { path: newPath, status: 'in_progress' });
-          
-          // Trigger vibe implement
           await invoke('run_vibe_command', { 
             command: 'implement', 
             args: [activePRD.id] 
           });
         } else if (oldColumnId === 'in_progress' && newColumnId === 'next') {
-          // Cancel current implementation
           await invoke('send_vibe_input', { input: JSON.stringify({ type: 'cancel' }) });
           await invoke('move_file', { from: activePRD.path, to: newPath });
           await invoke('update_artifact_meta', { path: newPath, status: 'next' });
         } else {
           await invoke('move_file', { from: activePRD.path, to: newPath });
-          await invoke('update_artifact_meta', { path: newPath, status: newColumnId === 'archive' ? 'completed' : newColumnId });
+          await invoke('update_artifact_meta', { path: newPath, status: newColumnId === 'history' ? 'completed' : newColumnId });
         }
         
         loadPRDs();
@@ -298,24 +379,57 @@ export const PlannerBoard = ({
         loadPRDs();
       }
     } else {
-      // Reorder within column if needed (optional for now, dnd-kit handles local state)
       const oldIndex = prds.findIndex(p => p.id === activeId);
       const newIndex = prds.findIndex(p => p.id === overId);
-      if (oldIndex !== newIndex) {
+      if (oldIndex !== newIndex && newIndex !== -1) {
         setPrds(prev => arrayMove(prev, oldIndex, newIndex));
       }
     }
   };
 
   const activePRD = useMemo(() => prds.find(p => p.id === activeId), [prds, activeId]);
+  const inProgressPRD = useMemo(() => prds.find(p => p.columnId === 'in_progress'), [prds]);
 
   return (
     <div className="h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Project Roadmap</h3>
+        <div className="flex items-center gap-4">
+          <h3 className="text-sm font-bold text-muted uppercase tracking-widest">Project Roadmap</h3>
+          
+          <button 
+            onClick={() => {
+              setIsAddingPRD(true);
+              setVisibleColumns(prev => ({ ...prev, inbox: true }));
+            }}
+            className="px-2 py-1 bg-accent/10 hover:bg-accent/20 text-accent rounded text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-accent/20"
+            style={{ color: accentColor, borderColor: `${accentColor}30` }}
+          >
+            <Plus size={10} />
+            New PRD
+          </button>
+
+          <div className="flex items-center gap-1 bg-panel/50 border border-border rounded-md px-1 py-0.5">
+            {COLUMNS.map(col => (
+              <button
+                key={col.id}
+                onClick={() => setVisibleColumns(prev => ({ ...prev, [col.id]: !prev[col.id] }))}
+                className={cn(
+                  "px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
+                  visibleColumns[col.id] 
+                    ? "bg-zinc-800 text-foreground" 
+                    : "text-muted hover:text-foreground/70"
+                )}
+              >
+                {visibleColumns[col.id] ? <Eye size={10} /> : <EyeOff size={10} />}
+                {col.title}
+              </button>
+            ))}
+          </div>
+        </div>
+        
         <button 
           onClick={loadPRDs}
-          className="p-1.5 hover:bg-zinc-800 rounded text-zinc-500 transition-colors"
+          className="p-1.5 hover:bg-zinc-800 rounded text-muted transition-colors"
         >
           <MoreVertical size={14} />
         </button>
@@ -328,39 +442,114 @@ export const PlannerBoard = ({
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 grid grid-cols-5 gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
-          {COLUMNS.map(column => (
-            <div key={column.id} className="flex flex-col gap-3 min-w-[200px]">
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{column.title}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-500 font-mono">
-                    {prds.filter(p => p.columnId === column.id).length}
-                  </span>
+        <div className="flex-1 flex flex-col gap-6 min-h-0">
+          <div className="shrink-0">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-foreground uppercase tracking-widest">Active Implementation</span>
+            </div>
+            
+            <div 
+              className={cn(
+                "h-24 rounded-xl border border-dashed flex items-center justify-center transition-all",
+                inProgressPRD ? "bg-panel border-border border-solid p-4" : "bg-zinc-900/20 border-border/50"
+              )}
+            >
+              <SortableContext
+                id="in_progress"
+                items={inProgressPRD ? [inProgressPRD.id] : []}
+                strategy={verticalListSortingStrategy}
+              >
+                {inProgressPRD ? (
+                  <div className="w-full max-w-2xl">
+                    <SortablePRDCard prd={inProgressPRD} onClick={onSelectPRD} accentColor={accentColor} />
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted flex items-center gap-2 italic">
+                    <PlayCircle size={14} />
+                    Drag a PRD here to start implementation
+                  </div>
+                )}
+              </SortableContext>
+            </div>
+          </div>
+
+          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
+            {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
+              <div key={column.id} className="flex flex-col gap-3 min-w-[250px] max-w-[350px]">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-80">{column.title}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-panel border border-border text-muted font-mono">
+                      {prds.filter(p => p.columnId === column.id).length}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto no-scrollbar">
+                  <SortableContext
+                    id={column.id}
+                    items={prds.filter(p => p.columnId === column.id).map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2 min-h-[150px]">
+                      {column.id === 'inbox' && isAddingPRD && (
+                        <div className="bg-panel border border-accent/30 rounded-lg p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="PRD Title..."
+                            value={newPRDTitle}
+                            onChange={(e) => setNewPRDTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleCreatePRD();
+                              if (e.key === 'Escape') {
+                                setIsAddingPRD(false);
+                                setNewPRDTitle('');
+                              }
+                            }}
+                            className="w-full bg-transparent text-xs font-semibold text-foreground focus:outline-none mb-3"
+                          />
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setIsAddingPRD(false);
+                                setNewPRDTitle('');
+                              }}
+                              className="p-1 hover:bg-zinc-800 rounded text-muted transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                            <button
+                              onClick={handleCreatePRD}
+                              disabled={!newPRDTitle.trim() || isSubmitting}
+                              className="p-1 bg-accent text-white rounded hover:bg-accent/80 transition-colors disabled:opacity-50"
+                              style={{ backgroundColor: accentColor }}
+                            >
+                              {isSubmitting ? (
+                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <Check size={14} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {prds
+                        .filter(p => p.columnId === column.id)
+                        .map(prd => (
+                          <SortablePRDCard key={prd.id} prd={prd} onClick={onSelectPRD} accentColor={accentColor} />
+                        ))}
+                    </div>
+                  </SortableContext>
                 </div>
               </div>
-              
-              <div className="flex-1 bg-zinc-900/30 rounded-xl border border-zinc-800/50 p-2 overflow-y-auto no-scrollbar">
-                <SortableContext
-                  id={column.id}
-                  items={prds.filter(p => p.columnId === column.id).map(p => p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-2 min-h-[150px]">
-                    {prds
-                      .filter(p => p.columnId === column.id)
-                      .map(prd => (
-                        <SortablePRDCard key={prd.id} prd={prd} onClick={onSelectPRD} />
-                      ))}
-                  </div>
-                </SortableContext>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <DragOverlay>
-          {activePRD ? <SortablePRDCard prd={activePRD} /> : null}
+          {activePRD ? <SortablePRDCard prd={activePRD} accentColor={accentColor} /> : null}
         </DragOverlay>
       </DndContext>
     </div>
