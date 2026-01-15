@@ -105,7 +105,6 @@ def register_issue_add(issue_group):
         prd.save()
 
         # Update the sync call to the unified sync
-        from vibe_tools.commands.sync import sync_unified_prds
         # We need repo info, but sync_unified_prds is usually called from vibe sync.
         # For now, let's just trigger a sync if possible or skip it if it's too complex here.
         # Actually, the old code called sync_issues(quiet=True).

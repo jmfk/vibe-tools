@@ -1,10 +1,9 @@
 import pathlib
 import re
 import datetime
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-import yaml
 
 from vibe_tools.utils import safe_yaml_load, safe_yaml_dump
 

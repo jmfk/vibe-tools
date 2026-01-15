@@ -9,7 +9,6 @@ from vibe_tools.utils import (
     INFRA_SPEC,
     ensure_project_structure,
     get_agent_command,
-    get_file_hash,
     get_prompt,
     load_project_state,
     run_agent,

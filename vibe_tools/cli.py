@@ -1,60 +1,36 @@
 import atexit
-import datetime
-import json
 import logging
 import os
 import pathlib
-import shutil
-import subprocess
-from typing import Any, Dict, List
+from typing import List
 
 import click
-import yaml
 from dotenv import find_dotenv, load_dotenv
 
-from vibe_tools.cost import finalize_cost_report, get_total_cost
-from vibe_tools.setup import SERVICE_DEFINITIONS, install_deps, maybe_init_git
-from vibe_tools.templates import TEMPLATES
+from vibe_tools.version import __version__
+from vibe_tools.commands import register_all_commands
+from vibe_tools.cost import finalize_cost_report
+from vibe_tools.setup import SERVICE_DEFINITIONS
 from vibe_tools.normalize import normalize_to_data
 from vibe_tools.utils import (
-    ARCHITECTURE_CURRENT,
     ARCHITECTURE_SPEC,
     DEV_ENV_CURRENT,
     DEV_SPEC,
-    CICD_SPEC,
-    COSTS_DIR,
-    INFRA_CURRENT,
-    INFRA_SPEC,
     LOGS_DIR,
-    TESTING_CURRENT,
-    TESTING_SPEC,
     VIBE_PROJECT_DIR,
-    check_dependencies,
-    cleanup_stale_processes,
     enable_console_debug,
-    ensure_dir,
-    ensure_gitignore,
-    get_agent_command,
-    get_agent_processes,
-    get_automerge_branch,
     get_file_hash,
     get_google_api_key,
-    get_main_branch,
-    get_prompt,
     is_test_mode,
     load_config,
-    load_project_state,
     logger,
-    reset_prd_state,
-    run_agent,
     run_command,
+    output_manager,
     load_pids,
     save_pids,
     get_services,
     test_build_services,
     check_and_install_build_tools,
-    save_config,
-    save_project_state,
     setup_logging,
     safe_yaml_load,
     safe_yaml_dump,
@@ -65,9 +41,6 @@ load_dotenv(find_dotenv() or ".env")
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 SPECS_DIR = pathlib.Path("product")
-
-
-from vibe_tools.version import __version__
 
 
 class OrderedGroup(click.Group):
@@ -126,6 +99,12 @@ class OrderedGroup(click.Group):
 
 @click.group(invoke_without_command=True, cls=OrderedGroup)
 @click.option(
+    "--server",
+    is_flag=True,
+    default=False,
+    help="Enable server mode (JSON-based protocol).",
+)
+@click.option(
     "--debug",
     is_flag=True,
     default=False,
@@ -155,13 +134,39 @@ class OrderedGroup(click.Group):
 )
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, debug, verbose, stream, agent, no_branch_switch):
+def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
+    if server:
+        output_manager.set_server_mode(True)
+        # Monkeypatch click.prompt
+        import click
+        original_prompt = click.prompt
+        def server_prompt(text, default=None, hide_input=False, confirmation_prompt=False, type=None, value_proc=None, prompt_suffix=': ', show_default=True, err=False, show_choices=True):
+            return output_manager.get_input(text)
+        click.prompt = server_prompt
+        # Also monkeypatch confirm
+        def server_confirm(text, default=False, abort=False, prompt_suffix=': ', show_default=True, err=False):
+            res = output_manager.get_input(f"{text} (y/n)")
+            return res.lower() in ('y', 'yes', 'true', '1')
+        click.confirm = server_confirm
+    
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
     setup_logging(command_name)
 
+    def emit_final_result():
+        # This will be called at exit
+        # Check if there was an exception? 
+        # Click handles most of it.
+        pass
+    
     # Register session cost reporting at exit
     atexit.register(finalize_cost_report)
+
+    if server:
+        def server_exit_handler():
+            # If we're here, the command finished
+            output_manager.emit_server_message("result", {"code": 0, "data": {}})
+        atexit.register(server_exit_handler)
 
     # Ensure files are in the right place
     from vibe_tools.utils import migrate_to_project_dir, get_project_root, GlobalProjectRegistry
@@ -277,7 +282,7 @@ def cli(ctx, debug, verbose, stream, agent, no_branch_switch):
 
 
 # Register all commands from the commands module
-from vibe_tools.commands import register_all_commands
+
 
 register_all_commands(cli)
 
@@ -569,8 +574,7 @@ def build_debug(ctx):
 @click.pass_context
 def stop(ctx):
     """Stop all active services."""
-    from vibe_tools.utils import load_pids, save_pids, get_services, run_command
-    import time
+    from vibe_tools.utils import get_services, run_command
 
     services = get_services()
     if not services:

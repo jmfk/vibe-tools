@@ -1,4 +1,3 @@
-import atexit
 import datetime
 import functools
 import hashlib
@@ -9,7 +8,6 @@ import os
 import pathlib
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -17,15 +15,15 @@ from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
-from dotenv import find_dotenv, load_dotenv, set_key
+from dotenv import find_dotenv, set_key
 
 from vibe_tools.command_output import (
     out_debug,
     out_error,
     out_info,
-    out_print,
     out_success,
     out_warn,
+    out_print as out_print,
     output_manager,
 )
 
@@ -427,10 +425,10 @@ def get_prompt(filename: str) -> str:
 
     # 3. Fallback to package resources (deprecated/legacy check)
     try:
-        import importlib.resources as pkg_resources
-        from . import prompts
-
-        return pkg_resources.read_text(prompts, filename)
+        # We can't import .prompts because it doesn't exist.
+        # This was likely intended for when prompts were package data.
+        # For now, we'll just raise the error if not found in TEMPLATES or filesystem.
+        raise FileNotFoundError
     except (ImportError, FileNotFoundError):
         raise FileNotFoundError(f"Prompt template '{filename}' not found.")
 
@@ -507,7 +505,7 @@ def reset_prd_state(project_name: str) -> List[str]:
         messages.append(f"Removed '{project_name}' from started PRDs.")
 
     # 2. Reset progress flags in the PRD file itself if possible
-    from vibe_tools.prds import load_prd, PRODUCT_DIR
+    from vibe_tools.prds import load_prd
 
     potential_files = list(PRODUCT_DIR.rglob(f"*{project_name}*.md"))
     if not potential_files:
@@ -1078,9 +1076,7 @@ def save_memory(text: str) -> pathlib.Path:
 
 def perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
-    from vibe_tools.setup import maybe_init_git
     from vibe_tools.templates import TEMPLATES
-    import click
 
     maybe_init_git()
 
@@ -1185,7 +1181,6 @@ def get_services():
 
 def test_build_services(debug=False):
     """Test that services defined in build config can actually start and respond."""
-    import time
 
     services = get_services()
     if not services:
@@ -1623,7 +1618,6 @@ def save_google_api_key(api_key: str):
 
 def sync_env_file():
     """Syncs project configuration to the .env file."""
-    config = load_config()
     env_file = find_dotenv() or ".env"
 
     # This is a simplified version for now to satisfy imports
@@ -1854,7 +1848,6 @@ def find_available_port(start_port, max_attempts=10):
 
 def extract_port_from_command(cmd):
     """Extract port number from a command string."""
-    import re
 
     # Look for --port, -p, PORT=, or :port patterns
     patterns = [
@@ -1873,7 +1866,6 @@ def extract_port_from_command(cmd):
 
 def replace_port_in_command(cmd, old_port, new_port):
     """Replace port in a command string."""
-    import re
 
     # Replace various port patterns
     cmd = re.sub(
@@ -1900,7 +1892,6 @@ def extract_services_from_build_config(build_config):
 
 def parse_makefile_target(target_name, makefile_content, visited=None):
     """Parse a Makefile target to extract the commands it runs."""
-    import re
 
     if visited is None:
         visited = set()
@@ -2214,7 +2205,6 @@ def extract_services_from_dev_env_md():
     build_md = DEV_SPEC.read_text()
 
     # Look for startup commands section
-    import re
 
     # Pattern to find commands like "make run", "make dev", "npm run dev", etc.
     startup_patterns = [
@@ -2278,7 +2268,6 @@ def uses_skaffold(services: List[Dict[str, Any]]) -> bool:
 def check_and_install_build_tools():
     """Check for required build tools (skaffold, helm) and install if missing."""
     import platform
-    import click
 
     required_tools = {}
 

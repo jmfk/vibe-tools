@@ -71,10 +71,9 @@ def test_setup_service_commands_save_config(runner, tmp_path, command, service_k
     with patch("vibe_tools.utils.CONFIG_FILE", config_file):
         with patch("vibe_tools.setup.detect_docker_service", return_value=detection):
             with patch("vibe_tools.setup.click.prompt", side_effect=_prompt_return_default):
-                with patch("vibe_tools.setup.ensure_gitignore"):
-                    with patch("vibe_tools.setup.check_connection", return_value=True):
-                        result = runner.invoke(setup_cli, [command])
-                        assert result.exit_code == 0
+                with patch("vibe_tools.setup.check_connection", return_value=True):
+                    result = runner.invoke(setup_cli, [command])
+                    assert result.exit_code == 0
 
     content = json.loads(config_file.read_text())
     service_settings = content["services"][service_key]

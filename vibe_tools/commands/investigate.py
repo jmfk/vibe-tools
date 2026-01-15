@@ -104,12 +104,18 @@ def register_investigate(cli):
         target_path = PLANNING_INBOX_DIR / filename
 
         content = f"# {title}\n\n"
-        if summary: content += f"## Summary\n{summary}\n\n"
-        if reproduction: content += f"## Reproduction Steps\n{reproduction}\n\n"
-        if expected: content += f"## Expected Behavior\n{expected}\n\n"
-        if actual: content += f"## Actual Behavior\n{actual}\n\n"
-        if evidence: content += f"## Evidence\n```\n{evidence}\n```\n\n"
-        if acceptance: content += f"## Acceptance Criteria\n{acceptance}\n\n"
+        if summary:
+            content += f"## Summary\n{summary}\n\n"
+        if reproduction:
+            content += f"## Reproduction Steps\n{reproduction}\n\n"
+        if expected:
+            content += f"## Expected Behavior\n{expected}\n\n"
+        if actual:
+            content += f"## Actual Behavior\n{actual}\n\n"
+        if evidence:
+            content += f"## Evidence\n```\n{evidence}\n```\n\n"
+        if acceptance:
+            content += f"## Acceptance Criteria\n{acceptance}\n\n"
         
         content += f"## Investigation Notes\n- Created via `vibe investigate` on {now}\n"
 
@@ -138,7 +144,6 @@ def register_investigate(cli):
         click.echo(f"Location: {target_path}")
 
         if github or click.confirm("Sync to GitHub now?"):
-            from vibe_tools.commands.sync import register_sync
             # The sync command is a bit different now, it's a CLI command.
             # For now, let's just advise the user to run 'vibe sync'.
             click.echo("Please run 'vibe sync' to synchronize with GitHub.")

@@ -1,6 +1,6 @@
 import click
 import pathlib
-from vibe_tools.utils import GlobalProjectRegistry, out_success, out_info, out_error, get_project_name
+from vibe_tools.utils import GlobalProjectRegistry, out_success, out_info, get_project_name
 
 def register_project(cli):
     @cli.group()

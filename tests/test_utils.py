@@ -2,7 +2,6 @@ import logging
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from vibe_tools import utils
 from vibe_tools.utils import (

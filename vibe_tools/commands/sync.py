@@ -1,8 +1,7 @@
 import datetime
 import json
-import pathlib
 import re
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Dict, Any
 
 import click
 
@@ -10,14 +9,8 @@ from vibe_tools.prds import PRD, load_prd, generate_prd_id
 from vibe_tools.utils import (
     PRODUCT_DIR,
     PRODUCT_BACKLOG_DIR,
-    PRODUCT_IN_PROGRESS_DIR,
-    PRODUCT_HISTORY_DIR,
-    PLANNING_REJECTED_DIR,
-    get_main_branch,
-    load_project_state,
     logger,
     run_command,
-    switch_to_main,
 )
 
 ENSURED_LABELS = set()
@@ -518,21 +511,21 @@ def update_gh_labels(prd: PRD, remote_id: str, repo: str, is_discussion: bool, c
         labels.append(f"group:{prd.group}")
         
     # 2. Ensure all exist
-    for l in labels:
-        ensure_github_label(repo, l)
+    for label in labels:
+        ensure_github_label(repo, label)
         
     # 3. Apply labels
     if is_discussion:
         if current_labels is not None:
-            to_add = [l for l in labels if l not in current_labels]
+            to_add = [lbl for lbl in labels if lbl not in current_labels]
             if to_add:
-                label_ids = [get_label_id(repo_owner, repo_name, l) for l in to_add]
+                label_ids = [get_label_id(repo_owner, repo_name, lbl) for lbl in to_add]
                 add_discussion_labels(remote_id, [lid for lid in label_ids if lid])
     else:
         # For Issues, we can just use gh issue edit
         cmd = ["gh", "issue", "edit", remote_id, "--repo", repo]
-        for l in labels:
-            cmd.extend(["--add-label", l])
+        for label in labels:
+            cmd.extend(["--add-label", label])
         run_command(cmd, check=False)
 
 def pull_github_content(repo_owner, repo_name, repo_id, has_discussions, full=False):
@@ -551,7 +544,7 @@ def pull_github_content(repo_owner, repo_name, repo_id, has_discussions, full=Fa
     if has_discussions:
         discs = fetch_github_discussions(repo_owner, repo_name)
         for disc in discs:
-            labels = [l["name"] for l in disc["labels"]["nodes"]]
+            labels = [lbl["name"] for lbl in disc["labels"]["nodes"]]
             if "prd" in labels:
                 process_remote_item(disc, is_discussion=True)
 
@@ -595,8 +588,10 @@ def process_remote_item(item: Dict[str, Any], is_discussion: bool):
         content=item["body"]
     )
     
-    if is_discussion: new_prd.discussion_id = remote_id
-    else: new_prd.issue_number = remote_id
+    if is_discussion:
+        new_prd.discussion_id = remote_id
+    else:
+        new_prd.issue_number = remote_id
     
     new_prd.last_synced_at = item["updatedAt"]
     
@@ -636,7 +631,7 @@ def reset_remote_state(owner, name, has_discussions):
     if has_discussions:
         discs = fetch_github_discussions(owner, name)
         for disc in discs:
-            labels = [l["name"] for l in disc["labels"]["nodes"]]
+            labels = [lbl["name"] for lbl in disc["labels"]["nodes"]]
             if "prd" in labels:
                 click.echo(f"  Deleting discussion {disc['id']}...")
                 delete_github_discussion(disc["id"])

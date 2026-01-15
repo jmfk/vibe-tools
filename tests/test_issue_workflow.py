@@ -1,9 +1,6 @@
 import pytest
 from click.testing import CliRunner
 from vibe_tools.cli import cli
-from vibe_tools.utils import PRODUCT_DIR, PLANNING_INBOX_DIR, PRODUCT_HISTORY_DIR, PRODUCT_BACKLOG_DIR
-import pathlib
-import os
 
 @pytest.fixture
 def runner():
@@ -54,7 +51,7 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     # Check if moved to in_progress
     in_progress_files = list((product_dir / "in_progress").glob("*.md"))
     assert len(in_progress_files) == 1
-    assert (product_dir / "inbox" / issue_path.name).exists() == False
+    assert not (product_dir / "inbox" / issue_path.name).exists()
 
     # 4. Close issue
     result = runner.invoke(cli, ["issue", "close", "PRD-001"])
@@ -64,4 +61,4 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     # Check if moved to history
     history_files = list((product_dir / "history").glob("*.md"))
     assert len(history_files) == 1
-    assert (product_dir / "in_progress" / issue_path.name).exists() == False
+    assert not (product_dir / "in_progress" / issue_path.name).exists()

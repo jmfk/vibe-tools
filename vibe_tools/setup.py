@@ -1,4 +1,3 @@
-import datetime
 import pathlib
 import re
 import shutil
@@ -9,17 +8,12 @@ import time
 from typing import Any, Dict, List, Optional
 
 import click
-import yaml
 from dotenv import find_dotenv, load_dotenv
-
-# Load environment variables from .env file at startup
-load_dotenv(find_dotenv() or ".env")
 
 from vibe_tools.templates import TEMPLATES
 from vibe_tools.utils import (
     CONFIG_FILE,
     ensure_dir,
-    ensure_gitignore,
     get_agent_command,
     get_automerge_branch,
     get_google_api_key,
@@ -27,16 +21,16 @@ from vibe_tools.utils import (
     get_project_name,
     is_tool_available,
     load_config,
-    load_project_state,
     run_agent,
     run_command,
     save_config,
     save_google_api_key,
-    save_project_state,
     safe_yaml_dump,
-    maybe_init_git,
     check_and_install_build_tools,
 )
+
+# Load environment variables from .env file at startup
+load_dotenv(find_dotenv() or ".env")
 
 SERVICE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "postgres": {
@@ -861,7 +855,7 @@ def google():
 
 def ensure_infrastructure():
     """Ensure that the required project infrastructure (directories and files) exists."""
-    from vibe_tools.utils import VIBE_DATA_DIR, ensure_gitignore
+    from vibe_tools.utils import VIBE_DATA_DIR
 
     # 1. Create storage directory
     if not VIBE_DATA_DIR.exists():
@@ -1039,7 +1033,7 @@ def env(python_version):
     except Exception as e:
         click.echo(f"⚠️ Warning: Failed to install dependencies: {e}")
 
-    click.echo(f"\n✅ Environment setup complete.")
+    click.echo("\n✅ Environment setup complete.")
     click.echo(f"Virtualenv: {venv_name}")
     click.echo(
         "\nTo ensure your shell is configured for pyenv (safer macOS config), add these to your ~/.zshrc:"
@@ -1140,12 +1134,9 @@ def eject_prompts():
 @click.pass_context
 def scaffold(ctx):
     """Generate development environment scaffolding (dev_environment.md, Makefile, Dockerfiles, etc.)."""
-    from vibe_tools.normalize import normalize_to_data
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
-        DEV_ENV_CURRENT,
         DEV_SPEC,
-        safe_yaml_dump,
     )
 
     click.echo("\n--- Development Environment Scaffolding Setup ---")
@@ -1453,7 +1444,6 @@ Output ONLY the markdown content for dev_environment.md, starting with the title
 def _install_stern() -> bool:
     """Install Stern for live log tailing. Returns True if successful."""
     import platform
-    import shutil
 
     from vibe_tools.utils import run_command
 
@@ -1533,7 +1523,6 @@ def _ensure_helm_installed() -> bool:
 
     # Try to install via existing logic
     import platform
-    import shutil
 
     system = platform.system().lower()
     is_macos = system == "darwin"
@@ -1970,7 +1959,6 @@ def _get_available_cluster_tools() -> List[str]:
 def _ensure_kubectl_installed() -> bool:
     """Ensure kubectl is installed. Returns True if available."""
     import platform
-    import shutil
 
     from vibe_tools.staging import has_kubectl
     from vibe_tools.utils import run_command
@@ -2018,7 +2006,6 @@ def _ensure_kubectl_installed() -> bool:
 def _install_kind() -> bool:
     """Install Kind. Returns True if successful."""
     import platform
-    import shutil
 
     from vibe_tools.utils import run_command
 
@@ -2086,7 +2073,6 @@ def _install_kind() -> bool:
 def _install_k3d() -> bool:
     """Install k3d. Returns True if successful."""
     import platform
-    import shutil
 
     from vibe_tools.utils import run_command
 
@@ -2143,7 +2129,6 @@ def _install_k3d() -> bool:
 def _install_minikube() -> bool:
     """Install Minikube. Returns True if successful."""
     import platform
-    import shutil
 
     from vibe_tools.utils import run_command
 

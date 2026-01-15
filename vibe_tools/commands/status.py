@@ -1,11 +1,15 @@
 import click
 
-from vibe_tools.utils import get_vibe_status_report
+from vibe_tools.utils import get_vibe_status_report, output_manager
 
 
 def register_status(cli):
     @click.command()
     def status():
         """Display a comprehensive system status report."""
-        click.echo(get_vibe_status_report())
+        report = get_vibe_status_report()
+        if output_manager._server_mode:
+            output_manager.emit_server_message("log", {"level": "info", "message": report})
+        else:
+            click.echo(report)
     cli.add_command(status)
