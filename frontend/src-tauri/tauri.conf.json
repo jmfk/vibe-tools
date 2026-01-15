@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "vibe-dashboard",
+    "productName": "Vibe Dashboard",
     "version": "0.1.0"
   },
   "tauri": {
@@ -14,7 +14,7 @@
       "all": false,
       "fs": {
         "all": true,
-        "scope": ["$HOME/code/vibe-tools/**"]
+        "scope": ["$HOME/code/vibe-tools/**", "$HOME/.vibe-tools/**"]
       },
       "shell": {
         "all": true,

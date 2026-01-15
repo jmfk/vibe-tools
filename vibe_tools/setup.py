@@ -27,6 +27,7 @@ from vibe_tools.utils import (
     save_google_api_key,
     safe_yaml_dump,
     check_and_install_build_tools,
+    ensure_project_structure,
 )
 
 # Load environment variables from .env file at startup
@@ -1128,6 +1129,50 @@ def eject_prompts():
     click.echo(
         "Files in 'prompts/' will override the system defaults in 'templates.py'."
     )
+
+
+@setup_cli.command(name="desktop-init")
+def desktop_init():
+    """Initialize the global ~/.vibe-tools directory and default files."""
+    from vibe_tools.utils import (
+        GLOBAL_VIBE_TOOLS_DIR,
+        PROJECTS_REGISTRY_FILE,
+        GlobalProjectRegistry,
+    )
+
+    click.echo(f"\n--- Global Environment Setup (~/.vibe-tools) ---")
+    
+    # 1. Ensure directory exists
+    ensure_dir(GLOBAL_VIBE_TOOLS_DIR)
+    click.echo(f"✅ Directory exists: {GLOBAL_VIBE_TOOLS_DIR}")
+
+    # 2. Ensure projects.json exists
+    if not PROJECTS_REGISTRY_FILE.exists():
+        GlobalProjectRegistry.save({"projects": [], "last_active_project_id": None})
+        click.echo(f"✅ Created projects registry: {PROJECTS_REGISTRY_FILE}")
+    else:
+        click.echo(f"✅ Projects registry already exists: {PROJECTS_REGISTRY_FILE}")
+
+    # 3. Setup default templates
+    templates_dir = GLOBAL_VIBE_TOOLS_DIR / "templates"
+    ensure_dir(templates_dir)
+    
+    # Eject some basic prompts if they don't exist
+    from vibe_tools.templates import TEMPLATES
+    count = 0
+    for filename, content in TEMPLATES.items():
+        if filename.endswith(".txt"):
+            target_file = templates_dir / filename
+            if not target_file.exists():
+                target_file.write_text(content)
+                count += 1
+    
+    if count > 0:
+        click.echo(f"✅ Initialized {count} default templates in {templates_dir}")
+    else:
+        click.echo(f"✅ Templates already exist in {templates_dir}")
+
+    click.echo("\n✨ Global setup complete!")
 
 
 @setup_cli.command()

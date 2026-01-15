@@ -45,12 +45,15 @@
 id: PRD-045
 title: Production Build & Installation
 type: FEATURE
-status: planned
+status: done
 group: infra
 depends_on:
 - PRD-043
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T10:40:18.012547'
+updated_at: '2026-01-15T11:48:55.060006'
+impl_code_ready: true
+impl_tests_passed: true
+impl_review_passed: true
 ```
 </details>
 
