@@ -24,7 +24,7 @@ def register_deps(cli):
         help="Only install Frontend dependencies.",
     )
     def deps(only_makefile, only_python, only_frontend):
-        """Phase 4: Install required Python and Frontend dependencies."""
+        """Phase 2: Install required Python and Frontend dependencies."""
         install_deps(
             only_makefile=only_makefile,
             only_python=only_python,

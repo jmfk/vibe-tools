@@ -10,7 +10,7 @@ def register_implement(cli):
     @click.command()
     @click.pass_context
     def implement(ctx):
-        """Phase 5: Implement. Iterates through product backlog PRDs."""
+        """Phase 4: Implement. Iterates through product backlog items."""
         state = load_project_state()
 
         missing = check_dependencies("implement", state)

@@ -39,7 +39,7 @@ def register_setup(cli):
     )
     @click.pass_context
     def setup(ctx, import_code, only_arch, only_scaffold):
-        """Phase 3: Architecture Setup. Reconciles architecture.md with architecture-current.yaml."""
+        """Phase 1: Architecture Reconciliation. Reconciles architecture.md with architecture-current.yaml."""
         state = load_project_state()
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)

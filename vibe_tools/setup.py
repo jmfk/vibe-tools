@@ -938,13 +938,6 @@ def install_deps(
 
 
 @setup_cli.command()
-def deps():
-    """Install required Python and Frontend dependencies."""
-    install_deps()
-    click.echo("✅ Dependencies installed.")
-
-
-@setup_cli.command()
 @click.option("--python-version", default="3.11.10", help="Python version to install")
 def env(python_version):
     """Set up and verify a managed Python environment."""

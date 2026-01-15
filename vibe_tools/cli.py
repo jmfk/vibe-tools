@@ -146,44 +146,35 @@ class OrderedGroup(click.Group):
             raise
 
     def list_commands(self, ctx: click.Context) -> List[str]:
-        # Define the desired order of commands
+        # Define the desired order of commands based on Phases 0-9
         order = [
-            # Phases 1-8
-            "architect",
-            "pm",
-            "setup",
-            "deps",
-            "implement",
-            "build",
-            "run",
-            "start",
-            "stop",
-            "run-status",
-            "infra",
-            "testing",
-            "cicd",
-            "deploy",
+            "init",           # Phase 0
+            "setup",          # Phase 1: Reconcile Architecture
+            "config",         # Phase 2: Configuration
+            "deps",           # Phase 2: Dependencies
+            "plan",           # Phase 3: Planning & Issues
+            "implement",      # Phase 4: Implementation Loop
+            "build",          # Phase 5: Build & Verify
+            "infra",          # Phase 6: Infrastructure
+            "testing",        # Phase 6: Testing Loop
+            "cicd",           # Phase 8: CI/CD
+            "deploy",         # Phase 9: Deployment
             # Supporting tools
-            "history",
             "status",
             "cost",
             "stats",
             "docs",
             "memory",
             "rerun",
-            "implemented",
             "ps",
             "kill",
             "test-fix",
             "coverage",
-            "billing-groups",
             "demo-data",
             "project",
-            "init",
             "sync",
-            "investigate",
-            "solve",
             "monitor",
+            "history",
         ]
 
         # Get the actual commands available

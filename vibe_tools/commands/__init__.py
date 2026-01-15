@@ -21,6 +21,7 @@ def register_all_commands(cli):
         memory,
         migrate,
         normalize,
+        plan,
         prd,
         project,
         ps,
@@ -40,12 +41,13 @@ def register_all_commands(cli):
     init.register_init(cli)
     migrate.register_migrate(cli)
     view_implement.register_view_implement(cli)
-    issue.register_issue(cli)
+    plan.register_plan(cli)
+    # issue.register_issue(cli) # Integrated into plan
+    # prd.register_prd(cli)     # Integrated into plan
     test_fix.register_test_fix(cli)
     quick_fix.register_quick_fix(cli)
     coverage.register_coverage(cli)
     normalize.register_normalize(cli)
-    prd.register_prd(cli)
     project.register_project(cli)
     status.register_status(cli)
     sync.register_sync(cli)
@@ -68,10 +70,10 @@ def register_all_commands(cli):
     ps.register_ps(cli)
     kill.register_kill(cli)
     stats.register_stats(cli)
-    billing_groups.register_billing_groups(cli)
+    # billing_groups.register_billing_groups(cli)
     demo_data.register_demo_data(cli)
-    investigate.register_investigate(cli)
-    solve.register_solve(cli)
+    # investigate.register_investigate(cli)
+    # solve.register_solve(cli)
     monitor.register_monitor(cli)
 
     from vibe_tools.servers import servers_cli
