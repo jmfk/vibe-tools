@@ -5,7 +5,7 @@ import json
 import logging
 import html
 import re
-from typing import List, Optional, Any, Callable, Dict
+from typing import List, Optional, Any, Callable, Dict, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -27,7 +27,8 @@ class JSONStream:
     def write(self, data):
         if not data:
             return
-        # sys.stderr.write(f"DEBUG JSONStream write: {repr(data)}\n")
+        if isinstance(data, bytes):
+            data = data.decode("utf-8", errors="replace")
         self.buffer += data
         while "\n" in self.buffer:
             line, self.buffer = self.buffer.split("\n", 1)
@@ -97,12 +98,13 @@ class OutputManager:
 
                 if msg_type == "cancel":
                     # Handle cancellation
-                    import os
                     from vibe_tools.agent import agent_manager
+                    import _thread
 
                     agent_manager.cleanup_session()
-                    # Exit the whole process immediately
-                    os._exit(0)
+                    self.set_final_result(0, {"status": "cancelled"})
+                    # Signal the main thread to exit
+                    _thread.interrupt_main()
                 elif msg_type == "input":
                     value = data.get("value")
                     with self._lock:
