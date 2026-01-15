@@ -19,7 +19,6 @@ def register_all_commands(cli):
         quick_fix,
         setup,
         start,
-        stats,
         status,
         sync,
         test_fix,
@@ -37,7 +36,6 @@ def register_all_commands(cli):
     coverage.register_coverage(cli)
     project.register_project(cli)
     status.register_status(cli)
-    stats.register_stats(cli)
     sync.register_sync(cli)
     docs.register_docs(cli)
     setup.register_setup(cli)

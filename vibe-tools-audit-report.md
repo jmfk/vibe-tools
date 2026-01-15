@@ -38,7 +38,7 @@ Tools for status reporting, cost tracking, and specialized developer tasks.
 | :--- | :--- | :--- |
 | `vibe status` | Comprehensive system status report. | ✅ Working |
 | `vibe cost` | Cost reporting and reconciliation. | ✅ Working |
-| `vibe stats` | Usage and billing statistics. | ✅ Working |
+| `vibe usage` | Usage and billing statistics. | ✅ Working |
 | `vibe history` | View project history and previous PRDs. | ✅ Working |
 | `vibe docs` | Documentation management. | ✅ Working |
 | `vibe memory` | System memory management for agents. | ✅ Working |

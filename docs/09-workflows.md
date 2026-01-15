@@ -268,7 +268,7 @@ Track and analyze LLM costs:
 vibe cost
 
 # View detailed stats
-vibe stats
+vibe usage
 
 # Export to Google Sheets (if configured)
 # Costs automatically logged during execution
