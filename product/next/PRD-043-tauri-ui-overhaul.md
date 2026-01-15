@@ -57,11 +57,13 @@
 id: PRD-043
 title: Tauri UI Overhaul
 type: FEATURE
-status: inbox
+status: planned
 group: tauri
-depends_on: [PRD-041, PRD-042]
+depends_on:
+- PRD-041
+- PRD-042
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T12:00:00.000000'
+updated_at: '2026-01-15T10:40:17.185067'
 ```
 </details>
 

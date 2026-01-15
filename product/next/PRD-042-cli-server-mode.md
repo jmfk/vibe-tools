@@ -55,11 +55,12 @@ When started with `--server`, the CLI expects and produces JSON objects:
 id: PRD-042
 title: CLI Server Mode & Integration
 type: FEATURE
-status: inbox
+status: planned
 group: core
-depends_on: [PRD-041]
+depends_on:
+- PRD-041
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T12:00:00.000000'
+updated_at: '2026-01-15T10:40:16.729567'
 ```
 </details>
 
