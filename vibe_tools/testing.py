@@ -135,6 +135,34 @@ class ProjectTester:
 
         return None
 
+    def discover_frontend_build_cmd(self):
+        """Discovers the command to build the frontend."""
+        if self.has_make_target("build-frontend"):
+            return ["make", "build-frontend"]
+
+        if (
+            self.frontend_root.exists()
+            and (self.frontend_root / "package.json").exists()
+        ):
+            return ["npm", "--prefix", str(self.frontend_root), "run", "build"]
+
+        return None
+
+    def discover_tauri_build_cmd(self):
+        """Discovers the command to build tauri core."""
+        if self.has_make_target("build-tauri"):
+            return ["make", "build-tauri"]
+
+        if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
+            return [
+                "cargo",
+                "build",
+                "--manifest-path",
+                str(self.tauri_root / "Cargo.toml"),
+            ]
+
+        return None
+
     def discover_coverage_cmd(self, component=None):
         """Discovers the command to run coverage for a specific component."""
         if component == "frontend":
@@ -340,6 +368,10 @@ class ProjectTester:
                     cmd = self.discover_frontend_lint_cmd()
                 elif target == "lint-tauri":
                     cmd = self.discover_tauri_lint_cmd()
+                elif target == "build-frontend":
+                    cmd = self.discover_frontend_build_cmd()
+                elif target == "build-tauri":
+                    cmd = self.discover_tauri_build_cmd()
                 elif target == "coverage":
                     cmd = self.discover_coverage_cmd()
 
@@ -448,7 +480,7 @@ class ProjectTester:
             elif "tauri" in target:
                 if has_tauri_changes:
                     filtered.append(target)
-            elif target == "test" or target == "coverage":
+            elif target == "test" or target == "coverage" or target == "build":
                 if has_backend_changes or has_frontend_changes or has_tauri_changes:
                     filtered.append(target)
             else:

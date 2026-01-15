@@ -13,6 +13,9 @@ build-cli: install-backend ## Install the Python CLI in editable mode
 build-desktop: ## Build the production Tauri desktop application
 	cd frontend && npm run tauri build
 
+build-frontend: ## Build the frontend only (Vite)
+	cd frontend && npm run build
+
 # Test Targets
 test: test-backend test-desktop ## Run all tests (CLI and Desktop)
 
