@@ -45,11 +45,12 @@
 id: PRD-045
 title: Production Build & Installation
 type: FEATURE
-status: inbox
+status: planned
 group: infra
-depends_on: [PRD-043]
+depends_on:
+- PRD-043
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T12:00:00.000000'
+updated_at: '2026-01-15T10:40:18.012547'
 ```
 </details>
 
