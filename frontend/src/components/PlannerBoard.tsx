@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -692,6 +692,17 @@ updated_at: '${new Date().toISOString()}'
 
   const activePRD = useMemo(() => prds.find(p => p.id === activeId), [prds, activeId]);
   const inProgressPRD = useMemo(() => prds.find(p => p.columnId === 'in_progress'), [prds]);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    // Only scroll horizontally if we're not scrolling a vertical list
+    const target = e.target as HTMLElement;
+    const isInsideColumn = target.closest('.overflow-y-auto');
+    
+    if (e.deltaY !== 0 && scrollContainerRef.current && !isInsideColumn) {
+      scrollContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
 
   if (editingPRD) {
     return (
@@ -801,9 +812,14 @@ updated_at: '${new Date().toISOString()}'
             </DroppableColumn>
           </div>
 
-          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
-            {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
-              <div key={column.id} className="flex flex-col gap-3 w-[250px] shrink-0">
+          <div 
+            ref={scrollContainerRef}
+            onWheel={handleWheel}
+            className="flex-1 min-h-0 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800"
+          >
+            <div className="flex gap-4 h-full">
+              {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
+                <div key={column.id} className="flex flex-col gap-3 w-[280px] shrink-0">
                 <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-80">{column.title}</span>
@@ -813,7 +829,7 @@ updated_at: '${new Date().toISOString()}'
                   </div>
                 </div>
 
-                <DroppableColumn id={column.id} className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto no-scrollbar">
+                <DroppableColumn id={column.id} className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800/50">
                   <SortableContext
                     id={column.id}
                     items={prds.filter(p => p.columnId === column.id).map(p => p.id)}
@@ -887,8 +903,9 @@ updated_at: '${new Date().toISOString()}'
             ))}
           </div>
         </div>
+      </div>
 
-        <DragOverlay>
+      <DragOverlay>
           {activePRD ? (
             <SortablePRDCard
               prd={activePRD}
