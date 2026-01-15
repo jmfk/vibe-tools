@@ -19,23 +19,23 @@ const COLUMNS = [
   { id: 'backlog', folder: 'product/backlog', color: '#94a3b8' },
   { id: 'next', folder: 'product/next', color: '#60a5fa' },
   { id: 'in_progress', folder: 'product/in_progress', color: '#4ade80' },
-  { id: 'archive', folder: 'product/history', color: '#a855f7' },
+  { id: 'history', folder: 'product/history', color: '#a855f7' },
 ];
 
 const PRDNode = ({ data }: { data: any }) => {
   return (
     <div 
-      className="px-4 py-3 rounded-lg border-2 bg-zinc-900 text-white min-w-[180px] shadow-xl"
+      className="px-4 py-3 rounded-lg border-2 bg-panel text-foreground min-w-[180px] shadow-xl"
       style={{ borderColor: data.color }}
     >
-      <div className="text-[10px] font-mono font-bold text-zinc-500 mb-1">{data.id}</div>
+      <div className="text-[10px] font-mono font-bold text-muted mb-1">{data.id}</div>
       <div className="text-sm font-bold truncate">{data.title}</div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-800" style={{ color: data.color }}>
+        <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-background" style={{ color: data.color }}>
           {data.columnId}
         </span>
         {data.owner && (
-           <span className="text-[9px] text-zinc-500 truncate max-w-[80px]">@{data.owner}</span>
+           <span className="text-[9px] text-muted truncate max-w-[80px]">@{data.owner}</span>
         )}
       </div>
     </div>
@@ -139,7 +139,7 @@ export const PlannerGraph = ({
   }, [loadData]);
 
   return (
-    <div className="h-full w-full bg-zinc-950/50 rounded-xl border border-zinc-800/50 overflow-hidden relative">
+    <div className="h-full w-full bg-background rounded-xl border border-border/50 overflow-hidden relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -148,18 +148,20 @@ export const PlannerGraph = ({
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectPRD(node.id)}
         connectionMode={ConnectionMode.Loose}
+        minZoom={0.001}
+        maxZoom={10}
         fitView
       >
-        <Background color="#27272a" gap={20} />
-        <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-400" />
+        <Background color="var(--border)" gap={20} />
+        <Controls className="bg-panel border-border fill-muted" />
       </ReactFlow>
       
-      <div className="absolute top-4 right-4 flex flex-col gap-2 p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg backdrop-blur-sm z-10">
-        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Legend</div>
+      <div className="absolute top-4 right-4 flex flex-col gap-2 p-3 bg-panel border border-border rounded-lg backdrop-blur-sm z-10">
+        <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Legend</div>
         {COLUMNS.map(col => (
           <div key={col.id} className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color }} />
-            <span className="text-[10px] text-zinc-400 capitalize">{col.id}</span>
+            <span className="text-[10px] text-muted capitalize">{col.id}</span>
           </div>
         ))}
       </div>
