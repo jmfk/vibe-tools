@@ -286,12 +286,57 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
               
               {expandedId === log.id && (
                 <div className="mt-2 ml-10 p-3 bg-black/40 rounded-lg border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                  <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
-                    {log.data 
-                      ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                      : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
-                    }
-                  </pre>
+                  {log.data && typeof log.data === 'object' && ('command_line' in log.data || 'stdio' in log.data || 'stdout' in log.data || 'stderr' in log.data) ? (
+                    <div className="space-y-4">
+                      {log.data.command_line && (
+                        <div>
+                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <Terminal size={10} /> command line
+                          </div>
+                          <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
+                            {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {log.data.stdio && (
+                        <div>
+                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <ChevronDown size={10} /> stdio (in)
+                          </div>
+                          <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
+                            {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {log.data.stdout && (
+                        <div>
+                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <ChevronUp size={10} /> stdout (out)
+                          </div>
+                          <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
+                            {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {log.data.stderr && (
+                        <div>
+                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <AlertCircle size={10} /> stderr (error)
+                          </div>
+                          <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
+                            {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+                      {log.data 
+                        ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                        : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
+                      }
+                    </pre>
+                  )}
                   <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
                     <button 
                       onClick={(e) => {
@@ -415,12 +460,57 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
 
                 {expandedId === log.id && (
                   <div className="mt-2 ml-8 p-2 bg-black/40 rounded border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                    <pre className="text-[9px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
-                      {log.data 
-                        ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                        : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
-                      }
-                    </pre>
+                    {log.data && typeof log.data === 'object' && ('command_line' in log.data || 'stdio' in log.data || 'stdout' in log.data || 'stderr' in log.data) ? (
+                      <div className="space-y-4">
+                        {log.data.command_line && (
+                          <div>
+                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                              <Terminal size={10} /> command line
+                            </div>
+                            <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
+                              {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {log.data.stdio && (
+                          <div>
+                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                              <ChevronDown size={10} /> stdio (in)
+                            </div>
+                            <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
+                              {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {log.data.stdout && (
+                          <div>
+                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                              <ChevronUp size={10} /> stdout (out)
+                            </div>
+                            <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
+                              {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {log.data.stderr && (
+                          <div>
+                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                              <AlertCircle size={10} /> stderr (error)
+                            </div>
+                            <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
+                              {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <pre className="text-[9px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+                        {log.data 
+                          ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                          : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
+                        }
+                      </pre>
+                    )}
                     <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
                       <button 
                         onClick={(e) => {
