@@ -338,6 +338,65 @@ fn list_logs(root: String) -> Result<Vec<FileEntry>, String> {
     Ok(files)
 }
 
+#[tauri::command]
+fn get_projects() -> Result<serde_json::Value, String> {
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let path = Path::new(&home).join(".vibe-tools").join("projects.json");
+    if !path.exists() {
+        return Ok(serde_json::into_value(serde_json::json!({"projects": [], "last_active_project_id": null})).unwrap());
+    }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_workspace_root(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err("Path does not exist".to_string());
+    }
+    std::env::set_current_dir(&path_buf).map_err(|e| e.to_string())?;
+    // We don't update state.workspace_root because it's not Mutex protected, 
+    // but subsequent commands use current_dir or root passed from frontend.
+    // Actually, we should probably update the frontend's workspaceRoot state.
+    Ok(())
+}
+
+#[tauri::command]
+fn update_project_registry(
+    id: String,
+    name: String,
+    description: String,
+    github_url: String,
+    secrets: serde_json::Value
+) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let path = Path::new(&home).join(".vibe-tools").join("projects.json");
+    if !path.exists() {
+        return Err("Registry file not found".to_string());
+    }
+    
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut registry: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    
+    if let Some(projects) = registry["projects"].as_array_mut() {
+        if let Some(project) = projects.iter_mut().find(|p| p["id"] == id) {
+            project["name"] = serde_json::Value::String(name);
+            project["description"] = serde_json::Value::String(description);
+            project["metadata"]["github_url"] = serde_json::Value::String(github_url);
+            project["secrets"] = secrets;
+        } else {
+            return Err("Project not found in registry".to_string());
+        }
+    }
+    
+    fs::write(path, serde_json::to_string_pretty(&registry).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
 fn main() {
     let workspace_root = get_workspace_root().unwrap_or_else(|_| ".".into());
     let workspace_root_path = PathBuf::from(&workspace_root);
@@ -399,7 +458,10 @@ fn main() {
             move_file,
             list_logs,
             tail_log_file,
-            get_terminal_buffer
+            get_terminal_buffer,
+            get_projects,
+            set_workspace_root,
+            update_project_registry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -68,6 +68,8 @@ DEV_SPEC = PLANNING_DIR / "dev_environment.md"
 SETUP_SPEC = PLANNING_DIR / "setup.md"
 
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
+GLOBAL_VIBE_TOOLS_DIR = pathlib.Path.home() / ".vibe-tools"
+PROJECTS_REGISTRY_FILE = GLOBAL_VIBE_TOOLS_DIR / "projects.json"
 ARCH_CONFIG_FILE = VIBE_PROJECT_DIR / "architect-config.json"
 ARCH_SESSION_FILE = VIBE_PROJECT_DIR / "architect-session.json"
 PM_CONFIG_FILE = VIBE_PROJECT_DIR / "pm-config.json"
@@ -560,6 +562,113 @@ def ensure_gitignore(patterns: List[str]):
                 f.write("\n")
             for p in new_patterns:
                 f.write(f"{p}\n")
+
+
+class GlobalProjectRegistry:
+    """Manages the global registry of vibe projects in ~/.vibe-tools/projects.json."""
+
+    @staticmethod
+    def load() -> Dict[str, Any]:
+        """Loads the project registry."""
+        if PROJECTS_REGISTRY_FILE.exists():
+            try:
+                return json.loads(PROJECTS_REGISTRY_FILE.read_text())
+            except json.JSONDecodeError:
+                pass
+        return {"projects": [], "last_active_project_id": None}
+
+    @staticmethod
+    def save(registry: Dict[str, Any]):
+        """Saves the project registry."""
+        ensure_dir(GLOBAL_VIBE_TOOLS_DIR)
+        PROJECTS_REGISTRY_FILE.write_text(json.dumps(registry, indent=2))
+
+    @classmethod
+    def add_project(
+        cls,
+        name: str,
+        path: str,
+        description: str = "",
+        metadata: Dict[str, Any] = None,
+        secrets: Dict[str, str] = None,
+    ):
+        """Adds or updates a project in the registry."""
+        registry = cls.load()
+        path = str(pathlib.Path(path).resolve())
+        
+        # Check if project already exists by path
+        existing = next((p for p in registry["projects"] if p["path"] == path), None)
+        
+        if existing:
+            existing["name"] = name
+            existing["description"] = description
+            existing["metadata"].update(metadata or {})
+            existing["secrets"].update(secrets or {})
+            existing["last_active"] = datetime.datetime.now().isoformat()
+            registry["last_active_project_id"] = existing["id"]
+        else:
+            import uuid
+            new_project = {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "path": path,
+                "description": description,
+                "metadata": metadata or {},
+                "secrets": secrets or {},
+                "last_active": datetime.datetime.now().isoformat(),
+            }
+            registry["projects"].append(new_project)
+            registry["last_active_project_id"] = new_project["id"]
+        
+        cls.save(registry)
+
+    @classmethod
+    def remove_project(cls, name_or_id: str):
+        """Removes a project from the registry."""
+        registry = cls.load()
+        registry["projects"] = [
+            p for p in registry["projects"] 
+            if p["id"] != name_or_id and p["name"] != name_or_id
+        ]
+        cls.save(registry)
+
+    @classmethod
+    def list_projects(cls) -> List[Dict[str, Any]]:
+        """Lists all registered projects."""
+        return cls.load()["projects"]
+
+    @classmethod
+    def get_project_by_path(cls, path: str) -> Optional[Dict[str, Any]]:
+        """Finds a project by its path or any parent path."""
+        registry = cls.load()
+        target_path = pathlib.Path(path).resolve()
+        
+        # Sort projects by path length (deepest first) to match most specific project
+        sorted_projects = sorted(
+            registry["projects"], 
+            key=lambda p: len(pathlib.Path(p["path"]).parts), 
+            reverse=True
+        )
+        
+        for project in sorted_projects:
+            project_path = pathlib.Path(project["path"]).resolve()
+            try:
+                # Check if target_path is project_path or a subdirectory
+                if target_path == project_path or project_path in target_path.parents:
+                    return project
+            except ValueError:
+                continue
+        return None
+
+    @classmethod
+    def set_active_project(cls, project_id: str):
+        """Sets the last active project."""
+        registry = cls.load()
+        project = next((p for p in registry["projects"] if p["id"] == project_id), None)
+        if project:
+            project["last_active"] = datetime.datetime.now().isoformat()
+            registry["last_active_project_id"] = project_id
+            cls.save(registry)
 
 
 def ensure_project_structure():
@@ -1469,6 +1578,26 @@ def is_tool_available(tool: str) -> bool:
     import shutil
 
     return shutil.which(tool) is not None
+
+
+def get_project_root() -> pathlib.Path:
+    """Returns the project root directory, either from the global registry or current git repo."""
+    # 1. Check global registry
+    project = GlobalProjectRegistry.get_project_by_path(str(pathlib.Path.cwd()))
+    if project:
+        return pathlib.Path(project["path"])
+    
+    # 2. Fallback to git root
+    try:
+        curr = pathlib.Path.cwd()
+        for parent in [curr] + list(curr.parents):
+            if (parent / ".git").exists():
+                return parent
+    except Exception:
+        pass
+        
+    # 3. Default to CWD
+    return pathlib.Path.cwd()
 
 
 def get_project_name() -> str:
