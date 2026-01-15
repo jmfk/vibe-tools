@@ -167,6 +167,12 @@ def run_command(
             return f"Blocked intrusive command: {' '.join(command)}", 0
 
     try:
+        # Log the command execution details
+        out_debug(f"Running command: {' '.join(command)}", source="vibe", data={
+            "command": command,
+            "cwd": cwd or os.getcwd(),
+        })
+        
         result = subprocess.run(
             command,
             cwd=cwd,
@@ -176,13 +182,40 @@ def run_command(
         )
         if len(result.stdout.splitlines()) > 5:
             log_large_output(f"command_{command[0]}", result.stdout)
+        
+        # Log successful completion with output summary if needed
+        out_debug(f"Command {command[0]} finished (code: {result.returncode})", source="vibe", data={
+            "command_line": f"$ {' '.join(command)}",
+            "stdio": "",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "code": result.returncode
+        })
+        
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
         output = (e.stdout or "") + (e.stderr or "")
         if len(output.splitlines()) > 5:
             log_large_output(f"command_{command[0]}_error", output)
+        
+        # Log failure
+        out_error(f"Command {command[0]} failed (code: {e.returncode})", source="vibe", data={
+            "command_line": f"$ {' '.join(command)}",
+            "stdio": "",
+            "stdout": e.stdout,
+            "stderr": e.stderr,
+            "code": e.returncode
+        })
+        
         return output, e.returncode
     except (FileNotFoundError, OSError) as e:
+        out_error(f"Command {command[0]} could not be executed: {e}", source="vibe", data={
+            "command_line": f"$ {' '.join(command)}",
+            "stdio": "",
+            "stdout": "",
+            "stderr": str(e),
+            "error": str(e)
+        })
         return str(e), 127
 
 

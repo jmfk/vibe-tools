@@ -98,7 +98,22 @@ fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args:
     if !args.is_empty() {
         full_command = format!("{} {}", full_command, args.join(" "));
     }
-    log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command), None);
+    
+    let command_data = serde_json::json!({
+        "command_line": full_command,
+        "stdio": if is_server {
+            serde_json::to_string(&serde_json::json!({
+                "command": command,
+                "args": args
+            })).unwrap_or_default()
+        } else {
+            "".to_string()
+        },
+        "stdout": "",
+        "stderr": "",
+    });
+
+    log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command), Some(command_data));
     
     // Persistent file logging
     let log_path = PathBuf::from("implementation/logs/tauri_vibe_commands.log");
@@ -561,12 +576,22 @@ async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, comma
     error_msg = error_capture.await.map_err(|e| e.to_string())?;
 
     if let Some(res) = result_json {
-        log_to_app(&state, &window, "INFO", "Command", &format!("Command {} finished with result", command), None);
+        log_to_app(&state, &window, "INFO", "Command", &format!("Command {} finished with result", command), Some(serde_json::json!({
+            "command_line": format!("vibe --server {} {}", command, args.join(" ")),
+            "stdio": serde_json::json!({ "command": command, "args": args }),
+            "stdout": res,
+            "stderr": error_msg,
+        })));
         return Ok(res);
     }
 
     if !status.success() {
-        log_to_app(&state, &window, "ERROR", "Command", &format!("Command {} failed: {}", command, error_msg), None);
+        log_to_app(&state, &window, "ERROR", "Command", &format!("Command {} failed: {}", command, error_msg), Some(serde_json::json!({
+            "command_line": format!("vibe --server {} {}", command, args.join(" ")),
+            "stdio": serde_json::json!({ "command": command, "args": args }),
+            "stdout": "",
+            "stderr": error_msg,
+        })));
         return Err(error_msg);
     }
     
