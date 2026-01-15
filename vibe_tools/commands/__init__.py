@@ -23,6 +23,7 @@ def register_all_commands(cli):
         monitor,
         normalize,
         prd,
+        project,
         ps,
         quick_fix,
         rerun,
@@ -46,6 +47,7 @@ def register_all_commands(cli):
     coverage.register_coverage(cli)
     normalize.register_normalize(cli)
     prd.register_prd(cli)
+    project.register_project(cli)
     status.register_status(cli)
     sync.register_sync(cli)
     docs.register_docs(cli)

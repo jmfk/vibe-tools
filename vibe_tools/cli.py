@@ -106,6 +106,7 @@ class OrderedGroup(click.Group):
             "coverage",
             "billing-groups",
             "demo-data",
+            "project",
             "init",
             "sync",
             "investigate",
@@ -163,7 +164,23 @@ def cli(ctx, debug, verbose, stream, agent, no_branch_switch):
     atexit.register(finalize_cost_report)
 
     # Ensure files are in the right place
-    from vibe_tools.utils import migrate_to_project_dir
+    from vibe_tools.utils import migrate_to_project_dir, get_project_root, GlobalProjectRegistry
+
+    # Auto-detect project root and change CWD if found in registry
+    project_root = get_project_root()
+    if project_root != pathlib.Path.cwd():
+        os.chdir(project_root)
+        logger.debug(f"Changed CWD to project root: {project_root}")
+    
+    # Update last active if found in registry
+    project = GlobalProjectRegistry.get_project_by_path(str(pathlib.Path.cwd()))
+    if project:
+        GlobalProjectRegistry.set_active_project(project["id"])
+        # Load project-specific secrets into environment
+        if "secrets" in project:
+            for key, value in project["secrets"].items():
+                if value:
+                    os.environ[key] = value
 
     if not is_test_mode():
         migrate_to_project_dir()

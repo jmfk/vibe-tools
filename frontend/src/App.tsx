@@ -50,7 +50,22 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Tab = 'vibe' | 'explorer' | 'monitor' | 'runner' | 'testing';
+type Tab = 'vibe' | 'explorer' | 'monitor' | 'runner' | 'testing' | 'projects';
+
+interface Project {
+  id: string;
+  name: string;
+  path: string;
+  description: string;
+  last_active: string;
+  metadata?: Record<string, any>;
+  secrets?: Record<string, string>;
+}
+
+interface ProjectRegistry {
+  projects: Project[];
+  last_active_project_id: string | null;
+}
 
 interface FileEntry {
   name: string;
@@ -763,6 +778,256 @@ const VibeView = ({ root }: { root: string }) => {
 
 // --- Main App ---
 
+const ProjectManagerView = ({ 
+  registry, 
+  onSwitch, 
+  onRefresh 
+}: { 
+  registry: ProjectRegistry, 
+  onSwitch: (p: Project) => void,
+  onRefresh: () => void
+}) => {
+  const [importPath, setImportPath] = useState('');
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editGithub, setEditGithub] = useState('');
+  const [editSecrets, setEditSecrets] = useState('');
+
+  const handleImport = async () => {
+    if (!importPath) return;
+    try {
+      await invoke('run_vibe_command', { command: 'project', args: ['add', importPath] });
+      setImportPath('');
+      onRefresh();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this project from the registry?')) return;
+    try {
+      await invoke('run_vibe_command', { command: 'project', args: ['remove', id] });
+      onRefresh();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const startEditing = (p: Project) => {
+    setEditingProject(p);
+    setEditName(p.name);
+    setEditDesc(p.description || '');
+    setEditGithub(p.metadata?.github_url || '');
+    setEditSecrets(JSON.stringify(p.secrets || {}, null, 2));
+  };
+
+  const saveEdit = async () => {
+    if (!editingProject) return;
+    try {
+      let secretsObj = {};
+      try {
+        secretsObj = JSON.parse(editSecrets);
+      } catch (e) {
+        alert('Invalid JSON for secrets');
+        return;
+      }
+
+      await invoke('run_vibe_command', { 
+        command: 'project', 
+        args: [
+          'add', 
+          editingProject.path, 
+          '--name', editName
+        ] 
+      });
+      
+      // Since 'vibe project add' doesn't support metadata/secrets yet, 
+      // we'll need to update the registry file directly from Tauri or update the CLI.
+      // For now, let's assume we need to update the registry via a new Tauri command
+      // because the CLI 'project add' is basic.
+      
+      await invoke('update_project_registry', {
+        id: editingProject.id,
+        name: editName,
+        description: editDesc,
+        githubUrl: editGithub,
+        secrets: secretsObj
+      });
+
+      setEditingProject(null);
+      onRefresh();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-zinc-100">Project Manager</h2>
+          <p className="text-sm text-zinc-500 mt-1">Manage and switch between your vibe projects</p>
+        </div>
+        {!editingProject && (
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Path to project..."
+              value={importPath}
+              onChange={(e) => setImportPath(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-64"
+            />
+            <button 
+              onClick={handleImport}
+              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-bold transition-colors"
+            >
+              Import Project
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editingProject ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-bold text-zinc-100">Edit Project: {editingProject.name}</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Name</label>
+              <input 
+                type="text" 
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">GitHub URL</label>
+              <input 
+                type="text" 
+                value={editGithub}
+                onChange={(e) => setEditGithub(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Description</label>
+              <input 
+                type="text" 
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Secrets (JSON)</label>
+              <textarea 
+                value={editSecrets}
+                onChange={(e) => setEditSecrets(e.target.value)}
+                rows={5}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <button 
+              onClick={() => setEditingProject(null)}
+              className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={saveEdit}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-bold transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {registry.projects.map((project) => (
+            <div 
+              key={project.id} 
+              className={cn(
+                "p-5 rounded-xl border transition-all flex items-center justify-between group",
+                registry.last_active_project_id === project.id 
+                  ? "bg-blue-500/5 border-blue-500/30" 
+                  : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
+              )}
+            >
+              <div className="flex-1 min-w-0 pr-8">
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-lg font-bold text-zinc-100 truncate">{project.name}</h3>
+                  {registry.last_active_project_id === project.id && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase tracking-wider">Active</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-zinc-500 text-sm font-mono truncate mb-2">
+                  <Folder size={14} />
+                  <span>{project.path}</span>
+                </div>
+                {project.description && (
+                  <p className="text-sm text-zinc-400 line-clamp-1">{project.description}</p>
+                )}
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="text-[10px] text-zinc-600 font-medium uppercase tracking-widest">
+                    Last active: {new Date(project.last_active).toLocaleString()}
+                  </div>
+                  {project.metadata?.github_url && (
+                    <div className="flex items-center gap-1 text-[10px] text-blue-500/70 font-medium uppercase tracking-widest">
+                      <LinkIcon size={10} />
+                      GitHub Linked
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => startEditing(project)}
+                  className="p-2 text-zinc-500 hover:text-zinc-200 transition-colors"
+                  title="Edit Project"
+                >
+                  <History size={18} />
+                </button>
+                <button 
+                  onClick={() => onSwitch(project)}
+                  disabled={registry.last_active_project_id === project.id}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-bold transition-all",
+                    registry.last_active_project_id === project.id
+                      ? "bg-zinc-800 text-zinc-500 cursor-default"
+                      : "bg-zinc-100 text-zinc-950 hover:bg-white"
+                  )}
+                >
+                  {registry.last_active_project_id === project.id ? "Current" : "Switch to Project"}
+                </button>
+                <button 
+                  onClick={() => handleRemove(project.id)}
+                  className="p-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Remove from registry"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
+          
+          {registry.projects.length === 0 && (
+            <div className="h-64 flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/30 border border-dashed border-zinc-800 rounded-xl">
+               <LayoutDashboard size={48} className="mb-4 opacity-10" />
+               <p className="text-lg font-medium text-zinc-400">No projects registered yet</p>
+               <p className="text-sm mt-1">Import an existing project or use 'vibe init' in the CLI</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('vibe');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -770,6 +1035,7 @@ const App: React.FC = () => {
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents, setActiveAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
+  const [projectRegistry, setProjectRegistry] = useState<ProjectRegistry>({ projects: [], last_active_project_id: null });
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'Architect',
@@ -778,10 +1044,32 @@ const App: React.FC = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
 
+  const loadRegistry = async () => {
+    try {
+      const registry = await invoke<ProjectRegistry>('get_projects');
+      setProjectRegistry(registry);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const switchProject = async (project: Project) => {
+    try {
+      await invoke('set_workspace_root', { path: project.path });
+      setWorkspaceRoot(project.path);
+      await loadRegistry();
+      setActiveTab('vibe');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     invoke<string>('get_workspace_root')
       .then(setWorkspaceRoot)
       .catch(console.error);
+    
+    loadRegistry();
     
     const interval = setInterval(() => {
       invoke<AgentProcess[]>('get_active_agents')
@@ -971,6 +1259,13 @@ const App: React.FC = () => {
               setActiveTab('monitor');
             }} />}
             {activeTab === 'testing' && <TestingView />}
+            {activeTab === 'projects' && (
+              <ProjectManagerView 
+                registry={projectRegistry} 
+                onSwitch={switchProject} 
+                onRefresh={loadRegistry} 
+              />
+            )}
           </div>
         </main>
       </div>
@@ -993,6 +1288,38 @@ const App: React.FC = () => {
         </div>
 
         <div className="p-4 space-y-6 overflow-y-auto">
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Projects</h3>
+              <button 
+                onClick={() => setActiveTab('projects')}
+                className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest"
+              >
+                Manage
+              </button>
+            </div>
+            <div className="space-y-1">
+              {projectRegistry.projects.slice(0, 5).map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => switchProject(p)}
+                  className={cn(
+                    "w-full text-left px-2 py-1.5 rounded text-[11px] transition-colors truncate flex items-center gap-2",
+                    projectRegistry.last_active_project_id === p.id 
+                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                  )}
+                >
+                  <Folder size={12} className={projectRegistry.last_active_project_id === p.id ? "text-blue-400" : "text-zinc-600"} />
+                  <span className="truncate">{p.name}</span>
+                </button>
+              ))}
+              {projectRegistry.projects.length === 0 && (
+                <div className="text-[10px] text-zinc-600 italic px-2">No projects registered</div>
+              )}
+            </div>
+          </section>
+
           <section>
             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Project Status</h3>
             <div className="space-y-2">
