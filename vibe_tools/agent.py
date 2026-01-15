@@ -205,6 +205,7 @@ def run_agent(
         full_event_log = []
         full_result_text = None
         detected_chat_id = None
+        active_tool_calls = {}
 
         if stream or is_cursor_agent:
             for line in process.stdout:
@@ -257,12 +258,19 @@ def run_agent(
                         elif event_type == "tool_call":
                             if subtype == "started":
                                 tool_call = data.get("tool_call", {})
+                                for tool_name, tool_info in tool_call.items():
+                                    call_id = tool_info.get("call_id") or tool_name
+                                    active_tool_calls[call_id] = tool_info.get("args", {})
                                 if stream:
                                     _print_tool_call_start(tool_call, data)
                             else:
                                 tool_call = data.get("tool_call", {})
                                 if stream:
-                                    _print_tool_call_done(tool_call, data)
+                                    _print_tool_call_done(tool_call, data, active_tool_calls)
+                                for tool_name, tool_info in tool_call.items():
+                                    call_id = tool_info.get("call_id") or tool_name
+                                    if call_id in active_tool_calls:
+                                        del active_tool_calls[call_id]
 
                         elif event_type == "thinking":
                             text = data.get("text", None)
@@ -334,11 +342,11 @@ def run_agent(
 
 def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
     for key, value in tool_call.items():
+        if key in ["readToolCall", "lsToolCall", "globToolCall"]:
+            continue
         log_large_output(f"{key}-start", json.dumps(value.get("result", {}), indent=2))
     if "readToolCall" in tool_call:
-        output = tool_call["readToolCall"]
-        path = output["args"].get("path")
-        out_print(f"📖 Reading: {path}", flush=True, source="agent")
+        pass  # Silenced
     elif "writeToolCall" in tool_call:
         output = tool_call["writeToolCall"]
         path = output["args"].get("path")
@@ -348,17 +356,13 @@ def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
         path = output["args"].get("path")
         out_print(f"🔧 Editing: {path}", flush=True, source="agent")
     elif "lsToolCall" in tool_call:
-        output = tool_call["lsToolCall"]
-        path = output["args"].get("path")
-        out_print(f"🔧 Listing: {path}", flush=True, source="agent")
+        pass  # Silenced
     elif "shellToolCall" in tool_call:
         output = tool_call["shellToolCall"]
         commandText = output["args"].get("command")
         out_print(f"🔧 Command: {commandText}", flush=True, source="agent")
     elif "globToolCall" in tool_call:
-        output = tool_call["globToolCall"]
-        globPattern = output["args"].get("globPattern")
-        out_print(f"🔧 Searching: {globPattern}", flush=True, source="agent")
+        pass  # Silenced
     elif "function" in tool_call:
         output = tool_call["function"]
         name = output.get("name")
@@ -366,17 +370,24 @@ def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
         out_print(f"🛠️ Calling: {name} ({arguments})", flush=True, source="agent")
 
 
-def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
+def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], active_tool_calls: Dict[str, Any] = None):
     for key, value in tool_call.items():
+        if key in ["readToolCall", "lsToolCall", "globToolCall"]:
+            result = value.get("result", {})
+            if result.get("success"):
+                continue
         log_large_output(f"{key}-done", json.dumps(value.get("result", {}), indent=2))
     if "readToolCall" in tool_call:
-        result = tool_call.get("readToolCall", {}).get("result", {})
+        tool_info = tool_call.get("readToolCall", {})
+        result = tool_info.get("result", {})
         success = result.get("success")
         if success:
-            total_lines = success.get("totalLines", 0)
-            out_print(f"✅ Read {total_lines} lines.", flush=True, source="agent")
+            pass  # Silenced
         else:
-            out_print("🚫 Read failed.", flush=True, source="agent")
+            call_id = tool_info.get("call_id") or "readToolCall"
+            args = (active_tool_calls or {}).get(call_id, {})
+            path = args.get("path") or "unknown path"
+            out_print(f"🚫 Read failed: {path}", flush=True, source="agent")
     elif "writeToolCall" in tool_call:
         result = tool_call.get("writeToolCall", {}).get("result", {})
         success = result.get("success")
@@ -393,13 +404,16 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
         else:
             out_print("🚫 Edit failed.", flush=True, source="agent")
     elif "lsToolCall" in tool_call:
-        result = tool_call.get("lsToolCall", {}).get("result", {})
+        tool_info = tool_call.get("lsToolCall", {})
+        result = tool_info.get("result", {})
         success = result.get("success")
         if success:
-            num_files = success.get("directoryTreeRoot", {}).get("numFiles", 0)
-            out_print(f"✅ Found {num_files} files.", flush=True, source="agent")
+            pass  # Silenced
         else:
-            out_print("🚫 List failed.", flush=True, source="agent")
+            call_id = tool_info.get("call_id") or "lsToolCall"
+            args = (active_tool_calls or {}).get(call_id, {})
+            path = args.get("path") or "unknown path"
+            out_print(f"🚫 List failed: {path}", flush=True, source="agent")
     elif "shellToolCall" in tool_call:
         result = tool_call.get("shellToolCall", {}).get("result", {})
         success = result.get("success")
@@ -413,13 +427,16 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any]):
                 f"❌ Command failed (Exit code: {code}).", flush=True, source="agent"
             )
     elif "globToolCall" in tool_call:
-        result = tool_call.get("globToolCall", {}).get("result", {})
+        tool_info = tool_call.get("globToolCall", {})
+        result = tool_info.get("result", {})
         success = result.get("success")
         if success:
-            total = success.get("totalFiles", 0)
-            out_print(f"✅ Found {total} matches.", flush=True, source="agent")
+            pass  # Silenced
         else:
-            out_print("🚫 Search failed.", flush=True, source="agent")
+            call_id = tool_info.get("call_id") or "globToolCall"
+            args = (active_tool_calls or {}).get(call_id, {})
+            pattern = args.get("globPattern") or "unknown pattern"
+            out_print(f"🚫 Search failed: {pattern}", flush=True, source="agent")
     elif "function" in tool_call:
         result = tool_call.get("function", {}).get("result", {})
         out_print(f"🛠️ Done: {result}", flush=True, source="agent")
