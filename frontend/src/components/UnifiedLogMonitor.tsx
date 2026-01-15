@@ -29,6 +29,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 interface AppLog {
+  id: string;
   timestamp: string;
   level: string;
   source: string;
@@ -45,18 +46,24 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
   const [activeTab, setActiveTab] = useState<LogTab>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Initial load
     invoke<AppLog[]>('get_all_logs')
-      .then(setLogs)
+      .then(logs => {
+        const logsWithId = logs.map(l => ({ ...l, id: l.id || `${Date.now()}-${Math.random()}` }));
+        setLogs(logsWithId);
+      })
       .catch(console.error);
 
     // Listen for new logs
     const unlistenAppLog = listen('app-log', (event: any) => {
-      const log = event.payload as AppLog;
+      const log = { 
+        ...(event.payload as AppLog), 
+        id: `${Date.now()}-${Math.random()}` 
+      };
       setLogs(prev => [...prev, log].slice(-1000));
     });
 
@@ -85,6 +92,7 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
 
       if (message) {
         const log: AppLog = {
+          id: `${Date.now()}-${Math.random()}`,
           timestamp: new Date().toLocaleTimeString(),
           level,
           source: 'Agent',
@@ -217,15 +225,14 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
         </div>
         
         <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-0.5 p-4 bg-input rounded-xl border border-border/50 shadow-inner">
-          {filteredLogs.map((log, i) => (
+          {filteredLogs.map((log) => (
             <div 
-              key={i} 
+              key={log.id} 
               className={cn(
-                "flex flex-col group py-0.5 rounded px-1 transition-colors",
-                log.data ? "cursor-pointer hover:bg-zinc-800/40" : "hover:bg-zinc-800/20",
-                expandedIndex === i ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : ""
+                "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
+                expandedId === log.id ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "hover:bg-zinc-800/20"
               )}
-              onClick={() => log.data && setExpandedIndex(expandedIndex === i ? null : i)}
+              onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
             >
               <div className="flex gap-4 items-start">
                 <span className="text-muted shrink-0 opacity-40 text-[10px] w-24 pt-0.5">{log.timestamp}</span>
@@ -239,23 +246,27 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                 <span className={cn("break-all flex-1", log.level === 'ERROR' ? "text-red-400" : "text-foreground opacity-90")}>
                   <Ansi>{log.message}</Ansi>
                 </span>
-                {log.data && (
-                  <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
-                    {expandedIndex === i ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </div>
-                )}
+                <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
+                  {expandedId === log.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
               </div>
               
-              {expandedIndex === i && log.data && (
+              {expandedId === log.id && (
                 <div className="mt-2 ml-10 p-3 bg-black/40 rounded-lg border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                  <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
-                    {typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2)}
+                  <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+                    {log.data 
+                      ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                      : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
+                    }
                   </pre>
                   <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText(typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2));
+                        const detailText = log.data 
+                          ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                          : `[${log.timestamp}] [${log.level}] [${log.source}] ${log.message}`;
+                        navigator.clipboard.writeText(detailText);
                       }}
                       className="text-[9px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest flex items-center gap-1.5"
                     >
@@ -338,15 +349,14 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
               </button>
           </div>
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4 pt-2 font-mono text-[10px] space-y-0.5">
-            {filteredLogs.slice(-100).map((log, i) => (
+            {filteredLogs.slice(-100).map((log) => (
               <div 
-                key={i} 
+                key={log.id} 
                 className={cn(
-                  "flex flex-col group py-0.5 rounded px-1 transition-colors",
-                  log.data ? "cursor-pointer hover:bg-zinc-800/40" : "hover:bg-zinc-800/20",
-                  expandedIndex === i ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : ""
+                  "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
+                  expandedId === log.id ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "hover:bg-zinc-800/20"
                 )}
-                onClick={() => log.data && setExpandedIndex(expandedIndex === i ? null : i)}
+                onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
               >
                 <div className="flex gap-3 items-start">
                   <span className="text-muted shrink-0 opacity-40 w-16 pt-0.5">{log.timestamp}</span>
@@ -357,18 +367,34 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                     <span className="text-muted/40 font-bold mr-2">{log.source}</span>
                     <Ansi>{log.message}</Ansi>
                   </span>
-                  {log.data && (
-                    <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
-                      {expandedIndex === i ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </div>
-                  )}
+                  <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
+                    {expandedId === log.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </div>
                 </div>
 
-                {expandedIndex === i && log.data && (
+                {expandedId === log.id && (
                   <div className="mt-2 ml-8 p-2 bg-black/40 rounded border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                    <pre className="text-[9px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
-                      {typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2)}
+                    <pre className="text-[9px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+                      {log.data 
+                        ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                        : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
+                      }
                     </pre>
+                    <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const detailText = log.data 
+                            ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                            : `[${log.timestamp}] [${log.level}] [${log.source}] ${log.message}`;
+                          navigator.clipboard.writeText(detailText);
+                        }}
+                        className="text-[9px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                      >
+                        <Copy size={10} />
+                        Copy Detail
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
