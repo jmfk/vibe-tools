@@ -6,7 +6,7 @@
 - **Success criteria**: Stats command provides useful statistics, billing groups work correctly, time filtering works, and cost allocation accurate.
 
 ## Feature Inspiration
-The `vibe stats` and `vibe billing-groups` commands provide usage statistics and billing group management. Stats can be filtered by API, billing groups, date ranges, and provide cost breakdowns. Billing groups allow organizing users/costs for allocation.
+The `vibe usage` and `vibe billing-groups` commands provide usage statistics and billing group management. Stats can be filtered by API, billing groups, date ranges, and provide cost breakdowns. Billing groups allow organizing users/costs for allocation.
 
 **Key capabilities**:
 - Usage statistics (costs, tokens, operations)
@@ -19,7 +19,7 @@ The `vibe stats` and `vibe billing-groups` commands provide usage statistics and
 N/A - CLI commands with formatted output.
 
 ## Backend
-- **Stats Command** (`vibe stats`):
+- **Usage Command** (`vibe usage`):
   - Reads `usage.csv`
   - Filters by:
     - `--api`: Filter by API/agent
@@ -68,7 +68,7 @@ N/A - CLI commands with formatted output.
 - Reports formatted clearly
 
 ## Acceptance Tests
-1. **Stats Display**: Run `vibe stats`, verify statistics shown
+1. **Stats Display**: Run `vibe usage`, verify statistics shown
 2. **API Filtering**: Filter by API, verify correct subset
 3. **Date Filtering**: Filter by date range, verify correct period
 4. **Billing Group Creation**: Create billing group, verify saved

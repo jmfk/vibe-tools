@@ -175,18 +175,34 @@ def register_usage(cli):
             if server_mode:
                 from vibe_tools.command_output import output_manager
                 from vibe_tools.agent import AgentManager
+
                 agent_manager = AgentManager()
                 active_agents = agent_manager.get_active_agents()
-                
+
+                # Get aggregated data for the UI
+                files = list_usage_files(COSTS_DIR)
+                agg_data = aggregate_usage_data(files, curr_start, curr_next)
+
                 data = {
+                    "type": "stats_result",  # UI expects this type
                     "total_cost": total_cost,
                     "current_month_cost": current_month_cost,
                     "last_month_cost": last_month_cost,
                     "current_month_name": curr_start.strftime("%B %Y"),
                     "last_month_name": last_start.strftime("%B %Y"),
-                    "active_agents": active_agents
+                    "active_agents": active_agents,
+                    # Include stats fields
+                    "total_input_tokens": agg_data["total_input_tokens"],
+                    "total_output_tokens": agg_data["total_output_tokens"],
+                    "total_cache_read": agg_data.get("total_cache_read", 0),
+                    "request_count": len(agg_data["rows"]),
+                    "by_model": dict(agg_data["by_model"]),
+                    "by_kind": dict(agg_data["by_kind"]),
+                    "by_phase": dict(agg_data["by_phase"]),
+                    "by_prd": dict(agg_data["by_prd"]),
+                    "by_agent": dict(agg_data["by_agent"]),
                 }
-                output_manager.emit_server_message("usage_result", data)
+                output_manager.emit_server_message("stats_result", data)
                 return
 
             click.echo("\n--- Cursor Usage & Cost Summary ---")
@@ -210,12 +226,25 @@ def register_usage(cli):
         
         if server_mode:
             from vibe_tools.command_output import output_manager
-            data = {
-                "period_cost": cost_range,
-                "start_date": start.strftime("%Y-%m-%d"),
-                "end_date": end.strftime("%Y-%m-%d"),
+            
+            # For the UI (StatsView), we need detailed stats
+            files = list_usage_files(COSTS_DIR)
+            data = aggregate_usage_data(files, start, end)
+            
+            clean_data = {
+                "type": "stats_result",
+                "total_cost": data["total_cost"],
+                "total_input_tokens": data["total_input_tokens"],
+                "total_output_tokens": data["total_output_tokens"],
+                "total_cache_read": data.get("total_cache_read", 0),
+                "request_count": len(data["rows"]),
+                "by_model": dict(data["by_model"]),
+                "by_kind": dict(data["by_kind"]),
+                "by_phase": dict(data["by_phase"]),
+                "by_prd": dict(data["by_prd"]),
+                "by_agent": dict(data["by_agent"]),
             }
-            output_manager.emit_server_message("usage_range_result", data)
+            output_manager.emit_server_message("stats_result", clean_data)
             return
 
         click.echo(f"\n--- Cursor Usage Summary ({start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}) ---")
