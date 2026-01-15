@@ -52,16 +52,63 @@ impl LogBuffer {
     }
 }
 
+#[derive(serde::Serialize, Clone, Debug)]
+struct AppLog {
+    timestamp: String,
+    level: String,
+    source: String,
+    message: String,
+}
+
 struct AppState {
     #[allow(dead_code)]
     workspace_root: PathBuf,
     terminal_buffers: Mutex<HashMap<String, LogBuffer>>,
     active_process_stdin: AsyncMutex<Option<tokio::process::ChildStdin>>,
+    app_logs: Mutex<VecDeque<AppLog>>,
+}
+
+fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, message: &str) {
+    let log = AppLog {
+        timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+        level: level.to_string(),
+        source: source.to_string(),
+        message: message.to_string(),
+    };
+
+    {
+        let mut logs = state.app_logs.lock().unwrap();
+        if logs.len() >= 1000 {
+            logs.pop_front();
+        }
+        logs.push_back(log.clone());
+    }
+
+    let _ = window.emit("app-log", log);
 }
 
 #[tauri::command]
-fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
+fn emit_log(state: State<'_, AppState>, window: Window, level: String, source: String, message: String) {
+    log_to_app(&state, &window, &level, &source, &message);
+}
+
+#[tauri::command]
+fn get_all_logs(state: State<'_, AppState>) -> Result<Vec<AppLog>, String> {
+    let logs = state.app_logs.lock().unwrap();
+    Ok(logs.iter().cloned().collect())
+}
+
+#[tauri::command]
+fn clear_logs(state: State<'_, AppState>, window: Window) {
+    let mut logs = state.app_logs.lock().unwrap();
+    logs.clear();
+    let _ = window.emit("logs-cleared", ());
+}
+
+#[tauri::command]
+fn list_directory(state: State<'_, AppState>, window: Window, path: String) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
+    log_to_app(&state, &window, "DEBUG", "FS", &format!("Listing directory: {}", path));
     let mut files = Vec::new();
     
     for entry in entries {
@@ -89,6 +136,12 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 #[tauri::command]
 fn read_file_content(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_file_content(state: State<'_, AppState>, window: Window, path: String, content: String) -> Result<(), String> {
+    log_to_app(&state, &window, "INFO", "FS", &format!("Writing file: {}", path));
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -128,6 +181,8 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+
+    log_to_app(&state, &window, "INFO", "Command", &format!("Running vibe {} {}", command, args.join(" ")));
 
     let mut cmd = Command::new("vibe");
     cmd.arg("--server");
@@ -195,6 +250,8 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     });
 
     let handle_finished = window.app_handle();
+    let window_finished = window.clone();
+    let command_name = command.clone();
     tokio::spawn(async move {
         let status = child.wait().await;
         {
@@ -202,7 +259,16 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
             let mut stdin_lock = state.active_process_stdin.lock().await;
             *stdin_lock = None;
         }
-        window.emit("command-finished", status.map(|s| s.to_string()).ok()).unwrap();
+        
+        {
+            let state = handle_finished.state::<AppState>();
+            match &status {
+                Ok(s) => log_to_app(&state, &window_finished, "INFO", "Command", &format!("Command {} finished with status {}", command_name, s)),
+                Err(e) => log_to_app(&state, &window_finished, "ERROR", "Command", &format!("Command {} failed: {}", command_name, e)),
+            }
+        }
+
+        window_finished.emit("command-finished", status.map(|s| s.to_string()).ok()).unwrap();
     });
 
     Ok(())
@@ -392,11 +458,12 @@ fn get_projects() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn set_workspace_root(_state: State<'_, AppState>, path: String) -> Result<(), String> {
+fn set_workspace_root(state: State<'_, AppState>, window: Window, path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("Path does not exist".to_string());
     }
+    log_to_app(&state, &window, "INFO", "System", &format!("Switching workspace to {}", path));
     std::env::set_current_dir(&path_buf).map_err(|e| e.to_string())?;
     // We don't update state.workspace_root because it's not Mutex protected, 
     // but subsequent commands use current_dir or root passed from frontend.
@@ -408,34 +475,66 @@ fn set_workspace_root(_state: State<'_, AppState>, path: String) -> Result<(), S
 fn update_project_registry(
     id: String,
     name: String,
+    path: String,
     description: String,
-    github_url: String,
+    metadata: serde_json::Value,
     secrets: serde_json::Value
 ) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    let path = Path::new(&home).join(".vibe-tools").join("projects.json");
-    if !path.exists() {
+    let registry_path = Path::new(&home).join(".vibe-tools").join("projects.json");
+    if !registry_path.exists() {
         return Err("Registry file not found".to_string());
     }
     
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&registry_path).map_err(|e| e.to_string())?;
     let mut registry: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
     
     if let Some(projects) = registry["projects"].as_array_mut() {
         if let Some(project) = projects.iter_mut().find(|p| p["id"] == id) {
             project["name"] = serde_json::Value::String(name);
+            project["path"] = serde_json::Value::String(path);
             project["description"] = serde_json::Value::String(description);
-            project["metadata"]["github_url"] = serde_json::Value::String(github_url);
+            project["metadata"] = metadata;
             project["secrets"] = secrets;
         } else {
             return Err("Project not found in registry".to_string());
         }
     }
     
-    fs::write(path, serde_json::to_string_pretty(&registry).map_err(|e| e.to_string())?)
+    fs::write(registry_path, serde_json::to_string_pretty(&registry).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     
     Ok(())
+}
+
+#[tauri::command]
+async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, command: String, args: Vec<String>) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+
+    log_to_app(&state, &window, "INFO", "Command", &format!("Running vibe {} {} (JSON)", command, args.join(" ")));
+
+    let mut all_args = vec![command];
+    all_args.extend(args);
+    
+    let output = Command::new("vibe")
+        .args(all_args)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Attempt to parse JSON regardless of exit status if stdout is not empty
+    if !stdout.trim().is_empty() {
+        if let Ok(json) = serde_json::from_str(&stdout) {
+            return Ok(json);
+        }
+    }
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    
+    serde_json::from_str(&stdout).map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -443,10 +542,12 @@ fn main() {
     let workspace_root_path = PathBuf::from(&workspace_root);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState {
             workspace_root: workspace_root_path.clone(),
             terminal_buffers: Mutex::new(HashMap::new()),
             active_process_stdin: AsyncMutex::new(None),
+            app_logs: Mutex::new(VecDeque::with_capacity(1000)),
         })
         .setup(move |app| {
             let handle = app.handle();
@@ -497,6 +598,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_directory, 
             read_file_content,
+            write_file_content,
             get_workspace_root,
             run_vibe_command,
             send_vibe_input,
@@ -510,7 +612,11 @@ fn main() {
             get_terminal_buffer,
             get_projects,
             set_workspace_root,
-            update_project_registry
+            update_project_registry,
+            run_vibe_command_json,
+            emit_log,
+            get_all_logs,
+            clear_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
