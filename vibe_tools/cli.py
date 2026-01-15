@@ -44,6 +44,34 @@ load_dotenv(find_dotenv() or ".env")
 
 # Global check for server mode to monkeypatch early
 if "--server" in sys.argv:
+    # Check for initial payload if no subcommand is provided
+    if len([a for a in sys.argv if not a.startswith("-")]) <= 1:
+        import json
+
+        try:
+            line = sys.stdin.readline()
+            if line:
+                payload = json.loads(line)
+                command = payload.get("command")
+                args = payload.get("args", [])
+
+                # Reconstruct sys.argv for click
+                # Put --server first so it's recognized as a global option
+                new_argv = [sys.argv[0], "--server"]
+                
+                # Add other global flags if they were in original sys.argv
+                for arg in sys.argv[1:]:
+                    if arg.startswith("-") and arg != "--server":
+                        new_argv.append(arg)
+                
+                if command and command != "vibe":
+                    new_argv.append(command)
+                new_argv.extend(args)
+                
+                sys.argv = new_argv
+        except Exception:
+            pass
+
     from vibe_tools.command_output import output_manager
     import builtins
 
@@ -97,15 +125,24 @@ class OrderedGroup(click.Group):
     def __call__(self, *args, **kwargs):
         try:
             return super().__call__(*args, **kwargs)
-        except Exception as e:
+        except (Exception, KeyboardInterrupt) as e:
             if "--server" in sys.argv:
                 from vibe_tools.command_output import out_error, output_manager
                 import traceback
 
-                out_error(str(e), traceback=traceback.format_exc())
-                output_manager.set_final_result(1)
+                if isinstance(e, KeyboardInterrupt):
+                    # Check if it was a cancellation
+                    code, data = output_manager.get_final_result()
+                    if data.get("status") == "cancelled":
+                        # Already handled, just exit
+                        sys.exit(0)
+                    out_error("Interrupted by user")
+                else:
+                    out_error(str(e), traceback=traceback.format_exc())
+                
+                output_manager.set_final_result(1 if not isinstance(e, KeyboardInterrupt) else 0)
                 # Ensure the exit handler knows it failed
-                sys.exit(1)
+                sys.exit(1 if not isinstance(e, KeyboardInterrupt) else 0)
             raise
 
     def list_commands(self, ctx: click.Context) -> List[str]:

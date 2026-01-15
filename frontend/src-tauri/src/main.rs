@@ -126,19 +126,8 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    // Always add --server for GUI interaction
-    if !args.contains(&"--server".to_string()) {
-        args.push("--server".to_string());
-    }
-
     let mut cmd = Command::new("vibe");
-    
-    // If command is "vibe", we just use the args. 
-    // Otherwise we use command as the first arg.
-    if command != "vibe" {
-        cmd.arg(&command);
-    }
-    cmd.args(args);
+    cmd.arg("--server");
     
     let mut child = cmd
         .stdout(Stdio::piped())
@@ -149,7 +138,17 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
-    let stdin = child.stdin.take().unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+
+    // Send initial payload as per protocol spec
+    let payload = serde_json::json!({
+        "command": command,
+        "args": args
+    });
+    use tokio::io::AsyncWriteExt;
+    stdin.write_all(payload.to_string().as_bytes()).await.unwrap();
+    stdin.write_all(b"\n").await.unwrap();
+    stdin.flush().await.unwrap();
 
     {
         let mut stdin_lock = state.active_process_stdin.lock().await;

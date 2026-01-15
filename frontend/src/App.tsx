@@ -1043,6 +1043,8 @@ const App: React.FC = () => {
     }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
 
   const loadRegistry = async () => {
     try {
@@ -1071,6 +1073,32 @@ const App: React.FC = () => {
     
     loadRegistry();
     
+    const unlistenServer = listen('vibe-server-event', (event: any) => {
+      const payload = event.payload;
+      console.log('Vibe Server Event:', payload);
+      
+      if (payload.type === 'prompt') {
+        setPendingPrompt(payload.message);
+      } else if (payload.type === 'status') {
+        setServerStatus({
+          phase: payload.phase,
+          status: payload.status,
+          progress: payload.progress
+        });
+      } else if (payload.type === 'result') {
+        // Handle result if needed
+        setPendingPrompt(null);
+        setServerStatus(null);
+      } else if (payload.type === 'log') {
+        // The main log stream is handled by 'log-line', but we could use this for structured logs
+      } else if (payload.type === 'error') {
+        setMessages(prev => [...prev, {
+          role: 'Architect',
+          content: `❌ **Error**: ${payload.message}\n\n\`\`\`\n${payload.traceback || ''}\n\`\`\``
+        }]);
+      }
+    });
+
     const interval = setInterval(() => {
       invoke<AgentProcess[]>('get_active_agents')
         .then(setActiveAgents)
@@ -1081,10 +1109,43 @@ const App: React.FC = () => {
         .catch(console.error);
     }, 3000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unlistenServer.then(f => f());
+    };
   }, []);
 
+  const handlePromptSubmit = async () => {
+    if (!inputValue.trim()) return;
+    const val = inputValue.trim();
+    setMessages(prev => [...prev, { role: 'User', content: val }]);
+    setInputValue('');
+    setPendingPrompt(null);
+    try {
+      await invoke('send_vibe_input', { input: val });
+    } catch (e) {
+      console.error('Error sending prompt response:', e);
+    }
+  };
+
+  const handleCancelCommand = async (pid?: number) => {
+    try {
+      // Send cancel message via STDIN
+      await invoke('send_vibe_input', { input: JSON.stringify({ type: 'cancel' }) });
+    } catch (e) {
+      console.error('Error sending cancel command:', e);
+      // Fallback: use kill command if available
+      if (pid) {
+        await invoke('run_vibe_command', { command: 'kill', args: [pid.toString()] });
+      }
+    }
+  };
+
   const handleSendMessage = () => {
+    if (pendingPrompt) {
+      handlePromptSubmit();
+      return;
+    }
     if (!inputValue.trim()) return;
     
     const content = inputValue.trim();
@@ -1154,7 +1215,16 @@ const App: React.FC = () => {
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       <span className="text-[10px] text-blue-300 font-mono truncate">{agent.command}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">PID:{agent.pid}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-500 font-mono">PID:{agent.pid}</span>
+                      <button 
+                        onClick={() => handleCancelCommand(agent.pid)}
+                        className="text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors"
+                        title="Cancel command"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1163,6 +1233,28 @@ const App: React.FC = () => {
         </div>
 
         <div className="p-4 border-t border-zinc-800 bg-zinc-900">
+          {pendingPrompt && (
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg animate-in fade-in slide-in-from-bottom-2">
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Input Required</div>
+              <div className="text-sm text-zinc-200 mb-2">{pendingPrompt}</div>
+            </div>
+          )}
+          
+          {serverStatus && (
+            <div className="mb-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+              <div className="flex justify-between items-center mb-1.5">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{serverStatus.phase}: {serverStatus.status}</div>
+                <div className="text-[10px] font-mono text-zinc-400">{serverStatus.progress}%</div>
+              </div>
+              <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-blue-500 h-full transition-all duration-500 ease-out" 
+                  style={{ width: `${serverStatus.progress}%` }} 
+                />
+              </div>
+            </div>
+          )}
+
           <div className="mb-3 flex flex-wrap gap-2">
             {['/status', '/prd list', '/issue list', '/test'].map(cmd => (
               <button 
