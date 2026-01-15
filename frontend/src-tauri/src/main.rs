@@ -112,6 +112,36 @@ fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args:
     }
 }
 
+async fn spawn_vibe_process(command: String, args: Vec<String>) -> Result<tokio::process::Child, String> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+    use tokio::io::AsyncWriteExt;
+
+    let mut cmd = Command::new("vibe");
+    cmd.arg("--server")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::piped());
+    
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn vibe: {}", e))?;
+    
+    let mut stdin = child.stdin.take().ok_or("Failed to open stdin")?;
+    
+    let payload = serde_json::json!({
+        "command": command,
+        "args": args
+    });
+    
+    stdin.write_all(payload.to_string().as_bytes()).await.map_err(|e| e.to_string())?;
+    stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
+    stdin.flush().await.map_err(|e| e.to_string())?;
+    
+    // Put stdin back so it can be used for interactive prompts if needed
+    child.stdin = Some(stdin);
+    
+    Ok(child)
+}
+
 #[tauri::command]
 fn emit_log(state: State<'_, AppState>, window: Window, level: String, source: String, message: String, data: Option<serde_json::Value>) {
     log_to_app(&state, &window, &level, &source, &message, data);
@@ -202,35 +232,15 @@ async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<()
 
 #[tauri::command]
 async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
-    use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
-    use tokio::process::Command;
 
     log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
-    let mut cmd = Command::new("vibe");
-    cmd.arg("--server");
-    
-    let mut child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut child = spawn_vibe_process(command.clone(), args).await?;
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
-    let mut stdin = child.stdin.take().unwrap();
-
-    // Send initial payload as per protocol spec
-    let payload = serde_json::json!({
-        "command": command,
-        "args": args
-    });
-    use tokio::io::AsyncWriteExt;
-    stdin.write_all(payload.to_string().as_bytes()).await.unwrap();
-    stdin.write_all(b"\n").await.unwrap();
-    stdin.flush().await.unwrap();
+    let stdin = child.stdin.take().unwrap();
 
     {
         let mut stdin_lock = state.active_process_stdin.lock().await;
@@ -511,38 +521,56 @@ fn update_project_registry(
 
 #[tauri::command]
 async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, command: String, args: Vec<String>) -> Result<serde_json::Value, String> {
-    use std::process::Command;
+    use tokio::io::{AsyncBufReadExt, BufReader};
 
-    log_vibe_command_call(&state, &window, &command, &args, "INFO", false);
+    log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
-    let mut all_args = vec![command];
-    all_args.extend(args);
+    let mut child = spawn_vibe_process(command.clone(), args).await?;
     
-    let output = Command::new("vibe")
-        .args(all_args)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
     
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut reader = BufReader::new(stdout).lines();
+    let mut err_reader = BufReader::new(stderr).lines();
     
-    // Attempt to parse JSON regardless of exit status if stdout is not empty
-    if !stdout.trim().is_empty() {
-        if let Ok(json) = serde_json::from_str(&stdout) {
-            log_to_app(&state, &window, "INFO", "Command", &format!("Command finished successfully with JSON output"), None);
-            return Ok(json);
+    let mut result_json: Option<serde_json::Value> = None;
+    let mut error_msg = String::new();
+
+    // Spawn a task to capture stderr
+    let error_capture = tokio::spawn(async move {
+        let mut errs = String::new();
+        while let Ok(Some(line)) = err_reader.next_line().await {
+            if !errs.is_empty() { errs.push('\n'); }
+            errs.push_str(&line);
+        }
+        errs
+    });
+
+    while let Ok(Some(line)) = reader.next_line().await {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            // Check if it's the final result
+            if json["type"] == "result" {
+                result_json = Some(json["data"].clone());
+            }
+            // Also emit it so the UI can see progress if it wants to
+            window.emit("vibe-server-event", json).unwrap();
         }
     }
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).to_string();
-        log_to_app(&state, &window, "ERROR", "Command", &format!("Command failed: {}", err), None);
-        return Err(err);
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    error_msg = error_capture.await.map_err(|e| e.to_string())?;
+
+    if let Some(res) = result_json {
+        log_to_app(&state, &window, "INFO", "Command", &format!("Command {} finished with result", command), None);
+        return Ok(res);
+    }
+
+    if !status.success() {
+        log_to_app(&state, &window, "ERROR", "Command", &format!("Command {} failed: {}", command, error_msg), None);
+        return Err(error_msg);
     }
     
-    serde_json::from_str(&stdout).map_err(|e| {
-        log_to_app(&state, &window, "ERROR", "Command", &format!("Failed to parse command output as JSON: {}", e), None);
-        e.to_string()
-    })
+    Err("Command finished without returning a result".to_string())
 }
 
 fn main() {
