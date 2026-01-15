@@ -41,9 +41,21 @@ type LogTab = 'All' | 'System' | 'Commands' | 'Errors' | 'Agent';
 
 export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => {
   const [logs, setLogs] = useState<AppLog[]>([]);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(() => {
+    return localStorage.getItem('vibe-logs-expanded') === 'true';
+  });
   const [isFullView, setIsFullView] = useState(false);
-  const [activeTab, setActiveTab] = useState<LogTab>('All');
+  const [activeTab, setActiveTab] = useState<LogTab>(() => {
+    return (localStorage.getItem('vibe-logs-tab') as LogTab) || 'All';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vibe-logs-expanded', isExpanded.toString());
+  }, [isExpanded]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-logs-tab', activeTab);
+  }, [activeTab]);
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
