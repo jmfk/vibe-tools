@@ -109,7 +109,7 @@ def log_large_output(event_name: str, content: str) -> Optional[pathlib.Path]:
     except ValueError:
         rel_path = filepath
 
-    logger.info(f"EVENT: {event_name} -> See {rel_path}")
+    out_info(f"EVENT: {event_name} -> See {rel_path}", data=content)
 
     return filepath
 

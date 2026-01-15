@@ -1084,7 +1084,7 @@ const App: React.FC = () => {
   const [customThemeColors, setCustomThemeColors] = useState<Record<ThemeMode, ThemeColors>>(DEFAULT_THEMES);
 
   useEffect(() => {
-    invoke('emit_log', { level: 'INFO', source: 'UI', message: `Tab changed to: ${activeTab}` }).catch(() => {});
+    invoke('emit_log', { level: 'INFO', source: 'UI', message: `Tab changed to: ${activeTab}`, data: null }).catch(() => {});
   }, [activeTab]);
 
   const themeColors = useMemo(() => {
@@ -1114,7 +1114,7 @@ const App: React.FC = () => {
 
   const switchProject = async (project: Project) => {
     try {
-      await invoke('emit_log', { level: 'INFO', source: 'UI', message: `Switching to project: ${project.name}` });
+      await invoke('emit_log', { level: 'INFO', source: 'UI', message: `Switching to project: ${project.name}`, data: null });
       await invoke('set_workspace_root', { path: project.path });
       setWorkspaceRoot(project.path);
       await loadRegistry();
