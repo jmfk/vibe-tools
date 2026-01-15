@@ -75,9 +75,15 @@ const IN_PROGRESS_COLUMN: Column = { id: 'in_progress', title: 'In Progress', fo
 interface SortablePRDCardProps {
   prd: PRD;
   onClick?: (prd: PRD) => void;
+  onEdit?: (prd: PRD) => void;
+  onTitleUpdate?: (prd: PRD, newTitle: string) => void;
+  accentColor?: string;
 }
 
-const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & { accentColor?: string }) => {
+const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: SortablePRDCardProps) => {
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(prd.title);
+
   const {
     attributes,
     listeners,
@@ -85,7 +91,11 @@ const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & {
     transform,
     transition,
     isDragging
-  } = useSortable({ id: prd.id, data: prd });
+  } = useSortable({ 
+    id: prd.id, 
+    data: prd,
+    disabled: isEditingTitle
+  });
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -93,15 +103,34 @@ const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & {
     opacity: isDragging ? 0.3 : 1,
   };
 
+  const handleTitleSubmit = () => {
+    if (editedTitle.trim() && editedTitle !== prd.title) {
+      onTitleUpdate?.(prd, editedTitle);
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSubmit();
+    } else if (e.key === 'Escape') {
+      setEditedTitle(prd.title);
+      setIsEditingTitle(false);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
+      {...attributes}
+      {...listeners}
       className={cn(
-        "bg-panel border border-border rounded-lg p-3 shadow-sm hover:border-zinc-700 transition-colors cursor-default group relative",
+        "bg-panel border border-border rounded-lg p-3 shadow-sm hover:border-zinc-700 transition-colors group relative",
+        !isEditingTitle && "cursor-grab active:cursor-grabbing",
         isDragging && "z-50"
       )}
-      onClick={() => onClick?.(prd)}
+      onClick={() => !isEditingTitle && onClick?.(prd)}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -114,10 +143,43 @@ const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & {
                </div>
             )}
           </div>
-          <h4 className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">{prd.title}</h4>
+          {isEditingTitle ? (
+            <input
+              autoFocus
+              type="text"
+              value={editedTitle}
+              onChange={(e) => setEditedTitle(e.target.value)}
+              onBlur={handleTitleSubmit}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-zinc-800 text-xs font-semibold text-foreground rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+              style={{ "--tw-ring-color": accentColor } as any}
+            />
+          ) : (
+            <h4 
+              className="text-xs font-semibold text-foreground line-clamp-2 leading-snug hover:text-accent cursor-text"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setIsEditingTitle(true);
+              }}
+            >
+              {prd.title}
+            </h4>
+          )}
         </div>
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground p-1 -mr-1">
-          <GripVertical size={14} />
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.(prd);
+            }}
+            className="p-1 rounded hover:bg-zinc-800 text-muted hover:text-foreground transition-colors"
+          >
+            <Pencil size={12} />
+          </button>
+          <div className="text-muted opacity-50">
+            <GripVertical size={14} />
+          </div>
         </div>
       </div>
       
@@ -151,6 +213,72 @@ const SortablePRDCard = ({ prd, onClick, accentColor }: SortablePRDCardProps & {
   );
 };
 
+const DroppableColumn = ({ id, children, className }: { id: string, children: React.ReactNode, className?: string }) => {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className={className}>
+      {children}
+    </div>
+  );
+};
+
+const PRDEditor = ({ 
+  prd, 
+  content, 
+  onContentChange, 
+  onSave, 
+  onCancel, 
+  accentColor 
+}: { 
+  prd: PRD; 
+  content: string; 
+  onContentChange: (content: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  accentColor?: string;
+}) => {
+  return (
+    <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={onCancel}
+            className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold" style={{ color: accentColor }}>{prd.id}</span>
+              <span className="text-[10px] text-muted font-mono">{prd.filename}</span>
+            </div>
+            <h3 className="text-sm font-bold text-foreground">{prd.title}</h3>
+          </div>
+        </div>
+        
+        <button 
+          onClick={onSave}
+          className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-accent/10 hover:brightness-110"
+          style={{ backgroundColor: accentColor }}
+        >
+          <Save size={14} />
+          Save PRD
+        </button>
+      </div>
+
+      <div className="flex-1 bg-panel border border-border rounded-xl overflow-hidden flex flex-col">
+        <textarea
+          autoFocus
+          value={content}
+          onChange={(e) => onContentChange(e.target.value)}
+          className="flex-1 w-full bg-transparent p-6 text-sm font-mono leading-relaxed focus:outline-none resize-none scrollbar-thin"
+          placeholder="Write your PRD here..."
+        />
+      </div>
+    </div>
+  );
+};
+
 export const PlannerBoard = ({ 
   workspaceRoot, 
   onSelectPRD,
@@ -173,6 +301,8 @@ export const PlannerBoard = ({
     next: true,
     history: false
   });
+  const [editingPRD, setEditingPRD] = useState<PRD | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -391,8 +521,84 @@ updated_at: '${new Date().toISOString()}'
     }
   };
 
+  const handleEditPRD = async (prd: PRD) => {
+    try {
+      const content = await invoke<string>('read_file_content', { path: prd.path });
+      setEditingPRD(prd);
+      setEditContent(content);
+    } catch (err) {
+      console.error('Failed to load PRD content:', err);
+    }
+  };
+
+  const handleSavePRD = async () => {
+    if (!editingPRD) return;
+    try {
+      await invoke('write_file_content', { path: editingPRD.path, content: editContent });
+      setEditingPRD(null);
+      setEditContent('');
+      loadPRDs();
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to save PRD:', err);
+      alert('Failed to save PRD.');
+    }
+  };
+
+  const handleUpdatePRDTitle = async (prd: PRD, newTitle: string) => {
+    try {
+      let content = await invoke<string>('read_file_content', { path: prd.path });
+      
+      // 1. Update markdown header (first line starting with #)
+      const lines = content.split('\n');
+      if (lines[0].startsWith('# ')) {
+        lines[0] = `# ${newTitle}`;
+      } else {
+        // Find the first line starting with #
+        const h1Index = lines.findIndex(l => l.startsWith('# '));
+        if (h1Index !== -1) {
+          lines[h1Index] = `# ${newTitle}`;
+        }
+      }
+      content = lines.join('\n');
+
+      // 2. Update YAML metadata
+      const yamlMatch = content.match(/```yaml\n([\s\S]*?)\n```/);
+      if (yamlMatch) {
+        try {
+          const meta = yaml.load(yamlMatch[1]) as any;
+          meta.title = newTitle;
+          const newYaml = yaml.dump(meta).trim();
+          content = content.replace(yamlMatch[1], newYaml);
+        } catch (e) {
+          console.error('Failed to parse YAML for title update:', e);
+        }
+      }
+
+      await invoke('write_file_content', { path: prd.path, content });
+      await loadPRDs();
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to update PRD title:', err);
+      alert('Failed to update PRD title.');
+    }
+  };
+
   const activePRD = useMemo(() => prds.find(p => p.id === activeId), [prds, activeId]);
   const inProgressPRD = useMemo(() => prds.find(p => p.columnId === 'in_progress'), [prds]);
+
+  if (editingPRD) {
+    return (
+      <PRDEditor 
+        prd={editingPRD} 
+        content={editContent} 
+        onContentChange={setEditContent} 
+        onSave={handleSavePRD} 
+        onCancel={() => setEditingPRD(null)} 
+        accentColor={accentColor}
+      />
+    );
+  }
 
   return (
     <div className="h-full flex flex-col gap-4">
@@ -453,7 +659,8 @@ updated_at: '${new Date().toISOString()}'
               <span className="text-[10px] font-bold text-foreground uppercase tracking-widest">Active Implementation</span>
             </div>
             
-            <div 
+            <DroppableColumn 
+              id="in_progress"
               className={cn(
                 "h-24 rounded-xl border border-dashed flex items-center justify-center transition-all",
                 inProgressPRD ? "bg-panel border-border border-solid p-4" : "bg-zinc-900/20 border-border/50"
@@ -466,7 +673,13 @@ updated_at: '${new Date().toISOString()}'
               >
                 {inProgressPRD ? (
                   <div className="w-full max-w-2xl">
-                    <SortablePRDCard prd={inProgressPRD} onClick={onSelectPRD} accentColor={accentColor} />
+                    <SortablePRDCard 
+                      prd={inProgressPRD} 
+                      onClick={onSelectPRD} 
+                      onEdit={handleEditPRD} 
+                      onTitleUpdate={handleUpdatePRDTitle}
+                      accentColor={accentColor} 
+                    />
                   </div>
                 ) : (
                   <div className="text-xs text-muted flex items-center gap-2 italic">
@@ -475,7 +688,7 @@ updated_at: '${new Date().toISOString()}'
                   </div>
                 )}
               </SortableContext>
-            </div>
+            </DroppableColumn>
           </div>
 
           <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
@@ -490,7 +703,7 @@ updated_at: '${new Date().toISOString()}'
                   </div>
                 </div>
                 
-                <div className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto no-scrollbar">
+                <DroppableColumn id={column.id} className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto no-scrollbar">
                   <SortableContext
                     id={column.id}
                     items={prds.filter(p => p.columnId === column.id).map(p => p.id)}
@@ -542,18 +755,32 @@ updated_at: '${new Date().toISOString()}'
                       {prds
                         .filter(p => p.columnId === column.id)
                         .map(prd => (
-                          <SortablePRDCard key={prd.id} prd={prd} onClick={onSelectPRD} accentColor={accentColor} />
+                          <SortablePRDCard 
+                            key={prd.id} 
+                            prd={prd} 
+                            onClick={onSelectPRD} 
+                            onEdit={handleEditPRD} 
+                            onTitleUpdate={handleUpdatePRDTitle}
+                            accentColor={accentColor} 
+                          />
                         ))}
                     </div>
                   </SortableContext>
-                </div>
+                </DroppableColumn>
               </div>
             ))}
           </div>
         </div>
 
         <DragOverlay>
-          {activePRD ? <SortablePRDCard prd={activePRD} accentColor={accentColor} /> : null}
+          {activePRD ? (
+            <SortablePRDCard 
+              prd={activePRD} 
+              onEdit={handleEditPRD} 
+              onTitleUpdate={handleUpdatePRDTitle}
+              accentColor={accentColor} 
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
     </div>
