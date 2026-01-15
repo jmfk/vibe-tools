@@ -4,6 +4,17 @@
 
 set -e
 
+# Parse arguments
+DESKTOP_MODE=false
+for arg in "$@"; do
+    case $arg in
+        --desktop)
+            DESKTOP_MODE=true
+            shift
+            ;;
+    esac
+done
+
 echo "--- Installing Vibe-Tools ---"
 
 # Check for Git
@@ -29,11 +40,8 @@ if ! command -v pip3 &> /dev/null; then
     exit 1
 fi
 
-# Option for global installation
-echo "Do you want to install 'vibe' globally so it's available in all environments?"
-echo "(Recommended: This uses 'pipx' to make commands available everywhere)"
-read -p "(y/n): " install_global
-if [[ $install_global == "y" || $install_global == "Y" ]]; then
+# Helper for global install
+install_vibe_globally() {
     if ! command -v pipx &> /dev/null; then
         echo "pipx not found. pipx is recommended for global Python tools."
         if command -v brew &> /dev/null; then
@@ -65,6 +73,76 @@ if [[ $install_global == "y" || $install_global == "Y" ]]; then
             python3 -m pip install -e .
         fi
     fi
+}
+
+# --- Desktop Application Build & Install ---
+if [[ $DESKTOP_MODE == true ]]; then
+    echo ""
+    echo "🖥️  Entering Desktop Installation Mode"
+    
+    # 1. Dependency Checks for Desktop
+    echo "Checking Node.js..."
+    if ! command -v node &> /dev/null; then
+        echo "Error: node is not installed. Node.js is required for the Tauri dashboard."
+        exit 1
+    fi
+    
+    echo "Checking Rust..."
+    if ! command -v cargo &> /dev/null; then
+        echo "Error: cargo (Rust) is not installed. Rust is required to build the Tauri dashboard."
+        echo "Install it via: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+        exit 1
+    fi
+
+    # 2. Global Environment Setup
+    echo "Initializing global environment..."
+    python3 -m pip install -e .
+    python3 -m vibe_tools.setup desktop-init
+
+    # 3. Frontend Build
+    echo "Building frontend assets..."
+    cd frontend
+    npm install
+    npm run build
+    cd ..
+
+    # 4. Tauri Build
+    echo "Building Tauri production bundle..."
+    cd frontend
+    # Generate icons if we have a source
+    if [ -f "src-tauri/icons/icon.png" ]; then
+        echo "Generating app icons from src-tauri/icons/icon.png..."
+        npm run tauri icon src-tauri/icons/icon.png
+    fi
+    npm run tauri build
+    cd ..
+
+    # 5. App Installation (macOS only for now)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        APP_PATH=$(ls -d frontend/src-tauri/target/release/bundle/macos/*.app | head -n 1)
+        if [[ -d "$APP_PATH" ]]; then
+            echo ""
+            read -p "Would you like to move the Vibe Dashboard to your Applications folder? (y/n): " move_app
+            if [[ $move_app == "y" || $move_app == "Y" ]]; then
+                echo "Installing to /Applications..."
+                cp -R "$APP_PATH" /Applications/
+                echo "✅ Vibe Dashboard installed in /Applications"
+            fi
+        fi
+    fi
+
+    echo ""
+    echo "--- Desktop Installation Complete ---"
+    exit 0
+fi
+
+# Standard (CLI-only) installation flow
+# Option for global installation
+echo "Do you want to install 'vibe' globally so it's available in all environments?"
+echo "(Recommended: This uses 'pipx' to make commands available everywhere)"
+read -p "(y/n): " install_global
+if [[ $install_global == "y" || $install_global == "Y" ]]; then
+    install_vibe_globally
 fi
 
 # Check if user wants managed environment
@@ -90,6 +168,3 @@ echo ""
 echo "--- Installation Complete ---"
 echo "You can now use the 'vibe' and 'vibe-setup' commands."
 echo "Try running: vibe --help or vibe-setup --help"
-
-
-
