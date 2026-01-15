@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::io::{Write, self};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
@@ -58,6 +59,7 @@ struct AppLog {
     level: String,
     source: String,
     message: String,
+    data: Option<serde_json::Value>,
 }
 
 struct AppState {
@@ -68,12 +70,13 @@ struct AppState {
     app_logs: Mutex<VecDeque<AppLog>>,
 }
 
-fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, message: &str) {
+fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, message: &str, data: Option<serde_json::Value>) {
     let log = AppLog {
         timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
         level: level.to_string(),
         source: source.to_string(),
         message: message.to_string(),
+        data,
     };
 
     {
@@ -87,9 +90,25 @@ fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, mess
     let _ = window.emit("app-log", log);
 }
 
+fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args: &[String], level: &str) {
+    let full_command = format!("vibe {} {}", command, args.join(" "));
+    log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command));
+    
+    // Persistent file logging
+    let log_path = PathBuf::from("implementation/logs/tauri_vibe_commands.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let _ = writeln!(file, "[{}] [{}] {}", timestamp, level, full_command);
+    }
+}
+
 #[tauri::command]
-fn emit_log(state: State<'_, AppState>, window: Window, level: String, source: String, message: String) {
-    log_to_app(&state, &window, &level, &source, &message);
+fn emit_log(state: State<'_, AppState>, window: Window, level: String, source: String, message: String, data: Option<serde_json::Value>) {
+    log_to_app(&state, &window, &level, &source, &message, data);
 }
 
 #[tauri::command]
@@ -108,7 +127,6 @@ fn clear_logs(state: State<'_, AppState>, window: Window) {
 #[tauri::command]
 fn list_directory(state: State<'_, AppState>, window: Window, path: String) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
-    log_to_app(&state, &window, "DEBUG", "FS", &format!("Listing directory: {}", path));
     let mut files = Vec::new();
     
     for entry in entries {
@@ -140,7 +158,7 @@ fn read_file_content(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn write_file_content(state: State<'_, AppState>, window: Window, path: String, content: String) -> Result<(), String> {
-    log_to_app(&state, &window, "INFO", "FS", &format!("Writing file: {}", path));
+    log_to_app(&state, &window, "INFO", "FS", &format!("Writing file: {}", path), None);
     fs::write(path, content).map_err(|e| e.to_string())
 }
 
@@ -182,7 +200,7 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    log_to_app(&state, &window, "INFO", "Command", &format!("Running vibe {} {}", command, args.join(" ")));
+    log_vibe_command_call(&state, &window, &command, &args, "INFO");
 
     let mut cmd = Command::new("vibe");
     cmd.arg("--server");
@@ -263,8 +281,8 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
         {
             let state = handle_finished.state::<AppState>();
             match &status {
-                Ok(s) => log_to_app(&state, &window_finished, "INFO", "Command", &format!("Command {} finished with status {}", command_name, s)),
-                Err(e) => log_to_app(&state, &window_finished, "ERROR", "Command", &format!("Command {} failed: {}", command_name, e)),
+                Ok(s) => log_to_app(&state, &window_finished, "INFO", "Command", &format!("Command {} finished with status {}", command_name, s), None),
+                Err(e) => log_to_app(&state, &window_finished, "ERROR", "Command", &format!("Command {} failed: {}", command_name, e), None),
             }
         }
 
@@ -293,8 +311,9 @@ struct AgentProcess {
 }
 
 #[tauri::command]
-async fn get_active_agents() -> Result<Vec<AgentProcess>, String> {
+async fn get_active_agents(state: State<'_, AppState>, window: Window) -> Result<Vec<AgentProcess>, String> {
     use std::process::Command;
+    log_vibe_command_call(&state, &window, "ps", &vec!["--json".to_string()], "DEBUG");
     let output = Command::new("vibe")
         .args(["ps", "--json"])
         .output()
@@ -309,8 +328,9 @@ async fn get_active_agents() -> Result<Vec<AgentProcess>, String> {
 }
 
 #[tauri::command]
-async fn get_total_cost() -> Result<f64, String> {
+async fn get_total_cost(state: State<'_, AppState>, window: Window) -> Result<f64, String> {
     use std::process::Command;
+    log_vibe_command_call(&state, &window, "cost", &vec!["--json".to_string()], "DEBUG");
     let output = Command::new("vibe")
         .args(["cost", "--json"])
         .output()
@@ -463,7 +483,7 @@ fn set_workspace_root(state: State<'_, AppState>, window: Window, path: String) 
     if !path_buf.exists() {
         return Err("Path does not exist".to_string());
     }
-    log_to_app(&state, &window, "INFO", "System", &format!("Switching workspace to {}", path));
+    log_to_app(&state, &window, "INFO", "System", &format!("Switching workspace to {}", path), None);
     std::env::set_current_dir(&path_buf).map_err(|e| e.to_string())?;
     // We don't update state.workspace_root because it's not Mutex protected, 
     // but subsequent commands use current_dir or root passed from frontend.
@@ -511,7 +531,7 @@ fn update_project_registry(
 async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, command: String, args: Vec<String>) -> Result<serde_json::Value, String> {
     use std::process::Command;
 
-    log_to_app(&state, &window, "INFO", "Command", &format!("Running vibe {} {} (JSON)", command, args.join(" ")));
+    log_vibe_command_call(&state, &window, &command, &args, "INFO");
 
     let mut all_args = vec![command];
     all_args.extend(args);
@@ -526,15 +546,21 @@ async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, comma
     // Attempt to parse JSON regardless of exit status if stdout is not empty
     if !stdout.trim().is_empty() {
         if let Ok(json) = serde_json::from_str(&stdout) {
+            log_to_app(&state, &window, "INFO", "Command", &format!("Command finished successfully with JSON output"), None);
             return Ok(json);
         }
     }
 
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        log_to_app(&state, &window, "ERROR", "Command", &format!("Command failed: {}", err), None);
+        return Err(err);
     }
     
-    serde_json::from_str(&stdout).map_err(|e| e.to_string())
+    serde_json::from_str(&stdout).map_err(|e| {
+        log_to_app(&state, &window, "ERROR", "Command", &format!("Failed to parse command output as JSON: {}", e), None);
+        e.to_string()
+    })
 }
 
 fn main() {
