@@ -77,19 +77,24 @@ const Accordion = ({
   title, 
   children, 
   defaultOpen = true,
-  icon: Icon
+  icon: Icon,
+  isDark = true
 }: { 
   title: string, 
   children: React.ReactNode, 
   defaultOpen?: boolean,
-  icon?: any
+  icon?: any,
+  isDark?: boolean
 }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
     <div className="border-b border-zinc-800/50 last:border-0">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors group"
+        className={cn(
+          "w-full flex items-center justify-between px-4 py-3 transition-colors group",
+          isDark ? "hover:bg-zinc-800/30" : "hover:bg-zinc-200/30"
+        )}
       >
         <div className="flex items-center gap-2">
           {Icon && <Icon size={14} className={cn("text-muted group-hover:text-foreground", isOpen && "text-foreground")} />}
@@ -420,8 +425,8 @@ const ProjectSettingsEditor = ({
                     className={cn(
                       "px-3 py-2.5 rounded-xl border text-xs font-bold transition-all capitalize flex items-center justify-center gap-2",
                       theme === m 
-                        ? "bg-zinc-800 border-zinc-600 text-foreground" 
-                        : "bg-zinc-950/50 border-zinc-800/50 text-muted hover:text-foreground hover:bg-zinc-900"
+                        ? (themeColors[m].isDark ? "bg-zinc-800 border-zinc-600 text-foreground" : "bg-zinc-200 border-zinc-300 text-foreground")
+                        : (themeColors[m].isDark ? "bg-zinc-950/50 border-zinc-800/50 text-muted hover:text-foreground hover:bg-zinc-900" : "bg-zinc-50 border-zinc-200 text-muted hover:text-foreground hover:bg-zinc-100")
                     )}
                     style={theme === m ? { borderColor: color, color: color } : {}}
                   >
@@ -574,7 +579,7 @@ const ProjectSettingsEditor = ({
   );
 };
 
-const VibeSidebar = ({ root, onSelect, selectedPath, accentColor }: { root: string, onSelect: (artifact: Artifact) => void, selectedPath?: string, accentColor?: string }) => {
+const VibeSidebar = ({ root, onSelect, selectedPath, accentColor, isDark }: { root: string, onSelect: (artifact: Artifact) => void, selectedPath?: string, accentColor?: string, isDark: boolean }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
   const [specTree, setSpecTree] = useState<TreeItem[]>([]);
@@ -662,8 +667,8 @@ const VibeSidebar = ({ root, onSelect, selectedPath, accentColor }: { root: stri
                 className={cn(
                   "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
                   selectedPath === artifact.path 
-                    ? "bg-zinc-800/50 border shadow-sm font-bold" 
-                    : "text-muted hover:text-foreground hover:bg-zinc-800/20"
+                    ? (isDark ? "bg-zinc-800/50 border shadow-sm font-bold" : "bg-zinc-200/50 border shadow-sm font-bold")
+                    : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/20" : "text-muted hover:text-foreground hover:bg-zinc-200/20")
                 )}
                 style={selectedPath === artifact.path ? { borderColor: `${accentColor}40`, color: accentColor } : {}}
               >
@@ -681,21 +686,21 @@ const VibeSidebar = ({ root, onSelect, selectedPath, accentColor }: { root: stri
                 <div className="w-1 h-1 rounded-full bg-purple-500" />
                 Product (PRDs)
               </div>
-              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} />
+              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} isDark={isDark} />
             </div>
             <div>
               <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">
                 <div className="w-1 h-1 rounded-full bg-accent" />
                 System Specs
               </div>
-              <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} />
+              <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} isDark={isDark} />
             </div>
             <div>
               <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">
                 <div className="w-1 h-1 rounded-full bg-emerald-500" />
                 Issues
               </div>
-              <SidebarTree items={issueTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} />
+              <SidebarTree items={issueTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} isDark={isDark} />
             </div>
           </>
         )}
@@ -742,13 +747,15 @@ const SidebarTree = ({
   level = 0, 
   selectedPath, 
   onSelect,
-  accentColor
+  accentColor,
+  isDark
 }: { 
   items: TreeItem[], 
   level?: number, 
   selectedPath?: string, 
   onSelect: (artifact: Artifact) => void,
-  accentColor?: string
+  accentColor?: string,
+  isDark: boolean
 }) => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -764,7 +771,10 @@ const SidebarTree = ({
             <div>
               <button
                 onClick={() => toggle(item.path)}
-                className="w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 font-bold text-muted hover:text-foreground hover:bg-zinc-800/20"
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 font-bold text-muted hover:text-foreground",
+                  isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20"
+                )}
                 style={{ paddingLeft: `${level * 12 + 8}px` }}
               >
                 {expanded[item.path] ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
@@ -778,6 +788,7 @@ const SidebarTree = ({
                   selectedPath={selectedPath} 
                   onSelect={onSelect} 
                   accentColor={accentColor}
+                  isDark={isDark}
                 />
               )}
             </div>
@@ -788,8 +799,8 @@ const SidebarTree = ({
                 className={cn(
                   "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
                   selectedPath === item.path 
-                    ? "bg-zinc-800/50 border shadow-sm font-bold" 
-                    : "text-muted hover:text-foreground hover:bg-zinc-800/20"
+                    ? (isDark ? "bg-zinc-800/50 border shadow-sm font-bold" : "bg-zinc-200/50 border shadow-sm font-bold")
+                    : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/20" : "text-muted hover:text-foreground hover:bg-zinc-200/20")
                 )}
                 style={{ 
                   paddingLeft: `${level * 12 + 24}px`,
@@ -1064,12 +1075,30 @@ const ProjectManagerView = ({
 
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('planner');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    return (localStorage.getItem('vibe-active-tab') as Tab) || 'planner';
+  });
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents, setActiveAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [projectRegistry, setProjectRegistry] = useState<ProjectRegistry>({ projects: [], last_active_project_id: null });
-  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(() => {
+    const saved = localStorage.getItem('vibe-selected-artifact');
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (selectedArtifact) {
+      localStorage.setItem('vibe-selected-artifact', JSON.stringify(selectedArtifact));
+    } else {
+      localStorage.removeItem('vibe-selected-artifact');
+    }
+  }, [selectedArtifact]);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'Architect',
@@ -1082,10 +1111,30 @@ const App: React.FC = () => {
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>('night');
   const [accentColor, setAccentColor] = useState('#3b82f6');
   const [customThemeColors, setCustomThemeColors] = useState<Record<ThemeMode, ThemeColors>>(DEFAULT_THEMES);
+  const [interactionMode, setInteractionMode] = useState<'ASK' | 'AGENT'>(() => {
+    return (localStorage.getItem('vibe-interaction-mode') as 'ASK' | 'AGENT') || 'ASK';
+  });
 
   useEffect(() => {
+    localStorage.setItem('vibe-active-tab', activeTab);
     invoke('emit_log', { level: 'INFO', source: 'UI', message: `Tab changed to: ${activeTab}`, data: null }).catch(() => {});
   }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-interaction-mode', interactionMode);
+  }, [interactionMode]);
+
+  useEffect(() => {
+    // Sync interaction mode with backend on startup
+    const syncMode = async () => {
+      try {
+        await invoke('run_vibe_command', { command: 'mode', args: [interactionMode.toLowerCase()] });
+      } catch (e) {
+        // Ignore errors on startup
+      }
+    };
+    syncMode();
+  }, []);
 
   const themeColors = useMemo(() => {
     return customThemeColors[currentTheme];
@@ -1203,7 +1252,13 @@ const App: React.FC = () => {
     }
   };
 
-  const [plannerView, setPlannerView] = useState<'board' | 'graph'>('board');
+  const [plannerView, setPlannerView] = useState<'board' | 'graph'>(() => {
+    return (localStorage.getItem('vibe-planner-view') as 'board' | 'graph') || 'board';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vibe-planner-view', plannerView);
+  }, [plannerView]);
 
   const cycleTheme = () => {
     const modes: ThemeMode[] = ['night', 'day', 'morning', 'sunset'];
@@ -1252,13 +1307,14 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 px-1 rounded-md border h-10 bg-panel border-border">
+          <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
             <TabButton 
               active={activeTab === 'planner'} 
               onClick={() => setActiveTab('planner')}
               icon={<Kanban size={14} />}
               label="Planner"
               accentColor={accentColor}
+              isDark={themeColors.isDark}
             />
             <TabButton 
               active={activeTab === 'issues'} 
@@ -1266,6 +1322,7 @@ const App: React.FC = () => {
               icon={<Bug size={14} />}
               label="Issues"
               accentColor={accentColor}
+              isDark={themeColors.isDark}
             />
             <TabButton 
               active={activeTab === 'stats'} 
@@ -1273,6 +1330,7 @@ const App: React.FC = () => {
               icon={<BarChart3 size={14} />}
               label="Stats"
               accentColor={accentColor}
+              isDark={themeColors.isDark}
             />
             <TabButton 
               active={activeTab === 'projects'} 
@@ -1280,6 +1338,7 @@ const App: React.FC = () => {
               icon={<LayoutDashboard size={14} />}
               label="Projects"
               accentColor={accentColor}
+              isDark={themeColors.isDark}
             />
           </div>
 
@@ -1344,7 +1403,7 @@ const App: React.FC = () => {
         {/* Left Pane: Project Pulse */}
         <Panel id="sidebar-left" defaultSize={200} minSize={200} className="flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border">
           <div className="flex-1 overflow-y-auto no-scrollbar">
-            <Accordion title="Projects" icon={LayoutDashboard} defaultOpen={false}>
+            <Accordion title="Projects" icon={LayoutDashboard} defaultOpen={false} isDark={themeColors.isDark}>
               <div className="space-y-1">
                 {projectRegistry.projects.map(p => (
                   <button
@@ -1353,8 +1412,8 @@ const App: React.FC = () => {
                     className={cn(
                       "w-full text-left px-2 py-1.5 rounded text-[11px] transition-colors truncate flex items-center gap-2",
                       projectRegistry.last_active_project_id === p.id 
-                        ? "bg-zinc-800/20 border shadow-sm" 
-                        : "text-muted hover:text-foreground hover:bg-zinc-800/10"
+                        ? (themeColors.isDark ? "bg-zinc-800/20 border shadow-sm" : "bg-zinc-200/20 border shadow-sm")
+                        : (themeColors.isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/10" : "text-muted hover:text-foreground hover:bg-zinc-200/10")
                     )}
                     style={projectRegistry.last_active_project_id === p.id ? { borderColor: `${accentColor}40`, color: accentColor } : {}}
                   >
@@ -1365,15 +1424,15 @@ const App: React.FC = () => {
               </div>
             </Accordion>
 
-            <Accordion title="Vibe Explorer (PRDs)" icon={Files}>
+            <Accordion title="Vibe Explorer (PRDs)" icon={Files} isDark={themeColors.isDark}>
               <div className="mt-2">
                 <VibeSidebar root={workspaceRoot} onSelect={(artifact) => {
                   setSelectedArtifact(artifact);
-                }} selectedPath={selectedArtifact?.path} accentColor={accentColor} currentTheme={currentTheme} />
+                }} selectedPath={selectedArtifact?.path} accentColor={accentColor} isDark={themeColors.isDark} />
               </div>
             </Accordion>
 
-            <Accordion title="Properties" icon={Tag}>
+            <Accordion title="Properties" icon={Tag} isDark={themeColors.isDark}>
               {selectedArtifact ? (
                 <div className="space-y-3 p-1">
                   <div>
@@ -1430,7 +1489,9 @@ const App: React.FC = () => {
                       onClick={() => setPlannerView('board')}
                       className={cn(
                         "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                        plannerView === 'board' ? "bg-zinc-800 text-accent shadow-sm" : "text-muted hover:text-foreground"
+                        plannerView === 'board' 
+                          ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm")
+                          : "text-muted hover:text-foreground"
                       )}
                     >
                       <div className="flex items-center gap-2">
@@ -1442,7 +1503,9 @@ const App: React.FC = () => {
                       onClick={() => setPlannerView('graph')}
                       className={cn(
                         "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                        plannerView === 'graph' ? "bg-zinc-800 text-accent shadow-sm" : "text-muted hover:text-foreground"
+                        plannerView === 'graph' 
+                          ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm")
+                          : "text-muted hover:text-foreground"
                       )}
                     >
                       <div className="flex items-center gap-2">
@@ -1506,6 +1569,7 @@ const App: React.FC = () => {
               <div className="h-full overflow-y-auto">
                 <StatsView 
                   accentColor={accentColor} 
+                  isDark={themeColors.isDark}
                 />
               </div>
             )}
@@ -1523,7 +1587,28 @@ const App: React.FC = () => {
                 <MessageSquare size={16} style={{ color: accentColor }} />
                 <span className="text-xs uppercase tracking-widest font-bold">Agent Interaction</span>
               </div>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-3">
+                <div className="flex bg-zinc-900/50 rounded-lg p-0.5 border border-border">
+                  {(['ASK', 'AGENT'] as const).map(m => (
+                    <button
+                      key={m}
+                      onClick={async () => {
+                        setInteractionMode(m);
+                        await invoke('run_vibe_command', { command: 'mode', args: [m.toLowerCase()] });
+                      }}
+                      className={cn(
+                        "px-2 py-1 rounded-md text-[9px] font-bold transition-all",
+                        interactionMode === m 
+                          ? (themeColors.isDark ? "bg-zinc-800 shadow-sm" : "bg-zinc-200 shadow-sm")
+                          : "text-muted hover:text-foreground"
+                      )}
+                      style={interactionMode === m ? { color: accentColor } : {}}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <div className="w-px h-4 bg-border mx-1" />
                 <button onClick={() => setMessages([])} className="p-1.5 rounded transition-colors text-muted hover:text-red-400 hover:bg-zinc-800/20" title="Clear Chat">
                   <Trash2 size={14} />
                 </button>
@@ -1629,7 +1714,7 @@ const App: React.FC = () => {
       </PanelGroup>
       )}
       </div>
-      <UnifiedLogMonitor accentColor={accentColor} />
+      <UnifiedLogMonitor accentColor={accentColor} isDark={themeColors.isDark} />
     </div>
   );
 };
@@ -1640,16 +1725,17 @@ interface TabButtonProps {
   icon: React.ReactNode;
   label: string;
   accentColor: string;
+  isDark: boolean;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label, accentColor }) => (
+const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label, accentColor, isDark }) => (
   <button 
     onClick={onClick}
     className={cn(
       "flex items-center gap-2 px-3 py-2 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
       active 
-        ? "text-foreground bg-zinc-800/50" 
-        : "border-transparent text-muted hover:text-foreground hover:bg-zinc-800/30"
+        ? cn("text-foreground", isDark ? "bg-zinc-800/50" : "bg-zinc-200/50") 
+        : cn("border-transparent text-muted hover:text-foreground", isDark ? "hover:bg-zinc-800/30" : "hover:bg-zinc-200/30")
     )}
     style={active ? { borderBottomColor: accentColor } : {}}
   >

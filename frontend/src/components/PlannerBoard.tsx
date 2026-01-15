@@ -83,9 +83,10 @@ interface SortablePRDCardProps {
   onEdit?: (prd: PRD) => void;
   onTitleUpdate?: (prd: PRD, newTitle: string) => void;
   accentColor?: string;
+  isDark?: boolean;
 }
 
-const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: SortablePRDCardProps) => {
+const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor, isDark }: SortablePRDCardProps) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(prd.title);
 
@@ -157,7 +158,10 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
               onBlur={handleTitleSubmit}
               onKeyDown={handleKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-zinc-800 text-xs font-semibold text-foreground rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+              className={cn(
+                "w-full text-xs font-semibold text-foreground rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-accent",
+                isDark ? "bg-zinc-800" : "bg-zinc-100"
+              )}
               style={{ "--tw-ring-color": accentColor } as any}
             />
           ) : (
@@ -178,7 +182,10 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
               e.stopPropagation();
               onEdit?.(prd);
             }}
-            className="p-1 rounded hover:bg-zinc-800 text-muted hover:text-foreground transition-colors"
+            className={cn(
+              "p-1 rounded transition-colors",
+              isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-200"
+            )}
           >
             <Pencil size={12} />
           </button>
@@ -259,7 +266,10 @@ const PRDEditor = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onCancel}
-            className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors"
+            className={cn(
+              "p-2 rounded-lg text-muted transition-colors",
+              isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-200"
+            )}
           >
             <ArrowLeft size={18} />
           </button>
@@ -278,7 +288,9 @@ const PRDEditor = ({
               onClick={() => setViewMode('edit')}
               className={cn(
                 "p-1.5 rounded transition-all",
-                viewMode === 'edit' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+                viewMode === 'edit' 
+                  ? (isDark ? "bg-zinc-800 text-foreground" : "bg-zinc-200 text-foreground") 
+                  : "text-muted hover:text-foreground"
               )}
               title="Edit Mode"
               style={viewMode === 'edit' ? { color: accentColor } : {}}
@@ -289,7 +301,9 @@ const PRDEditor = ({
               onClick={() => setViewMode('split')}
               className={cn(
                 "p-1.5 rounded transition-all",
-                viewMode === 'split' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+                viewMode === 'split' 
+                  ? (isDark ? "bg-zinc-800 text-foreground" : "bg-zinc-200 text-foreground") 
+                  : "text-muted hover:text-foreground"
               )}
               title="Split Mode"
               style={viewMode === 'split' ? { color: accentColor } : {}}
@@ -300,7 +314,9 @@ const PRDEditor = ({
               onClick={() => setViewMode('preview')}
               className={cn(
                 "p-1.5 rounded transition-all",
-                viewMode === 'preview' ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+                viewMode === 'preview' 
+                  ? (isDark ? "bg-zinc-800 text-foreground" : "bg-zinc-200 text-foreground") 
+                  : "text-muted hover:text-foreground"
               )}
               title="Preview Mode"
               style={viewMode === 'preview' ? { color: accentColor } : {}}
@@ -311,7 +327,10 @@ const PRDEditor = ({
 
           <button
             onClick={handleCopy}
-            className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors mr-2"
+            className={cn(
+              "p-2 rounded-lg text-muted transition-colors mr-2",
+              isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-200"
+            )}
             title="Copy to Clipboard"
           >
             {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
@@ -714,7 +733,7 @@ updated_at: '${new Date().toISOString()}'
                 className={cn(
                   "px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
                   visibleColumns[col.id]
-                    ? "bg-zinc-800 text-foreground"
+                    ? (isDark ? "bg-zinc-800 text-foreground" : "bg-zinc-200 text-foreground")
                     : "text-muted hover:text-foreground/70"
                 )}
               >
@@ -751,7 +770,9 @@ updated_at: '${new Date().toISOString()}'
               id="in_progress"
               className={cn(
                 "h-24 rounded-xl border border-dashed flex items-center justify-center transition-all",
-                inProgressPRD ? "bg-panel border-border border-solid p-4" : "bg-zinc-900/20 border-border/50"
+                inProgressPRD 
+                  ? "bg-panel border-border border-solid p-4" 
+                  : (isDark ? "bg-zinc-900/20 border-border/50" : "bg-zinc-100/50 border-border/50")
               )}
             >
               <SortableContext
@@ -767,6 +788,7 @@ updated_at: '${new Date().toISOString()}'
                       onEdit={handleEditPRD}
                       onTitleUpdate={handleUpdatePRDTitle}
                       accentColor={accentColor}
+                      isDark={isDark}
                     />
                   </div>
                 ) : (
@@ -798,8 +820,10 @@ updated_at: '${new Date().toISOString()}'
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="space-y-2 min-h-[250px]">
-                      {column.id === 'inbox' && isAddingPRD && (
-                        <div className="bg-panel border border-accent/30 rounded-lg p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                          {column.id === 'inbox' && isAddingPRD && (
+                        <div className={cn(
+                          "bg-panel border border-accent/30 rounded-lg p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200"
+                        )}>
                           <input
                             autoFocus
                             type="text"
@@ -821,7 +845,10 @@ updated_at: '${new Date().toISOString()}'
                                 setIsAddingPRD(false);
                                 setNewPRDTitle('');
                               }}
-                              className="p-1 hover:bg-zinc-800 rounded text-muted transition-colors"
+                              className={cn(
+                                "p-1 rounded text-muted transition-colors",
+                                isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-200"
+                              )}
                             >
                               <X size={14} />
                             </button>
@@ -850,6 +877,7 @@ updated_at: '${new Date().toISOString()}'
                             onEdit={handleEditPRD}
                             onTitleUpdate={handleUpdatePRDTitle}
                             accentColor={accentColor}
+                            isDark={isDark}
                           />
                         ))}
                     </div>
@@ -867,6 +895,7 @@ updated_at: '${new Date().toISOString()}'
               onEdit={handleEditPRD}
               onTitleUpdate={handleUpdatePRDTitle}
               accentColor={accentColor}
+              isDark={isDark}
             />
           ) : null}
         </DragOverlay>
