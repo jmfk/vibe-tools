@@ -136,7 +136,8 @@ def register_stats(cli):
             return
 
         # Local file processing
-        stats_dir = pathlib.Path("stats")
+        from vibe_tools.utils import COSTS_DIR
+        stats_dir = COSTS_DIR
 
         if not stats_dir.exists():
             click.echo(f"❌ Stats directory '{stats_dir}' not found.")

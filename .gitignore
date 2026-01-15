@@ -18,7 +18,7 @@ prds/
 node_modules/
 
 reports/
-stats/
+implementation/costs/
 implementation/logs/*
 vibe_tools/_version.py
 *.pyc
