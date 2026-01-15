@@ -10,6 +10,7 @@ from vibe_tools.servers import servers_cli
 def runner():
     return CliRunner()
 
+
 @pytest.fixture
 def mock_global_servers(tmp_path, monkeypatch):
     global_vibe = tmp_path / ".vibe"
@@ -22,6 +23,7 @@ def mock_global_servers(tmp_path, monkeypatch):
     monkeypatch.setattr("vibe_tools.utils.GLOBAL_CONFIG_FILE", config_file)
 
     return global_vibe
+
 
 def test_list_servers(runner, mock_global_servers):
     with patch("vibe_tools.servers.run_command") as mock_run:
@@ -36,13 +38,14 @@ def test_list_servers(runner, mock_global_servers):
         assert "⚪ Not Installed" in result.output
         assert (mock_global_servers / "servers.json").exists()
 
+
 def test_install_server(runner, mock_global_servers):
     with patch("vibe_tools.servers.run_command") as mock_run:
         # 1. inspect (not created)
         # 2. docker run (success)
         mock_run.side_effect = [
             ("", 1),  # inspect fails -> not created
-            ("container_id", 0) # docker run succeeds
+            ("container_id", 0),  # docker run succeeds
         ]
 
         result = runner.invoke(servers_cli, ["install", "redis"])
@@ -54,18 +57,17 @@ def test_install_server(runner, mock_global_servers):
 
         # Verify global config was updated
         import json
+
         config_data = json.loads((mock_global_servers / "config.json").read_text())
         assert "redis" in config_data["services"]
         assert config_data["services"]["redis"]["port"] == 6379
+
 
 def test_start_server(runner, mock_global_servers):
     with patch("vibe_tools.servers.run_command") as mock_run:
         # 1. inspect (exited)
         # 2. docker start (success)
-        mock_run.side_effect = [
-            ("exited", 0),
-            ("", 0)
-        ]
+        mock_run.side_effect = [("exited", 0), ("", 0)]
 
         result = runner.invoke(servers_cli, ["start", "postgres"])
 
@@ -76,14 +78,12 @@ def test_start_server(runner, mock_global_servers):
         # Check docker start call
         mock_run.assert_any_call(["docker", "start", "vibe-postgres"], check=False)
 
+
 def test_stop_server(runner):
     with patch("vibe_tools.servers.run_command") as mock_run:
         # 1. inspect (running)
         # 2. docker stop (success)
-        mock_run.side_effect = [
-            ("running", 0),
-            ("", 0)
-        ]
+        mock_run.side_effect = [("running", 0), ("", 0)]
 
         result = runner.invoke(servers_cli, ["stop", "rabbitmq"])
 
@@ -94,14 +94,12 @@ def test_stop_server(runner):
         # Check docker stop call
         mock_run.assert_any_call(["docker", "stop", "vibe-rabbitmq"], check=False)
 
+
 def test_remove_server(runner):
     with patch("vibe_tools.servers.run_command") as mock_run:
         # 1. inspect (exited)
         # 2. docker rm (success)
-        mock_run.side_effect = [
-            ("exited", 0),
-            ("", 0)
-        ]
+        mock_run.side_effect = [("exited", 0), ("", 0)]
 
         # Provide 'y' to the confirmation prompt
         result = runner.invoke(servers_cli, ["remove", "mailhog"], input="y\n")
@@ -112,4 +110,3 @@ def test_remove_server(runner):
 
         # Check docker rm call
         mock_run.assert_any_call(["docker", "rm", "-f", "vibe-mailhog"], check=False)
-

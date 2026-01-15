@@ -13,6 +13,7 @@ from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.prds import PRD, load_prd, generate_prd_id
 from vibe_tools.normalize import normalize_to_data
 from vibe_tools.branches import _switch_to_branch
+from vibe_tools.command_output import out_status, out_info, out_error, out_success
 from vibe_tools.utils import (
     PRODUCT_BACKLOG_DIR,
     PRODUCT_NEXT_DIR,
@@ -121,12 +122,14 @@ class RalphLoop:
 
         # 3. Iterative Reconciliation
         config = load_config()
-        max_iterations = config.get("iterations", {}).get("reconciliation", MAX_ITERATIONS)
-        
+        max_iterations = config.get("iterations", {}).get(
+            "reconciliation", MAX_ITERATIONS
+        )
+
         last_output = ""
         for i in range(1, max_iterations + 1):
             logger.info(f"🛠️ [{self.name} Loop] Iteration {i}/{max_iterations}")
-            
+
             # Update current content from file if it changed
             if self.current_file.exists():
                 current_content = self.current_file.read_text()
@@ -174,8 +177,15 @@ class RalphLoop:
             else:
                 logger.warning(f"⚠️ {self.name} iteration {i} incomplete.")
 
-        log_issue(self.name, max_iterations, max_iterations, "Reconciliation failed after max iterations")
-        logger.error(f"❌ {self.name} reconciliation failed or incomplete after {max_iterations} iterations.")
+        log_issue(
+            self.name,
+            max_iterations,
+            max_iterations,
+            "Reconciliation failed after max iterations",
+        )
+        logger.error(
+            f"❌ {self.name} reconciliation failed or incomplete after {max_iterations} iterations."
+        )
         return False
 
 
@@ -190,7 +200,7 @@ def debugging_loop(
     cost_logger = CostLogger(config)
 
     log_start("debug_loop", f"Running targets: {', '.join(targets)}")
-    
+
     last_summary = "Tests failed but no summary was generated."
 
     for i in range(1, iterations + 1):
@@ -341,7 +351,7 @@ def _restore_prd_to_next(prd: PRD):
     """Helper to restore a PRD from in_progress back to next."""
     if not prd or not prd.path:
         return
-    
+
     # Only move if it's actually in the in_progress directory and exists
     if "in_progress" in str(prd.path) and prd.path.exists():
         logger.info(f"♻️ Restoring PRD {prd.id} ({prd.title}) to 'next' directory...")
@@ -401,20 +411,26 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         branch_name, agent, prd.id, parent_branch=parent_branch, stream=stream
     )
 
+    out_status(phase="implement", status="in_progress", progress=0, prd_id=prd.id)
+
     success = False
     failure_reason = ""
     failure_context = ""
 
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
+        progress = int((i - 1) / max_impl_iterations * 100)
+        out_status(phase="implement", status="in_progress", progress=progress, iteration=i, prd_id=prd.id)
 
         # 3a. Implementation Step
         if not prd.impl_code_ready:
             try:
                 prompt_template = get_prompt("implementation_prompt.txt")
-                
-                success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
-                
+
+                success_criteria_str = chr(10).join(
+                    ["- " + str(c) for c in success_criteria]
+                )
+
                 feedback_context = ""
                 if i > 1 and failure_reason:
                     feedback_context = f"\n\nPREVIOUS ATTEMPT FAILED:\nReason: {failure_reason}\nContext: {failure_context}\n\nPlease address the issues above in this iteration."
@@ -439,10 +455,15 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                 if is_dirty():
                     run_command(["git", "add", "."], check=False)
                     run_command(
-                        ["git", "commit", "-m", f"vibe: impl iteration {i} for {prd.id}"],
+                        [
+                            "git",
+                            "commit",
+                            "-m",
+                            f"vibe: impl iteration {i} for {prd.id}",
+                        ],
                         check=False,
                     )
-                
+
                 # Mark code as ready and persist
                 prd.impl_code_ready = True
                 prd.save()
@@ -475,14 +496,16 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                 # Agentic review logic
                 try:
                     review_template = get_prompt("implementation_review_prompt.txt")
-                    success_criteria_str = chr(10).join(["- " + str(c) for c in success_criteria])
-                    
+                    success_criteria_str = chr(10).join(
+                        ["- " + str(c) for c in success_criteria]
+                    )
+
                     prompt = review_template.format(
                         title=prd.title,
                         description=prd.content,
                         success_criteria=success_criteria_str,
                     )
-                    
+
                     cmd = get_agent_command(agent, prompt)
                     output, _ = run_agent(cmd, stream=stream)
                     if "<review>PASSED</review>" in output:
@@ -517,6 +540,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     # 4. Finalize
     if success:
         logger.info(f"✅ PRD {prd.id} completed successfully.")
+        out_status(phase="implement", status="completed", progress=100, prd_id=prd.id)
         prd.status = "done"
         final_path = PRODUCT_HISTORY_DIR / prd.path.name
         prd.save(final_path)
@@ -541,11 +565,14 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         return True
     else:
         logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
+        out_status(phase="implement", status="failed", progress=progress, prd_id=prd.id, error=failure_reason)
 
         # 4b. Summarize failure for the new PRD
         from vibe_tools.utils import run_llm
-        
-        problem_description = f"Implementation of {prd.id} failed with: {failure_reason}"
+
+        problem_description = (
+            f"Implementation of {prd.id} failed with: {failure_reason}"
+        )
         if failure_context:
             logger.info("🧠 Summarizing failure for the new PRD...")
             summary_prompt = f"""
@@ -601,6 +628,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
 def implementation_loop(agent: str, stream: bool = False) -> bool:
     """Unified implementation loop working on Markdown PRDs in product/."""
     from vibe_tools.utils import ensure_project_structure
+
     ensure_project_structure()
     config = load_config()
 
@@ -616,7 +644,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             prd = load_prd(in_progress_files[0])
             logger.info(f"📍 Resuming PRD: {prd.title} ({prd.id})")
             _implement_single_prd(prd, agent, stream, config)
-        
+
         while True:
             # 1. Try to pick from 'next' directory (planned for implementation)
             next_files = sorted(list(PRODUCT_NEXT_DIR.glob("*.md")))
@@ -640,7 +668,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             completed = set(state.get("completed_prds", []))
             deps = prd.depends_on or []
             missing_deps = [d for d in deps if d not in completed]
-            
+
             # If in 'next' and deps missing, we MUST exit as per plan
             if "next" in str(prd.path) and missing_deps:
                 click.echo(
@@ -651,7 +679,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
                     )
                 )
                 return False
-            
+
             # If in backlog and deps missing, skip it for now (old behavior)
             if missing_deps:
                 logger.warning(
@@ -669,13 +697,15 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             prd.path = new_path
 
             _implement_single_prd(prd, agent, stream, config)
-            
+
             # If branch switching is enabled, make sure we are back on main before next iteration
             if is_branch_switching_enabled():
                 switch_to_main()
 
     except KeyboardInterrupt:
-        logger.warning(f"\n⚠️ Process interrupted. Restoring state for PRD {prd.id if prd else 'unknown'}...")
+        logger.warning(
+            f"\n⚠️ Process interrupted. Restoring state for PRD {prd.id if prd else 'unknown'}..."
+        )
         if prd:
             _restore_prd_to_next(prd)
         if is_branch_switching_enabled():

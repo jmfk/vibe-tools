@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 use std::time::Duration;
 use notify::{Watcher, RecursiveMode, Config};
 use tauri::{Manager, Window, State};
@@ -52,9 +53,10 @@ impl LogBuffer {
 }
 
 struct AppState {
+    #[allow(dead_code)]
     workspace_root: PathBuf,
     terminal_buffers: Mutex<HashMap<String, LogBuffer>>,
-    active_process_stdin: Mutex<Option<tokio::process::ChildStdin>>,
+    active_process_stdin: AsyncMutex<Option<tokio::process::ChildStdin>>,
 }
 
 #[tauri::command]
@@ -106,7 +108,7 @@ fn get_workspace_root() -> Result<String, String> {
 
 #[tauri::command]
 async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<(), String> {
-    let mut stdin_lock = state.active_process_stdin.lock().unwrap();
+    let mut stdin_lock = state.active_process_stdin.lock().await;
     if let Some(stdin) = stdin_lock.as_mut() {
         use tokio::io::AsyncWriteExt;
         stdin.write_all(input.as_bytes()).await.map_err(|e| e.to_string())?;
@@ -150,7 +152,7 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     let stdin = child.stdin.take().unwrap();
 
     {
-        let mut stdin_lock = state.active_process_stdin.lock().unwrap();
+        let mut stdin_lock = state.active_process_stdin.lock().await;
         *stdin_lock = Some(stdin);
     }
 
@@ -190,11 +192,12 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
         }
     });
 
-    let state_finished = state.inner().clone();
+    let handle_finished = window.app_handle();
     tokio::spawn(async move {
         let status = child.wait().await;
         {
-            let mut stdin_lock = state_finished.active_process_stdin.lock().unwrap();
+            let state = handle_finished.state::<AppState>();
+            let mut stdin_lock = state.active_process_stdin.lock().await;
             *stdin_lock = None;
         }
         window.emit("command-finished", status.map(|s| s.to_string()).ok()).unwrap();
@@ -442,7 +445,7 @@ fn main() {
         .manage(AppState {
             workspace_root: workspace_root_path.clone(),
             terminal_buffers: Mutex::new(HashMap::new()),
-            active_process_stdin: Mutex::new(None),
+            active_process_stdin: AsyncMutex::new(None),
         })
         .setup(move |app| {
             let handle = app.handle();

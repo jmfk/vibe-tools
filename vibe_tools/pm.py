@@ -84,11 +84,35 @@ class PMCompleter:
         self.pm = pm
         self.commands = sorted(
             [
-                "/send", "/reset", "/mode", "/ask", "/agent", "/show", "/edit",
-                "/history", "/files", "/add", "/list", "/ls", "/implemented",
-                "/i", "/ps", "/kill", "/exit", "/conf", "/help", "/focus",
-                "/f", "/switch", "/create", "/delete", "/push", "/queue", "/stop",
-                "/qu", "/clear"
+                "/send",
+                "/reset",
+                "/mode",
+                "/ask",
+                "/agent",
+                "/show",
+                "/edit",
+                "/history",
+                "/files",
+                "/add",
+                "/list",
+                "/ls",
+                "/implemented",
+                "/i",
+                "/ps",
+                "/kill",
+                "/exit",
+                "/conf",
+                "/help",
+                "/focus",
+                "/f",
+                "/switch",
+                "/create",
+                "/delete",
+                "/push",
+                "/queue",
+                "/stop",
+                "/qu",
+                "/clear",
             ]
         )
         self.subcommands = {
@@ -188,6 +212,7 @@ class InteractivePM:
                 except Exception:
                     pass
             import atexit
+
             atexit.register(self._save_readline_history, history_file)
 
     def _save_readline_history(self, history_file):
@@ -202,6 +227,7 @@ class InteractivePM:
         if PM_CONFIG_FILE.exists():
             try:
                 import json
+
                 return json.loads(PM_CONFIG_FILE.read_text())
             except Exception:
                 pass
@@ -209,6 +235,7 @@ class InteractivePM:
 
     def _save_config(self):
         import json
+
         ensure_dir(PM_CONFIG_FILE.parent)
         PM_CONFIG_FILE.write_text(json.dumps(self.config, indent=2))
 
@@ -216,12 +243,15 @@ class InteractivePM:
         if PM_SESSION_FILE.exists():
             try:
                 import json
+
                 data = json.loads(PM_SESSION_FILE.read_text())
                 self.history = data.get("history", [])
                 self.pending_prompt = data.get("pending_prompt", "")
                 self.session_memory = data.get("session_memory", "")
                 self.chat_id = data.get("chat_id")
-                self.additional_files = [pathlib.Path(f) for f in data.get("additional_files", [])]
+                self.additional_files = [
+                    pathlib.Path(f) for f in data.get("additional_files", [])
+                ]
                 self.mode = data.get("mode", "ASK")
                 self.focused_prd = data.get("focused_prd")
             except Exception as e:
@@ -229,6 +259,7 @@ class InteractivePM:
 
     def _save_session(self):
         import json
+
         ensure_dir(PM_SESSION_FILE.parent)
         data = {
             "history": self.history,
@@ -244,7 +275,11 @@ class InteractivePM:
     async def run_loop(self, initial_prompt: Optional[str] = None):
         """Main interactive loop."""
         loop = asyncio.get_running_loop()
-        click.echo(click.style("\n📋 VIBE PRODUCT MANAGER (Async Mode)", fg="magenta", bold=True))
+        click.echo(
+            click.style(
+                "\n📋 VIBE PRODUCT MANAGER (Async Mode)", fg="magenta", bold=True
+            )
+        )
         click.echo("Refine your PRDs and specifications interactively.")
         click.echo("Type /help for available commands.\n")
 
@@ -267,13 +302,16 @@ class InteractivePM:
             prompt_symbol = f"{MODE_COLOR}({self.mode}){focus_text}{status_text}{RESET} {BOLD}👤{RESET} "
 
             try:
-                user_input = await loop.run_in_executor(None, lambda: input(prompt_symbol).strip())
+                user_input = await loop.run_in_executor(
+                    None, lambda: input(prompt_symbol).strip()
+                )
             except EOFError:
                 break
             except KeyboardInterrupt:
                 if self.mq.status == "BUSY":
                     click.echo("\n🛑 Interrupting stream...")
-                    if self.mq.current_task: self.mq.current_task.cancel()
+                    if self.mq.current_task:
+                        self.mq.current_task.cancel()
                 else:
                     click.echo("\n🛑 Use /exit to quit.")
                 continue
@@ -310,7 +348,9 @@ class InteractivePM:
             self.mq.status = "BUSY"
             prompt_content = self.mq.items.popleft()
 
-            self.mq.current_task = asyncio.create_task(self._execute_llm_task(prompt_content))
+            self.mq.current_task = asyncio.create_task(
+                self._execute_llm_task(prompt_content)
+            )
             try:
                 await self.mq.current_task
             except asyncio.CancelledError:
@@ -322,13 +362,17 @@ class InteractivePM:
     async def _execute_llm_task(self, query: str):
         full_prompt = self._build_prompt_with_query(query)
 
-        mode_prefix = click.style(f"({self.mode})", fg="green" if self.mode == "ASK" else "red")
+        mode_prefix = click.style(
+            f"({self.mode})", fg="green" if self.mode == "ASK" else "red"
+        )
         click.echo(f"\n{mode_prefix} 🤖 ", nl=False)
 
         full_response = ""
         try:
             if self.agent_type == "cursor-agent":
-                command = get_agent_command(self.agent_type, full_prompt, chat_id=self.chat_id)
+                command = get_agent_command(
+                    self.agent_type, full_prompt, chat_id=self.chat_id
+                )
                 loop = asyncio.get_running_loop()
                 # Run the synchronous run_agent in an executor
                 full_response, exit_code, chat_id = await loop.run_in_executor(
@@ -337,7 +381,11 @@ class InteractivePM:
                 if chat_id:
                     self.chat_id = chat_id
                 if exit_code != 0:
-                    click.echo(click.style(f"\n❌ Agent failed with exit code {exit_code}", fg="red"))
+                    click.echo(
+                        click.style(
+                            f"\n❌ Agent failed with exit code {exit_code}", fg="red"
+                        )
+                    )
             else:
                 async for chunk in self.llm.stream(full_prompt):
                     click.echo(chunk, nl=False)
@@ -372,7 +420,11 @@ class InteractivePM:
             state = load_project_state()
             completed = state.get("completed_prds", [])
             if filename in completed or filename.replace(".md", "") in completed:
-                click.echo(click.style(f"🚫 BLOCKED: '{filename}' is implemented.", fg="red", bold=True))
+                click.echo(
+                    click.style(
+                        f"🚫 BLOCKED: '{filename}' is implemented.", fg="red", bold=True
+                    )
+                )
             else:
                 target_path = SPECS_DIR / filename
                 ensure_dir(SPECS_DIR)
@@ -384,12 +436,18 @@ class InteractivePM:
             return
         lines = self.pending_prompt.splitlines()
         count = len(lines)
-        click.echo(click.style(f"\n📝 Pending Prompt ({count} lines):", fg="yellow", bold=True))
+        click.echo(
+            click.style(f"\n📝 Pending Prompt ({count} lines):", fg="yellow", bold=True)
+        )
         for line in lines[:5]:
             click.echo(f"  {line}")
         if count > 5:
-            click.echo(f"  ... (+{count-5} more lines)")
-        click.echo(click.style("Type /s to send, /push to prioritize, or keep typing.\n", dim=True))
+            click.echo(f"  ... (+{count - 5} more lines)")
+        click.echo(
+            click.style(
+                "Type /s to send, /push to prioritize, or keep typing.\n", dim=True
+            )
+        )
 
     async def _handle_slash_command(self, command_str: str) -> bool:
         parts = command_str.split(" ", 1)
@@ -451,7 +509,8 @@ class InteractivePM:
             if args:
                 self.session_memory += f"\n{args}" if self.session_memory else args
                 click.echo("✅ Added to session memory.")
-            else: click.echo("❌ Usage: /add <text>")
+            else:
+                click.echo("❌ Usage: /add <text>")
         elif cmd == "/i" or cmd == "/implemented":
             self._handle_implemented_command()
         elif cmd == "/ps":
@@ -486,7 +545,9 @@ class InteractivePM:
     def _show_help(self):
         click.echo("\nAvailable commands:")
         click.echo("  /send, /s        - Add pending prompt to queue")
-        click.echo("  /push            - Interrupt current and start pending prompt immediately")
+        click.echo(
+            "  /push            - Interrupt current and start pending prompt immediately"
+        )
         click.echo("  /stop            - Stop the current LLM generation")
         click.echo("  /queue, /qu [list|clear|remove <idx>] - Manage message queue")
         click.echo("  /reset, /r, /clear - Clear pending prompt and queue")
@@ -504,7 +565,8 @@ class InteractivePM:
         target = None
         try:
             idx = int(args)
-            if 0 <= idx < len(files): target = files[idx]
+            if 0 <= idx < len(files):
+                target = files[idx]
         except ValueError:
             for f in files:
                 if args.lower() in f.name.lower():
@@ -512,7 +574,9 @@ class InteractivePM:
                     break
         if target:
             self.focused_prd = target.name
-            click.echo(f"✅ Focused on: {click.style(target.name, fg='cyan', bold=True)}")
+            click.echo(
+                f"✅ Focused on: {click.style(target.name, fg='cyan', bold=True)}"
+            )
         else:
             click.echo(f"❌ Not found: {args}")
 
@@ -586,7 +650,7 @@ class InteractivePM:
         if not completed:
             return click.echo("None.")
         for i, p in enumerate(reversed(completed)):
-            click.echo(f"{i+1}. {p}")
+            click.echo(f"{i + 1}. {p}")
 
     def _handle_ps_command(self):
         procs = get_agent_processes()
@@ -604,7 +668,8 @@ class InteractivePM:
 
     def _handle_conf_command_internal(self, args):
         parts = args.split(maxsplit=1)
-        if len(parts) < 2: return click.echo("❌ Usage: /conf [md|code] <cmd>")
+        if len(parts) < 2:
+            return click.echo("❌ Usage: /conf [md|code] <cmd>")
         target, cmd = parts
         if target in ["md", "code"]:
             self.config[f"{target}_editor"] = cmd
@@ -617,7 +682,11 @@ class InteractivePM:
         completed = state.get("completed_prds", [])
         click.echo("\n--- product/ ---")
         for i, f in enumerate(files):
-            style = {"fg": "cyan", "bold": True} if self.focused_prd == f.name else {"fg": "white"}
+            style = (
+                {"fg": "cyan", "bold": True}
+                if self.focused_prd == f.name
+                else {"fg": "white"}
+            )
             status = click.style(" [DONE]", fg="green") if f.stem in completed else ""
             click.echo(f"[{i}] {click.style(f.name, **style)}{status}")
 
@@ -642,9 +711,15 @@ class InteractivePM:
 
         state = load_project_state()
         impl = ", ".join(state.get("completed_prds", []))
-        history = "\n".join([f"{h['role']}: {h['content'][:200]}" for h in self.history])
+        history = "\n".join(
+            [f"{h['role']}: {h['content'][:200]}" for h in self.history]
+        )
 
-        mode_instr = "ASK mode: No file updates." if self.mode == "ASK" else "AGENT mode: Can update files using FILE_UPDATE: <filename>"
+        mode_instr = (
+            "ASK mode: No file updates."
+            if self.mode == "ASK"
+            else "AGENT mode: Can update files using FILE_UPDATE: <filename>"
+        )
 
         return template.format(
             mode=self.mode,
@@ -655,5 +730,5 @@ class InteractivePM:
             instructions=get_instructions_context(),
             user_memory=self.session_memory,
             history=history,
-            query=query
+            query=query,
         )

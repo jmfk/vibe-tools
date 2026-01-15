@@ -30,7 +30,9 @@ def register_branch(cli):
         """Get or set the base branch for a feature branch."""
         if not branch_name:
             # Show current branch and its base
-            branch_name, _ = run_command(["git", "branch", "--show-current"], check=False)
+            branch_name, _ = run_command(
+                ["git", "branch", "--show-current"], check=False
+            )
             branch_name = branch_name.strip()
 
         state = load_project_state()
@@ -74,7 +76,9 @@ def register_branch(cli):
 
             config["ralph"]["automerge_branch"] = branch_name
             save_config(config)
-            click.echo(f"✅ Automerge branch set to: {click.style(branch_name, fg='cyan')}")
+            click.echo(
+                f"✅ Automerge branch set to: {click.style(branch_name, fg='cyan')}"
+            )
 
             # Verify if branch exists, if not, inform user it will be created on first use
             _, code = run_command(

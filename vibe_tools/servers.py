@@ -79,6 +79,7 @@ DEFAULT_SERVER_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+
 def get_server_configs() -> Dict[str, Any]:
     """Returns global server configurations, merging defaults with saved ones."""
     configs = DEFAULT_SERVER_CONFIGS.copy()
@@ -98,12 +99,13 @@ def get_server_configs() -> Dict[str, Any]:
 
     return configs
 
+
 def get_container_status(container_name: str) -> str:
     """Returns the status of a Docker container."""
     try:
         stdout, code = run_command(
             ["docker", "inspect", "-f", "{{.State.Status}}", container_name],
-            check=False
+            check=False,
         )
         if code == 0:
             return stdout.strip()
@@ -111,10 +113,12 @@ def get_container_status(container_name: str) -> str:
     except Exception:
         return "error"
 
+
 @click.group()
 def servers_cli():
     """Manage local development servers via Docker."""
     pass
+
 
 @servers_cli.command(name="list")
 def list_servers():
@@ -134,6 +138,7 @@ def list_servers():
 
     click.echo("\nRun 'vibe servers install <service>' to set up a new server.")
 
+
 @servers_cli.command()
 @click.argument("service")
 def install(service):
@@ -149,7 +154,9 @@ def install(service):
         service = "minio-linode" if choice == 1 else "minio-aws"
 
     if service not in configs:
-        click.echo(f"❌ Unknown service: {service}. Available: {', '.join(configs.keys())}")
+        click.echo(
+            f"❌ Unknown service: {service}. Available: {', '.join(configs.keys())}"
+        )
         return
 
     config = configs[service]
@@ -165,11 +172,7 @@ def install(service):
 
     click.echo(f"Installing {service}...")
 
-    cmd = [
-        "docker", "run", "-d",
-        "--name", container_name,
-        "--restart", "always"
-    ]
+    cmd = ["docker", "run", "-d", "--name", container_name, "--restart", "always"]
 
     for container_port, host_port in config.get("ports", {}).items():
         cmd.extend(["-p", f"{host_port}:{container_port}"])
@@ -181,6 +184,7 @@ def install(service):
 
     if "command" in config:
         import shlex
+
         cmd.extend(shlex.split(config["command"]))
 
     stdout, code = run_command(cmd, check=False)
@@ -189,17 +193,20 @@ def install(service):
 
         # Save connection details to global config
         from vibe_tools.utils import load_config
-        global_config = load_config() # This now includes global config
+
+        global_config = load_config()  # This now includes global config
         services = global_config.setdefault("services", {})
 
         # Determine the host port (assuming localhost)
         # In a real scenario we might want to be more sophisticated here
-        host_port = list(config.get("ports", {}).values())[0] if config.get("ports") else None
+        host_port = (
+            list(config.get("ports", {}).values())[0] if config.get("ports") else None
+        )
 
         service_details = {
             "host": "localhost",
             "port": host_port,
-            "docker_container_name": container_name
+            "docker_container_name": container_name,
         }
 
         # Add default credentials if present in env
@@ -236,6 +243,7 @@ def install(service):
     else:
         click.echo(f"❌ Failed to install {service}: {stdout}")
 
+
 @servers_cli.command()
 def status():
     """Show detailed status of all servers."""
@@ -253,6 +261,7 @@ def status():
 
         ports = ", ".join([f"{v}->{k}" for k, v in config.get("ports", {}).items()])
         click.echo(f"{name:<15} {container_name:<20} {status_display:<15} {ports}")
+
 
 @servers_cli.command()
 @click.argument("service", required=False)
@@ -282,7 +291,9 @@ def start(service):
         click.echo(f"Server '{service}' is already running.")
         return
     if status == "not_created":
-        click.echo(f"Server '{service}' is not installed. Use 'vibe servers install {service}' first.")
+        click.echo(
+            f"Server '{service}' is not installed. Use 'vibe servers install {service}' first."
+        )
         return
 
     click.echo(f"Starting {service}...")
@@ -291,6 +302,7 @@ def start(service):
         click.echo(f"✅ {service} started.")
     else:
         click.echo(f"❌ Failed to start {service}: {stdout}")
+
 
 @servers_cli.command()
 @click.argument("service", required=False)
@@ -327,6 +339,7 @@ def stop(service):
     else:
         click.echo(f"❌ Failed to stop {service}: {stdout}")
 
+
 @servers_cli.command()
 @click.argument("service", required=False)
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
@@ -335,8 +348,11 @@ def logs(service, follow):
     configs = get_server_configs()
 
     if not service or service == "all":
-        container_names = [c["container_name"] for c in configs.values()
-                          if get_container_status(c["container_name"]) != "not_created"]
+        container_names = [
+            c["container_name"]
+            for c in configs.values()
+            if get_container_status(c["container_name"]) != "not_created"
+        ]
         if not container_names:
             click.echo("No installed servers found.")
             return
@@ -369,6 +385,7 @@ def logs(service, follow):
     except KeyboardInterrupt:
         pass
 
+
 @servers_cli.command()
 @click.argument("service")
 def remove(service):
@@ -384,7 +401,9 @@ def remove(service):
         click.echo(f"Server '{service}' is not installed.")
         return
 
-    if click.confirm(f"Are you sure you want to remove the '{service}' container? All data in the container will be lost."):
+    if click.confirm(
+        f"Are you sure you want to remove the '{service}' container? All data in the container will be lost."
+    ):
         click.echo(f"Removing {service}...")
         stdout, code = run_command(["docker", "rm", "-f", container_name], check=False)
         if code == 0:
@@ -392,6 +411,6 @@ def remove(service):
         else:
             click.echo(f"❌ Failed to remove {service}: {stdout}")
 
+
 if __name__ == "__main__":
     servers_cli()
-

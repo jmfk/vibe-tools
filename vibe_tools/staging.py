@@ -57,7 +57,9 @@ def detect_k8s_type() -> Optional[str]:
             return "kind"
 
         # Check for Docker Desktop
-        stdout, code = run_command(["kubectl", "config", "current-context"], check=False)
+        stdout, code = run_command(
+            ["kubectl", "config", "current-context"], check=False
+        )
         if code == 0 and "docker-desktop" in stdout.lower():
             return "docker-desktop"
 
@@ -135,7 +137,9 @@ def get_required_services() -> Dict[str, Any]:
                     server_config[key] = value
                 # Preserve docker container info if present
                 if "docker_container_name" in project_config:
-                    server_config["docker_container_name"] = project_config["docker_container_name"]
+                    server_config["docker_container_name"] = project_config[
+                        "docker_container_name"
+                    ]
 
             services[project_key] = server_config
 
@@ -155,28 +159,41 @@ def discover_application_services() -> List[Dict[str, Any]]:
     backend_dockerfile = pathlib.Path("Dockerfile")
     backend_dockerfile_alt = pathlib.Path("backend/Dockerfile")
     if backend_dockerfile.exists() or backend_dockerfile_alt.exists():
-        dockerfile_path = backend_dockerfile if backend_dockerfile.exists() else backend_dockerfile_alt
-        app_services.append({
-            "name": "backend",
-            "type": "backend",
-            "dockerfile": str(dockerfile_path),
-            "context": str(dockerfile_path.parent),
-        })
+        dockerfile_path = (
+            backend_dockerfile
+            if backend_dockerfile.exists()
+            else backend_dockerfile_alt
+        )
+        app_services.append(
+            {
+                "name": "backend",
+                "type": "backend",
+                "dockerfile": str(dockerfile_path),
+                "context": str(dockerfile_path.parent),
+            }
+        )
 
     # Check for frontend Dockerfile
     frontend_dockerfile = pathlib.Path("frontend/Dockerfile")
     if frontend_dockerfile.exists():
-        app_services.append({
-            "name": "frontend",
-            "type": "frontend",
-            "dockerfile": str(frontend_dockerfile),
-            "context": str(frontend_dockerfile.parent),
-        })
+        app_services.append(
+            {
+                "name": "frontend",
+                "type": "frontend",
+                "dockerfile": str(frontend_dockerfile),
+                "context": str(frontend_dockerfile.parent),
+            }
+        )
 
     return app_services
 
 
-def check_service_health(service_name: str, service_config: Dict[str, Any], env_type: str, check_reused: bool = True) -> Tuple[bool, str]:
+def check_service_health(
+    service_name: str,
+    service_config: Dict[str, Any],
+    env_type: str,
+    check_reused: bool = True,
+) -> Tuple[bool, str]:
     """Check if a service is healthy."""
     # First check if it's a reused container
     if check_reused and env_type != "kubernetes":
@@ -220,8 +237,18 @@ def check_service_health(service_name: str, service_config: Dict[str, Any], env_
         k8s_service_name = service_name.replace("_", "").lower()
         try:
             stdout, code = run_command(
-                ["kubectl", "get", "pod", "-l", f"app={k8s_service_name}", "-n", namespace, "-o", "json"],
-                check=False
+                [
+                    "kubectl",
+                    "get",
+                    "pod",
+                    "-l",
+                    f"app={k8s_service_name}",
+                    "-n",
+                    namespace,
+                    "-o",
+                    "json",
+                ],
+                check=False,
             )
             if code == 0:
                 pods = json.loads(stdout)
@@ -252,6 +279,7 @@ def check_service_health(service_name: str, service_config: Dict[str, Any], env_
             if port:
                 try:
                     import socket
+
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(1)
                     result = sock.connect_ex((host, int(port)))
@@ -291,16 +319,14 @@ def save_staging_config(config: Dict[str, Any]):
     STAGING_CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
-def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[str, Any]], isolated: bool = False) -> Dict[str, Any]:
+def generate_docker_compose(
+    services: Dict[str, Any], app_services: List[Dict[str, Any]], isolated: bool = False
+) -> Dict[str, Any]:
     """Generate Docker Compose configuration from service configs."""
     compose = {
         "version": "3.8",
         "services": {},
-        "networks": {
-            "vibe-staging": {
-                "driver": "bridge"
-            }
-        }
+        "networks": {"vibe-staging": {"driver": "bridge"}},
     }
 
     # Add infrastructure services
@@ -312,10 +338,21 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
         # Get server config for defaults
         server_configs = get_server_configs()
         server_key = None
-        for sk in ["postgres", "redis", "rabbitmq", "elasticsearch", "minio-linode", "minio-aws", "mailhog", "imgproxy"]:
-            if (service_key == sk or
-                (service_key == "s3-linode" and sk == "minio-linode") or
-                (service_key == "s3-aws" and sk == "minio-aws")):
+        for sk in [
+            "postgres",
+            "redis",
+            "rabbitmq",
+            "elasticsearch",
+            "minio-linode",
+            "minio-aws",
+            "mailhog",
+            "imgproxy",
+        ]:
+            if (
+                service_key == sk
+                or (service_key == "s3-linode" and sk == "minio-linode")
+                or (service_key == "s3-aws" and sk == "minio-aws")
+            ):
                 server_key = sk
                 break
 
@@ -346,16 +383,22 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
                 elif server_key == "redis":
                     compose_service["ports"] = [f"{port}:6379"]
                 elif server_key == "rabbitmq":
-                    compose_service["ports"] = [f"{port}:5672", f"{service_config.get('management_port', 15672)}:15672"]
+                    compose_service["ports"] = [
+                        f"{port}:5672",
+                        f"{service_config.get('management_port', 15672)}:15672",
+                    ]
                 elif server_key == "elasticsearch":
                     compose_service["ports"] = [f"{port}:9200"]
                 elif server_key in ["minio-linode", "minio-aws"]:
                     compose_service["ports"] = [
                         f"{port}:9000",
-                        f"{service_config.get('console_port', port + 1)}:9001"
+                        f"{service_config.get('console_port', port + 1)}:9001",
                     ]
                 elif server_key == "mailhog":
-                    compose_service["ports"] = [f"{port}:1025", f"{service_config.get('web_port', 8025)}:8025"]
+                    compose_service["ports"] = [
+                        f"{port}:1025",
+                        f"{service_config.get('web_port', 8025)}:8025",
+                    ]
                 elif server_key == "imgproxy":
                     compose_service["ports"] = [f"{port}:8080"]
 
@@ -363,11 +406,17 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
             env_vars = {}
             if server_key == "postgres":
                 env_vars["POSTGRES_USER"] = service_config.get("user", "postgres")
-                env_vars["POSTGRES_PASSWORD"] = service_config.get("password", "postgres")
+                env_vars["POSTGRES_PASSWORD"] = service_config.get(
+                    "password", "postgres"
+                )
                 env_vars["POSTGRES_DB"] = service_config.get("database", "app_db")
             elif server_key in ["minio-linode", "minio-aws"]:
-                env_vars["MINIO_ROOT_USER"] = service_config.get("access_key", "minioadmin")
-                env_vars["MINIO_ROOT_PASSWORD"] = service_config.get("secret_key", "minioadmin")
+                env_vars["MINIO_ROOT_USER"] = service_config.get(
+                    "access_key", "minioadmin"
+                )
+                env_vars["MINIO_ROOT_PASSWORD"] = service_config.get(
+                    "secret_key", "minioadmin"
+                )
 
             if env_vars:
                 compose_service["environment"] = env_vars
@@ -385,7 +434,9 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
     # Add volumes
     volumes = {}
     for service_name, service_def in compose["services"].items():
-        container_name = service_def.get("container_name", f"vibe-staging-{service_name}")
+        container_name = service_def.get(
+            "container_name", f"vibe-staging-{service_name}"
+        )
         if "volumes" in service_def:
             # Extract volume name from volumes list
             for vol in service_def["volumes"]:
@@ -438,7 +489,9 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
                 env_vars[f"{env_name}_HOST"] = "host.docker.internal"
             else:
                 # New services use service name in docker network
-                docker_service_name = service_key.replace("s3-", "minio-").replace("-", "_")
+                docker_service_name = service_key.replace("s3-", "minio-").replace(
+                    "-", "_"
+                )
                 env_vars[f"{env_name}_HOST"] = docker_service_name
             if "port" in service_config:
                 env_vars[f"{env_name}_PORT"] = str(service_config["port"])
@@ -447,21 +500,26 @@ def generate_docker_compose(services: Dict[str, Any], app_services: List[Dict[st
 
         # If reusing services, also add extra_hosts for host.docker.internal
         if reused_services:
-            compose["services"][service_name]["extra_hosts"] = ["host.docker.internal:host-gateway"]
+            compose["services"][service_name]["extra_hosts"] = [
+                "host.docker.internal:host-gateway"
+            ]
 
     return compose
 
 
-def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str, Any]], namespace: str, isolated: bool = False) -> List[Dict[str, Any]]:
+def generate_k8s_manifests(
+    services: Dict[str, Any],
+    app_services: List[Dict[str, Any]],
+    namespace: str,
+    isolated: bool = False,
+) -> List[Dict[str, Any]]:
     """Generate Kubernetes manifests from service configs."""
     manifests = []
 
     # Namespace manifest
-    manifests.append({
-        "apiVersion": "v1",
-        "kind": "Namespace",
-        "metadata": {"name": namespace}
-    })
+    manifests.append(
+        {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": namespace}}
+    )
 
     server_configs = get_server_configs()
 
@@ -470,18 +528,38 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
     if not isolated:
         for service_key in services.keys():
             server_key = None
-            for sk in ["postgres", "redis", "rabbitmq", "elasticsearch", "minio-linode", "minio-aws", "mailhog", "imgproxy"]:
-                if (service_key == sk or
-                    (service_key == "s3-linode" and sk == "minio-linode") or
-                    (service_key == "s3-aws" and sk == "minio-aws")):
+            for sk in [
+                "postgres",
+                "redis",
+                "rabbitmq",
+                "elasticsearch",
+                "minio-linode",
+                "minio-aws",
+                "mailhog",
+                "imgproxy",
+            ]:
+                if (
+                    service_key == sk
+                    or (service_key == "s3-linode" and sk == "minio-linode")
+                    or (service_key == "s3-aws" and sk == "minio-aws")
+                ):
                     server_key = sk
                     break
             # For k8s, check if service exists in default namespace
             if server_key:
                 try:
                     stdout, code = run_command(
-                        ["kubectl", "get", "service", server_key, "-n", "default", "-o", "json"],
-                        check=False
+                        [
+                            "kubectl",
+                            "get",
+                            "service",
+                            server_key,
+                            "-n",
+                            "default",
+                            "-o",
+                            "json",
+                        ],
+                        check=False,
                     )
                     if code == 0:
                         reused_services.add(service_key)
@@ -491,10 +569,21 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
     # Generate manifests for infrastructure services
     for service_key, service_config in services.items():
         server_key = None
-        for sk in ["postgres", "redis", "rabbitmq", "elasticsearch", "minio-linode", "minio-aws", "mailhog", "imgproxy"]:
-            if (service_key == sk or
-                (service_key == "s3-linode" and sk == "minio-linode") or
-                (service_key == "s3-aws" and sk == "minio-aws")):
+        for sk in [
+            "postgres",
+            "redis",
+            "rabbitmq",
+            "elasticsearch",
+            "minio-linode",
+            "minio-aws",
+            "mailhog",
+            "imgproxy",
+        ]:
+            if (
+                service_key == sk
+                or (service_key == "s3-linode" and sk == "minio-linode")
+                or (service_key == "s3-aws" and sk == "minio-aws")
+            ):
                 server_key = sk
                 break
 
@@ -511,14 +600,11 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
             service = {
                 "apiVersion": "v1",
                 "kind": "Service",
-                "metadata": {
-                    "name": service_name,
-                    "namespace": namespace
-                },
+                "metadata": {"name": service_name, "namespace": namespace},
                 "spec": {
                     "type": "ExternalName",
-                    "externalName": f"{server_key}.default.svc.cluster.local"
-                }
+                    "externalName": f"{server_key}.default.svc.cluster.local",
+                },
             }
 
             manifests.append(service)
@@ -531,7 +617,7 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
             "metadata": {
                 "name": service_name,
                 "namespace": namespace,
-                "labels": {"app": service_name}
+                "labels": {"app": service_name},
             },
             "spec": {
                 "replicas": 1,
@@ -539,55 +625,81 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
                 "template": {
                     "metadata": {"labels": {"app": service_name}},
                     "spec": {
-                        "containers": [{
-                            "name": service_name,
-                            "image": server_config.get("image"),
-                            "ports": []
-                        }]
-                    }
-                }
-            }
+                        "containers": [
+                            {
+                                "name": service_name,
+                                "image": server_config.get("image"),
+                                "ports": [],
+                            }
+                        ]
+                    },
+                },
+            },
         }
 
         # Add ports
         if "port" in service_config:
             if server_key == "postgres":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 5432})
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append(
+                    {"containerPort": 5432}
+                )
             elif server_key == "redis":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 6379})
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append(
+                    {"containerPort": 6379}
+                )
             elif server_key == "rabbitmq":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend([
-                    {"containerPort": 5672},
-                    {"containerPort": 15672}
-                ])
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend(
+                    [{"containerPort": 5672}, {"containerPort": 15672}]
+                )
             elif server_key == "elasticsearch":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 9200})
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append(
+                    {"containerPort": 9200}
+                )
             elif server_key in ["minio-linode", "minio-aws"]:
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend([
-                    {"containerPort": 9000},
-                    {"containerPort": 9001}
-                ])
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend(
+                    [{"containerPort": 9000}, {"containerPort": 9001}]
+                )
             elif server_key == "mailhog":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend([
-                    {"containerPort": 1025},
-                    {"containerPort": 8025}
-                ])
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].extend(
+                    [{"containerPort": 1025}, {"containerPort": 8025}]
+                )
             elif server_key == "imgproxy":
-                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 8080})
+                deployment["spec"]["template"]["spec"]["containers"][0]["ports"].append(
+                    {"containerPort": 8080}
+                )
 
         # Add environment variables
         env_vars = []
         if server_key == "postgres":
-            env_vars.extend([
-                {"name": "POSTGRES_USER", "value": service_config.get("user", "postgres")},
-                {"name": "POSTGRES_PASSWORD", "value": service_config.get("password", "postgres")},
-                {"name": "POSTGRES_DB", "value": service_config.get("database", "app_db")}
-            ])
+            env_vars.extend(
+                [
+                    {
+                        "name": "POSTGRES_USER",
+                        "value": service_config.get("user", "postgres"),
+                    },
+                    {
+                        "name": "POSTGRES_PASSWORD",
+                        "value": service_config.get("password", "postgres"),
+                    },
+                    {
+                        "name": "POSTGRES_DB",
+                        "value": service_config.get("database", "app_db"),
+                    },
+                ]
+            )
         elif server_key in ["minio-linode", "minio-aws"]:
-            env_vars.extend([
-                {"name": "MINIO_ROOT_USER", "value": service_config.get("access_key", "minioadmin")},
-                {"name": "MINIO_ROOT_PASSWORD", "value": service_config.get("secret_key", "minioadmin")}
-            ])
+            env_vars.extend(
+                [
+                    {
+                        "name": "MINIO_ROOT_USER",
+                        "value": service_config.get("access_key", "minioadmin"),
+                    },
+                    {
+                        "name": "MINIO_ROOT_PASSWORD",
+                        "value": service_config.get("secret_key", "minioadmin"),
+                    },
+                ]
+            )
 
         if env_vars:
             deployment["spec"]["template"]["spec"]["containers"][0]["env"] = env_vars
@@ -595,7 +707,10 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
         # Add command if specified
         if "command" in server_config:
             import shlex
-            deployment["spec"]["template"]["spec"]["containers"][0]["command"] = shlex.split(server_config["command"])
+
+            deployment["spec"]["template"]["spec"]["containers"][0]["command"] = (
+                shlex.split(server_config["command"])
+            )
 
         manifests.append(deployment)
 
@@ -603,14 +718,8 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
         service = {
             "apiVersion": "v1",
             "kind": "Service",
-            "metadata": {
-                "name": service_name,
-                "namespace": namespace
-            },
-            "spec": {
-                "selector": {"app": service_name},
-                "ports": []
-            }
+            "metadata": {"name": service_name, "namespace": namespace},
+            "spec": {"selector": {"app": service_name}, "ports": []},
         }
 
         if "port" in service_config:
@@ -619,22 +728,28 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
             elif server_key == "redis":
                 service["spec"]["ports"].append({"port": 6379, "targetPort": 6379})
             elif server_key == "rabbitmq":
-                service["spec"]["ports"].extend([
-                    {"port": 5672, "targetPort": 5672},
-                    {"port": 15672, "targetPort": 15672, "name": "management"}
-                ])
+                service["spec"]["ports"].extend(
+                    [
+                        {"port": 5672, "targetPort": 5672},
+                        {"port": 15672, "targetPort": 15672, "name": "management"},
+                    ]
+                )
             elif server_key == "elasticsearch":
                 service["spec"]["ports"].append({"port": 9200, "targetPort": 9200})
             elif server_key in ["minio-linode", "minio-aws"]:
-                service["spec"]["ports"].extend([
-                    {"port": 9000, "targetPort": 9000},
-                    {"port": 9001, "targetPort": 9001, "name": "console"}
-                ])
+                service["spec"]["ports"].extend(
+                    [
+                        {"port": 9000, "targetPort": 9000},
+                        {"port": 9001, "targetPort": 9001, "name": "console"},
+                    ]
+                )
             elif server_key == "mailhog":
-                service["spec"]["ports"].extend([
-                    {"port": 1025, "targetPort": 1025},
-                    {"port": 8025, "targetPort": 8025, "name": "web"}
-                ])
+                service["spec"]["ports"].extend(
+                    [
+                        {"port": 1025, "targetPort": 1025},
+                        {"port": 8025, "targetPort": 8025, "name": "web"},
+                    ]
+                )
             elif server_key == "imgproxy":
                 service["spec"]["ports"].append({"port": 8080, "targetPort": 8080})
 
@@ -651,7 +766,7 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
             "metadata": {
                 "name": service_name,
                 "namespace": namespace,
-                "labels": {"app": service_name}
+                "labels": {"app": service_name},
             },
             "spec": {
                 "replicas": 1,
@@ -659,15 +774,17 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
                 "template": {
                     "metadata": {"labels": {"app": service_name}},
                     "spec": {
-                        "containers": [{
-                            "name": service_name,
-                            "image": f"vibe-staging-{service_name}:latest",
-                            "imagePullPolicy": "Never",  # Use local image
-                            "ports": [{"containerPort": 8080}]
-                        }]
-                    }
-                }
-            }
+                        "containers": [
+                            {
+                                "name": service_name,
+                                "image": f"vibe-staging-{service_name}:latest",
+                                "imagePullPolicy": "Never",  # Use local image
+                                "ports": [{"containerPort": 8080}],
+                            }
+                        ]
+                    },
+                },
+            },
         }
 
         # Add environment variables for service discovery
@@ -676,15 +793,11 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
             env_name = service_key.upper().replace("-", "_")
             infra_service_name = service_key.replace("s3-", "minio-").replace("-", "")
             # For reused services, use the service name in staging namespace (ExternalName will resolve)
-            env_vars.append({
-                "name": f"{env_name}_HOST",
-                "value": infra_service_name
-            })
+            env_vars.append({"name": f"{env_name}_HOST", "value": infra_service_name})
             if "port" in service_config:
-                env_vars.append({
-                    "name": f"{env_name}_PORT",
-                    "value": str(service_config["port"])
-                })
+                env_vars.append(
+                    {"name": f"{env_name}_PORT", "value": str(service_config["port"])}
+                )
 
         if env_vars:
             deployment["spec"]["template"]["spec"]["containers"][0]["env"] = env_vars
@@ -695,14 +808,11 @@ def generate_k8s_manifests(services: Dict[str, Any], app_services: List[Dict[str
         service = {
             "apiVersion": "v1",
             "kind": "Service",
-            "metadata": {
-                "name": service_name,
-                "namespace": namespace
-            },
+            "metadata": {"name": service_name, "namespace": namespace},
             "spec": {
                 "selector": {"app": service_name},
-                "ports": [{"port": 80, "targetPort": 8080}]
-            }
+                "ports": [{"port": 80, "targetPort": 8080}],
+            },
         }
         manifests.append(service)
 
@@ -716,7 +826,12 @@ def staging_cli():
 
 
 @staging_cli.command()
-@click.option("--isolated", is_flag=True, default=False, help="Create isolated containers instead of reusing existing vibe servers containers")
+@click.option(
+    "--isolated",
+    is_flag=True,
+    default=False,
+    help="Create isolated containers instead of reusing existing vibe servers containers",
+)
 def up(isolated):
     """Start the complete staging environment. By default, reuses existing vibe servers containers."""
     env_type = detect_environment()
@@ -744,10 +859,21 @@ def up(isolated):
         reused_count = 0
         for service_key in services.keys():
             server_key = None
-            for sk in ["postgres", "redis", "rabbitmq", "elasticsearch", "minio-linode", "minio-aws", "mailhog", "imgproxy"]:
-                if (service_key == sk or
-                    (service_key == "s3-linode" and sk == "minio-linode") or
-                    (service_key == "s3-aws" and sk == "minio-aws")):
+            for sk in [
+                "postgres",
+                "redis",
+                "rabbitmq",
+                "elasticsearch",
+                "minio-linode",
+                "minio-aws",
+                "mailhog",
+                "imgproxy",
+            ]:
+                if (
+                    service_key == sk
+                    or (service_key == "s3-linode" and sk == "minio-linode")
+                    or (service_key == "s3-aws" and sk == "minio-aws")
+                ):
                     server_key = sk
                     break
             if server_key:
@@ -777,7 +903,12 @@ def up(isolated):
         _setup_docker_compose_staging(services, app_services, isolated)
 
 
-def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, Any]], namespace: str, isolated: bool = False):
+def _setup_k8s_staging(
+    services: Dict[str, Any],
+    app_services: List[Dict[str, Any]],
+    namespace: str,
+    isolated: bool = False,
+):
     """Set up Kubernetes staging environment."""
     K8S_MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -801,8 +932,7 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
     for manifest_file in sorted(K8S_MANIFESTS_DIR.glob("*.yaml")):
         click.echo(f"  Applying {manifest_file.name}...")
         stdout, code = run_command(
-            ["kubectl", "apply", "-f", str(manifest_file), "-n", namespace],
-            check=False
+            ["kubectl", "apply", "-f", str(manifest_file), "-n", namespace], check=False
         )
         if code != 0:
             click.echo(f"  ⚠️  Warning: {stdout}")
@@ -819,8 +949,16 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
         image_name = f"vibe-staging-{service_name}:latest"
 
         stdout, code = run_command(
-            ["docker", "build", "-t", image_name, "-f", str(dockerfile_path), str(context)],
-            check=False
+            [
+                "docker",
+                "build",
+                "-t",
+                image_name,
+                "-f",
+                str(dockerfile_path),
+                str(context),
+            ],
+            check=False,
         )
         if code != 0:
             click.echo(f"  ❌ Failed to build {service_name}: {stdout}")
@@ -836,7 +974,17 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
             stdout, _ = run_command(["kind", "get", "clusters"], check=False)
             if stdout.strip():
                 cluster_name = stdout.strip().split()[0]
-                run_command(["kind", "load", "docker-image", image_name, "--name", cluster_name], check=False)
+                run_command(
+                    [
+                        "kind",
+                        "load",
+                        "docker-image",
+                        image_name,
+                        "--name",
+                        cluster_name,
+                    ],
+                    check=False,
+                )
         # Docker Desktop doesn't need image loading
 
     click.echo("✅ Staging environment started")
@@ -844,7 +992,9 @@ def _setup_k8s_staging(services: Dict[str, Any], app_services: List[Dict[str, An
     click.echo("  View status: vibe-staging status")
 
 
-def _setup_docker_compose_staging(services: Dict[str, Any], app_services: List[Dict[str, Any]], isolated: bool = False):
+def _setup_docker_compose_staging(
+    services: Dict[str, Any], app_services: List[Dict[str, Any]], isolated: bool = False
+):
     """Set up Docker Compose staging environment."""
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -859,8 +1009,7 @@ def _setup_docker_compose_staging(services: Dict[str, Any], app_services: List[D
         return
 
     stdout, code = run_command(
-        compose_cmd + ["-f", str(DOCKER_COMPOSE_FILE), "up", "-d"],
-        check=False
+        compose_cmd + ["-f", str(DOCKER_COMPOSE_FILE), "up", "-d"], check=False
     )
     if code != 0:
         click.echo(f"❌ Failed to start services: {stdout}")
@@ -888,8 +1037,7 @@ def down():
             compose_cmd = get_docker_compose_cmd()
             if compose_cmd:
                 run_command(
-                    compose_cmd + ["-f", str(DOCKER_COMPOSE_FILE), "down"],
-                    check=False
+                    compose_cmd + ["-f", str(DOCKER_COMPOSE_FILE), "down"], check=False
                 )
             click.echo("✅ Staging environment stopped")
         else:
@@ -912,7 +1060,9 @@ def status():
     for service_key, service_config in services.items():
         # Use display name that matches what's in docker-compose/k8s
         service_name = service_key.replace("s3-", "minio-").replace("-", "_")
-        is_healthy, health_msg = check_service_health(service_name, service_config, env_type)
+        is_healthy, health_msg = check_service_health(
+            service_name, service_config, env_type
+        )
         status_icon = "✅" if is_healthy else "❌"
         # Show original service key for clarity
         display_name = service_key.replace("s3-", "minio-")
@@ -980,7 +1130,9 @@ def health():
 
     for service_key, service_config in services.items():
         service_name = service_key.replace("s3-", "minio-").replace("-", "_")
-        is_healthy, health_msg = check_service_health(service_name, service_config, env_type)
+        is_healthy, health_msg = check_service_health(
+            service_name, service_config, env_type
+        )
         if not is_healthy:
             all_healthy = False
         status_icon = "✅" if is_healthy else "❌"
@@ -1004,7 +1156,9 @@ def health():
 
 
 @staging_cli.command()
-@click.option("--type", type=click.Choice(["integration", "regression", "all"]), default="all")
+@click.option(
+    "--type", type=click.Choice(["integration", "regression", "all"]), default="all"
+)
 def test(type):
     """Run tests against the staging environment."""
     config = load_staging_config()

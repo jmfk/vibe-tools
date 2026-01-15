@@ -2,9 +2,11 @@ import pytest
 from click.testing import CliRunner
 from vibe_tools.cli import cli
 
+
 @pytest.fixture
 def runner():
     return CliRunner()
+
 
 def test_issue_workflow(runner, tmp_path, monkeypatch):
     # Setup temporary directories
@@ -14,16 +16,21 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     (product_dir / "inbox").mkdir()
     (product_dir / "history").mkdir()
     (product_dir / "in_progress").mkdir()
-    
+
     monkeypatch.setattr("vibe_tools.utils.PRODUCT_DIR", product_dir)
     monkeypatch.setattr("vibe_tools.utils.PRODUCT_BACKLOG_DIR", product_dir / "backlog")
-    monkeypatch.setattr("vibe_tools.utils.PRODUCT_IN_PROGRESS_DIR", product_dir / "in_progress")
+    monkeypatch.setattr(
+        "vibe_tools.utils.PRODUCT_IN_PROGRESS_DIR", product_dir / "in_progress"
+    )
     monkeypatch.setattr("vibe_tools.utils.PRODUCT_HISTORY_DIR", product_dir / "history")
     monkeypatch.setattr("vibe_tools.utils.PLANNING_INBOX_DIR", product_dir / "inbox")
-    
+
     # 1. Add an issue
     with monkeypatch.context() as m:
-        m.setattr("vibe_tools.commands.issue_add.run_llm", lambda x: '{"title": "Test Issue", "summary": "Test Summary", "severity": "high", "service": "core"}')
+        m.setattr(
+            "vibe_tools.commands.issue_add.run_llm",
+            lambda x: '{"title": "Test Issue", "summary": "Test Summary", "severity": "high", "service": "core"}',
+        )
         result = runner.invoke(cli, ["issue", "add", "Test prompt"])
         assert result.exit_code == 0
         assert "Issue created successfully" in result.output
@@ -43,7 +50,10 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     # 3. Solve issue (this will transition status and move file)
     # Mock implementation_loop to avoid running agent
     with monkeypatch.context() as m:
-        m.setattr("vibe_tools.commands.solve.implementation_loop", lambda agent, stream=False: True)
+        m.setattr(
+            "vibe_tools.commands.solve.implementation_loop",
+            lambda agent, stream=False: True,
+        )
         result = runner.invoke(cli, ["solve", "PRD-001"])
         assert result.exit_code == 0
         assert "Starting solve mode" in result.output

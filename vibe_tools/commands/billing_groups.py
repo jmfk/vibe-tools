@@ -29,7 +29,9 @@ def register_billing_groups(cli):
         """List all billing groups."""
         api_key = get_cursor_api_key()
         if not api_key:
-            click.echo("❌ CURSOR_API_KEY not found. Set it in .env file or environment.")
+            click.echo(
+                "❌ CURSOR_API_KEY not found. Set it in .env file or environment."
+            )
             return
 
         try:
@@ -86,7 +88,9 @@ def register_billing_groups(cli):
             reports_dir.mkdir(parents=True, exist_ok=True)
             markdown = generate_billing_groups_report(groups_data)
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_path = reports_dir / f"report_billing_group_{group_id}_{timestamp}.md"
+            report_path = (
+                reports_dir / f"report_billing_group_{group_id}_{timestamp}.md"
+            )
             report_path.write_text(markdown, encoding="utf-8")
             click.echo(f"✅ Report generated: {report_path}")
         except Exception as e:
@@ -106,7 +110,9 @@ def register_billing_groups(cli):
         try:
             result = add_members_to_group(api_key, group_id, list(user_ids))
             group = result.get("group", {})
-            click.echo(f"✅ Added {len(user_ids)} member(s) to group: {group.get('name')}")
+            click.echo(
+                f"✅ Added {len(user_ids)} member(s) to group: {group.get('name')}"
+            )
         except Exception as e:
             click.echo(f"❌ Error: {e}")
 

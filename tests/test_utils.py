@@ -84,10 +84,12 @@ def test_is_merged():
 
 
 def test_run_agent():
-    with patch("subprocess.Popen") as mock_popen, \
-         patch("shutil.which", return_value="/usr/local/bin/some-agent"), \
-         patch("vibe_tools.agent.is_test_mode", return_value=False), \
-         patch.dict(os.environ, {"VIBE_AGENT_ACTIVE": "0"}):
+    with (
+        patch("subprocess.Popen") as mock_popen,
+        patch("shutil.which", return_value="/usr/local/bin/some-agent"),
+        patch("vibe_tools.agent.is_test_mode", return_value=False),
+        patch.dict(os.environ, {"VIBE_AGENT_ACTIVE": "0"}),
+    ):
         mock_process = MagicMock()
         mock_process.pid = 12345
         mock_process.communicate.return_value = ("line1\nline2\n", "")

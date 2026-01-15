@@ -3,7 +3,15 @@ import re
 
 import click
 
-from vibe_tools.utils import get_prompt, log_issue, log_start, log_success, logger, run_command, run_llm
+from vibe_tools.utils import (
+    get_prompt,
+    log_issue,
+    log_start,
+    log_success,
+    logger,
+    run_command,
+    run_llm,
+)
 
 
 def register_quick_fix(cli):
@@ -75,7 +83,9 @@ def register_quick_fix(cli):
             return 1
 
         if not success_command:
-            click.echo("❌ Error: Success command must be provided with --success-command")
+            click.echo(
+                "❌ Error: Success command must be provided with --success-command"
+            )
             return 1
 
         # Read file contents
@@ -92,7 +102,9 @@ def register_quick_fix(cli):
         # Build success function
         def success_fn() -> bool:
             stdout, code = run_command(
-                success_command.split() if isinstance(success_command, str) else success_command,
+                success_command.split()
+                if isinstance(success_command, str)
+                else success_command,
                 check=False,
             )
             if code == 0:
@@ -113,7 +125,10 @@ def register_quick_fix(cli):
 
             # Format files section
             files_section = "\n".join(
-                [f"- {path} ({len(content)} chars)" for path, content in file_contents.items()]
+                [
+                    f"- {path} ({len(content)} chars)"
+                    for path, content in file_contents.items()
+                ]
             )
 
             # Build context with file contents
@@ -126,7 +141,9 @@ def register_quick_fix(cli):
 
             # Include previous attempt info if retrying
             if iteration > 1 and llm_outputs:
-                context_with_files += f"\n\nPREVIOUS ATTEMPT (iteration {iteration - 1}):\n"
+                context_with_files += (
+                    f"\n\nPREVIOUS ATTEMPT (iteration {iteration - 1}):\n"
+                )
                 context_with_files += llm_outputs[-1][:1000] + "..."
 
             return template.format(
@@ -153,17 +170,23 @@ def register_quick_fix(cli):
                 prompt = prompt_builder(iteration)
             except Exception as e:
                 logger.error(f"Error building prompt: {e}")
-                log_issue("Quick Fix", iteration, max_iterations, f"Prompt build error: {e}")
+                log_issue(
+                    "Quick Fix", iteration, max_iterations, f"Prompt build error: {e}"
+                )
                 return 1
 
             # Call LLM directly
             try:
                 llm_output = run_llm(prompt, model=model, debug=debug)
                 llm_outputs.append(llm_output)
-                logger.debug(f"LLM output (iteration {iteration}): {llm_output[:500]}...")
+                logger.debug(
+                    f"LLM output (iteration {iteration}): {llm_output[:500]}..."
+                )
             except Exception as e:
                 logger.error(f"LLM call failed: {e}")
-                log_issue("Quick Fix", iteration, max_iterations, f"LLM call error: {e}")
+                log_issue(
+                    "Quick Fix", iteration, max_iterations, f"LLM call error: {e}"
+                )
                 if iteration < max_iterations:
                     continue
                 else:
@@ -178,7 +201,7 @@ def register_quick_fix(cli):
 
                 if not matches:
                     # Try alternative format without quotes
-                    file_pattern = r'<file\s+path=([^\s>]+)>([\s\S]*?)</file>'
+                    file_pattern = r"<file\s+path=([^\s>]+)>([\s\S]*?)</file>"
                     matches = re.findall(file_pattern, output)
 
                 if not matches:
@@ -233,20 +256,38 @@ def register_quick_fix(cli):
             # Check if fix succeeded
             try:
                 if success_fn():
-                    log_success("Quick Fix", f"Fix succeeded after {iteration} iteration(s)")
-                    logger.info(f"✅ Quick fix succeeded after {iteration} iteration(s).")
-                    click.echo(f"\n✅ Quick fix succeeded after {iteration} iteration(s)!")
+                    log_success(
+                        "Quick Fix", f"Fix succeeded after {iteration} iteration(s)"
+                    )
+                    logger.info(
+                        f"✅ Quick fix succeeded after {iteration} iteration(s)."
+                    )
+                    click.echo(
+                        f"\n✅ Quick fix succeeded after {iteration} iteration(s)!"
+                    )
                     return 0
             except Exception as e:
                 logger.warning(f"Error checking success: {e}")
-                log_issue("Quick Fix", iteration, max_iterations, f"Success check error: {e}")
+                log_issue(
+                    "Quick Fix", iteration, max_iterations, f"Success check error: {e}"
+                )
 
             # Not successful yet
             if iteration < max_iterations:
-                log_issue("Quick Fix", iteration, max_iterations, "Fix attempt did not succeed, retrying...")
+                log_issue(
+                    "Quick Fix",
+                    iteration,
+                    max_iterations,
+                    "Fix attempt did not succeed, retrying...",
+                )
                 logger.info(f"⚠️  Fix attempt {iteration} did not succeed, retrying...")
             else:
-                log_issue("Quick Fix", iteration, max_iterations, "Fix failed after all iterations")
+                log_issue(
+                    "Quick Fix",
+                    iteration,
+                    max_iterations,
+                    "Fix failed after all iterations",
+                )
                 logger.error(f"❌ Quick fix failed after {max_iterations} iterations.")
         return 1
 

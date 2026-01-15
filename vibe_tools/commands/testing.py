@@ -41,9 +41,11 @@ def register_testing(cli):
         click.echo(f"🔄 Normalizing {TESTING_SPEC.name} in-memory...")
         testing_data = normalize_to_data(TESTING_SPEC.read_text(), "testing")
         if not testing_data:
-            click.echo("❌ Normalization failed. Please check the content of testing.md.")
+            click.echo(
+                "❌ Normalization failed. Please check the content of testing.md."
+            )
             return
-        
+
         testing_yaml = safe_yaml_dump(testing_data)
 
         loop = RalphLoop(
@@ -78,7 +80,7 @@ def register_testing(cli):
         """Update the status of a test step."""
         import yaml
         from vibe_tools.utils import VIBE_PROJECT_DIR
-        
+
         test_file = VIBE_PROJECT_DIR / "testing.yaml"
         if not test_file.exists():
             click.echo(f"❌ {test_file} not found.")
@@ -98,12 +100,18 @@ def register_testing(cli):
                     if s.get("id") == step_id:
                         s["status"] = status
                         updated = True
-                
+
                 # Update test status based on steps
-                all_passed = all(s.get("status") == "passed" for s in t.get("steps", []))
-                any_failed = any(s.get("status") == "failed" for s in t.get("steps", []))
-                any_in_progress = any(s.get("status") == "in_progress" for s in t.get("steps", []))
-                
+                all_passed = all(
+                    s.get("status") == "passed" for s in t.get("steps", [])
+                )
+                any_failed = any(
+                    s.get("status") == "failed" for s in t.get("steps", [])
+                )
+                any_in_progress = any(
+                    s.get("status") == "in_progress" for s in t.get("steps", [])
+                )
+
                 if any_failed:
                     t["status"] = "failed"
                 elif all_passed:
@@ -112,7 +120,7 @@ def register_testing(cli):
                     t["status"] = "in_progress"
                 else:
                     t["status"] = "pending"
-                    
+
         if updated:
             test_file.write_text(yaml.dump(data, sort_keys=False))
             click.echo(f"✅ Updated {test_id}/{step_id} to {status}")

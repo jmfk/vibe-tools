@@ -47,7 +47,9 @@ class ProjectTester:
         # Try python3 -m pytest
         try:
             subprocess.run(
-                ["python3", "-m", "pytest", "--version"], capture_output=True, check=True
+                ["python3", "-m", "pytest", "--version"],
+                capture_output=True,
+                check=True,
             )
             return ["python3", "-m", "pytest", "-v", str(backend_tests)]
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -60,7 +62,10 @@ class ProjectTester:
         if self.has_make_target("frontend-test"):
             return ["make", "frontend-test"]
 
-        if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
+        if (
+            self.frontend_root.exists()
+            and (self.frontend_root / "package.json").exists()
+        ):
             return ["npx", "--prefix", str(self.frontend_root), "vitest", "run"]
 
         return None
@@ -72,14 +77,23 @@ class ProjectTester:
 
         if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
             # Run cargo test in the tauri directory
-            return ["cargo", "test", "--manifest-path", str(self.tauri_root / "Cargo.toml")]
+            return [
+                "cargo",
+                "test",
+                "--manifest-path",
+                str(self.tauri_root / "Cargo.toml"),
+            ]
 
         return None
 
     def discover_backend_lint_cmd(self):
         """Discovers the command to run backend lint."""
         if self.has_make_target("lint-backend") or self.has_make_target("lint"):
-            return ["make", "lint-backend"] if self.has_make_target("lint-backend") else ["make", "lint"]
+            return (
+                ["make", "lint-backend"]
+                if self.has_make_target("lint-backend")
+                else ["make", "lint"]
+            )
 
         # Fallback to ruff if available
         try:
@@ -95,7 +109,10 @@ class ProjectTester:
         if self.has_make_target("frontend-lint"):
             return ["make", "frontend-lint"]
 
-        if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
+        if (
+            self.frontend_root.exists()
+            and (self.frontend_root / "package.json").exists()
+        ):
             return ["npm", "--prefix", str(self.frontend_root), "run", "lint"]
 
         return None
@@ -106,7 +123,15 @@ class ProjectTester:
             return ["make", "tauri-lint"]
 
         if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
-            return ["cargo", "clippy", "--manifest-path", str(self.tauri_root / "Cargo.toml"), "--", "-D", "warnings"]
+            return [
+                "cargo",
+                "clippy",
+                "--manifest-path",
+                str(self.tauri_root / "Cargo.toml"),
+                "--",
+                "-D",
+                "warnings",
+            ]
 
         return None
 
@@ -115,8 +140,17 @@ class ProjectTester:
         if component == "frontend":
             if self.has_make_target("frontend-coverage"):
                 return ["make", "frontend-coverage"]
-            if self.frontend_root.exists() and (self.frontend_root / "package.json").exists():
-                return ["npm", "--prefix", str(self.frontend_root), "run", "test:coverage"] # Standard Vitest/Jest coverage
+            if (
+                self.frontend_root.exists()
+                and (self.frontend_root / "package.json").exists()
+            ):
+                return [
+                    "npm",
+                    "--prefix",
+                    str(self.frontend_root),
+                    "run",
+                    "test:coverage",
+                ]  # Standard Vitest/Jest coverage
             return None
 
         if component == "infra":
@@ -127,7 +161,12 @@ class ProjectTester:
             if self.has_make_target("coverage"):
                 return ["make", "coverage"]
             if self.backend_root.exists():
-                return ["pytest", f"--cov={self.backend_root}", "--cov-report=term-missing", "tests/"]
+                return [
+                    "pytest",
+                    f"--cov={self.backend_root}",
+                    "--cov-report=term-missing",
+                    "tests/",
+                ]
 
         return None
 
@@ -176,8 +215,20 @@ class ProjectTester:
         # Vitest failures
         # Example: ❯ src/components/workflow/SearchHeader.test.tsx > SearchHeader > should render correctly
         # Example: FAIL  frontend/src/components/workflow/SearchHeader.test.tsx > SearchHeader > should render correctly
-        vitest_matches = re.findall(r"(?:FAIL|❯)\s+([^\s]+\.test\.[jt]sx?)(?:\s+>\s+(.+))?", output)
-        failures.extend([{"id": f"{m[0]} - {m[1] if m[1] else 'Unknown Test'}", "file": m[0], "name": m[1] if m[1] else "", "type": "frontend"} for m in vitest_matches])
+        vitest_matches = re.findall(
+            r"(?:FAIL|❯)\s+([^\s]+\.test\.[jt]sx?)(?:\s+>\s+(.+))?", output
+        )
+        failures.extend(
+            [
+                {
+                    "id": f"{m[0]} - {m[1] if m[1] else 'Unknown Test'}",
+                    "file": m[0],
+                    "name": m[1] if m[1] else "",
+                    "type": "frontend",
+                }
+                for m in vitest_matches
+            ]
+        )
 
         # Cargo (Tauri) failures
         # Example: test tests::some_test ... FAILED
@@ -198,7 +249,9 @@ class ProjectTester:
             # Since run_command doesn't take env, we'll prefix it if needed or just rely on current process env
             # Actually run_command uses subprocess.run which inherits env.
             # Let's use the same pattern as discover_backend_test_cmd but targeted.
-            output, code = run_command(["python3", "-m", "pytest", "-v", test_id], check=False)
+            output, code = run_command(
+                ["python3", "-m", "pytest", "-v", test_id], check=False
+            )
             log_large_output(f"test_backend_{test_id}", output)
             return output, code == 0
         elif failure["type"] == "frontend":
@@ -207,7 +260,16 @@ class ProjectTester:
             logger.info(f"Running single frontend test: {test_name} in {test_file}")
             # cd frontend && npx vitest run <test_file> -t "<test_name>"
             # We can use the prefix option for npm/npx
-            cmd = ["npx", "--prefix", str(self.frontend_root), "vitest", "run", test_file, "-t", test_name]
+            cmd = [
+                "npx",
+                "--prefix",
+                str(self.frontend_root),
+                "vitest",
+                "run",
+                test_file,
+                "-t",
+                test_name,
+            ]
             output, code = run_command(cmd, check=False)
             log_large_output(f"test_frontend_{test_name}", output)
             return output, code == 0
@@ -215,7 +277,14 @@ class ProjectTester:
             test_name = failure["name"]
             logger.info(f"Running single tauri test: {test_name}")
             # cargo test --manifest-path frontend/src-tauri/Cargo.toml -- <test_name>
-            cmd = ["cargo", "test", "--manifest-path", str(self.tauri_root / "Cargo.toml"), "--", test_name]
+            cmd = [
+                "cargo",
+                "test",
+                "--manifest-path",
+                str(self.tauri_root / "Cargo.toml"),
+                "--",
+                test_name,
+            ]
             output, code = run_command(cmd, check=False)
             log_large_output(f"test_tauri_{test_name}", output)
             return output, code == 0
@@ -276,7 +345,7 @@ class ProjectTester:
 
             if cmd:
                 logger.info(f"Running command: {' '.join(cmd)}")
-                # We need to pass the env to subprocess.run. 
+                # We need to pass the env to subprocess.run.
                 original_env = os.environ.copy()
                 try:
                     os.environ["CI"] = "true"
@@ -338,7 +407,9 @@ class ProjectTester:
         outputs = [r["output"] for r in results]
         all_passed = all(r["passed"] for r in results)
         env_failures = [r["target"] for r in results if r["env_failure"]]
-        failed_targets = [r["target"] for r in results if not r["passed"] and not r["env_failure"]]
+        failed_targets = [
+            r["target"] for r in results if not r["passed"] and not r["env_failure"]
+        ]
 
         combined_output = "\n\n".join(outputs)
         return combined_output, all_passed, env_failures, failed_targets
@@ -348,18 +419,27 @@ class ProjectTester:
         filtered = []
 
         has_backend_changes = any(
-            f.startswith("vibe_tools/") or f == "pyproject.toml" or f == "Makefile" or f.startswith("tests/")
+            f.startswith("vibe_tools/")
+            or f == "pyproject.toml"
+            or f == "Makefile"
+            or f.startswith("tests/")
             for f in changed_files
         )
         has_frontend_changes = any(
-            f.startswith("frontend/") and not f.startswith("frontend/src-tauri/") for f in changed_files
+            f.startswith("frontend/") and not f.startswith("frontend/src-tauri/")
+            for f in changed_files
         )
         has_tauri_changes = any(
             f.startswith("frontend/src-tauri/") for f in changed_files
         )
 
         for target in targets:
-            if "backend" in target or "infra" in target or "integration" in target or "regression" in target:
+            if (
+                "backend" in target
+                or "infra" in target
+                or "integration" in target
+                or "regression" in target
+            ):
                 if has_backend_changes:
                     filtered.append(target)
             elif "frontend" in target:
@@ -381,7 +461,10 @@ class ProjectTester:
         """Runs coverage for a component and returns the report and total percentage."""
         cmd = self.discover_coverage_cmd(component=component)
         if not cmd:
-            return f"No coverage command discovered for component: {component or 'default'}", 0
+            return (
+                f"No coverage command discovered for component: {component or 'default'}",
+                0,
+            )
 
         logger.info(f"Running Coverage ({component or 'default'}): {' '.join(cmd)}")
         output, _ = run_command(cmd, check=False)

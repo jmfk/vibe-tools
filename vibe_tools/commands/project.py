@@ -1,6 +1,12 @@
 import click
 import pathlib
-from vibe_tools.utils import GlobalProjectRegistry, out_success, out_info, get_project_name
+from vibe_tools.utils import (
+    GlobalProjectRegistry,
+    out_success,
+    out_info,
+    get_project_name,
+)
+
 
 def register_project(cli):
     @cli.group()
@@ -30,13 +36,14 @@ def register_project(cli):
         if not name:
             # Try to get project name from the path or git
             import os
+
             old_cwd = os.getcwd()
             os.chdir(path_obj)
             try:
                 name = get_project_name()
             finally:
                 os.chdir(old_cwd)
-        
+
         GlobalProjectRegistry.add_project(name, str(path_obj))
         out_success(f"✅ Registered project '{name}' at {path_obj}")
 

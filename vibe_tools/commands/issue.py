@@ -25,16 +25,18 @@ def register_issue(cli):
             return
 
         import datetime
+
         issue.status = "done"
         issue.updated_at = datetime.datetime.now().isoformat()
-        
+
         # Move to history
         from vibe_tools.utils import PRODUCT_HISTORY_DIR
+
         new_path = PRODUCT_HISTORY_DIR / issue.path.name
         issue.save(new_path)
         if issue.path.exists():
             issue.path.unlink()
-        
+
         click.echo(f"Issue {issue_id} marked as done and moved to history.")
         click.echo("Run 'vibe sync' to update GitHub.")
 

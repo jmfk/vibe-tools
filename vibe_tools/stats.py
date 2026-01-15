@@ -15,9 +15,7 @@ def list_usage_files(stats_dir: pathlib.Path) -> List[pathlib.Path]:
         return []
 
     csv_files = sorted(
-        stats_dir.glob("*.csv"),
-        key=lambda p: _extract_date_from_file(p),
-        reverse=True
+        stats_dir.glob("*.csv"), key=lambda p: _extract_date_from_file(p), reverse=True
     )
     return csv_files
 
@@ -25,7 +23,7 @@ def list_usage_files(stats_dir: pathlib.Path) -> List[pathlib.Path]:
 def _extract_date_from_file(file_path: pathlib.Path) -> datetime.datetime:
     """Extract date from filename, defaulting to file modification time if not found."""
     # Try to extract date from filename like "usage-events-2026-01-06.csv"
-    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', file_path.name)
+    date_match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path.name)
     if date_match:
         try:
             return datetime.datetime.strptime(date_match.group(1), "%Y-%m-%d")
@@ -41,7 +39,7 @@ def _extract_date_from_file(file_path: pathlib.Path) -> datetime.datetime:
 
 def detect_csv_format(file_path: pathlib.Path) -> str:
     """Detect the format of the CSV file."""
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.reader(f)
         header = next(reader, None)
         if not header:
@@ -51,7 +49,9 @@ def detect_csv_format(file_path: pathlib.Path) -> str:
 
         if "date" in header_str and "kind" in header_str and "model" in header_str:
             return "usage-events"
-        elif "timestamp" in header_str and "prd" in header_str and "phase" in header_str:
+        elif (
+            "timestamp" in header_str and "prd" in header_str and "phase" in header_str
+        ):
             return "usage"
         else:
             return "unknown"
@@ -64,13 +64,21 @@ def parse_usage_csv(file_path: pathlib.Path) -> Dict[str, Any]:
         "total_cost": 0.0,
         "total_input_tokens": 0,
         "total_output_tokens": 0,
-        "by_phase": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
-        "by_model": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
-        "by_prd": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
-        "by_agent": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
+        "by_phase": defaultdict(
+            lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}
+        ),
+        "by_model": defaultdict(
+            lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}
+        ),
+        "by_prd": defaultdict(
+            lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}
+        ),
+        "by_agent": defaultdict(
+            lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}
+        ),
     }
 
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
@@ -120,11 +128,19 @@ def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
         "total_input_tokens": 0,
         "total_output_tokens": 0,
         "total_cache_read": 0,
-        "by_model": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0, "cache_read": 0}),
+        "by_model": defaultdict(
+            lambda: {
+                "count": 0,
+                "cost": 0.0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read": 0,
+            }
+        ),
         "by_kind": defaultdict(lambda: {"count": 0, "cost": 0.0}),
     }
 
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
@@ -164,11 +180,9 @@ def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
     return data
 
 
-
-
-
-
-def cursor_api_request(method: str, endpoint: str, api_key: str, data: Optional[Dict] = None) -> Dict[str, Any]:
+def cursor_api_request(
+    method: str, endpoint: str, api_key: str, data: Optional[Dict] = None
+) -> Dict[str, Any]:
     """Make a request to the Cursor API."""
     url = f"https://api.cursor.com{endpoint}"
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
@@ -194,17 +208,26 @@ def cursor_api_request(method: str, endpoint: str, api_key: str, data: Optional[
     return response.json()
 
 
-def fetch_daily_usage_data(api_key: str, start_date: datetime.datetime, end_date: datetime.datetime) -> Dict[str, Any]:
+def fetch_daily_usage_data(
+    api_key: str, start_date: datetime.datetime, end_date: datetime.datetime
+) -> Dict[str, Any]:
     """Fetch daily usage data from Cursor API."""
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
-    return cursor_api_request("POST", "/teams/daily-usage-data", api_key, {
-        "startDate": start_ms,
-        "endDate": end_ms,
-    })
+    return cursor_api_request(
+        "POST",
+        "/teams/daily-usage-data",
+        api_key,
+        {
+            "startDate": start_ms,
+            "endDate": end_ms,
+        },
+    )
 
 
-def fetch_spending_data(api_key: str, search_term: Optional[str] = None, page: int = 1, page_size: int = 100) -> Dict[str, Any]:
+def fetch_spending_data(
+    api_key: str, search_term: Optional[str] = None, page: int = 1, page_size: int = 100
+) -> Dict[str, Any]:
     """Fetch spending data from Cursor API."""
     data: Dict[str, Any] = {"page": page, "pageSize": page_size}
     if search_term:
@@ -212,8 +235,14 @@ def fetch_spending_data(api_key: str, search_term: Optional[str] = None, page: i
     return cursor_api_request("POST", "/teams/spend", api_key, data)
 
 
-def fetch_usage_events(api_key: str, start_date: datetime.datetime, end_date: datetime.datetime,
-                      email: Optional[str] = None, page: int = 1, page_size: int = 25) -> Dict[str, Any]:
+def fetch_usage_events(
+    api_key: str,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
+    email: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, Any]:
     """Fetch usage events from Cursor API."""
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
@@ -228,7 +257,9 @@ def fetch_usage_events(api_key: str, start_date: datetime.datetime, end_date: da
     return cursor_api_request("POST", "/teams/filtered-usage-events", api_key, data)
 
 
-def list_billing_groups(api_key: str, billing_cycle: Optional[str] = None) -> Dict[str, Any]:
+def list_billing_groups(
+    api_key: str, billing_cycle: Optional[str] = None
+) -> Dict[str, Any]:
     """List all billing groups."""
     params = {}
     if billing_cycle:
@@ -236,7 +267,9 @@ def list_billing_groups(api_key: str, billing_cycle: Optional[str] = None) -> Di
     return cursor_api_request("GET", "/teams/groups", api_key, params)
 
 
-def get_billing_group(api_key: str, group_id: str, billing_cycle: Optional[str] = None) -> Dict[str, Any]:
+def get_billing_group(
+    api_key: str, group_id: str, billing_cycle: Optional[str] = None
+) -> Dict[str, Any]:
     """Get a specific billing group."""
     params = {}
     if billing_cycle:
@@ -249,8 +282,12 @@ def create_billing_group(api_key: str, name: str) -> Dict[str, Any]:
     return cursor_api_request("POST", "/teams/groups", api_key, {"name": name})
 
 
-def update_billing_group(api_key: str, group_id: str, name: Optional[str] = None,
-                        directory_group_id: Optional[str] = None) -> Dict[str, Any]:
+def update_billing_group(
+    api_key: str,
+    group_id: str,
+    name: Optional[str] = None,
+    directory_group_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Update a billing group."""
     data = {}
     if name is not None:
@@ -265,14 +302,22 @@ def delete_billing_group(api_key: str, group_id: str):
     cursor_api_request("DELETE", f"/teams/groups/{group_id}", api_key)
 
 
-def add_members_to_group(api_key: str, group_id: str, user_ids: List[str]) -> Dict[str, Any]:
+def add_members_to_group(
+    api_key: str, group_id: str, user_ids: List[str]
+) -> Dict[str, Any]:
     """Add members to a billing group."""
-    return cursor_api_request("POST", f"/teams/groups/{group_id}/members", api_key, {"userIds": user_ids})
+    return cursor_api_request(
+        "POST", f"/teams/groups/{group_id}/members", api_key, {"userIds": user_ids}
+    )
 
 
-def remove_members_from_group(api_key: str, group_id: str, user_ids: List[str]) -> Dict[str, Any]:
+def remove_members_from_group(
+    api_key: str, group_id: str, user_ids: List[str]
+) -> Dict[str, Any]:
     """Remove members from a billing group."""
-    return cursor_api_request("DELETE", f"/teams/groups/{group_id}/members", api_key, {"userIds": user_ids})
+    return cursor_api_request(
+        "DELETE", f"/teams/groups/{group_id}/members", api_key, {"userIds": user_ids}
+    )
 
 
 def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -283,9 +328,19 @@ def parse_api_usage_events(api_data: Dict[str, Any]) -> Dict[str, Any]:
         "total_input_tokens": 0,
         "total_output_tokens": 0,
         "total_cache_read": 0,
-        "by_model": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0, "cache_read": 0}),
+        "by_model": defaultdict(
+            lambda: {
+                "count": 0,
+                "cost": 0.0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read": 0,
+            }
+        ),
         "by_kind": defaultdict(lambda: {"count": 0, "cost": 0.0}),
-        "by_user": defaultdict(lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}),
+        "by_user": defaultdict(
+            lambda: {"count": 0, "cost": 0.0, "input_tokens": 0, "output_tokens": 0}
+        ),
     }
 
     events = api_data.get("usageEvents", [])
@@ -334,7 +389,14 @@ def parse_api_daily_usage(api_data: Dict[str, Any]) -> Dict[str, Any]:
     data: Dict[str, Any] = {
         "rows": [],
         "total_cost": 0.0,
-        "by_user": defaultdict(lambda: {"count": 0, "cost": 0.0, "total_lines_added": 0, "total_lines_deleted": 0}),
+        "by_user": defaultdict(
+            lambda: {
+                "count": 0,
+                "cost": 0.0,
+                "total_lines_added": 0,
+                "total_lines_deleted": 0,
+            }
+        ),
         "by_model": defaultdict(lambda: {"count": 0}),
     }
 
@@ -352,7 +414,12 @@ def parse_api_daily_usage(api_data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
-def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, Any], format_type: str, source: str = "file") -> str:
+def generate_markdown_report(
+    file_path: Optional[pathlib.Path],
+    data: Dict[str, Any],
+    format_type: str,
+    source: str = "file",
+) -> str:
     """Generate markdown report with statistics and tables."""
     lines = []
     lines.append("# Usage Statistics Report")
@@ -361,7 +428,9 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         lines.append(f"**Source:** `{file_path.name}` ({source})")
     else:
         lines.append(f"**Source:** Cursor API ({source})")
-    lines.append(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(
+        f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -372,29 +441,37 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
     lines.append("| Metric | Value |")
     lines.append("|--------|-------|")
     lines.append(f"| Total Cost (USD) | ${data['total_cost']:.4f} |")
-    if 'total_input_tokens' in data:
+    if "total_input_tokens" in data:
         lines.append(f"| Total Input Tokens | {data['total_input_tokens']:,} |")
         lines.append(f"| Total Output Tokens | {data['total_output_tokens']:,} |")
-        total_tokens = data['total_input_tokens'] + data['total_output_tokens']
+        total_tokens = data["total_input_tokens"] + data["total_output_tokens"]
         lines.append(f"| Total Tokens | {total_tokens:,} |")
-    if 'total_cache_read' in data:
+    if "total_cache_read" in data:
         lines.append(f"| Total Cache Read Tokens | {data['total_cache_read']:,} |")
     lines.append(f"| Total Requests | {len(data['rows']):,} |")
-    if len(data['rows']) > 0:
-        avg_cost = data['total_cost'] / len(data['rows'])
+    if len(data["rows"]) > 0:
+        avg_cost = data["total_cost"] / len(data["rows"])
         lines.append(f"| Average Cost per Request | ${avg_cost:.6f} |")
     lines.append("")
 
     # By Model
-    if data.get('by_model'):
+    if data.get("by_model"):
         lines.append("## Statistics by Model")
         lines.append("")
-        if 'input_tokens' in next(iter(data['by_model'].values()), {}):
-            lines.append("| Model | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |")
-            lines.append("|-------|----------|------------|--------------|---------------|--------------|")
-            for model in sorted(data['by_model'].keys(), key=lambda m: data['by_model'][m].get('cost', 0), reverse=True):
-                stats = data['by_model'][model]
-                avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
+        if "input_tokens" in next(iter(data["by_model"].values()), {}):
+            lines.append(
+                "| Model | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |"
+            )
+            lines.append(
+                "|-------|----------|------------|--------------|---------------|--------------|"
+            )
+            for model in sorted(
+                data["by_model"].keys(),
+                key=lambda m: data["by_model"][m].get("cost", 0),
+                reverse=True,
+            ):
+                stats = data["by_model"][model]
+                avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
                 lines.append(
                     f"| {model} | {stats['count']:,} | ${stats.get('cost', 0):.4f} | "
                     f"{stats.get('input_tokens', 0):,} | {stats.get('output_tokens', 0):,} | ${avg:.6f} |"
@@ -402,21 +479,33 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         else:
             lines.append("| Model | Days Used |")
             lines.append("|-------|-----------|")
-            for model in sorted(data['by_model'].keys(), key=lambda m: data['by_model'][m]['count'], reverse=True):
-                stats = data['by_model'][model]
+            for model in sorted(
+                data["by_model"].keys(),
+                key=lambda m: data["by_model"][m]["count"],
+                reverse=True,
+            ):
+                stats = data["by_model"][model]
                 lines.append(f"| {model} | {stats['count']:,} |")
         lines.append("")
 
     # By User
-    if data.get('by_user'):
+    if data.get("by_user"):
         lines.append("## Statistics by User")
         lines.append("")
-        if 'input_tokens' in next(iter(data['by_user'].values()), {}):
-            lines.append("| User | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |")
-            lines.append("|------|----------|------------|--------------|---------------|--------------|")
-            for user in sorted(data['by_user'].keys(), key=lambda u: data['by_user'][u].get('cost', 0), reverse=True):
-                stats = data['by_user'][user]
-                avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
+        if "input_tokens" in next(iter(data["by_user"].values()), {}):
+            lines.append(
+                "| User | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |"
+            )
+            lines.append(
+                "|------|----------|------------|--------------|---------------|--------------|"
+            )
+            for user in sorted(
+                data["by_user"].keys(),
+                key=lambda u: data["by_user"][u].get("cost", 0),
+                reverse=True,
+            ):
+                stats = data["by_user"][user]
+                avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
                 lines.append(
                     f"| {user} | {stats['count']:,} | ${stats.get('cost', 0):.4f} | "
                     f"{stats.get('input_tokens', 0):,} | {stats.get('output_tokens', 0):,} | ${avg:.6f} |"
@@ -424,8 +513,12 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         else:
             lines.append("| User | Days Active | Lines Added | Lines Deleted |")
             lines.append("|------|-------------|--------------|---------------|")
-            for user in sorted(data['by_user'].keys(), key=lambda u: data['by_user'][u]['count'], reverse=True):
-                stats = data['by_user'][user]
+            for user in sorted(
+                data["by_user"].keys(),
+                key=lambda u: data["by_user"][u]["count"],
+                reverse=True,
+            ):
+                stats = data["by_user"][user]
                 lines.append(
                     f"| {user} | {stats['count']:,} | {stats.get('total_lines_added', 0):,} | "
                     f"{stats.get('total_lines_deleted', 0):,} |"
@@ -433,14 +526,22 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         lines.append("")
 
     # By Phase (for usage.csv format)
-    if data.get('by_phase'):
+    if data.get("by_phase"):
         lines.append("## Statistics by Phase")
         lines.append("")
-        lines.append("| Phase | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |")
-        lines.append("|-------|----------|------------|--------------|---------------|--------------|")
-        for phase in sorted(data['by_phase'].keys(), key=lambda p: data['by_phase'][p]['cost'], reverse=True):
-            stats = data['by_phase'][phase]
-            avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
+        lines.append(
+            "| Phase | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |"
+        )
+        lines.append(
+            "|-------|----------|------------|--------------|---------------|--------------|"
+        )
+        for phase in sorted(
+            data["by_phase"].keys(),
+            key=lambda p: data["by_phase"][p]["cost"],
+            reverse=True,
+        ):
+            stats = data["by_phase"][phase]
+            avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
             lines.append(
                 f"| {phase} | {stats['count']:,} | ${stats['cost']:.4f} | "
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
@@ -448,15 +549,21 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         lines.append("")
 
     # By PRD (for usage.csv format)
-    if data.get('by_prd'):
+    if data.get("by_prd"):
         lines.append("## Top 20 PRDs by Cost")
         lines.append("")
-        lines.append("| PRD | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |")
-        lines.append("|-----|----------|------------|--------------|---------------|--------------|")
-        sorted_prds = sorted(data['by_prd'].keys(), key=lambda p: data['by_prd'][p]['cost'], reverse=True)[:20]
+        lines.append(
+            "| PRD | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |"
+        )
+        lines.append(
+            "|-----|----------|------------|--------------|---------------|--------------|"
+        )
+        sorted_prds = sorted(
+            data["by_prd"].keys(), key=lambda p: data["by_prd"][p]["cost"], reverse=True
+        )[:20]
         for prd in sorted_prds:
-            stats = data['by_prd'][prd]
-            avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
+            stats = data["by_prd"][prd]
+            avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
             lines.append(
                 f"| {prd} | {stats['count']:,} | ${stats['cost']:.4f} | "
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
@@ -464,14 +571,22 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         lines.append("")
 
     # By Agent (for usage.csv format)
-    if data.get('by_agent'):
+    if data.get("by_agent"):
         lines.append("## Statistics by Agent")
         lines.append("")
-        lines.append("| Agent | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |")
-        lines.append("|-------|----------|------------|--------------|---------------|--------------|")
-        for agent in sorted(data['by_agent'].keys(), key=lambda a: data['by_agent'][a]['cost'], reverse=True):
-            stats = data['by_agent'][agent]
-            avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
+        lines.append(
+            "| Agent | Requests | Cost (USD) | Input Tokens | Output Tokens | Avg Cost/Req |"
+        )
+        lines.append(
+            "|-------|----------|------------|--------------|---------------|--------------|"
+        )
+        for agent in sorted(
+            data["by_agent"].keys(),
+            key=lambda a: data["by_agent"][a]["cost"],
+            reverse=True,
+        ):
+            stats = data["by_agent"][agent]
+            avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
             lines.append(
                 f"| {agent} | {stats['count']:,} | ${stats['cost']:.4f} | "
                 f"{stats['input_tokens']:,} | {stats['output_tokens']:,} | ${avg:.6f} |"
@@ -479,26 +594,40 @@ def generate_markdown_report(file_path: Optional[pathlib.Path], data: Dict[str, 
         lines.append("")
 
     # By Kind (for usage-events format)
-    if data.get('by_kind'):
+    if data.get("by_kind"):
         lines.append("## Statistics by Kind")
         lines.append("")
         lines.append("| Kind | Requests | Cost (USD) | Avg Cost/Req |")
         lines.append("|------|----------|------------|--------------|")
-        for kind in sorted(data['by_kind'].keys(), key=lambda k: data['by_kind'][k]['cost'], reverse=True):
-            stats = data['by_kind'][kind]
-            avg = stats['cost'] / stats['count'] if stats['count'] > 0 else 0
-            lines.append(f"| {kind} | {stats['count']:,} | ${stats['cost']:.4f} | ${avg:.6f} |")
+        for kind in sorted(
+            data["by_kind"].keys(),
+            key=lambda k: data["by_kind"][k]["cost"],
+            reverse=True,
+        ):
+            stats = data["by_kind"][kind]
+            avg = stats["cost"] / stats["count"] if stats["count"] > 0 else 0
+            lines.append(
+                f"| {kind} | {stats['count']:,} | ${stats['cost']:.4f} | ${avg:.6f} |"
+            )
         lines.append("")
 
     # Cost Distribution Chart (ASCII)
-    if data.get('by_model') and 'cost' in next(iter(data['by_model'].values()), {}):
+    if data.get("by_model") and "cost" in next(iter(data["by_model"].values()), {}):
         lines.append("## Cost Distribution by Model")
         lines.append("")
         lines.append("```")
-        max_cost = max(s.get('cost', 0) for s in data['by_model'].values()) if data['by_model'] else 1
-        for model in sorted(data['by_model'].keys(), key=lambda m: data['by_model'][m].get('cost', 0), reverse=True):
-            stats = data['by_model'][model]
-            cost = stats.get('cost', 0)
+        max_cost = (
+            max(s.get("cost", 0) for s in data["by_model"].values())
+            if data["by_model"]
+            else 1
+        )
+        for model in sorted(
+            data["by_model"].keys(),
+            key=lambda m: data["by_model"][m].get("cost", 0),
+            reverse=True,
+        ):
+            stats = data["by_model"][model]
+            cost = stats.get("cost", 0)
             bar_length = int((cost / max_cost) * 50) if max_cost > 0 else 0
             bar = "█" * bar_length
             lines.append(f"{model[:30]:<30} |{bar} ${cost:.4f}")
@@ -513,16 +642,24 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
     lines = []
     lines.append("# Billing Groups Report")
     lines.append("")
-    lines.append(f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(
+        f"**Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     lines.append("")
     lines.append("---")
     lines.append("")
 
     billing_cycle = groups_data.get("billingCycle", {})
     if billing_cycle:
-        cycle_start = datetime.datetime.fromtimestamp(billing_cycle.get("cycleStart", 0) / 1000)
-        cycle_end = datetime.datetime.fromtimestamp(billing_cycle.get("cycleEnd", 0) / 1000)
-        lines.append(f"**Billing Cycle:** {cycle_start.strftime('%Y-%m-%d')} to {cycle_end.strftime('%Y-%m-%d')}")
+        cycle_start = datetime.datetime.fromtimestamp(
+            billing_cycle.get("cycleStart", 0) / 1000
+        )
+        cycle_end = datetime.datetime.fromtimestamp(
+            billing_cycle.get("cycleEnd", 0) / 1000
+        )
+        lines.append(
+            f"**Billing Cycle:** {cycle_start.strftime('%Y-%m-%d')} to {cycle_end.strftime('%Y-%m-%d')}"
+        )
         lines.append("")
 
     lines.append("## Billing Groups")
@@ -550,7 +687,9 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
         spend_cents = unassigned.get("spendCents", 0)
         spend_dollars = spend_cents / 100.0
         member_count = unassigned.get("memberCount", 0)
-        lines.append(f"| {unassigned.get('name', 'Unassigned')} | {member_count} | ${spend_dollars:.2f} | N/A |")
+        lines.append(
+            f"| {unassigned.get('name', 'Unassigned')} | {member_count} | ${spend_dollars:.2f} | N/A |"
+        )
 
     lines.append("")
 
@@ -594,8 +733,12 @@ def generate_billing_groups_report(groups_data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path,
-                   api_data: Optional[Dict[str, Any]] = None, source: str = "file") -> pathlib.Path:
+def generate_report(
+    file_path: Optional[pathlib.Path],
+    reports_dir: pathlib.Path,
+    api_data: Optional[Dict[str, Any]] = None,
+    source: str = "file",
+) -> pathlib.Path:
     """Generate statistics report for a usage file or API data."""
     reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -630,6 +773,6 @@ def generate_report(file_path: Optional[pathlib.Path], reports_dir: pathlib.Path
         report_filename = f"report_api_{timestamp}.md"
     report_path = reports_dir / report_filename
 
-    report_path.write_text(markdown, encoding='utf-8')
+    report_path.write_text(markdown, encoding="utf-8")
 
     return report_path

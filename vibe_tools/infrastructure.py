@@ -1,4 +1,5 @@
 """Infrastructure deployment generation for Kubernetes clusters on various platforms."""
+
 import pathlib
 from typing import Any, Dict, List, Optional
 
@@ -77,7 +78,9 @@ def generate_k8s_cluster_config(
         return {}
 
 
-def generate_linode_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
+def generate_linode_k8s_config(
+    config: Dict[str, Any], output_dir: pathlib.Path
+) -> Dict[str, Any]:
     """Generate Terraform config for Linode Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
 
@@ -101,19 +104,19 @@ variable "linode_token" {{
 variable "region" {{
   description = "Linode region"
   type        = string
-  default     = "{config['region']}"
+  default     = "{config["region"]}"
 }}
 
 variable "node_count" {{
   description = "Number of nodes in the cluster"
   type        = number
-  default     = {config['node_count']}
+  default     = {config["node_count"]}
 }}
 
 variable "node_size" {{
   description = "Linode instance type"
   type        = string
-  default     = "{config['node_size']}"
+  default     = "{config["node_size"]}"
 }}
 
 provider "linode" {{
@@ -121,9 +124,9 @@ provider "linode" {{
 }}
 
 resource "linode_lke_cluster" "main" {{
-  label       = "{config['cluster_name']}"
+  label       = "{config["cluster_name"]}"
   region      = var.region
-  k8s_version  = "{config['kubernetes_version']}"
+  k8s_version  = "{config["kubernetes_version"]}"
   
   pool {{
     type  = var.node_size
@@ -154,15 +157,15 @@ output "status" {{
 
     # Generate variables file
     terraform_vars = output_dir / "terraform.tfvars.example"
-    terraform_vars.write_text('''linode_token = "your-linode-api-token-here"
+    terraform_vars.write_text("""linode_token = "your-linode-api-token-here"
 region      = "us-east"
 node_count  = 3
 node_size   = "g6-standard-2"
-''')
+""")
 
     # Generate README
     readme = output_dir / "README.md"
-    readme.write_text('''# Linode Kubernetes Cluster Deployment
+    readme.write_text("""# Linode Kubernetes Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -177,12 +180,14 @@ node_size   = "g6-standard-2"
 
 ## Outputs
 After deployment, the kubeconfig will be available as a Terraform output.
-''')
+""")
 
     return {"terraform_file": str(terraform_file), "platform": "linode"}
 
 
-def generate_aws_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
+def generate_aws_k8s_config(
+    config: Dict[str, Any], output_dir: pathlib.Path
+) -> Dict[str, Any]:
     """Generate Terraform config for AWS EKS cluster."""
     terraform_file = output_dir / "main.tf"
 
@@ -200,19 +205,19 @@ def generate_aws_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) ->
 variable "aws_region" {{
   description = "AWS region"
   type        = string
-  default     = "{config['region']}"
+  default     = "{config["region"]}"
 }}
 
 variable "cluster_name" {{
   description = "EKS cluster name"
   type        = string
-  default     = "{config['cluster_name']}"
+  default     = "{config["cluster_name"]}"
 }}
 
 variable "node_count" {{
   description = "Number of nodes in the cluster"
   type        = number
-  default     = {config['node_count']}
+  default     = {config["node_count"]}
 }}
 
 variable "node_instance_type" {{
@@ -275,7 +280,7 @@ resource "aws_subnet" "public" {{
 resource "aws_eks_cluster" "main" {{
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
-  version  = "{config['kubernetes_version']}"
+  version  = "{config["kubernetes_version"]}"
   
   vpc_config {{
     subnet_ids = concat(aws_subnet.private[*].id, aws_subnet.public[*].id)
@@ -323,7 +328,7 @@ output "cluster_security_group_id" {{
     terraform_file.write_text(terraform_content)
 
     readme = output_dir / "README.md"
-    readme.write_text('''# AWS EKS Cluster Deployment
+    readme.write_text("""# AWS EKS Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -342,16 +347,18 @@ This is a simplified EKS configuration. For production, add:
 - IAM roles for service accounts
 - Load balancer controller
 - Additional security configurations
-''')
+""")
 
     return {"terraform_file": str(terraform_file), "platform": "aws"}
 
 
-def generate_hetzner_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
+def generate_hetzner_k8s_config(
+    config: Dict[str, Any], output_dir: pathlib.Path
+) -> Dict[str, Any]:
     """Generate Terraform config for Hetzner Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
 
-    terraform_content = f'''terraform {{
+    terraform_content = f"""terraform {{
   required_version = ">= 1.0"
   
   required_providers {{
@@ -377,7 +384,7 @@ variable "location" {{
 variable "node_count" {{
   description = "Number of nodes"
   type        = number
-  default     = {config['node_count']}
+  default     = {config["node_count"]}
 }}
 
 variable "server_type" {{
@@ -431,12 +438,12 @@ output "master_ip" {{
   description = "Master node IP"
   value       = hcloud_server.master.ipv4_address
 }}
-'''
+"""
 
     terraform_file.write_text(terraform_content)
 
     readme = output_dir / "README.md"
-    readme.write_text('''# Hetzner k3s Cluster Deployment
+    readme.write_text("""# Hetzner k3s Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -452,12 +459,14 @@ output "master_ip" {{
 
 ## Note
 This uses k3s (lightweight Kubernetes) on Hetzner Cloud.
-''')
+""")
 
     return {"terraform_file": str(terraform_file), "platform": "hetzner"}
 
 
-def generate_digitalocean_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
+def generate_digitalocean_k8s_config(
+    config: Dict[str, Any], output_dir: pathlib.Path
+) -> Dict[str, Any]:
     """Generate Terraform config for DigitalOcean Kubernetes cluster."""
     terraform_file = output_dir / "main.tf"
 
@@ -487,7 +496,7 @@ variable "region" {{
 variable "node_count" {{
   description = "Number of nodes"
   type        = number
-  default     = {config['node_count']}
+  default     = {config["node_count"]}
 }}
 
 variable "node_size" {{
@@ -501,9 +510,9 @@ provider "digitalocean" {{
 }}
 
 resource "digitalocean_kubernetes_cluster" "main" {{
-  name    = "{config['cluster_name']}"
+  name    = "{config["cluster_name"]}"
   region  = var.region
-  version = "{config['kubernetes_version']}"
+  version = "{config["kubernetes_version"]}"
   
   node_pool {{
     name       = "worker-pool"
@@ -527,7 +536,7 @@ output "endpoint" {{
     terraform_file.write_text(terraform_content)
 
     readme = output_dir / "README.md"
-    readme.write_text('''# DigitalOcean Kubernetes Cluster Deployment
+    readme.write_text("""# DigitalOcean Kubernetes Cluster Deployment
 
 ## Prerequisites
 - Terraform >= 1.0
@@ -539,16 +548,18 @@ output "endpoint" {{
 3. Run `terraform init`
 4. Run `terraform plan`
 5. Run `terraform apply`
-''')
+""")
 
     return {"terraform_file": str(terraform_file), "platform": "digitalocean"}
 
 
-def generate_bare_metal_k8s_config(config: Dict[str, Any], output_dir: pathlib.Path) -> Dict[str, Any]:
+def generate_bare_metal_k8s_config(
+    config: Dict[str, Any], output_dir: pathlib.Path
+) -> Dict[str, Any]:
     """Generate SSH + cloud-init config for bare metal deployment."""
     readme = output_dir / "README.md"
 
-    readme.write_text('''# Bare Metal Kubernetes Deployment
+    readme.write_text("""# Bare Metal Kubernetes Deployment
 
 ## Prerequisites
 - SSH access to target machines
@@ -565,11 +576,11 @@ def generate_bare_metal_k8s_config(config: Dict[str, Any], output_dir: pathlib.P
 - `setup-master.sh`: Master node setup script
 - `setup-worker.sh`: Worker node setup script
 - `inventory.example`: Example inventory file
-''')
+""")
 
     # Generate master setup script
     master_script = output_dir / "setup-master.sh"
-    master_script.write_text('''#!/bin/bash
+    master_script.write_text("""#!/bin/bash
 set -e
 
 # Install k3s
@@ -582,12 +593,12 @@ chmod 600 ~/.kube/config
 # Get node token
 sudo cat /var/lib/rancher/k3s/server/node-token > /tmp/k3s-token
 echo "K3S_TOKEN saved to /tmp/k3s-token"
-''')
+""")
     master_script.chmod(0o755)
 
     # Generate worker setup script
     worker_script = output_dir / "setup-worker.sh"
-    worker_script.write_text('''#!/bin/bash
+    worker_script.write_text("""#!/bin/bash
 set -e
 
 if [ -z "$K3S_URL" ] || [ -z "$K3S_TOKEN" ]; then
@@ -596,19 +607,19 @@ if [ -z "$K3S_URL" ] || [ -z "$K3S_TOKEN" ]; then
 fi
 
 curl -sfL https://get.k3s.io | K3S_URL="$K3S_URL" K3S_TOKEN="$K3S_TOKEN" sh -
-''')
+""")
     worker_script.chmod(0o755)
 
     # Generate inventory example
     inventory = output_dir / "inventory.example"
-    inventory.write_text('''[masters]
+    inventory.write_text("""[masters]
 master1 ansible_host=192.168.1.10 ansible_user=root
 
 [workers]
 worker1 ansible_host=192.168.1.11 ansible_user=root
 worker2 ansible_host=192.168.1.12 ansible_user=root
 worker3 ansible_host=192.168.1.13 ansible_user=root
-''')
+""")
 
     return {"platform": "bare-metal", "scripts": ["setup-master.sh", "setup-worker.sh"]}
 
@@ -620,7 +631,7 @@ def generate_docker_build_system(infra_spec: Dict[str, Any]) -> Dict[str, Any]:
     # Generate main Dockerfile if it doesn't exist
     dockerfile = DEPLOYMENT_DIR / "Dockerfile"
     if not dockerfile.exists():
-        dockerfile.write_text('''FROM python:3.11-slim
+        dockerfile.write_text("""FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -641,11 +652,11 @@ EXPOSE 8000
 
 # Run application
 CMD ["python", "-m", "vibe_tools.cli"]
-''')
+""")
 
     # Generate docker-compose for building
     docker_compose_build = BUILD_DIR / "docker-compose.build.yml"
-    docker_compose_build.write_text('''version: '3.8'
+    docker_compose_build.write_text("""version: '3.8'
 
 services:
   builder:
@@ -656,11 +667,11 @@ services:
     volumes:
       - ../../:/app
     command: /bin/bash
-''')
+""")
 
     # Generate build script
     build_script = BUILD_DIR / "build.sh"
-    build_script.write_text('''#!/bin/bash
+    build_script.write_text("""#!/bin/bash
 set -e
 
 echo "Building Docker images..."
@@ -676,12 +687,12 @@ if [ -d "frontend" ]; then
 fi
 
 echo "✅ Build complete"
-''')
+""")
     build_script.chmod(0o755)
 
     # Generate Makefile targets
     makefile_targets = BUILD_DIR / "Makefile.targets"
-    makefile_targets.write_text('''
+    makefile_targets.write_text("""
 # Build targets (add to main Makefile)
 
 .PHONY: build build-docker build-frontend build-all
@@ -702,7 +713,7 @@ build-frontend:
 
 build-all: build build-docker build-frontend
 	@echo "✅ All builds complete"
-''')
+""")
 
     return {
         "dockerfile": str(dockerfile),

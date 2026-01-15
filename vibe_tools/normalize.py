@@ -103,7 +103,9 @@ CRITICAL REQUIREMENTS:
 
             fixed_output = fixed_output.strip()
             # Robust extraction for fixed output as well
-            yaml_match_fixed = re.search(r"```(?:yaml)?\s*?\n?([\s\S]*?)\n?```", fixed_output)
+            yaml_match_fixed = re.search(
+                r"```(?:yaml)?\s*?\n?([\s\S]*?)\n?```", fixed_output
+            )
             if yaml_match_fixed:
                 fixed_output = yaml_match_fixed.group(1).strip()
             elif fixed_output.startswith("```"):
@@ -131,6 +133,7 @@ CRITICAL REQUIREMENTS:
 def normalize_to_data(md_content: str, stem: str, debug: bool = False) -> dict:
     """Normalize PRD content to structured data without writing to disk."""
     from vibe_tools.cli import load_config
+
     config = load_config()
     cost_logger = CostLogger(config)
 
@@ -166,8 +169,10 @@ def normalize_prd(
     else:
         # Defaults to all PRDs in DEFAULT_SPECS_DIR
         files = [
-            f for f in DEFAULT_SPECS_DIR.rglob("*.md")
-            if f.stem not in [
+            f
+            for f in DEFAULT_SPECS_DIR.rglob("*.md")
+            if f.stem
+            not in [
                 "architecture",
                 "infrastructure",
                 "cicd",
@@ -185,13 +190,15 @@ def normalize_prd(
 
     for f in files:
         out_info(f"🔄 Validating normalization for {f.name}...")
-        
+
         # Run normalization in-memory
         data = normalize_to_data(f.read_text(), f.stem, debug=debug)
-        
+
         if data:
             out_success(f"✅ Normalization valid for {f.name}")
             if debug:
-                out_debug(f"\n--- YAML OUTPUT ---\n{safe_yaml_dump(data)}--- END YAML ---\n")
+                out_debug(
+                    f"\n--- YAML OUTPUT ---\n{safe_yaml_dump(data)}--- END YAML ---\n"
+                )
         else:
             out_error(f"❌ Failed to normalize {f.name}")

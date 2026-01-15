@@ -25,17 +25,26 @@ def get_interactive_prompt():
 
     session = PromptSession(key_bindings=kb)
 
-    click.echo(click.style("Enter issue prompt (Ctrl-S or Ctrl-A to save, Ctrl-Q to quit):", fg="cyan"))
+    click.echo(
+        click.style(
+            "Enter issue prompt (Ctrl-S or Ctrl-A to save, Ctrl-Q to quit):", fg="cyan"
+        )
+    )
     click.echo(click.style("-" * 60, fg="bright_black"))
 
     result = session.prompt(multiline=True)
     return result
 
+
 def register_issue_add(issue_group):
     @issue_group.command(name="add")
     @click.argument("prompt", required=False)
     @click.option("--title", help="Explicitly set title")
-    @click.option("--severity", type=click.Choice(["low", "medium", "high", "critical"]), help="Explicitly set severity")
+    @click.option(
+        "--severity",
+        type=click.Choice(["low", "medium", "high", "critical"]),
+        help="Explicitly set severity",
+    )
     @click.option("--service", help="Explicitly set service")
     def add_issue(prompt, title, severity, service):
         """Create a new local issue from a prompt."""
@@ -58,7 +67,7 @@ def register_issue_add(issue_group):
             if "```json" in response:
                 json_str = response.split("```json")[1].split("```")[0].strip()
             elif "{" in response:
-                json_str = response[response.find("{"):response.rfind("}")+1]
+                json_str = response[response.find("{") : response.rfind("}") + 1]
             else:
                 json_str = response
 
@@ -75,15 +84,16 @@ def register_issue_add(issue_group):
         issue_summary = data.get("summary", "")
 
         from vibe_tools.utils import PRODUCT_DIR, PLANNING_INBOX_DIR
+
         now = datetime.datetime.now().isoformat()
         issue_id = generate_prd_id(PRODUCT_DIR)
 
         # Create sanitized filename
-        safe_title = re.sub(r'[^a-z0-9]+', '-', issue_title.lower()).strip('-')
+        safe_title = re.sub(r"[^a-z0-9]+", "-", issue_title.lower()).strip("-")
         filename = f"{issue_id}-{safe_title}.md"
         if len(filename) > 64:
             filename = filename[:60] + ".md"
-        
+
         target_path = PLANNING_INBOX_DIR / filename
 
         prd = PRD(
@@ -97,9 +107,9 @@ def register_issue_add(issue_group):
             metadata={
                 "severity": issue_severity,
                 "service": issue_service,
-                "summary": issue_summary
+                "summary": issue_summary,
             },
-            path=target_path
+            path=target_path,
         )
 
         prd.save()
@@ -110,7 +120,7 @@ def register_issue_add(issue_group):
         # Actually, the old code called sync_issues(quiet=True).
         # Let's see if we can just call 'vibe sync' via shell or skip it.
         # Given the plan, let's keep it simple.
-        
+
         click.echo("✅ Issue created successfully!")
         click.echo(f"ID:       {prd.id}")
         click.echo(f"Title:    {prd.title}")

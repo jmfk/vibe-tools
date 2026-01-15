@@ -22,7 +22,10 @@ def register_stats(cli):
     )
     @click.option("--billing-groups", is_flag=True, help="Show billing groups report.")
     @click.option(
-        "--days", type=int, default=7, help="Number of days to fetch from API (default: 7)."
+        "--days",
+        type=int,
+        default=7,
+        help="Number of days to fetch from API (default: 7).",
     )
     @click.option("--start-date", help="Start date for API query (YYYY-MM-DD).")
     @click.option("--end-date", help="End date for API query (YYYY-MM-DD).")

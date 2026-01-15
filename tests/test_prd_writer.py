@@ -4,6 +4,8 @@ import pytest
 
 from vibe_tools.prd_writer import PRDWriter
 
+pytestmark = pytest.mark.filterwarnings("ignore:PRDWriter is deprecated:DeprecationWarning")
+
 
 def _create_prompt_template(target: pathlib.Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
@@ -24,7 +26,9 @@ def test_next_spec_path_increments(tmp_path: pathlib.Path) -> None:
     assert next_path.name.startswith("prd_02_new-feature")
 
 
-def test_interview_writes_spec(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_interview_writes_spec(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     prompts_dir = tmp_path / "prompts"
     specs_dir = tmp_path / "specs"
     _create_prompt_template(prompts_dir)
@@ -37,7 +41,11 @@ def test_interview_writes_spec(tmp_path: pathlib.Path, monkeypatch: pytest.Monke
     )
 
     responses = [
-        {"questions": ["What is the user impact?"], "satisfied": False, "summary": "step 1"},
+        {
+            "questions": ["What is the user impact?"],
+            "satisfied": False,
+            "summary": "step 1",
+        },
         {"questions": ["Any constraints?"], "satisfied": True, "summary": "final"},
     ]
 
@@ -69,4 +77,3 @@ def test_next_spec_path_increments_infra(tmp_path: pathlib.Path) -> None:
     next_path = writer._next_spec_path("Kubernetes")
 
     assert next_path.name.startswith("prd_infra_02_kubernetes")
-

@@ -1,4 +1,3 @@
-
 import click
 
 from vibe_tools.utils import INSTRUCTIONS_DIR, ensure_dir, save_memory
@@ -19,7 +18,9 @@ def register_memory(cli):
         ensure_dir(INSTRUCTIONS_DIR)
 
         if clear:
-            if click.confirm("Are you sure you want to clear all memories?", default=False):
+            if click.confirm(
+                "Are you sure you want to clear all memories?", default=False
+            ):
                 for f in INSTRUCTIONS_DIR.glob("*"):
                     if f.is_file():
                         f.unlink()

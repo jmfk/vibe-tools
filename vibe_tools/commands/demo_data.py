@@ -1,4 +1,3 @@
-
 import click
 
 from vibe_tools.pm import InteractivePM
@@ -75,7 +74,9 @@ Define the demo data needed for the staging environment.
         """Setup demo data according to product/demodata.md."""
         demodata_path = SPECS_DIR / "demodata.md"
         if not demodata_path.exists():
-            click.echo("❌ product/demodata.md not found. Run 'vibe demo-data design' first.")
+            click.echo(
+                "❌ product/demodata.md not found. Run 'vibe demo-data design' first."
+            )
             return
 
         # Check staging is running

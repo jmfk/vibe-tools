@@ -2,7 +2,13 @@ import sys
 
 from vibe_tools.cost import AGENT_DEFAULT_MODEL, CostLogger
 from vibe_tools.testing import ProjectTester
-from vibe_tools.utils import get_agent_command, get_prompt, logger, run_agent, run_command
+from vibe_tools.utils import (
+    get_agent_command,
+    get_prompt,
+    logger,
+    run_agent,
+    run_command,
+)
 
 MAX_ITERATIONS = 5
 COMPLETION_PROMISE = "<promise>DONE</promise>"
@@ -68,7 +74,9 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
             )
 
             # Verify if tests still pass
-            logger.info(f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests...")
+            logger.info(
+                f"[COVERAGE LOOP] [PHASE: verify] (Iteration {i}) Verifying tests..."
+            )
             _, test_exit_code = run_command(["make", "test"], check=False)
             if test_exit_code != 0:
                 logger.warning(
@@ -114,11 +122,17 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
         logger.warning("\n🛑 Coverage loop interrupted by user.")
         # Commit any partial work if we have uncommitted changes
         from vibe_tools.utils import is_dirty
+
         if is_dirty():
             logger.info("Committing partial work before exit...")
             run_command(["git", "add", "."])
             run_command(
-                ["git", "commit", "-m", "vibe: partial work saved on interrupt (coverage)"],
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    "vibe: partial work saved on interrupt (coverage)",
+                ],
             )
         logger.info("Run 'vibe coverage' again to resume.")
         return False

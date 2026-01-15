@@ -87,9 +87,13 @@ def register_setup(cli):
             else:
                 # Normalize architecture.md just-in-time
                 click.echo(f"🔄 Normalizing {ARCHITECTURE_SPEC.name} in-memory...")
-                arch_data = normalize_to_data(ARCHITECTURE_SPEC.read_text(), "architecture")
+                arch_data = normalize_to_data(
+                    ARCHITECTURE_SPEC.read_text(), "architecture"
+                )
                 if not arch_data:
-                    click.echo("❌ Normalization failed. Please check the content of architecture.md.")
+                    click.echo(
+                        "❌ Normalization failed. Please check the content of architecture.md."
+                    )
                     if only_arch:
                         return
                 else:
@@ -115,11 +119,14 @@ def register_setup(cli):
                     success = loop.run()
                     if success:
                         import hashlib
+
                         arch_hash = hashlib.sha256(arch_yaml.encode()).hexdigest()
                         state["phases"]["setup"]["status"] = "completed"
                         state["phases"]["setup"]["hash"] = arch_hash
                         save_project_state(state)
-                        click.echo("\n✅ Architecture setup complete. project-state.json updated.")
+                        click.echo(
+                            "\n✅ Architecture setup complete. project-state.json updated."
+                        )
 
                         # Generate the project plan based on PRDs
                         from vibe_tools.ralph import generate_prd_plan

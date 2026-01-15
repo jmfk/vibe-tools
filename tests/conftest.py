@@ -16,7 +16,6 @@ def silence_vibe_side_effects(monkeypatch):
         patch("vibe_tools.cli.finalize_cost_report"),
         patch("atexit.register"),
     ):
-
         yield
 
 

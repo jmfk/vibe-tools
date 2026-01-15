@@ -35,5 +35,10 @@ def test_improve_coverage_loop_improvement():
                             mock_agent.assert_called_once()
                             # Verify git commit was called
                             mock_run.assert_any_call(
-                                ["git", "commit", "-m", "Improve test coverage from 50% to 70%"],
+                                [
+                                    "git",
+                                    "commit",
+                                    "-m",
+                                    "Improve test coverage from 50% to 70%",
+                                ],
                             )

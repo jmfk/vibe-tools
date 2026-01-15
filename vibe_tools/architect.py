@@ -257,7 +257,7 @@ class InteractiveArchitect:
         for line in lines[:5]:
             click.echo(f"  {line}")
         if count > 5:
-            click.echo(f"  ... (+{count-5} more lines)")
+            click.echo(f"  ... (+{count - 5} more lines)")
 
         click.echo(
             click.style(
@@ -329,7 +329,7 @@ class InteractiveArchitect:
                 for line in lines[:5]:
                     click.echo(f"  {line}")
                 if count > 5:
-                    click.echo(f"  ... (+{count-5} more lines)")
+                    click.echo(f"  ... (+{count - 5} more lines)")
             else:
                 click.echo("❌ Usage: /add <text>")
         elif cmd == "/show":
@@ -543,7 +543,7 @@ class InteractiveArchitect:
             for line in lines[:5]:
                 click.echo(f"  {line}")
             if len(lines) > 5:
-                click.echo(f"  ... (+{len(lines)-5} more lines)")
+                click.echo(f"  ... (+{len(lines) - 5} more lines)")
             click.echo(f"  ({len(lines)} lines total)")
         else:
             click.echo("  (empty)")
@@ -555,7 +555,7 @@ class InteractiveArchitect:
             for line in lines[:5]:
                 click.echo(f"  {line}")
             if len(lines) > 5:
-                click.echo(f"  ... (+{len(lines)-5} more lines)")
+                click.echo(f"  ... (+{len(lines) - 5} more lines)")
             click.echo(f"  ({len(lines)} lines total)")
         else:
             click.echo("  (empty)")
