@@ -1150,19 +1150,8 @@ const App: React.FC = () => {
         }]);
       }
     });
-
-    const interval = setInterval(() => {
-      invoke<AgentProcess[]>('get_active_agents')
-        .then(setActiveAgents)
-        .catch(console.error);
-      
-      invoke<number>('get_total_cost')
-        .then(setTotalCost)
-        .catch(console.error);
-    }, 3000);
     
     return () => {
-      clearInterval(interval);
       unlistenServer.then(f => f());
     };
   }, []);

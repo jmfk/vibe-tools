@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::{Write, self};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
@@ -92,7 +92,7 @@ fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, mess
 
 fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args: &[String], level: &str) {
     let full_command = format!("vibe {} {}", command, args.join(" "));
-    log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command));
+    log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command), None);
     
     // Persistent file logging
     let log_path = PathBuf::from("implementation/logs/tauri_vibe_commands.log");
@@ -125,7 +125,7 @@ fn clear_logs(state: State<'_, AppState>, window: Window) {
 }
 
 #[tauri::command]
-fn list_directory(state: State<'_, AppState>, window: Window, path: String) -> Result<Vec<FileEntry>, String> {
+fn list_directory(_state: State<'_, AppState>, _window: Window, path: String) -> Result<Vec<FileEntry>, String> {
     let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
     let mut files = Vec::new();
     
@@ -300,49 +300,6 @@ fn get_terminal_buffer(state: State<'_, AppState>, session: String) -> Result<Ve
     } else {
         Ok(Vec::new())
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-struct AgentProcess {
-    pid: i32,
-    command: String,
-    chat_id: Option<String>,
-    tracked: bool,
-}
-
-#[tauri::command]
-async fn get_active_agents(state: State<'_, AppState>, window: Window) -> Result<Vec<AgentProcess>, String> {
-    use std::process::Command;
-    log_vibe_command_call(&state, &window, "ps", &vec!["--json".to_string()], "DEBUG");
-    let output = Command::new("vibe")
-        .args(["ps", "--json"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    let agents: Vec<AgentProcess> = serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
-    Ok(agents)
-}
-
-#[tauri::command]
-async fn get_total_cost(state: State<'_, AppState>, window: Window) -> Result<f64, String> {
-    use std::process::Command;
-    log_vibe_command_call(&state, &window, "cost", &vec!["--json".to_string()], "DEBUG");
-    let output = Command::new("vibe")
-        .args(["cost", "--json"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-    
-    let data: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
-    let cost = data["total_cost"].as_f64().ok_or("Invalid cost format")?;
-    Ok(cost)
 }
 
 #[tauri::command]
@@ -628,8 +585,6 @@ fn main() {
             get_workspace_root,
             run_vibe_command,
             send_vibe_input,
-            get_active_agents,
-            get_total_cost,
             open_in_cursor,
             update_artifact_meta,
             move_file,
