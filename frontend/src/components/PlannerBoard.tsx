@@ -779,9 +779,9 @@ updated_at: '${new Date().toISOString()}'
             </DroppableColumn>
           </div>
 
-          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4">
+          <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
             {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
-              <div key={column.id} className="flex flex-col gap-3 min-w-[200px] max-w-[350px] shrink-0">
+              <div key={column.id} className="flex flex-col gap-3 w-[150px] shrink-0">
                 <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-80">{column.title}</span>
