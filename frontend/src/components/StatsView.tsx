@@ -96,9 +96,19 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
   };
 
   useEffect(() => {
-    fetchStats('month');
+    let mounted = true;
+    
+    // Only fetch once even in StrictMode
+    const initFetch = async () => {
+      if (mounted) {
+        fetchStats('month');
+      }
+    };
+    
+    initFetch();
 
     const unlisten = listen('vibe-server-event', (event: any) => {
+      if (!mounted) return;
       const payload = event.payload;
       if (payload.type === 'stats_result') {
         setData(payload as StatsData);
@@ -109,6 +119,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor }) => {
     });
 
     return () => {
+      mounted = false;
       unlisten.then(f => f());
     };
   }, []);
