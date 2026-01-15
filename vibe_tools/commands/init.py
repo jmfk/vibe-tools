@@ -14,7 +14,7 @@ def register_init(cli):
     @click.command()
     @click.pass_context
     def init(ctx):
-        """Interactive guided project initialization."""
+        """Phase 0: Interactive guided project initialization."""
         if not guide_setup():
             click.echo(
                 click.style(
@@ -83,10 +83,13 @@ def register_init(cli):
 
         click.echo("\nNext Steps:")
         click.echo(
-            f"  {click.style('vibe architect', fg='cyan'):<20} Phase 1: Refine architecture and infrastructure"
+            f"  {click.style('vibe setup', fg='cyan'):<20} Phase 1: Reconcile architecture"
         )
         click.echo(
-            f"  {click.style('vibe pm', fg='magenta'):<20} Phase 1: Refine PRDs and product specs"
+            f"  {click.style('vibe config', fg='magenta'):<20} Phase 2: Configure services and APIs"
+        )
+        click.echo(
+            f"  {click.style('vibe plan', fg='yellow'):<20} Phase 3: Plan features and manage issues"
         )
         click.echo("\nRun 'vibe status' at any time to see your project progress.")
 

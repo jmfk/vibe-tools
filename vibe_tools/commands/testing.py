@@ -16,7 +16,7 @@ def register_testing(cli):
     @click.group(invoke_without_command=True, name="testing")
     @click.pass_context
     def testing(ctx):
-        """Phase 7: Testing reconciliation. Ensures integration and regression tests pass."""
+        """Phase 6: Testing reconciliation. Ensures integration and regression tests pass."""
         if ctx.invoked_subcommand is not None:
             return
 
