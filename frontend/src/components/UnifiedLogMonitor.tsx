@@ -39,7 +39,7 @@ interface AppLog {
 
 type LogTab = 'All' | 'System' | 'Commands' | 'Errors' | 'Agent';
 
-export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => {
+export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?: string, isDark?: boolean }) => {
   const [logs, setLogs] = useState<AppLog[]>([]);
   const [isExpanded, setIsExpanded] = useState(() => {
     return localStorage.getItem('vibe-logs-expanded') === 'true';
@@ -203,7 +203,9 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                    activeTab === tab ? "bg-zinc-800 text-foreground shadow-sm" : "text-muted hover:text-foreground"
+                    activeTab === tab 
+                      ? (isDark ? "bg-zinc-800 text-foreground shadow-sm" : "bg-zinc-200 text-foreground shadow-sm") 
+                      : "text-muted hover:text-foreground"
                   )}
                   style={activeTab === tab ? { color: accentColor } : {}}
                 >
@@ -259,7 +261,9 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
               key={log.id} 
               className={cn(
                 "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
-                expandedId === log.id ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "hover:bg-zinc-800/20"
+                expandedId === log.id 
+                  ? (isDark ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "bg-zinc-200/30 ring-1 ring-border/50 my-1") 
+                  : (isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20")
               )}
               onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
             >
@@ -365,7 +369,9 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                   onClick={(e) => { e.stopPropagation(); setActiveTab(tab); }}
                   className={cn(
                     "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all",
-                    activeTab === tab ? "bg-zinc-800 text-foreground" : "text-muted hover:text-foreground"
+                    activeTab === tab 
+                      ? (isDark ? "bg-zinc-800 text-foreground" : "bg-zinc-200 text-foreground") 
+                      : "text-muted hover:text-foreground"
                   )}
                   style={activeTab === tab ? { color: accentColor } : {}}
                 >
@@ -387,7 +393,9 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                 key={log.id} 
                 className={cn(
                   "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
-                  expandedId === log.id ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "hover:bg-zinc-800/20"
+                  expandedId === log.id 
+                    ? (isDark ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "bg-zinc-200/30 ring-1 ring-border/50 my-1") 
+                    : (isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20")
                 )}
                 onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
               >
