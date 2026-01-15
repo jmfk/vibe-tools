@@ -12,50 +12,38 @@ from typing import Any, Dict, List, Optional, Tuple
 import click
 import requests
 
-from vibe_tools.utils import COSTS_DIR, logger
-
-
-def ensure_daily_usage(ctx: click.Context):
-    """Ensure today's usage data is up-to-date."""
-    # Skip check if we are in test mode
-    from vibe_tools.utils import is_test_mode
-    if is_test_mode():
-        return
-
-    agent_name = ctx.obj.get("agent", "cursor-agent")
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    target_filename = f"{agent_name}-{today_str}.log"
-    target_path = COSTS_DIR / target_filename
-
-    should_update = False
-    if not target_path.exists():
-        should_update = True
-        click.echo(f"📊 Today's usage data not found ({target_filename}).")
-    else:
-        # Check if file is older than 4 hours
-        mtime = target_path.stat().st_mtime
-        if (time.time() - mtime) > (4 * 3600):
-            should_update = True
-            click.echo(f"📊 Today's usage data is older than 4 hours.")
-
-    if should_update:
-        if click.confirm("Would you like to download the latest usage data from Cursor?", default=True):
-            download_and_process_usage(backtrack=1, agent_name=agent_name)
+from vibe_tools.utils import COSTS_DIR, logger, get_cursor_api_key
 
 
 def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-agent"):
-    """Prompt user to download usage CSV and process it."""
+    """Download usage CSV and process it."""
     end_date = datetime.datetime.now()
     start_date = end_date - datetime.timedelta(days=backtrack)
 
     start_ms = int(start_date.timestamp() * 1000)
     end_ms = int(end_date.timestamp() * 1000)
+    
+    from vibe_tools.utils import get_cursor_api_key
+    api_key = get_cursor_api_key()
+    
+    if api_key:
+        try:
+            logger.info(f"📊 Fetching usage events via API...")
+            csv_content = fetch_usage_events_csv(api_key, start_date, end_date)
+            process_usage_csv(csv_content, agent_name)
+            return True
+        except Exception as e:
+            logger.error(f"❌ API download failed: {e}")
+            # Fallback to browser method if API fails
+    
     url = f"https://cursor.com/api/dashboard/export-usage-events-csv?startDate={start_ms}&endDate={end_ms}&strategy=tokens"
-
-    click.echo(
-        f"\n📊 To get usage for the last {backtrack} day(s), download the CSV manually. Download to ~/Downloads folder:"
-    )
-    click.echo(f"🔗 {url}")
+    
+    server_mode = "--server" in sys.argv
+    if not server_mode:
+        click.echo(
+            f"\n📊 To get usage for the last {backtrack} day(s), download the CSV manually. Download to ~/Downloads folder:"
+        )
+        click.echo(f"🔗 {url}")
 
     downloads_dir = pathlib.Path.home() / "Downloads"
     # Snapshot existing files to detect the NEW one
@@ -64,7 +52,8 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
     webbrowser.open(url)
 
     # Monitor Downloads folder
-    click.echo(f"⏳ Monitoring {downloads_dir} for NEW download (timeout 2m)...")
+    if not server_mode:
+        click.echo(f"⏳ Monitoring {downloads_dir} for NEW download (timeout 2m)...")
 
     start_wait = time.time()
     found_file = None
@@ -81,10 +70,12 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
         time.sleep(2)
 
     if not found_file:
-        click.echo("❌ Timeout: Downloaded file not found in Downloads folder.")
+        if not server_mode:
+            click.echo("❌ Timeout: Downloaded file not found in Downloads folder.")
         return False
 
-    click.echo(f"✅ Found downloaded file: {found_file}")
+    if not server_mode:
+        click.echo(f"✅ Found downloaded file: {found_file}")
     
     try:
         csv_content = found_file.read_text(encoding="utf-8")
@@ -93,10 +84,12 @@ def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-age
         # Delete the original downloaded file to keep Downloads clean
         if found_file.exists():
             found_file.unlink()
-            click.echo(f"🗑️ Removed source file: {found_file}")
+            if not server_mode:
+                click.echo(f"🗑️ Removed source file: {found_file}")
         return True
     except Exception as e:
-        click.echo(f"❌ Error processing file: {e}")
+        if not server_mode:
+            click.echo(f"❌ Error processing file: {e}")
         return False
 
 
@@ -139,14 +132,14 @@ def process_usage_csv(csv_content: str, agent_name: str = "cursor-agent"):
         click.echo(f"💾 Usage saved for {clean_date}: {target_path}")
 
 
-def list_usage_files(stats_dir: pathlib.Path) -> List[pathlib.Path]:
-    """List all CSV and .log files in stats directory, sorted by date (latest first)."""
-    if not stats_dir.exists():
+def list_usage_files(costs_dir: pathlib.Path) -> List[pathlib.Path]:
+    """List all CSV and .log files in costs directory, sorted by date (latest first)."""
+    if not costs_dir.exists():
         return []
 
     files = []
     for ext in ["*.csv", "*.log"]:
-        files.extend(list(stats_dir.glob(ext)))
+        files.extend(list(costs_dir.glob(ext)))
     
     files.sort(key=lambda p: _extract_date_from_file(p), reverse=True)
     return files
