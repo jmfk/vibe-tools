@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Ansi from 'ansi-to-react';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 import { 
   MessageSquare, 
   Files, 
@@ -36,7 +36,11 @@ import {
   Cpu,
   Coins,
   ChevronDown,
-  Network
+  Network,
+  Sun,
+  Moon,
+  Sunrise,
+  Sunset
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -101,7 +105,51 @@ const Accordion = ({
   );
 };
 
-type Tab = 'planner' | 'create' | 'issues' | 'projects';
+type Tab = 'planner' | 'create' | 'issues' | 'projects' | 'settings';
+
+type ThemeMode = 'night' | 'day' | 'morning' | 'sunset';
+
+const THEMES: Record<ThemeMode, { 
+  bg: string, 
+  text: string, 
+  panel: string, 
+  border: string, 
+  muted: string,
+  input: string
+}> = {
+  night: { 
+    bg: 'bg-zinc-950', 
+    text: 'text-zinc-100', 
+    panel: 'bg-zinc-900/50', 
+    border: 'border-zinc-800', 
+    muted: 'text-zinc-500',
+    input: 'bg-zinc-900'
+  },
+  day: { 
+    bg: 'bg-zinc-50', 
+    text: 'text-zinc-950', 
+    panel: 'bg-white', 
+    border: 'border-zinc-300', 
+    muted: 'text-zinc-500',
+    input: 'bg-white'
+  },
+  morning: { 
+    bg: 'bg-sky-50', 
+    text: 'text-sky-950', 
+    panel: 'bg-white/80', 
+    border: 'border-sky-200', 
+    muted: 'text-sky-600',
+    input: 'bg-white'
+  },
+  sunset: { 
+    bg: 'bg-orange-950', 
+    text: 'text-orange-50', 
+    panel: 'bg-orange-900/40', 
+    border: 'border-orange-800/50', 
+    muted: 'text-orange-400',
+    input: 'bg-orange-900/60'
+  }
+};
 
 interface Project {
   id: string;
@@ -111,6 +159,8 @@ interface Project {
   last_active: string;
   metadata?: Record<string, any>;
   secrets?: Record<string, string>;
+  theme?: ThemeMode;
+  color?: string;
 }
 
 interface ProjectRegistry {
@@ -158,7 +208,238 @@ interface TreeItem {
 
 // --- Components ---
 
-const VibeSidebar = ({ root, onSelect, selectedPath }: { root: string, onSelect: (artifact: Artifact) => void, selectedPath?: string }) => {
+const ProjectSettingsEditor = ({ 
+  project, 
+  workspaceRoot, 
+  onSave,
+  onThemeChange,
+  onColorChange
+}: { 
+  project: Project, 
+  workspaceRoot: string,
+  onSave: () => void,
+  onThemeChange: (theme: ThemeMode) => void,
+  onColorChange: (color: string) => void
+}) => {
+  const [config, setConfig] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>((project.metadata?.theme as ThemeMode) || 'night');
+  const [color, setColor] = useState((project.metadata?.color as string) || '#3b82f6');
+
+  const handleThemeChange = (newTheme: ThemeMode) => {
+    setTheme(newTheme);
+    onThemeChange(newTheme);
+  };
+
+  const handleColorChange = (newColor: string) => {
+    setColor(newColor);
+    onColorChange(newColor);
+  };
+
+  useEffect(() => {
+    const configPath = `${workspaceRoot}/implementation/config.json`;
+    invoke<string>('read_file_content', { path: configPath })
+      .then(content => {
+        try {
+          // Format JSON for better editing
+          const parsed = JSON.parse(content);
+          setConfig(JSON.stringify(parsed, null, 2));
+        } catch (e) {
+          setConfig(content);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error reading config.json:", err);
+        setLoading(false);
+      });
+  }, [workspaceRoot]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // 1. Validate JSON before saving
+      let finalConfig = config;
+      try {
+        const parsed = JSON.parse(config);
+        finalConfig = JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        throw new Error("Invalid JSON in configuration editor");
+      }
+
+      // 2. Save config.json
+      const configPath = `${workspaceRoot}/implementation/config.json`;
+      await invoke('write_file_content', { path: configPath, content: finalConfig });
+
+      // 3. Save project settings (theme and color) in registry
+      await invoke('update_project_registry', {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        metadata: { 
+          ...project.metadata, 
+          theme, 
+          color 
+        },
+        secrets: project.secrets || {}
+      });
+
+      onSave();
+    } catch (err) {
+      alert(`Error saving settings: ${err}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-zinc-500">
+      <RefreshCw size={32} className="animate-spin opacity-20" />
+      <span className="text-sm font-medium">Loading project configuration...</span>
+    </div>
+  );
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 p-10">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-8">
+        <div>
+          <h2 className="text-3xl font-bold text-zinc-100 flex items-center gap-3">
+            <Settings size={28} style={{ color: color }} />
+            Project Settings
+          </h2>
+          <p className="text-zinc-500 mt-2">Manage project-specific rules, appearance, and themes</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => onSave()}
+            className="px-4 py-2 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleSave}
+            disabled={saving}
+            className="px-8 py-2.5 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-500/10"
+            style={{ backgroundColor: color }}
+          >
+            {saving ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+            {saving ? "Saving..." : "Save Configuration"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-1 space-y-8">
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-6">
+            <h3 className="text-xs font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
+              <Eye size={16} />
+              Theme & Style
+            </h3>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 block">Theme Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['night', 'day', 'morning', 'sunset'] as ThemeMode[]).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => handleThemeChange(m)}
+                      className={cn(
+                        "px-3 py-2.5 rounded-xl border text-xs font-bold transition-all capitalize flex items-center justify-center gap-2",
+                        theme === m 
+                          ? "bg-zinc-800 border-zinc-600 text-zinc-100" 
+                          : "bg-zinc-950/50 border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
+                      )}
+                      style={theme === m ? { borderColor: color, color: color } : {}}
+                    >
+                      <div className={cn("w-2 h-2 rounded-full", 
+                        m === 'night' ? 'bg-blue-500' : 
+                        m === 'day' ? 'bg-zinc-400' : 
+                        m === 'morning' ? 'bg-sky-400' : 'bg-orange-500'
+                      )} />
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 block">Accent Color</label>
+                <div className="flex items-center gap-4">
+                  <div 
+                    className="w-12 h-12 rounded-xl border border-zinc-800 shadow-inner flex-shrink-0" 
+                    style={{ backgroundColor: color }}
+                  />
+                  <div className="flex-1 space-y-2">
+                    <input 
+                      type="color" 
+                      value={color}
+                      onChange={(e) => handleColorChange(e.target.value)}
+                      className="w-full h-8 bg-transparent border-0 cursor-pointer rounded-lg"
+                    />
+                    <input 
+                      type="text" 
+                      value={color}
+                      onChange={(e) => handleColorChange(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-zinc-700 text-zinc-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-6">
+             <h3 className="text-xs font-bold text-zinc-500 flex items-center gap-2 uppercase tracking-widest mb-4">
+              <Activity size={16} />
+              Project Info
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] text-zinc-600 font-bold uppercase tracking-tighter">Project Name</div>
+                <div className="text-sm text-zinc-300 font-medium">{project.name}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-zinc-600 font-bold uppercase tracking-tighter">Path</div>
+                <div className="text-xs text-zinc-500 font-mono break-all">{project.path}</div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[600px]">
+            <div className="px-6 py-4 bg-zinc-900/80 border-b border-zinc-800 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
+                <Terminal size={16} />
+                config.json
+              </h3>
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+              </div>
+            </div>
+            <textarea 
+              value={config}
+              onChange={(e) => setConfig(e.target.value)}
+              className="flex-1 w-full bg-zinc-950/30 p-6 text-sm font-mono focus:outline-none text-zinc-300 resize-none scrollbar-thin"
+              placeholder="{ ... }"
+              spellCheck={false}
+            />
+          </div>
+          <p className="mt-3 text-[10px] text-zinc-600 flex items-center gap-1.5 px-2">
+            <AlertCircle size={10} />
+            Careful: Invalid JSON structure will prevent the implementation agents from working correctly.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VibeSidebar = ({ root, onSelect, selectedPath, accentColor, currentTheme }: { root: string, onSelect: (artifact: Artifact) => void, selectedPath?: string, accentColor?: string, currentTheme: ThemeMode }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
   const [specTree, setSpecTree] = useState<TreeItem[]>([]);
@@ -227,13 +508,13 @@ const VibeSidebar = ({ root, onSelect, selectedPath }: { root: string, onSelect:
   return (
     <div className="flex flex-col gap-4">
       <div className="relative px-2">
-        <Search className="absolute left-4 top-2.5 text-zinc-600" size={12} />
+        <Search className={cn("absolute left-4 top-2.5", THEMES[currentTheme].muted)} size={12} />
         <input 
           type="text" 
           placeholder="Search..." 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-md py-1.5 pl-8 pr-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+          className={cn("w-full border rounded-md py-1.5 pl-8 pr-3 text-[10px] focus:outline-none focus:ring-1 transition-colors", THEMES[currentTheme].input, THEMES[currentTheme].border, "focus:ring-blue-500/50")}
         />
       </div>
       <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar px-1">
@@ -246,13 +527,14 @@ const VibeSidebar = ({ root, onSelect, selectedPath }: { root: string, onSelect:
                 className={cn(
                   "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
                   selectedPath === artifact.path 
-                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    ? "bg-zinc-800/50 border shadow-sm font-bold" 
+                    : cn(THEMES[currentTheme].muted, "hover:text-zinc-200 hover:bg-zinc-800/20")
                 )}
+                style={selectedPath === artifact.path ? { borderColor: `${accentColor}40`, color: accentColor } : {}}
               >
-                {artifact.type === 'prd' ? <FileText size={14} className="text-purple-500/50" /> :
-                 artifact.type === 'spec' ? <Database size={14} className="text-blue-500/50" /> :
-                 <AlertCircle size={14} className="text-emerald-500/50" />}
+                {artifact.type === 'prd' ? <FileText size={14} className="text-purple-500" /> :
+                 artifact.type === 'spec' ? <Database size={14} className="text-blue-500" /> :
+                 <AlertCircle size={14} className="text-emerald-500" />}
                 <span className="truncate">{artifact.name}</span>
               </button>
             ))}
@@ -260,25 +542,25 @@ const VibeSidebar = ({ root, onSelect, selectedPath }: { root: string, onSelect:
         ) : (
           <>
             <div>
-              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-purple-500/50" />
+              <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5", THEMES[currentTheme].muted)}>
+                <div className="w-1 h-1 rounded-full bg-purple-500" />
                 Product (PRDs)
               </div>
-              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} />
+              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} currentTheme={currentTheme} />
             </div>
             <div>
-              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+              <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5", THEMES[currentTheme].muted)}>
+                <div className="w-1 h-1 rounded-full bg-blue-500" />
                 System Specs
               </div>
-              <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} />
+              <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} currentTheme={currentTheme} />
             </div>
             <div>
-              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
+              <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5", THEMES[currentTheme].muted)}>
+                <div className="w-1 h-1 rounded-full bg-emerald-500" />
                 Issues
               </div>
-              <SidebarTree items={issueTree} selectedPath={selectedPath} onSelect={onSelect} />
+              <SidebarTree items={issueTree} selectedPath={selectedPath} onSelect={onSelect} accentColor={accentColor} currentTheme={currentTheme} />
             </div>
           </>
         )}
@@ -388,12 +670,16 @@ const SidebarTree = ({
   items, 
   level = 0, 
   selectedPath, 
-  onSelect 
+  onSelect,
+  accentColor,
+  currentTheme
 }: { 
   items: TreeItem[], 
   level?: number, 
   selectedPath?: string, 
-  onSelect: (artifact: Artifact) => void 
+  onSelect: (artifact: Artifact) => void,
+  accentColor?: string,
+  currentTheme: ThemeMode
 }) => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -409,11 +695,11 @@ const SidebarTree = ({
             <div>
               <button
                 onClick={() => toggle(item.path)}
-                className="w-full text-left px-2 py-1.5 rounded text-xs transition-colors hover:bg-zinc-800 flex items-center gap-1.5 text-zinc-500 font-medium"
+                className={cn("w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 font-bold", THEMES[currentTheme].muted, "hover:text-zinc-200 hover:bg-zinc-800/20")}
                 style={{ paddingLeft: `${level * 12 + 8}px` }}
               >
                 {expanded[item.path] ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
-                <Folder size={14} className="text-zinc-600" />
+                <Folder size={14} className={THEMES[currentTheme].muted} />
                 <span className="truncate">{item.name}</span>
               </button>
               {expanded[item.path] && item.children && (
@@ -422,6 +708,8 @@ const SidebarTree = ({
                   level={level + 1} 
                   selectedPath={selectedPath} 
                   onSelect={onSelect} 
+                  accentColor={accentColor}
+                  currentTheme={currentTheme}
                 />
               )}
             </div>
@@ -432,14 +720,17 @@ const SidebarTree = ({
                 className={cn(
                   "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
                   selectedPath === item.path 
-                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    ? "bg-zinc-800/50 border shadow-sm font-bold" 
+                    : cn(THEMES[currentTheme].muted, "hover:text-zinc-200 hover:bg-zinc-800/20")
                 )}
-                style={{ paddingLeft: `${level * 12 + 24}px` }}
+                style={{ 
+                  paddingLeft: `${level * 12 + 24}px`,
+                  ...(selectedPath === item.path ? { borderColor: `${accentColor}40`, color: accentColor } : {})
+                }}
               >
-                {item.artifact.type === 'prd' ? <FileText size={14} className="text-purple-500/50" /> :
-                 item.artifact.type === 'spec' ? <Database size={14} className="text-blue-500/50" /> :
-                 <AlertCircle size={14} className="text-emerald-500/50" />}
+                {item.artifact.type === 'prd' ? <FileText size={14} className="text-purple-500" /> :
+                 item.artifact.type === 'spec' ? <Database size={14} className="text-blue-500" /> :
+                 <AlertCircle size={14} className="text-emerald-500" />}
                 <span className="truncate">{item.name}</span>
               </button>
             )
@@ -609,7 +900,7 @@ const YAMLTreeView = ({ data, level = 0 }: { data: any, level?: number }) => {
   );
 };
 
-const VibeView = ({ root }: { root: string }) => {
+const VibeView = ({ root, accentColor, currentTheme }: { root: string, accentColor?: string, currentTheme: ThemeMode }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
@@ -894,15 +1185,15 @@ const VibeView = ({ root }: { root: string }) => {
             <>
               <div className="mb-6">
                 <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">PRDs</div>
-                <SidebarTree items={prdTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+                <SidebarTree items={prdTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} accentColor={accentColor} currentTheme={currentTheme} />
               </div>
               <div className="mb-6">
                 <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">System Specs</div>
-                <SidebarTree items={specTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+                <SidebarTree items={specTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} accentColor={accentColor} currentTheme={currentTheme} />
               </div>
               <div className="mb-6">
                 <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-2">Issues</div>
-                <SidebarTree items={issueTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} />
+                <SidebarTree items={issueTree} selectedPath={selectedArtifact?.path} onSelect={setSelectedArtifact} accentColor={accentColor} currentTheme={currentTheme} />
               </div>
             </>
           )}
@@ -1302,12 +1593,19 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
-  const [showProjectManager, setShowProjectManager] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeMode>('night');
+  const [accentColor, setAccentColor] = useState('#3b82f6');
 
   const loadRegistry = async () => {
     try {
       const registry = await invoke<ProjectRegistry>('get_projects');
       setProjectRegistry(registry);
+      
+      const active = registry.projects.find(p => p.id === registry.last_active_project_id);
+      if (active && active.metadata) {
+        if (active.metadata.theme) setCurrentTheme(active.metadata.theme as ThemeMode);
+        if (active.metadata.color) setAccentColor(active.metadata.color as string);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1416,49 +1714,71 @@ const App: React.FC = () => {
 
   const [plannerView, setPlannerView] = useState<'board' | 'graph'>('board');
 
+  const cycleTheme = () => {
+    const modes: ThemeMode[] = ['night', 'day', 'morning', 'sunset'];
+    const currentIndex = modes.indexOf(currentTheme);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setCurrentTheme(modes[nextIndex]);
+  };
+
   const activeProject = useMemo(() => {
     return projectRegistry.projects.find(p => p.id === projectRegistry.last_active_project_id);
   }, [projectRegistry]);
 
+  const {
+    defaultLayout,
+    onLayoutChanged,
+  } = useDefaultLayout({
+    id: "vibe-layout-v2",
+    storage: localStorage,
+  });
+
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
+    <div 
+      className={cn("flex flex-col h-screen w-full overflow-hidden font-sans transition-colors duration-500", THEMES[currentTheme].bg, THEMES[currentTheme].text)}
+      style={{ '--accent-color': accentColor } as React.CSSProperties}
+    >
       {/* Global Header */}
-      <header className="h-12 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900/50 backdrop-blur-sm z-20">
+      <header className={cn("h-12 border-b flex items-center justify-between px-4 backdrop-blur-sm z-20", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
         <div className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center">
+          <div className="w-6 h-6 rounded flex items-center justify-center transition-colors" style={{ backgroundColor: accentColor }}>
             <Cpu size={14} className="text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-zinc-100 leading-none">{activeProject?.name || 'No Project'}</span>
-            <span className="text-[10px] text-zinc-500 font-mono leading-none mt-1 truncate max-w-[200px]">{workspaceRoot || 'Not connected'}</span>
+            <span className="text-xs font-bold leading-none">{activeProject?.name || 'No Project'}</span>
+            <span className={cn("text-[10px] font-mono leading-none mt-1 truncate max-w-[200px]", THEMES[currentTheme].muted)}>{workspaceRoot || 'Not connected'}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 px-1 bg-zinc-800/30 rounded-md border border-zinc-700/30 h-10">
+          <div className={cn("flex items-center gap-1 px-1 rounded-md border h-10", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
             <TabButton 
               active={activeTab === 'planner'} 
-              onClick={() => { setActiveTab('planner'); setShowProjectManager(false); }}
+              onClick={() => setActiveTab('planner')}
               icon={<Kanban size={14} />}
               label="Planner"
+              accentColor={accentColor}
             />
             <TabButton 
               active={activeTab === 'create'} 
-              onClick={() => { setActiveTab('create'); setShowProjectManager(false); }}
+              onClick={() => setActiveTab('create')}
               icon={<PencilLine size={14} />}
               label="Create"
+              accentColor={accentColor}
             />
             <TabButton 
               active={activeTab === 'issues'} 
-              onClick={() => { setActiveTab('issues'); setShowProjectManager(false); }}
+              onClick={() => setActiveTab('issues')}
               icon={<Bug size={14} />}
               label="Issues"
+              accentColor={accentColor}
             />
             <TabButton 
               active={activeTab === 'projects'} 
-              onClick={() => { setActiveTab('projects'); setShowProjectManager(true); }}
+              onClick={() => setActiveTab('projects')}
               icon={<LayoutDashboard size={14} />}
               label="Projects"
+              accentColor={accentColor}
             />
           </div>
 
@@ -1468,34 +1788,59 @@ const App: React.FC = () => {
               {activeAgents.length > 0 ? 'Working' : 'Idle'}
             </span>
           </div>
+          
           <button 
-            onClick={() => setShowProjectManager(!showProjectManager)}
+            onClick={cycleTheme}
+            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center"
+            title={`Switch Theme (Current: ${currentTheme})`}
+          >
+            {currentTheme === 'night' && <Moon size={18} />}
+            {currentTheme === 'day' && <Sun size={18} />}
+            {currentTheme === 'morning' && <Sunrise size={18} />}
+            {currentTheme === 'sunset' && <Sunset size={18} />}
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('settings')}
             className={cn(
               "p-1.5 rounded-md transition-colors",
-              showProjectManager ? "bg-blue-600 text-white" : "hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+              activeTab === 'settings' ? "bg-blue-600 text-white" : "hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
             )}
+            style={activeTab === 'settings' ? { backgroundColor: accentColor } : {}}
           >
             <Settings size={18} />
           </button>
         </div>
       </header>
 
-      {showProjectManager ? (
-        <div className="flex-1 overflow-y-auto p-8 bg-zinc-950">
+      {activeTab === 'projects' || (activeTab === 'settings' && !activeProject) ? (
+        <div className="flex-1 overflow-y-auto p-8">
           <ProjectManagerView 
             registry={projectRegistry} 
             onSwitch={(p) => {
               switchProject(p);
-              setShowProjectManager(false);
               setActiveTab('planner');
             }} 
             onRefresh={loadRegistry} 
           />
         </div>
+      ) : activeTab === 'settings' && activeProject ? (
+        <div className="flex-1 overflow-y-auto">
+          <ProjectSettingsEditor 
+            project={activeProject}
+            workspaceRoot={workspaceRoot}
+            onSave={() => {
+              loadRegistry();
+              setActiveTab('planner');
+            }}
+            onThemeChange={setCurrentTheme}
+            onColorChange={setAccentColor}
+          />
+        </div>
       ) : (
-        <PanelGroup orientation="horizontal">
+        <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
         {/* Left Pane: Project Pulse */}
-        <Panel defaultSize={20} minSize={20} className="flex flex-col bg-zinc-900/20 border-r border-zinc-800">
+        <Panel id="sidebar-left" defaultSize={200} minSize={200} className={cn("flex flex-col border-r shadow-sm transition-colors duration-300", THEMES[currentTheme].bg, THEMES[currentTheme].border)}>
           <div className="flex-1 overflow-y-auto no-scrollbar">
             <Accordion title="Projects" icon={LayoutDashboard} defaultOpen={false}>
               <div className="space-y-1">
@@ -1506,11 +1851,12 @@ const App: React.FC = () => {
                     className={cn(
                       "w-full text-left px-2 py-1.5 rounded text-[11px] transition-colors truncate flex items-center gap-2",
                       projectRegistry.last_active_project_id === p.id 
-                        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
-                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                        ? "bg-zinc-800/20 border shadow-sm" 
+                        : cn(THEMES[currentTheme].muted, "hover:text-zinc-200 hover:bg-zinc-800/10")
                     )}
+                    style={projectRegistry.last_active_project_id === p.id ? { borderColor: `${accentColor}40`, color: accentColor } : {}}
                   >
-                    <Folder size={12} className={projectRegistry.last_active_project_id === p.id ? "text-blue-400" : "text-zinc-600"} />
+                    <Folder size={12} className={projectRegistry.last_active_project_id === p.id ? "" : THEMES[currentTheme].muted} style={projectRegistry.last_active_project_id === p.id ? { color: accentColor } : {}} />
                     <span className="truncate">{p.name}</span>
                   </button>
                 ))}
@@ -1526,7 +1872,7 @@ const App: React.FC = () => {
                   } else if (artifact.type === 'issue') {
                     setActiveTab('issues');
                   }
-                }} selectedPath={selectedArtifact?.path} />
+                }} selectedPath={selectedArtifact?.path} accentColor={accentColor} currentTheme={currentTheme} />
               </div>
             </Accordion>
 
@@ -1534,38 +1880,38 @@ const App: React.FC = () => {
               {selectedArtifact ? (
                 <div className="space-y-3 p-1">
                   <div>
-                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Name</div>
-                    <div className="text-xs text-zinc-300 truncate">{selectedArtifact.name}</div>
+                    <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-1", THEMES[currentTheme].muted)}>Name</div>
+                    <div className="text-xs truncate font-medium">{selectedArtifact.name}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Status</div>
-                    <div className="text-xs text-zinc-300">
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px]">
+                    <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-1", THEMES[currentTheme].muted)}>Status</div>
+                    <div className="text-xs">
+                      <span className={cn("px-1.5 py-0.5 rounded border text-[10px] font-bold", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
                         {selectedArtifact.status || 'N/A'}
                       </span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Path</div>
-                    <div className="text-[10px] text-zinc-500 font-mono break-all">{selectedArtifact.relPath}</div>
+                    <div className={cn("text-[9px] font-bold uppercase tracking-widest mb-1", THEMES[currentTheme].muted)}>Path</div>
+                    <div className={cn("text-[10px] font-mono break-all leading-tight", THEMES[currentTheme].muted)}>{selectedArtifact.relPath}</div>
                   </div>
                 </div>
               ) : (
-                <div className="text-[10px] text-zinc-600 italic text-center py-4">No item selected</div>
+                <div className={cn("text-[10px] italic text-center py-4", THEMES[currentTheme].muted)}>No item selected</div>
               )}
             </Accordion>
           </div>
 
-          <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
+          <div className={cn("p-4 border-t transition-colors duration-300", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+              <div className={cn("text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5", THEMES[currentTheme].muted)}>
                 <Coins size={12} className="text-amber-500/70" />
                 Cost Tracking
               </div>
             </div>
-            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
-              <div className="text-lg font-bold text-zinc-100">${totalCost.toFixed(4)}</div>
-              <div className="text-[9px] text-zinc-500 mt-0.5 uppercase font-medium">Estimated Usage</div>
+            <div className={cn("rounded-lg p-3 border shadow-inner transition-colors duration-300", THEMES[currentTheme].bg, THEMES[currentTheme].border)}>
+              <div className="text-lg font-bold">${totalCost.toFixed(4)}</div>
+              <div className={cn("text-[9px] mt-0.5 uppercase font-medium", THEMES[currentTheme].muted)}>Estimated Usage</div>
             </div>
           </div>
         </Panel>
@@ -1573,7 +1919,7 @@ const App: React.FC = () => {
         <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500/20 transition-colors" />
 
         {/* Center Pane: Main Content */}
-        <Panel className="flex flex-col min-w-0">
+        <Panel id="main-content" minSize={400} className="flex flex-col min-w-0">
           <main className="flex-1 overflow-y-auto relative p-6 no-scrollbar">
             {activeTab === 'planner' && (
               <div className="h-full flex flex-col gap-6 relative">
@@ -1627,6 +1973,7 @@ const App: React.FC = () => {
                         setActiveTab('create');
                       }}
                       onRefresh={loadRegistry}
+                      accentColor={accentColor}
                     />
                   ) : (
                     <PlannerGraph 
@@ -1651,7 +1998,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="shrink-0 -mx-6 -mb-6 mt-4">
-                  <AgentLogMonitor />
+                  <AgentLogMonitor accentColor={accentColor} />
                 </div>
               </div>
             )}
@@ -1684,15 +2031,15 @@ const App: React.FC = () => {
         <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500/20 transition-colors" />
 
         {/* Right Pane: AI / Interaction */}
-        <Panel defaultSize={30} minSize={25} className="flex flex-col bg-zinc-900/20 border-l border-zinc-800">
+        <Panel id="sidebar-right" defaultSize={300} minSize={300} className={cn("flex flex-col border-l transition-colors duration-300", THEMES[currentTheme].bg, THEMES[currentTheme].border)}>
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/30">
-              <div className="flex items-center gap-2 font-semibold text-zinc-100">
-                <MessageSquare size={16} className="text-blue-400" />
+            <div className={cn("p-4 border-b flex items-center justify-between transition-colors duration-300", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
+              <div className="flex items-center gap-2 font-semibold">
+                <MessageSquare size={16} style={{ color: accentColor }} />
                 <span className="text-xs uppercase tracking-widest font-bold">Agent Interaction</span>
               </div>
               <div className="flex gap-1">
-                <button onClick={() => setMessages([])} className="p-1.5 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-colors" title="Clear Chat">
+                <button onClick={() => setMessages([])} className={cn("p-1.5 rounded transition-colors", THEMES[currentTheme].muted, "hover:text-red-400 hover:bg-zinc-800/20")} title="Clear Chat">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -1701,16 +2048,16 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-800">
               {messages.map((msg, i) => (
                 <div key={i} className={cn(
-                  "rounded-lg p-3 border",
-                  msg.role === 'User' ? "bg-zinc-800/30 border-zinc-700/30 ml-4" : "bg-zinc-800/50 border-zinc-700/50 mr-4"
+                  "rounded-lg p-3 border shadow-sm transition-all duration-300",
+                  msg.role === 'User' ? cn(THEMES[currentTheme].panel, THEMES[currentTheme].border, "ml-4") : cn(THEMES[currentTheme].panel, THEMES[currentTheme].border, "mr-4 shadow-md")
                 )}>
                   <div className={cn(
                     "text-[10px] font-bold mb-1 uppercase tracking-wider",
-                    msg.role === 'Architect' ? "text-blue-400" : msg.role === 'PM' ? "text-purple-400" : "text-emerald-400"
-                  )}>
+                    msg.role === 'Architect' ? "text-blue-500" : msg.role === 'PM' ? "text-purple-500" : "text-emerald-500"
+                  )} style={msg.role === 'User' ? { color: accentColor } : {}}>
                     {msg.role}
                   </div>
-                  <div className="text-sm prose prose-invert max-w-none text-zinc-300">
+                  <div className={cn("text-sm prose max-w-none transition-colors duration-300", currentTheme === 'day' || currentTheme === 'morning' ? "prose-zinc" : "prose-invert")}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                       {msg.content}
                     </ReactMarkdown>
@@ -1719,18 +2066,18 @@ const App: React.FC = () => {
               ))}
               
               {activeAgents.length > 0 && (
-                <div className="pt-4 border-t border-zinc-800">
-                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">Active Processes</div>
+                <div className={cn("pt-4 border-t transition-colors duration-300", THEMES[currentTheme].border)}>
+                  <div className={cn("text-[10px] font-bold uppercase tracking-widest mb-2 px-1", THEMES[currentTheme].muted)}>Active Processes</div>
                   <div className="space-y-2">
                     {activeAgents.map(agent => (
-                      <div key={agent.pid} className="flex items-center justify-between bg-blue-500/5 border border-blue-500/20 rounded px-2 py-1.5">
+                      <div key={agent.pid} className={cn("flex items-center justify-between border rounded px-2 py-1.5 shadow-sm transition-colors duration-300", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                          <span className="text-[10px] text-blue-300 font-mono truncate">{agent.command}</span>
+                          <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: accentColor }} />
+                          <span className="text-[10px] font-mono truncate font-bold" style={{ color: accentColor }}>{agent.command}</span>
                         </div>
                         <button 
                           onClick={() => handleCancelCommand(agent.pid)}
-                          className="text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors"
+                          className={cn("p-0.5 rounded transition-colors", THEMES[currentTheme].muted, "hover:text-red-400")}
                         >
                           <Trash2 size={12} />
                         </button>
@@ -1741,24 +2088,24 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 border-t border-zinc-800 bg-zinc-900/50">
+            <div className={cn("p-4 border-t transition-colors duration-300", THEMES[currentTheme].panel, THEMES[currentTheme].border)}>
               {pendingPrompt && (
-                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Input Required</div>
-                  <div className="text-xs text-zinc-200 mb-2">{pendingPrompt}</div>
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg shadow-sm">
+                  <div className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-1">Input Required</div>
+                  <div className="text-xs mb-2 font-medium">{pendingPrompt}</div>
                 </div>
               )}
               
               {serverStatus && (
-                <div className="mb-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                <div className={cn("mb-4 p-3 border rounded-lg transition-colors duration-300 shadow-sm", THEMES[currentTheme].bg, THEMES[currentTheme].border)}>
                   <div className="flex justify-between items-center mb-1.5">
-                    <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{serverStatus.phase}</div>
-                    <div className="text-[9px] font-mono text-zinc-400">{serverStatus.progress}%</div>
+                    <div className={cn("text-[9px] font-bold uppercase tracking-widest", THEMES[currentTheme].muted)}>{serverStatus.phase}</div>
+                    <div className={cn("text-[9px] font-mono font-bold", THEMES[currentTheme].muted)}>{serverStatus.progress}%</div>
                   </div>
-                  <div className="w-full bg-zinc-950 rounded-full h-1 overflow-hidden">
+                  <div className="w-full bg-zinc-950/10 rounded-full h-1.5 overflow-hidden">
                     <div 
-                      className="bg-blue-500 h-full transition-all duration-500" 
-                      style={{ width: `${serverStatus.progress}%` }} 
+                      className="h-full transition-all duration-500" 
+                      style={{ width: `${serverStatus.progress}%`, backgroundColor: accentColor }} 
                     />
                   </div>
                 </div>
@@ -1771,11 +2118,12 @@ const App: React.FC = () => {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Ask the Architect..."
-                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-100"
+                  className={cn("flex-1 border rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-2 transition-all duration-300", THEMES[currentTheme].input, THEMES[currentTheme].border, "focus:ring-blue-500/50")}
                 />
                 <button 
                   onClick={handleSendMessage}
-                  className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors shadow-lg shadow-blue-500/10"
+                  className="p-2 text-white rounded-md transition-all shadow-lg active:scale-95"
+                  style={{ backgroundColor: accentColor }}
                 >
                   <Send size={16} />
                 </button>
@@ -1783,12 +2131,12 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-48 border-t border-zinc-800 bg-zinc-950 p-2 overflow-hidden flex flex-col">
-            <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+          <div className={cn("h-48 border-t p-2 overflow-hidden flex flex-col transition-colors duration-300", THEMES[currentTheme].bg, THEMES[currentTheme].border)}>
+            <div className={cn("flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-widest mb-1", THEMES[currentTheme].muted)}>
               <Terminal size={10} />
               Command Output
             </div>
-            <div className="flex-1 overflow-y-auto font-mono text-[10px] p-2 bg-black/30 rounded scrollbar-none">
+            <div className={cn("flex-1 overflow-y-auto font-mono text-[10px] p-2 rounded scrollbar-none transition-colors duration-300", THEMES[currentTheme].panel, THEMES[currentTheme].border, "border shadow-inner")}>
               <TerminalOutputView />
             </div>
           </div>
@@ -1804,19 +2152,21 @@ interface TabButtonProps {
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
+  accentColor: string;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label }) => (
+const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label, accentColor }) => (
   <button 
     onClick={onClick}
     className={cn(
       "flex items-center gap-2 px-3 py-2 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
       active 
-        ? "border-blue-500 text-zinc-100 bg-blue-500/5" 
+        ? "text-zinc-100 bg-zinc-800/50" 
         : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
     )}
+    style={active ? { borderBottomColor: accentColor } : {}}
   >
-    {icon}
+    <div style={active ? { color: accentColor } : {}}>{icon}</div>
     <span>{label}</span>
   </button>
 );
