@@ -1,4 +1,9 @@
 {
+  "repository": {
+    "url": "https://github.com/jmfk/vibe-tools",
+    "root": "/Users/jmfk/code/vibe-tools",
+    "branch": "main"
+  },
   "ralph": {
     "review": true,
     "tests": true,
@@ -9,7 +14,7 @@
     "no_branch_switch": true,
     "fast": true
   },
-  "default_budget": 5.0,
+  "default_budget": 5,
   "verbose": false,
   "coverage_targets": {
     "backend": 85,
@@ -68,19 +73,48 @@
     "prd_interview": 8
   },
   "test": "value",
-  "env": {
-    "type": "pyenv-virtualenv",
-    "python_version": "3.11.10",
-    "venv_name": "vibe-tools-3.11.10",
-    "path": "/Users/jmfk/code/vibe-tools",
-    "last_setup": "2026-01-11T11:25:15.903384"
-  },
   "setup": {
-    "deps_branch_enabled": false
+    "deps_branch_enabled": false,
+    "standalone": false
   },
   "agent": {
     "agent": "cursor-agent",
     "force": true,
-    "stream": true  
+    "stream": true
+  },
+  "current_env": "local",
+  "envs": {
+    "local": {
+      "type": "pyenv-virtualenv",
+      "python_version": "3.11.10",
+      "venv_name": "vibe-tools-3.11.10",
+      "path": "/Users/jmfk/code/vibe-tools",
+      "last_setup": "2026-01-11T11:25:15.903384",
+      "vars": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "DB_NAME": "vibe-tools",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/vibe-tools",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_PASSWORD": "",
+        "REDIS_DB": "0",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "GOOGLE_API_KEY": "AIzaSyCP6uupERCeUbnXDSyjwTWkK-AcXPgh7OI",
+        "CURSOR_API_KEY": "key_e86f2b81089f0819bf7dcbf9a6d347fae701339f4df08b8580f2d560ac2f38b7",
+        "VIBE_DATA_DIR": "/Users/jmfk/code/vibe-tools/implementation/data",
+        "S3_HOST": "localhost",
+        "S3_PORT": "9000",
+        "S3_ACCESS_KEY": "minioadmin",
+        "S3_SECRET_KEY": "minioadmin",
+        "S3_REGION": "us-east-1",
+        "RABBITMQ_HOST": "localhost",
+        "RABBITMQ_PORT": "5672",
+        "RABBITMQ_USER": "guest",
+        "RABBITMQ_PASSWORD": "guest"
+      }
+    }
   }
 }
