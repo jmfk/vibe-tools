@@ -478,8 +478,9 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         passed_gates = True
         if tests:
             if not prd.impl_tests_passed:
+                # Run tests, lint, and build to ensure total quality
                 success_tests, test_summary = debugging_loop(
-                    agent, ["test"], stream=stream, iterations=max_debug_iterations
+                    agent, ["test", "lint", "build-frontend"], stream=stream, iterations=max_debug_iterations
                 )
                 if not success_tests:
                     passed_gates = False
