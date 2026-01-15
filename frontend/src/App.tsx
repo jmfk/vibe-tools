@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Ansi from 'ansi-to-react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { 
   MessageSquare, 
   Files, 
@@ -46,17 +46,19 @@ import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/tauri';
 import { listen } from '@tauri-apps/api/event';
 import yaml from 'js-yaml';
-import mermaid from 'mermaid';
+// import mermaid from 'mermaid';
 import { PlannerBoard } from './components/PlannerBoard';
 import { PlannerGraph } from './components/PlannerGraph';
 import { AgentLogMonitor } from './components/AgentLogMonitor';
 
+/*
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
   securityLevel: 'loose',
   fontFamily: 'ui-sans-serif, system-ui, sans-serif',
 });
+*/
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -99,7 +101,7 @@ const Accordion = ({
   );
 };
 
-type Tab = 'planner' | 'create' | 'issues';
+type Tab = 'planner' | 'create' | 'issues' | 'projects';
 
 interface Project {
   id: string;
@@ -449,21 +451,7 @@ const SidebarTree = ({
 };
 
 const Mermaid = ({ chart }: { chart: string }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [svg, setSvg] = useState('');
-
-  useEffect(() => {
-    if (chart) {
-      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-      mermaid.render(id, chart).then(({ svg }) => {
-        setSvg(svg);
-      }).catch(err => {
-        console.error('Mermaid render error:', err);
-      });
-    }
-  }, [chart]);
-
-  return <div className="mermaid-container my-4 overflow-x-auto bg-zinc-900/50 p-4 rounded-lg border border-zinc-800" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div className="text-zinc-500 italic p-4 border border-zinc-800 rounded">Mermaid chart placeholder: {chart.substring(0, 20)}...</div>;
 };
 
 const MarkdownRenderer = ({ content }: { content: string }) => {
@@ -1118,11 +1106,6 @@ const ProjectManagerView = ({
         ] 
       });
       
-      // Since 'vibe project add' doesn't support metadata/secrets yet, 
-      // we'll need to update the registry file directly from Tauri or update the CLI.
-      // For now, let's assume we need to update the registry via a new Tauri command
-      // because the CLI 'project add' is basic.
-      
       await invoke('update_project_registry', {
         id: editingProject.id,
         name: editName,
@@ -1304,7 +1287,7 @@ const ProjectManagerView = ({
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('create');
+  const [activeTab, setActiveTab] = useState<Tab>('planner');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents, setActiveAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
@@ -1319,6 +1302,7 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
+  const [showProjectManager, setShowProjectManager] = useState(false);
 
   const loadRegistry = async () => {
     try {
@@ -1451,21 +1435,67 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 px-1 bg-zinc-800/30 rounded-md border border-zinc-700/30 h-10">
+            <TabButton 
+              active={activeTab === 'planner'} 
+              onClick={() => { setActiveTab('planner'); setShowProjectManager(false); }}
+              icon={<Kanban size={14} />}
+              label="Planner"
+            />
+            <TabButton 
+              active={activeTab === 'create'} 
+              onClick={() => { setActiveTab('create'); setShowProjectManager(false); }}
+              icon={<PencilLine size={14} />}
+              label="Create"
+            />
+            <TabButton 
+              active={activeTab === 'issues'} 
+              onClick={() => { setActiveTab('issues'); setShowProjectManager(false); }}
+              icon={<Bug size={14} />}
+              label="Issues"
+            />
+            <TabButton 
+              active={activeTab === 'projects'} 
+              onClick={() => { setActiveTab('projects'); setShowProjectManager(true); }}
+              icon={<LayoutDashboard size={14} />}
+              label="Projects"
+            />
+          </div>
+
           <div className="flex items-center gap-2 px-2 py-1 rounded bg-zinc-800/50 border border-zinc-700/50">
             <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", activeAgents.length > 0 ? "bg-green-500" : "bg-zinc-600")} />
             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               {activeAgents.length > 0 ? 'Working' : 'Idle'}
             </span>
           </div>
-          <button className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-500 hover:text-zinc-300 transition-colors">
+          <button 
+            onClick={() => setShowProjectManager(!showProjectManager)}
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              showProjectManager ? "bg-blue-600 text-white" : "hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+            )}
+          >
             <Settings size={18} />
           </button>
         </div>
       </header>
 
-      <PanelGroup direction="horizontal" autoSaveId="vibe-layout-v1">
+      {showProjectManager ? (
+        <div className="flex-1 overflow-y-auto p-8 bg-zinc-950">
+          <ProjectManagerView 
+            registry={projectRegistry} 
+            onSwitch={(p) => {
+              switchProject(p);
+              setShowProjectManager(false);
+              setActiveTab('planner');
+            }} 
+            onRefresh={loadRegistry} 
+          />
+        </div>
+      ) : (
+        <PanelGroup orientation="horizontal">
         {/* Left Pane: Project Pulse */}
-        <Panel defaultSize={20} minSize={15} className="flex flex-col bg-zinc-900/20 border-r border-zinc-800">
+        <Panel defaultSize={20} minSize={20} className="flex flex-col bg-zinc-900/20 border-r border-zinc-800">
           <div className="flex-1 overflow-y-auto no-scrollbar">
             <Accordion title="Projects" icon={LayoutDashboard} defaultOpen={false}>
               <div className="space-y-1">
@@ -1544,27 +1574,6 @@ const App: React.FC = () => {
 
         {/* Center Pane: Main Content */}
         <Panel className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1 px-4 border-b border-zinc-800 bg-zinc-900/30">
-            <TabButton 
-              active={activeTab === 'planner'} 
-              onClick={() => setActiveTab('planner')}
-              icon={<Kanban size={14} />}
-              label="Planner"
-            />
-            <TabButton 
-              active={activeTab === 'create'} 
-              onClick={() => setActiveTab('create')}
-              icon={<PencilLine size={14} />}
-              label="Create"
-            />
-            <TabButton 
-              active={activeTab === 'issues'} 
-              onClick={() => setActiveTab('issues')}
-              icon={<Bug size={14} />}
-              label="Issues"
-            />
-          </div>
-
           <main className="flex-1 overflow-y-auto relative p-6 no-scrollbar">
             {activeTab === 'planner' && (
               <div className="h-full flex flex-col gap-6 relative">
@@ -1675,7 +1684,7 @@ const App: React.FC = () => {
         <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500/20 transition-colors" />
 
         {/* Right Pane: AI / Interaction */}
-        <Panel defaultSize={30} minSize={20} className="flex flex-col bg-zinc-900/20 border-l border-zinc-800">
+        <Panel defaultSize={30} minSize={25} className="flex flex-col bg-zinc-900/20 border-l border-zinc-800">
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/30">
               <div className="flex items-center gap-2 font-semibold text-zinc-100">
@@ -1785,6 +1794,7 @@ const App: React.FC = () => {
           </div>
         </Panel>
       </PanelGroup>
+      )}
     </div>
   );
 };
@@ -1800,7 +1810,7 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label }) =
   <button 
     onClick={onClick}
     className={cn(
-      "flex items-center gap-2 px-4 py-3 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
+      "flex items-center gap-2 px-3 py-2 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
       active 
         ? "border-blue-500 text-zinc-100 bg-blue-500/5" 
         : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"

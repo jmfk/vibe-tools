@@ -10,7 +10,7 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  DefaultAnnouncements,
+  defaultAnnouncements,
 } from '@dnd-kit/core';
 import { 
   arrayMove, 
