@@ -110,7 +110,7 @@ const Accordion = ({
   );
 };
 
-type Tab = 'planner' | 'create' | 'issues' | 'projects' | 'settings' | 'env' | 'stats';
+type Tab = 'planner' | 'issues' | 'projects' | 'settings' | 'env' | 'stats';
 
 type ThemeMode = 'night' | 'day' | 'morning' | 'sunset';
 
@@ -259,6 +259,7 @@ const ProjectSettingsEditor = ({
   onThemeChange: (theme: ThemeMode) => void,
   onColorChange: (color: string) => void
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'colors' | 'config' | 'envs'>('config');
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -352,14 +353,14 @@ const ProjectSettingsEditor = ({
   );
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 p-10">
+    <div className="max-w-5xl mx-auto space-y-6 p-10">
       <div className="flex items-center justify-between border-b border-zinc-800 pb-8">
         <div>
           <h2 className="text-3xl font-bold text-foreground flex items-center gap-3">
             <Settings size={28} style={{ color: color }} />
             Project Settings
           </h2>
-          <p className="text-muted mt-2">Manage project-specific rules, appearance, and themes</p>
+          <p className="text-muted mt-2">Manage project-specific rules, appearance, and environment</p>
         </div>
         <div className="flex items-center gap-4">
           <button 
@@ -375,40 +376,59 @@ const ProjectSettingsEditor = ({
             style={{ backgroundColor: color }}
           >
             {saving ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-            {saving ? "Saving..." : "Save Configuration"}
+            {saving ? "Saving..." : "Save All Changes"}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-1 space-y-8">
-          <section className="bg-panel border border-border rounded-2xl p-6 space-y-6">
-            <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
-              <Eye size={16} />
-              Theme & Style
-            </h3>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] font-bold text-muted uppercase tracking-widest mb-3 block">Theme Mode</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['night', 'day', 'morning', 'sunset'] as ThemeMode[]).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => handleThemeChange(m)}
-                      className={cn(
-                        "px-3 py-2.5 rounded-xl border text-xs font-bold transition-all capitalize flex items-center justify-center gap-2",
-                        theme === m 
-                          ? "bg-zinc-800 border-zinc-600 text-foreground" 
-                          : "bg-zinc-950/50 border-zinc-800/50 text-muted hover:text-foreground hover:bg-zinc-900"
-                      )}
-                      style={theme === m ? { borderColor: color, color: color } : {}}
-                    >
-                      <div className={cn("w-2 h-2 rounded-full")} style={{ backgroundColor: themeColors[m].bg === '#09090b' ? '#3b82f6' : themeColors[m].bg }} />
-                      {m}
-                    </button>
-                  ))}
-                </div>
+      <div className="flex items-center gap-1 border-b border-zinc-800 pb-px">
+        {[
+          { id: 'config', label: 'Configuration', icon: Settings },
+          { id: 'colors', label: 'Theme & Style', icon: Eye },
+          { id: 'envs', label: 'Environment', icon: Shield },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id as any)}
+            className={cn(
+              "flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+              activeSubTab === tab.id 
+                ? "text-foreground border-foreground" 
+                : "text-muted hover:text-foreground border-transparent"
+            )}
+            style={activeSubTab === tab.id ? { borderBottomColor: color, color: color } : {}}
+          >
+            <tab.icon size={14} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-6">
+        {activeSubTab === 'colors' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <section className="bg-panel border border-border rounded-2xl p-6 space-y-6">
+              <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
+                <Eye size={16} />
+                Theme Mode
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {(['night', 'day', 'morning', 'sunset'] as ThemeMode[]).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => handleThemeChange(m)}
+                    className={cn(
+                      "px-3 py-2.5 rounded-xl border text-xs font-bold transition-all capitalize flex items-center justify-center gap-2",
+                      theme === m 
+                        ? "bg-zinc-800 border-zinc-600 text-foreground" 
+                        : "bg-zinc-950/50 border-zinc-800/50 text-muted hover:text-foreground hover:bg-zinc-900"
+                    )}
+                    style={theme === m ? { borderColor: color, color: color } : {}}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full")} style={{ backgroundColor: themeColors[m].bg === '#09090b' ? '#3b82f6' : themeColors[m].bg }} />
+                    {m}
+                  </button>
+                ))}
               </div>
 
               <div>
@@ -434,108 +454,121 @@ const ProjectSettingsEditor = ({
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div className="pt-4 border-t border-zinc-800/50">
-                <label className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 block">Mode Colors ({theme})</label>
+            <section className="bg-panel border border-border rounded-2xl p-6 space-y-6">
+              <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
+                <PencilLine size={16} />
+                Custom Mode Colors ({theme})
+              </h3>
+              <div className="space-y-4">
+                <ColorPicker 
+                  label="Background" 
+                  value={themeColors[theme].bg} 
+                  onChange={(v) => handleThemeColorChange(theme, 'bg', v)} 
+                />
+                <ColorPicker 
+                  label="Text" 
+                  value={themeColors[theme].text} 
+                  onChange={(v) => handleThemeColorChange(theme, 'text', v)} 
+                />
+                <ColorPicker 
+                  label="Panel" 
+                  value={themeColors[theme].panel} 
+                  onChange={(v) => handleThemeColorChange(theme, 'panel', v)} 
+                />
+                <ColorPicker 
+                  label="Border" 
+                  value={themeColors[theme].border} 
+                  onChange={(v) => handleThemeColorChange(theme, 'border', v)} 
+                />
+                <ColorPicker 
+                  label="Muted" 
+                  value={themeColors[theme].muted} 
+                  onChange={(v) => handleThemeColorChange(theme, 'muted', v)} 
+                />
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-[10px] text-muted font-bold uppercase">Dark Mode</span>
+                  <input 
+                    type="checkbox" 
+                    checked={themeColors[theme].isDark}
+                    onChange={(e) => handleThemeColorChange(theme, 'isDark', e.target.checked)}
+                    className="rounded border-zinc-800 bg-zinc-950 text-accent focus:ring-accent/50"
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {activeSubTab === 'config' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="lg:col-span-1 space-y-6">
+              <section className="bg-panel/50 border border-border/50 rounded-2xl p-6">
+                <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest mb-4">
+                  <Activity size={16} />
+                  Project Info
+                </h3>
                 <div className="space-y-4">
-                  <ColorPicker 
-                    label="Background" 
-                    value={themeColors[theme].bg} 
-                    onChange={(v) => handleThemeColorChange(theme, 'bg', v)} 
-                  />
-                  <ColorPicker 
-                    label="Text" 
-                    value={themeColors[theme].text} 
-                    onChange={(v) => handleThemeColorChange(theme, 'text', v)} 
-                  />
-                  <ColorPicker 
-                    label="Panel" 
-                    value={themeColors[theme].panel} 
-                    onChange={(v) => handleThemeColorChange(theme, 'panel', v)} 
-                  />
-                  <ColorPicker 
-                    label="Border" 
-                    value={themeColors[theme].border} 
-                    onChange={(v) => handleThemeColorChange(theme, 'border', v)} 
-                  />
-                  <ColorPicker 
-                    label="Muted" 
-                    value={themeColors[theme].muted} 
-                    onChange={(v) => handleThemeColorChange(theme, 'muted', v)} 
-                  />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted font-bold uppercase">Dark Mode</span>
+                  <div>
+                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Project Name</label>
                     <input 
-                      type="checkbox" 
-                      checked={themeColors[theme].isDark}
-                      onChange={(e) => handleThemeColorChange(theme, 'isDark', e.target.checked)}
-                      className="rounded border-zinc-800 bg-zinc-950 text-accent focus:ring-accent/50"
+                      type="text" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Local Path</label>
+                    <input 
+                      type="text" 
+                      value={path}
+                      onChange={(e) => setPath(e.target.value)}
+                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent text-muted"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">GitHub URL</label>
+                    <input 
+                      type="text" 
+                      value={githubUrl}
+                      onChange={(e) => setGithubUrl(e.target.value)}
+                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
                     />
                   </div>
                 </div>
-              </div>
+              </section>
             </div>
-          </section>
 
-          <section className="bg-panel/50 border border-border/50 rounded-2xl p-6">
-             <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest mb-4">
-              <Activity size={16} />
-              Project Info
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Project Name</label>
-                <input 
-                  type="text" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
-                />
+            <div className="lg:col-span-2">
+              <div className="bg-panel border border-border rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
+                <div className="px-6 py-4 bg-panel border-b border-border flex items-center justify-between shrink-0">
+                  <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
+                    <Settings size={16} />
+                    Project Rules & Agent Configuration
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                  <ConfigForm config={config} onChange={setConfig} accentColor={color} />
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Local Path</label>
-                <input 
-                  type="text" 
-                  value={path}
-                  onChange={(e) => setPath(e.target.value)}
-                  className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent text-muted"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">GitHub URL</label>
-                <input 
-                  type="text" 
-                  value={githubUrl}
-                  onChange={(e) => setGithubUrl(e.target.value)}
-                  className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
-                />
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div className="lg:col-span-2">
-          <div className="bg-panel border border-border rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
-            <div className="px-6 py-4 bg-panel border-b border-border flex items-center justify-between shrink-0">
-              <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
-                <Settings size={16} />
-                Project Rules & Agent Configuration
-              </h3>
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-              <ConfigForm config={config} onChange={setConfig} accentColor={color} />
+              <p className="mt-3 text-[10px] text-muted flex items-center gap-1.5 px-2">
+                <AlertCircle size={10} />
+                These settings are stored in `implementation/config.json` and affect how AI agents interact with your codebase.
+              </p>
             </div>
           </div>
-          <p className="mt-3 text-[10px] text-muted flex items-center gap-1.5 px-2">
-            <AlertCircle size={10} />
-            These settings are stored in `implementation/config.json` and affect how AI agents interact with your codebase.
-          </p>
-        </div>
+        )}
+
+        {activeSubTab === 'envs' && (
+          <div className="bg-panel border border-border rounded-2xl overflow-hidden">
+            <EnvEditor 
+              workspaceRoot={workspaceRoot} 
+              accentColor={color} 
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -667,70 +700,6 @@ const VibeSidebar = ({ root, onSelect, selectedPath, accentColor }: { root: stri
           </>
         )}
       </div>
-    </div>
-  );
-};
-
-const ArtifactContentView = ({ artifact, workspaceRoot }: { artifact: Artifact, workspaceRoot: string }) => {
-  const [content, setContent] = useState('');
-  const [yamlData, setYamlData] = useState<any>(null);
-  const [markdownContent, setMarkdownContent] = useState('');
-  const [showSpecSplit, setShowSpecSplit] = useState(false);
-
-  useEffect(() => {
-    if (artifact) {
-      invoke<string>('read_file_content', { path: artifact.path })
-        .then(raw => {
-          setContent(raw);
-          const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-          if (match) {
-            try {
-              setYamlData(yaml.load(match[1]));
-              setMarkdownContent(match[2]);
-            } catch (e) {
-              setYamlData(null);
-              setMarkdownContent(raw);
-            }
-          } else {
-            setYamlData(null);
-            setMarkdownContent(raw);
-          }
-        });
-    }
-  }, [artifact]);
-
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
-              artifact.type === 'prd' ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
-              artifact.type === 'spec' ? "bg-accent/10 text-accent border border-accent/20" : 
-              "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-            )}>
-              {artifact.type}
-            </span>
-            <span className="text-[10px] text-muted font-mono">{artifact.relPath}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground mt-1">{artifact.name}</h1>
-        </div>
-        <button 
-          onClick={() => invoke('open_in_cursor', { path: artifact.path })}
-          className="flex items-center gap-2 px-3 py-1.5 bg-panel hover:bg-zinc-800 border border-border rounded text-[10px] font-bold text-foreground transition-colors uppercase tracking-widest"
-        >
-          <Eye size={14} /> Open in Cursor
-        </button>
-      </div>
-
-      <FrontmatterCard data={yamlData} />
-
-      <div className="prose prose-invert max-w-none mt-8 prose-sm prose-zinc">
-        <MarkdownRenderer content={markdownContent} />
-      </div>
-
-      {artifact.type === 'issue' && <IssueTimeline content={content} />}
     </div>
   );
 };
@@ -1896,13 +1865,6 @@ const App: React.FC = () => {
               accentColor={accentColor}
             />
             <TabButton 
-              active={activeTab === 'create'} 
-              onClick={() => setActiveTab('create')}
-              icon={<PencilLine size={14} />}
-              label="Create"
-              accentColor={accentColor}
-            />
-            <TabButton 
               active={activeTab === 'issues'} 
               onClick={() => setActiveTab('issues')}
               icon={<Bug size={14} />}
@@ -1914,13 +1876,6 @@ const App: React.FC = () => {
               onClick={() => setActiveTab('stats')}
               icon={<BarChart3 size={14} />}
               label="Stats"
-              accentColor={accentColor}
-            />
-            <TabButton 
-              active={activeTab === 'env'} 
-              onClick={() => setActiveTab('env')}
-              icon={<Shield size={14} />}
-              label="Env"
               accentColor={accentColor}
             />
             <TabButton 
@@ -2017,11 +1972,6 @@ const App: React.FC = () => {
               <div className="mt-2">
                 <VibeSidebar root={workspaceRoot} onSelect={(artifact) => {
                   setSelectedArtifact(artifact);
-                  if (artifact.type === 'prd' || artifact.type === 'spec') {
-                    setActiveTab('create');
-                  } else if (artifact.type === 'issue') {
-                    setActiveTab('issues');
-                  }
                 }} selectedPath={selectedArtifact?.path} accentColor={accentColor} currentTheme={currentTheme} />
               </div>
             </Accordion>
@@ -2121,7 +2071,6 @@ const App: React.FC = () => {
                           owner: prd.owner,
                           relPath: prd.path.replace(workspaceRoot, '')
                         });
-                        setActiveTab('create');
                       }}
                       onRefresh={loadRegistry}
                       accentColor={accentColor}
@@ -2141,7 +2090,6 @@ const App: React.FC = () => {
                               type: 'prd',
                               relPath: entry.path.replace(workspaceRoot, '')
                             });
-                            setActiveTab('create');
                          }
                       }}
                     />
@@ -2153,35 +2101,11 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-            {activeTab === 'create' && (
-              selectedArtifact ? (
-                <ArtifactContentView 
-                  artifact={selectedArtifact} 
-                  workspaceRoot={workspaceRoot} 
-                />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-muted">
-                  <div className="w-16 h-16 rounded-full bg-panel/50 flex items-center justify-center mb-4">
-                    <PencilLine size={32} className="text-muted" />
-                  </div>
-                  <h3 className="text-lg font-medium text-foreground">Select a PRD to edit</h3>
-                  <p className="text-sm mt-1">Browse PRDs from the Vibe Explorer sidebar</p>
-                </div>
-              )
-            )}
             {activeTab === 'issues' && (
               <div className="h-full flex flex-col items-center justify-center text-muted">
                 <Bug size={48} className="mb-4 opacity-10" />
                 <h3 className="text-lg font-medium text-foreground">Issue Management</h3>
                 <p className="text-sm mt-1">Local and GitHub issues integration coming soon</p>
-              </div>
-            )}
-            {activeTab === 'env' && (
-              <div className="h-full overflow-y-auto">
-                <EnvEditor 
-                  workspaceRoot={workspaceRoot} 
-                  accentColor={accentColor} 
-                />
               </div>
             )}
             {activeTab === 'stats' && (
