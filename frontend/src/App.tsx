@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Ansi from 'ansi-to-react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { 
   MessageSquare, 
   Files, 
@@ -27,7 +28,14 @@ import {
   History,
   Trash2,
   RefreshCw,
-  Eye
+  Eye,
+  Settings,
+  PencilLine,
+  Kanban,
+  Bug,
+  Cpu,
+  Coins,
+  ChevronDown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -50,7 +58,44 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Tab = 'vibe' | 'explorer' | 'monitor' | 'runner' | 'testing' | 'projects';
+const Accordion = ({ 
+  title, 
+  children, 
+  defaultOpen = true,
+  icon: Icon
+}: { 
+  title: string, 
+  children: React.ReactNode, 
+  defaultOpen?: boolean,
+  icon?: any
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-zinc-800/50 last:border-0">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors group"
+      >
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={14} className={cn("text-zinc-500 group-hover:text-zinc-300", isOpen && "text-zinc-300")} />}
+          <span className={cn("text-[10px] font-bold uppercase tracking-widest transition-colors", 
+            isOpen ? "text-zinc-200" : "text-zinc-500 group-hover:text-zinc-400"
+          )}>
+            {title}
+          </span>
+        </div>
+        <ChevronDown size={14} className={cn("text-zinc-600 transition-transform duration-200", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && (
+        <div className="px-2 pb-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+type Tab = 'planner' | 'create' | 'issues';
 
 interface Project {
   id: string;
@@ -106,6 +151,232 @@ interface TreeItem {
 }
 
 // --- Components ---
+
+const VibeSidebar = ({ root, onSelect, selectedPath }: { root: string, onSelect: (artifact: Artifact) => void, selectedPath?: string }) => {
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
+  const [specTree, setSpecTree] = useState<TreeItem[]>([]);
+  const [issueTree, setIssueTree] = useState<TreeItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (root) loadArtifacts();
+  }, [root]);
+
+  const loadArtifacts = async () => {
+    try {
+      const all: Artifact[] = [];
+      const scan = async (dir: string, type: 'prd' | 'spec' | 'issue'): Promise<TreeItem[]> => {
+        const items: TreeItem[] = [];
+        try {
+          const entries = await invoke<FileEntry[]>('list_directory', { path: dir });
+          for (const f of entries) {
+            if (f.is_dir) {
+              const children = await scan(f.path, type);
+              if (children.length > 0) {
+                items.push({
+                  name: f.name,
+                  path: f.path,
+                  is_dir: true,
+                  children: children.sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
+                });
+              }
+            } else if (f.name.endsWith('.md') || f.name.endsWith('.yaml')) {
+              let artifactType = type;
+              const artifact: Artifact = { 
+                name: f.name, 
+                path: f.path, 
+                type: artifactType, 
+                relPath: f.path.replace(root, '')
+              };
+              all.push(artifact);
+              items.push({ name: f.name, path: f.path, is_dir: false, artifact: artifact, type: artifactType });
+            }
+          }
+        } catch (e) {}
+        return items;
+      };
+
+      const [prd, spec, issue] = await Promise.all([
+        scan(`${root}/product`, 'prd'),
+        scan(`${root}/implementation`, 'spec'),
+        scan(`${root}/issues`, 'issue'),
+      ]);
+
+      setArtifacts(all);
+      setPrdTree(prd);
+      setSpecTree(spec);
+      setIssueTree(issue);
+    } catch (err) {}
+  };
+
+  const filteredArtifacts = useMemo(() => {
+    if (!searchQuery) return null;
+    return artifacts.filter(a => 
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.relPath?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [artifacts, searchQuery]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="relative px-2">
+        <Search className="absolute left-4 top-2.5 text-zinc-600" size={12} />
+        <input 
+          type="text" 
+          placeholder="Search..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-md py-1.5 pl-8 pr-3 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+        />
+      </div>
+      <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar px-1">
+        {filteredArtifacts ? (
+          <div className="space-y-1">
+            {filteredArtifacts.map(artifact => (
+              <button
+                key={artifact.path}
+                onClick={() => onSelect(artifact)}
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2",
+                  selectedPath === artifact.path 
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                )}
+              >
+                {artifact.type === 'prd' ? <FileText size={14} className="text-purple-500/50" /> :
+                 artifact.type === 'spec' ? <Database size={14} className="text-blue-500/50" /> :
+                 <AlertCircle size={14} className="text-emerald-500/50" />}
+                <span className="truncate">{artifact.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div>
+              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
+                <div className="w-1 h-1 rounded-full bg-purple-500/50" />
+                Product (PRDs)
+              </div>
+              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} />
+            </div>
+            <div>
+              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
+                <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+                System Specs
+              </div>
+              <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} />
+            </div>
+            <div>
+              <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5">
+                <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
+                Issues
+              </div>
+              <SidebarTree items={issueTree} selectedPath={selectedPath} onSelect={onSelect} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ArtifactContentView = ({ artifact, workspaceRoot }: { artifact: Artifact, workspaceRoot: string }) => {
+  const [content, setContent] = useState('');
+  const [yamlData, setYamlData] = useState<any>(null);
+  const [markdownContent, setMarkdownContent] = useState('');
+  const [showSpecSplit, setShowSpecSplit] = useState(false);
+
+  useEffect(() => {
+    if (artifact) {
+      invoke<string>('read_file_content', { path: artifact.path })
+        .then(raw => {
+          setContent(raw);
+          const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+          if (match) {
+            try {
+              setYamlData(yaml.load(match[1]));
+              setMarkdownContent(match[2]);
+            } catch (e) {
+              setYamlData(null);
+              setMarkdownContent(raw);
+            }
+          } else {
+            setYamlData(null);
+            setMarkdownContent(raw);
+          }
+        });
+    }
+  }, [artifact]);
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+              artifact.type === 'prd' ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+              artifact.type === 'spec' ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : 
+              "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+            )}>
+              {artifact.type}
+            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">{artifact.relPath}</span>
+          </div>
+          <h1 className="text-2xl font-bold text-zinc-100 mt-1">{artifact.name}</h1>
+        </div>
+        <button 
+          onClick={() => invoke('open_in_cursor', { path: artifact.path })}
+          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-[10px] font-bold text-zinc-200 transition-colors uppercase tracking-widest"
+        >
+          <Eye size={14} /> Open in Cursor
+        </button>
+      </div>
+
+      <FrontmatterCard data={yamlData} />
+
+      <div className="prose prose-invert max-w-none mt-8 prose-sm prose-zinc">
+        <MarkdownRenderer content={markdownContent} />
+      </div>
+
+      {artifact.type === 'issue' && <IssueTimeline content={content} />}
+    </div>
+  );
+};
+
+const TerminalOutputView = () => {
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    invoke<string[]>('get_terminal_buffer', { session: 'main' })
+      .then(setTerminalOutput);
+
+    const unlisten = listen('log-line', (event: any) => {
+      setTerminalOutput(prev => [...prev, event.payload as string].slice(-1000));
+    });
+
+    return () => { unlisten.then(f => f()); };
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [terminalOutput]);
+
+  return (
+    <div ref={scrollRef} className="h-full overflow-y-auto space-y-0.5 scrollbar-none">
+      {terminalOutput.map((line, i) => (
+        <div key={i} className="whitespace-pre-wrap break-all leading-relaxed text-zinc-400">
+          <Ansi>{line}</Ansi>
+        </div>
+      ))}
+      <div className="inline-block w-1.5 h-3 bg-zinc-700 ml-1 animate-pulse" />
+    </div>
+  );
+};
 
 const SidebarTree = ({ 
   items, 
@@ -1029,17 +1300,16 @@ const ProjectManagerView = ({
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('vibe');
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>('create');
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents, setActiveAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [projectRegistry, setProjectRegistry] = useState<ProjectRegistry>({ projects: [], last_active_project_id: null });
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'Architect',
-      content: "Hello! I am the Architect agent. I've initialized the Vibe Explorer. You can now browse PRDs, System Specs, and Issues in a structured environment."
+      content: "Hello! I am the Architect agent. How can I help you today?"
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -1060,7 +1330,6 @@ const App: React.FC = () => {
       await invoke('set_workspace_root', { path: project.path });
       setWorkspaceRoot(project.path);
       await loadRegistry();
-      setActiveTab('vibe');
     } catch (e) {
       console.error(e);
     }
@@ -1075,8 +1344,6 @@ const App: React.FC = () => {
     
     const unlistenServer = listen('vibe-server-event', (event: any) => {
       const payload = event.payload;
-      console.log('Vibe Server Event:', payload);
-      
       if (payload.type === 'prompt') {
         setPendingPrompt(payload.message);
       } else if (payload.type === 'status') {
@@ -1086,11 +1353,8 @@ const App: React.FC = () => {
           progress: payload.progress
         });
       } else if (payload.type === 'result') {
-        // Handle result if needed
         setPendingPrompt(null);
         setServerStatus(null);
-      } else if (payload.type === 'log') {
-        // The main log stream is handled by 'log-line', but we could use this for structured logs
       } else if (payload.type === 'error') {
         setMessages(prev => [...prev, {
           role: 'Architect',
@@ -1130,11 +1394,8 @@ const App: React.FC = () => {
 
   const handleCancelCommand = async (pid?: number) => {
     try {
-      // Send cancel message via STDIN
       await invoke('send_vibe_input', { input: JSON.stringify({ type: 'cancel' }) });
     } catch (e) {
-      console.error('Error sending cancel command:', e);
-      // Fallback: use kill command if available
       if (pid) {
         await invoke('run_vibe_command', { command: 'kill', args: [pid.toString()] });
       }
@@ -1149,7 +1410,7 @@ const App: React.FC = () => {
     if (!inputValue.trim()) return;
     
     const content = inputValue.trim();
-    setMessages([...messages, { role: 'User', content }]);
+    setMessages(prev => [...prev, { role: 'User', content }]);
     setInputValue('');
 
     if (content.startsWith('/')) {
@@ -1162,297 +1423,289 @@ const App: React.FC = () => {
             content: `Error running command \`${cmd}\`: ${err}` 
           }]);
         });
-      setActiveTab('monitor');
     }
   };
 
+  const activeProject = useMemo(() => {
+    return projectRegistry.projects.find(p => p.id === projectRegistry.last_active_project_id);
+  }, [projectRegistry]);
+
   return (
-    <div className="flex h-screen w-full bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
-      {/* Left Pane: Agent Chat Interface */}
-      <div 
-        className={cn(
-          "flex flex-col border-r border-zinc-800 transition-all duration-300 ease-in-out bg-zinc-900/50",
-          leftSidebarOpen ? "w-[400px]" : "w-0 overflow-hidden border-none"
-        )}
-      >
-        <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-zinc-100">
-            <MessageSquare size={18} className="text-blue-400" />
-            <span>Agent Chat</span>
+    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
+      {/* Global Header */}
+      <header className="h-12 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900/50 backdrop-blur-sm z-20">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center">
+            <Cpu size={14} className="text-white" />
           </div>
-          <button onClick={() => setLeftSidebarOpen(false)} className="hover:text-zinc-100">
-            <ChevronLeft size={18} />
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-zinc-100 leading-none">{activeProject?.name || 'No Project'}</span>
+            <span className="text-[10px] text-zinc-500 font-mono leading-none mt-1 truncate max-w-[200px]">{workspaceRoot || 'Not connected'}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-2 py-1 rounded bg-zinc-800/50 border border-zinc-700/50">
+            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", activeAgents.length > 0 ? "bg-green-500" : "bg-zinc-600")} />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              {activeAgents.length > 0 ? 'Working' : 'Idle'}
+            </span>
+          </div>
+          <button className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-500 hover:text-zinc-300 transition-colors">
+            <Settings size={18} />
           </button>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-800">
-          {messages.map((msg, i) => (
-            <div key={i} className={cn(
-              "rounded-lg p-3 border",
-              msg.role === 'User' ? "bg-zinc-800/30 border-zinc-700/30 ml-4" : "bg-zinc-800/50 border-zinc-700/50 mr-4"
-            )}>
-              <div className={cn(
-                "text-xs font-bold mb-1 uppercase tracking-wider",
-                msg.role === 'Architect' ? "text-blue-400" : msg.role === 'PM' ? "text-purple-400" : "text-emerald-400"
-              )}>
-                {msg.role}
-              </div>
-              <div className="text-sm prose prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                  {msg.content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          ))}
-          
-          {activeAgents.length > 0 && (
-            <div className="pt-4 border-t border-zinc-800">
-              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Active Agents</div>
-              <div className="space-y-2">
-                {activeAgents.map(agent => (
-                  <div key={agent.pid} className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1.5">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                      <span className="text-[10px] text-blue-300 font-mono truncate">{agent.command}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-500 font-mono">PID:{agent.pid}</span>
-                      <button 
-                        onClick={() => handleCancelCommand(agent.pid)}
-                        className="text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors"
-                        title="Cancel command"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
+      </header>
+
+      <PanelGroup direction="horizontal" autoSaveId="vibe-layout-v1">
+        {/* Left Pane: Project Pulse */}
+        <Panel defaultSize={20} minSize={15} className="flex flex-col bg-zinc-900/20 border-r border-zinc-800">
+          <div className="flex-1 overflow-y-auto no-scrollbar">
+            <Accordion title="Projects" icon={LayoutDashboard} defaultOpen={false}>
+              <div className="space-y-1">
+                {projectRegistry.projects.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => switchProject(p)}
+                    className={cn(
+                      "w-full text-left px-2 py-1.5 rounded text-[11px] transition-colors truncate flex items-center gap-2",
+                      projectRegistry.last_active_project_id === p.id 
+                        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    )}
+                  >
+                    <Folder size={12} className={projectRegistry.last_active_project_id === p.id ? "text-blue-400" : "text-zinc-600"} />
+                    <span className="truncate">{p.name}</span>
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
+            </Accordion>
 
-        <div className="p-4 border-t border-zinc-800 bg-zinc-900">
-          {pendingPrompt && (
-            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg animate-in fade-in slide-in-from-bottom-2">
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Input Required</div>
-              <div className="text-sm text-zinc-200 mb-2">{pendingPrompt}</div>
-            </div>
-          )}
-          
-          {serverStatus && (
-            <div className="mb-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
-              <div className="flex justify-between items-center mb-1.5">
-                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{serverStatus.phase}: {serverStatus.status}</div>
-                <div className="text-[10px] font-mono text-zinc-400">{serverStatus.progress}%</div>
+            <Accordion title="Vibe Explorer (PRDs)" icon={Files}>
+              <div className="mt-2">
+                <VibeSidebar root={workspaceRoot} onSelect={(artifact) => {
+                  setSelectedArtifact(artifact);
+                  if (artifact.type === 'prd' || artifact.type === 'spec') {
+                    setActiveTab('create');
+                  } else if (artifact.type === 'issue') {
+                    setActiveTab('issues');
+                  }
+                }} selectedPath={selectedArtifact?.path} />
               </div>
-              <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-blue-500 h-full transition-all duration-500 ease-out" 
-                  style={{ width: `${serverStatus.progress}%` }} 
-                />
-              </div>
-            </div>
-          )}
+            </Accordion>
 
-          <div className="mb-3 flex flex-wrap gap-2">
-            {['/status', '/prd list', '/issue list', '/test'].map(cmd => (
-              <button 
-                key={cmd}
-                onClick={() => setInputValue(cmd)}
-                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 px-2 py-1 rounded transition-colors border border-zinc-700"
-              >
-                {cmd}
-              </button>
-            ))}
+            <Accordion title="Properties" icon={Tag}>
+              {selectedArtifact ? (
+                <div className="space-y-3 p-1">
+                  <div>
+                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Name</div>
+                    <div className="text-xs text-zinc-300 truncate">{selectedArtifact.name}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Status</div>
+                    <div className="text-xs text-zinc-300">
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px]">
+                        {selectedArtifact.status || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Path</div>
+                    <div className="text-[10px] text-zinc-500 font-mono break-all">{selectedArtifact.relPath}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] text-zinc-600 italic text-center py-4">No item selected</div>
+              )}
+            </Accordion>
           </div>
-          <div className="relative flex gap-2">
-            <input 
-              type="text" 
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Type a message..."
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-100"
+
+          <div className="p-4 border-t border-zinc-800 bg-zinc-900/30">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Coins size={12} className="text-amber-500/70" />
+                Cost Tracking
+              </div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/30">
+              <div className="text-lg font-bold text-zinc-100">${totalCost.toFixed(4)}</div>
+              <div className="text-[9px] text-zinc-500 mt-0.5 uppercase font-medium">Estimated Usage</div>
+            </div>
+          </div>
+        </Panel>
+
+        <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500/20 transition-colors" />
+
+        {/* Center Pane: Main Content */}
+        <Panel className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1 px-4 border-b border-zinc-800 bg-zinc-900/30">
+            <TabButton 
+              active={activeTab === 'planner'} 
+              onClick={() => setActiveTab('planner')}
+              icon={<Kanban size={14} />}
+              label="Planner"
             />
-            <button 
-              onClick={handleSendMessage}
-              className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors"
-            >
-              <Send size={18} />
-            </button>
+            <TabButton 
+              active={activeTab === 'create'} 
+              onClick={() => setActiveTab('create')}
+              icon={<PencilLine size={14} />}
+              label="Create"
+            />
+            <TabButton 
+              active={activeTab === 'issues'} 
+              onClick={() => setActiveTab('issues')}
+              icon={<Bug size={14} />}
+              label="Issues"
+            />
           </div>
-        </div>
-      </div>
 
-      {/* Main Area: Dynamic Workspaces */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-20">
-          <div className="flex items-center gap-4 overflow-hidden">
-            {!leftSidebarOpen && (
-              <button 
-                onClick={() => setLeftSidebarOpen(true)}
-                className="p-2 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100 transition-all border border-zinc-800"
-                title="Expand Chat"
-              >
-                <ChevronRight size={18} />
-              </button>
+          <main className="flex-1 overflow-y-auto relative p-6 no-scrollbar">
+            {activeTab === 'planner' && (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-600">
+                <Kanban size={48} className="mb-4 opacity-10" />
+                <h3 className="text-lg font-medium text-zinc-400">Planner View</h3>
+                <p className="text-sm mt-1">Board and Graph views coming soon</p>
+              </div>
             )}
-            <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
-               <TabButton 
-                active={activeTab === 'vibe'} 
-                onClick={() => setActiveTab('vibe')}
-                icon={<LayoutDashboard size={16} />}
-                label="Vibe Explorer"
-              />
-              <TabButton 
-                active={activeTab === 'explorer'} 
-                onClick={() => setActiveTab('explorer')}
-                icon={<Files size={16} />}
-                label="File Explorer"
-              />
-              <TabButton 
-                active={activeTab === 'monitor'} 
-                onClick={() => setActiveTab('monitor')}
-                icon={<Activity size={16} />}
-                label="Monitor"
-              />
-              <TabButton 
-                active={activeTab === 'runner'} 
-                onClick={() => setActiveTab('runner')}
-                icon={<PlayCircle size={16} />}
-                label="Runner"
-              />
-              <TabButton 
-                active={activeTab === 'testing'} 
-                onClick={() => setActiveTab('testing')}
-                icon={<TestTube size={16} />}
-                label="Testing"
-              />
-            </div>
-          </div>
-          {!rightSidebarOpen && (
-            <button 
-              onClick={() => setRightSidebarOpen(true)}
-              className="p-2 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100 transition-all border border-zinc-800"
-              title="Expand Meta Info"
-            >
-              <ChevronLeft size={18} />
-            </button>
-          )}
-        </header>
-
-        <main className="flex-1 overflow-hidden relative">
-          <div className="absolute inset-0 p-6 overflow-y-auto">
-            {activeTab === 'vibe' && <VibeView root={workspaceRoot} />}
-            {activeTab === 'explorer' && <ExplorerView root={workspaceRoot} />}
-            {activeTab === 'monitor' && <MonitorView root={workspaceRoot} />}
-            {activeTab === 'runner' && <RunnerView onRun={(cmd) => {
-              setActiveTab('monitor');
-            }} />}
-            {activeTab === 'testing' && <TestingView />}
-            {activeTab === 'projects' && (
-              <ProjectManagerView 
-                registry={projectRegistry} 
-                onSwitch={switchProject} 
-                onRefresh={loadRegistry} 
-              />
+            {activeTab === 'create' && (
+              selectedArtifact ? (
+                <ArtifactContentView 
+                  artifact={selectedArtifact} 
+                  workspaceRoot={workspaceRoot} 
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-zinc-500">
+                  <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center mb-4">
+                    <PencilLine size={32} className="text-zinc-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-zinc-300">Select a PRD to edit</h3>
+                  <p className="text-sm mt-1">Browse PRDs from the Vibe Explorer sidebar</p>
+                </div>
+              )
             )}
-          </div>
-        </main>
-      </div>
+            {activeTab === 'issues' && (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-600">
+                <Bug size={48} className="mb-4 opacity-10" />
+                <h3 className="text-lg font-medium text-zinc-400">Issue Management</h3>
+                <p className="text-sm mt-1">Local and GitHub issues integration coming soon</p>
+              </div>
+            )}
+          </main>
+        </Panel>
 
-      {/* Right Sidebar: Meta-Information */}
-      <div 
-        className={cn(
-          "flex flex-col border-l border-zinc-800 transition-all duration-300 ease-in-out bg-zinc-900/50",
-          rightSidebarOpen ? "w-72" : "w-0 overflow-hidden border-none"
-        )}
-      >
-        <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-zinc-100">
-            <Activity size={18} className="text-purple-400" />
-            <span>Project Pulse</span>
-          </div>
-          <button onClick={() => setRightSidebarOpen(false)} className="hover:text-zinc-100">
-            <ChevronRight size={18} />
-          </button>
-        </div>
+        <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500/20 transition-colors" />
 
-        <div className="p-4 space-y-6 overflow-y-auto">
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Projects</h3>
-              <button 
-                onClick={() => setActiveTab('projects')}
-                className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest"
-              >
-                Manage
-              </button>
-            </div>
-            <div className="space-y-1">
-              {projectRegistry.projects.slice(0, 5).map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => switchProject(p)}
-                  className={cn(
-                    "w-full text-left px-2 py-1.5 rounded text-[11px] transition-colors truncate flex items-center gap-2",
-                    projectRegistry.last_active_project_id === p.id 
-                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-                  )}
-                >
-                  <Folder size={12} className={projectRegistry.last_active_project_id === p.id ? "text-blue-400" : "text-zinc-600"} />
-                  <span className="truncate">{p.name}</span>
+        {/* Right Pane: AI / Interaction */}
+        <Panel defaultSize={30} minSize={20} className="flex flex-col bg-zinc-900/20 border-l border-zinc-800">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/30">
+              <div className="flex items-center gap-2 font-semibold text-zinc-100">
+                <MessageSquare size={16} className="text-blue-400" />
+                <span className="text-xs uppercase tracking-widest font-bold">Agent Interaction</span>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => setMessages([])} className="p-1.5 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-colors" title="Clear Chat">
+                  <Trash2 size={14} />
                 </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-800">
+              {messages.map((msg, i) => (
+                <div key={i} className={cn(
+                  "rounded-lg p-3 border",
+                  msg.role === 'User' ? "bg-zinc-800/30 border-zinc-700/30 ml-4" : "bg-zinc-800/50 border-zinc-700/50 mr-4"
+                )}>
+                  <div className={cn(
+                    "text-[10px] font-bold mb-1 uppercase tracking-wider",
+                    msg.role === 'Architect' ? "text-blue-400" : msg.role === 'PM' ? "text-purple-400" : "text-emerald-400"
+                  )}>
+                    {msg.role}
+                  </div>
+                  <div className="text-sm prose prose-invert max-w-none text-zinc-300">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
               ))}
-              {projectRegistry.projects.length === 0 && (
-                <div className="text-[10px] text-zinc-600 italic px-2">No projects registered</div>
+              
+              {activeAgents.length > 0 && (
+                <div className="pt-4 border-t border-zinc-800">
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">Active Processes</div>
+                  <div className="space-y-2">
+                    {activeAgents.map(agent => (
+                      <div key={agent.pid} className="flex items-center justify-between bg-blue-500/5 border border-blue-500/20 rounded px-2 py-1.5">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                          <span className="text-[10px] text-blue-300 font-mono truncate">{agent.command}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleCancelCommand(agent.pid)}
+                          className="text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          </section>
 
-          <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Project Status</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Branch</span>
-                <span className="text-zinc-200 font-mono text-xs truncate ml-2">feature/prd-38</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Environment</span>
-                <span className="text-green-500 font-medium">Development</span>
+            <div className="p-4 border-t border-zinc-800 bg-zinc-900/50">
+              {pendingPrompt && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Input Required</div>
+                  <div className="text-xs text-zinc-200 mb-2">{pendingPrompt}</div>
+                </div>
+              )}
+              
+              {serverStatus && (
+                <div className="mb-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{serverStatus.phase}</div>
+                    <div className="text-[9px] font-mono text-zinc-400">{serverStatus.progress}%</div>
+                  </div>
+                  <div className="w-full bg-zinc-950 rounded-full h-1 overflow-hidden">
+                    <div 
+                      className="bg-blue-500 h-full transition-all duration-500" 
+                      style={{ width: `${serverStatus.progress}%` }} 
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="relative flex gap-2">
+                <input 
+                  type="text" 
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Ask the Architect..."
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-100"
+                />
+                <button 
+                  onClick={handleSendMessage}
+                  className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors shadow-lg shadow-blue-500/10"
+                >
+                  <Send size={16} />
+                </button>
               </div>
             </div>
-          </section>
+          </div>
 
-          <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Active Services</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-zinc-300">Tauri Backend</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-zinc-300">File Watcher</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-zinc-300">Log Streamer</span>
-              </div>
+          <div className="h-48 border-t border-zinc-800 bg-zinc-950 p-2 overflow-hidden flex flex-col">
+            <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+              <Terminal size={10} />
+              Command Output
             </div>
-          </section>
-
-          <section>
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Cost Tracking</h3>
-            <div className="bg-zinc-800/30 rounded p-3 border border-zinc-800">
-              <div className="text-2xl font-bold text-zinc-100">${totalCost.toFixed(4)}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">Total project estimated usage</div>
+            <div className="flex-1 overflow-y-auto font-mono text-[10px] p-2 bg-black/30 rounded scrollbar-none">
+              <TerminalOutputView />
             </div>
-          </section>
-        </div>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 };
@@ -1468,694 +1721,15 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label }) =
   <button 
     onClick={onClick}
     className={cn(
-      "flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-sm font-medium whitespace-nowrap",
+      "flex items-center gap-2 px-4 py-3 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
       active 
-        ? "bg-zinc-800 text-zinc-100" 
-        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+        ? "border-blue-500 text-zinc-100 bg-blue-500/5" 
+        : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
     )}
   >
     {icon}
     <span>{label}</span>
   </button>
 );
-
-const ExplorerView = ({ root }: { root: string }) => {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [currentPath, setCurrentPath] = useState(root);
-  const [loading, setLoading] = useState(false);
-
-  const refreshFiles = () => {
-    if (currentPath) {
-      setLoading(true);
-      invoke<FileEntry[]>('list_directory', { path: currentPath })
-        .then(setFiles)
-        .catch(console.error)
-        .finally(() => setLoading(false));
-    }
-  };
-
-  useEffect(() => {
-    if (root && !currentPath) {
-      setCurrentPath(root);
-    }
-  }, [root]);
-
-  useEffect(() => {
-    refreshFiles();
-  }, [currentPath]);
-
-  useEffect(() => {
-    const unlisten = listen('file-changed', (event: any) => {
-      const changedPath = event.payload.path;
-      if (changedPath.startsWith(currentPath)) {
-        refreshFiles();
-      }
-    });
-    return () => { unlisten.then(f => f()); };
-  }, [currentPath]);
-
-  const navigateUp = () => {
-    const parts = currentPath.split(/[/\\]/);
-    if (parts.length > 1) {
-      if (parts[parts.length - 1] === '') parts.pop();
-      parts.pop();
-      const newPath = parts.join('/') || '/';
-      setCurrentPath(newPath);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-100">File Explorer</h2>
-        <div className="text-xs text-zinc-500 font-mono truncate max-w-md">
-          {currentPath}
-        </div>
-      </div>
-      
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-        <div className="p-2 border-b border-zinc-800 bg-zinc-800/30 flex items-center justify-between">
-          <button 
-            onClick={navigateUp}
-            disabled={currentPath === root}
-            className="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors disabled:opacity-50"
-          >
-            .. / Up
-          </button>
-          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest px-2">
-            {files.length} Items
-          </span>
-        </div>
-        
-        <div className="divide-y divide-zinc-800/50">
-          {loading && files.length === 0 ? (
-            <div className="p-8 text-center text-zinc-500 animate-pulse">Loading files...</div>
-          ) : (
-            files.map((file) => (
-              <div 
-                key={file.path} 
-                className="flex items-center gap-3 p-3 hover:bg-zinc-800/50 transition-colors cursor-pointer group"
-                onClick={() => file.is_dir && setCurrentPath(file.path)}
-              >
-                {file.is_dir ? (
-                  <Folder size={18} className="text-blue-400 group-hover:text-blue-300" />
-                ) : (
-                  <FileText size={18} className="text-zinc-500 group-hover:text-zinc-400" />
-                )}
-                <span className={cn(
-                  "text-sm transition-colors",
-                  file.is_dir ? "text-zinc-200 font-medium" : "text-zinc-400"
-                )}>
-                  {file.name}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface LogEntry {
-  id: string;
-  timestamp?: string;
-  level: 'INFO' | 'DEBUG' | 'ERROR' | 'NONE';
-  message: string;
-  details?: string[];
-}
-
-const LogLineComponent = ({ entry }: { entry: LogEntry }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const hasDetails = entry.details && entry.details.length > 0;
-
-  const levelColors = {
-    INFO: 'text-blue-400',
-    DEBUG: 'text-zinc-500',
-    ERROR: 'text-red-400',
-    NONE: 'text-zinc-300'
-  };
-
-  return (
-    <div className={cn(
-      "group border-l-2 py-0.5 pl-2 transition-colors",
-      entry.level === 'ERROR' ? "border-red-900/50 bg-red-900/10" : 
-      entry.level === 'INFO' ? "border-blue-900/50" : "border-transparent hover:border-zinc-800"
-    )}>
-      <div className="flex items-start gap-2">
-        {hasDetails && (
-          <button 
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="mt-1 p-0.5 hover:bg-zinc-800 rounded transition-colors"
-          >
-            {isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
-          </button>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            {entry.level !== 'NONE' && (
-              <span className={cn("text-[10px] font-bold px-1 rounded bg-zinc-800", levelColors[entry.level])}>
-                {entry.level}
-              </span>
-            )}
-            {entry.timestamp && <span className="text-[10px] text-zinc-600 font-mono">{entry.timestamp}</span>}
-          </div>
-          <div className={cn("whitespace-pre-wrap break-all", hasDetails ? "cursor-pointer" : "")} onClick={() => hasDetails && setIsExpanded(!isExpanded)}>
-            <Ansi>{entry.message}</Ansi>
-          </div>
-          {isExpanded && hasDetails && (
-            <div className="mt-2 pl-4 border-l border-zinc-800 space-y-0.5">
-              {entry.details!.map((detail, idx) => (
-                <div key={idx} className="text-zinc-500 text-[11px] whitespace-pre-wrap break-all">
-                  <Ansi>{detail}</Ansi>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MonitorView = ({ root }: { root: string }) => {
-  const [logFiles, setLogFiles] = useState<FileEntry[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
-  const [filter, setFilter] = useState('');
-  const [terminalFilter, setTerminalFilter] = useState('');
-  const [logLevelFilter, setLogLevelFilter] = useState<'ALL' | 'INFO' | 'DEBUG' | 'ERROR'>('ALL');
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const terminalScrollRef = useRef<HTMLDivElement>(null);
-  const [followTail, setFollowTail] = useState(true);
-
-  const groupLogs = (lines: string[]): LogEntry[] => {
-    const entries: LogEntry[] = [];
-    let currentEntry: LogEntry | null = null;
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      // Simple regex for log levels
-      const levelMatch = line.match(/\[(INFO|DEBUG|ERROR)\]/);
-      const isStackOrJson = line.startsWith('  ') || line.startsWith('\t') || line.startsWith('{') || line.startsWith('}') || line.startsWith('"') || line.startsWith('at ');
-
-      if (levelMatch && !isStackOrJson) {
-        if (currentEntry) entries.push(currentEntry);
-        currentEntry = {
-          id: Math.random().toString(36),
-          level: levelMatch[1] as any,
-          message: line,
-          details: []
-        };
-      } else if (currentEntry && (isStackOrJson || !line.includes('['))) {
-        currentEntry.details!.push(line);
-      } else {
-        if (currentEntry) entries.push(currentEntry);
-        currentEntry = {
-          id: Math.random().toString(36),
-          level: 'NONE',
-          message: line,
-          details: []
-        };
-      }
-    }
-    if (currentEntry) entries.push(currentEntry);
-    return entries;
-  };
-
-  const loadLogFiles = async () => {
-    try {
-      const files = await invoke<FileEntry[]>('list_logs', { root });
-      setLogFiles(files);
-      if (files.length > 0 && !selectedFile) {
-        setSelectedFile(files[0].path);
-      }
-    } catch (e) {
-      console.error('Error loading log files:', e);
-    }
-  };
-
-  useEffect(() => {
-    if (root) {
-      loadLogFiles();
-      // Load initial terminal buffer
-      invoke<string[]>('get_terminal_buffer', { session: 'main' })
-        .then(setTerminalOutput)
-        .catch(console.error);
-    }
-  }, [root]);
-
-  useEffect(() => {
-    const unlisten = listen('log-file-changed', () => {
-      loadLogFiles();
-    });
-    return () => { unlisten.then(f => f()); };
-  }, []);
-
-  useEffect(() => {
-    if (selectedFile) {
-      // Clear logs when switching files
-      setLogs([]);
-      // Start tailing
-      invoke('tail_log_file', { path: selectedFile }).catch(console.error);
-      // Also load initial content
-      invoke<string>('read_file_content', { path: selectedFile })
-        .then(content => {
-          setLogs(content.split('\n').filter(l => l.length > 0));
-        })
-        .catch(console.error);
-    }
-  }, [selectedFile]);
-
-  useEffect(() => {
-    const unlistenNewLog = listen('new-log-line', (event: any) => {
-      const payload = event.payload as { file: string, content: string };
-      if (selectedFile?.endsWith(payload.file)) {
-        setLogs(prev => [...prev, ...payload.content.split('\n').filter(l => l.length > 0)].slice(-5000));
-      }
-    });
-
-    const unlistenTerminal = listen('log-line', (event: any) => {
-      setTerminalOutput(prev => [...prev, event.payload as string].slice(-5000));
-    });
-
-    return () => { 
-      unlistenNewLog.then(f => f()); 
-      unlistenTerminal.then(f => f());
-    };
-  }, [selectedFile]);
-
-  useEffect(() => {
-    if (followTail && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [logs, followTail]);
-
-  useEffect(() => {
-    if (followTail && terminalScrollRef.current) {
-      terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
-    }
-  }, [terminalOutput, followTail]);
-
-  const filteredLogs = useMemo(() => {
-    const grouped = groupLogs(logs);
-    return grouped.filter(entry => {
-      const matchesSearch = entry.message.toLowerCase().includes(filter.toLowerCase()) || 
-                           entry.details?.some(d => d.toLowerCase().includes(filter.toLowerCase()));
-      const matchesLevel = logLevelFilter === 'ALL' || entry.level === logLevelFilter;
-      return matchesSearch && matchesLevel;
-    });
-  }, [logs, filter, logLevelFilter]);
-
-  const filteredTerminalOutput = useMemo(() => {
-    return terminalOutput.filter(line => 
-      line.toLowerCase().includes(terminalFilter.toLowerCase())
-    );
-  }, [terminalOutput, terminalFilter]);
-
-  return (
-    <div className="h-full flex gap-4 overflow-hidden">
-      {/* Session/File Sidebar */}
-      <div className="w-64 flex flex-col gap-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 overflow-hidden">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Log Sessions</h3>
-          <button onClick={loadLogFiles} className="text-zinc-500 hover:text-zinc-300">
-            <RefreshCw size={12} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-1 pr-2">
-          {logFiles.map(file => (
-            <button
-              key={file.path}
-              onClick={() => setSelectedFile(file.path)}
-              className={cn(
-                "w-full text-left px-2 py-2 rounded text-[11px] transition-colors truncate flex items-center gap-2",
-                selectedFile === file.path 
-                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" 
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-              )}
-            >
-              <FileText size={14} className={cn(selectedFile === file.path ? "text-blue-400" : "text-zinc-600")} />
-              <span className="truncate">{file.name}</span>
-            </button>
-          ))}
-          {logFiles.length === 0 && (
-            <div className="text-center py-8 text-zinc-600 text-xs">No logs found</div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Areas */}
-      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-        {/* Log Viewer */}
-        <div className="flex-[2] flex flex-col bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-hidden">
-          <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-sm font-bold text-zinc-200 flex items-center gap-2">
-                <Activity size={16} className="text-blue-400" />
-                Log Viewer
-              </h2>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2 text-zinc-600" size={12} />
-                  <input 
-                    type="text" 
-                    placeholder="Filter logs..."
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-800 rounded px-7 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
-                  />
-                </div>
-                <select
-                  value={logLevelFilter}
-                  onChange={(e) => setLogLevelFilter(e.target.value as any)}
-                  className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-400 focus:outline-none"
-                >
-                  <option value="ALL">All Levels</option>
-                  <option value="INFO">INFO</option>
-                  <option value="DEBUG">DEBUG</option>
-                  <option value="ERROR">ERROR</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setFollowTail(!followTail)}
-                className={cn(
-                  "px-2 py-1 rounded text-[10px] font-medium transition-colors border",
-                  followTail ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-zinc-900 text-zinc-500 border-zinc-800"
-                )}
-              >
-                Follow Tail
-              </button>
-              <button onClick={() => setLogs([])} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-colors">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-          <div 
-            ref={scrollRef}
-            className="flex-1 bg-black/50 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 space-y-0.5"
-          >
-            {filteredLogs.map((entry) => (
-              <LogLineComponent key={entry.id} entry={entry} />
-            ))}
-            {filteredLogs.length === 0 && (
-              <div className="h-full flex items-center justify-center text-zinc-600 italic">
-                {logs.length === 0 ? "No log content yet..." : "No logs match your filter"}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Terminal Output */}
-        <div className="flex-1 flex flex-col bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-          <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/80 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-[10px] font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-widest">
-                <Terminal size={12} />
-                Terminal Output
-              </h2>
-              <div className="relative">
-                <Search className="absolute left-2 top-1.5 text-zinc-600" size={10} />
-                <input 
-                  type="text" 
-                  placeholder="Search terminal..."
-                  value={terminalFilter}
-                  onChange={(e) => setTerminalFilter(e.target.value)}
-                  className="bg-zinc-950 border border-zinc-800 rounded px-6 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
-                />
-              </div>
-            </div>
-            <button onClick={() => setTerminalOutput([])} className="text-zinc-600 hover:text-zinc-400">
-              <Trash2 size={12} />
-            </button>
-          </div>
-          <div 
-            ref={terminalScrollRef}
-            className="flex-1 font-mono text-[12px] p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 bg-black"
-          >
-            {filteredTerminalOutput.map((line, i) => (
-              <div key={i} className="whitespace-pre-wrap break-all leading-relaxed">
-                <Ansi>{line}</Ansi>
-              </div>
-            ))}
-            {filteredTerminalOutput.length === 0 && (
-              <div className="text-zinc-700 italic text-[11px]">
-                {terminalOutput.length === 0 ? "Awaiting command output..." : "No matches found"}
-              </div>
-            )}
-            <div className="inline-block w-1.5 h-3.5 bg-zinc-700 ml-1 animate-pulse translate-y-0.5" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const RunnerView = ({ onRun }: { onRun: (cmd: string) => void }) => {
-  const [params, setParams] = useState<Record<string, string>>({});
-  
-  const commands = [
-    { id: 'architect', name: 'vibe architect', description: 'Start an architecture planning session', params: ['agent'] },
-    { id: 'pm', name: 'vibe pm', description: 'Run the Product Manager loop', params: ['agent'] },
-    { id: 'test', name: 'vibe testing', description: 'Run agent-driven tests', params: ['agent'] },
-    { id: 'implement', name: 'vibe implement', description: 'Run implementation loop', params: ['agent', 'plan'] },
-    { id: 'status', name: 'vibe status', description: 'Show project status', params: [] },
-    { id: 'prd-list', name: 'vibe prd list', description: 'List all PRDs', params: [] },
-    { id: 'issue-list', name: 'vibe issue list', description: 'List active issues', params: [] },
-    { id: 'cost', name: 'vibe cost', description: 'Show current cost', params: [] }
-  ];
-
-  const handleRun = (cmd: string, cmdParams: string[]) => {
-    const args: string[] = [];
-    
-    // Add global options first
-    const globalOptions = ['agent', 'stream', 'verbose'];
-    globalOptions.forEach(p => {
-      if (params[p]) {
-        args.push(`--${p}`);
-        args.push(params[p]);
-      }
-    });
-
-    const [base, ...rest] = cmd.split(' ');
-    // If it's something like 'vibe testing', we want 'testing' to be the subcommand
-    if (rest.length > 0) {
-      args.push(...rest);
-    }
-    
-    // Add command-specific parameters
-    cmdParams.forEach(p => {
-      if (!globalOptions.includes(p) && params[p]) {
-        args.push(`--${p}`);
-        args.push(params[p]);
-      }
-    });
-    
-    invoke('run_vibe_command', { command: 'vibe', args }).catch(console.error);
-    onRun(cmd);
-  };
-
-  const updateParam = (param: string, value: string) => {
-    setParams(prev => ({ ...prev, [param]: value }));
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-100">Command Launcher</h2>
-        <button 
-          onClick={() => invoke('run_vibe_command', { command: 'kill', args: ['--yes'] })}
-          className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md text-xs font-bold transition-colors"
-        >
-          <Trash2 size={14} /> Stop All Processes
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {commands.map((cmd) => (
-          <div key={cmd.id} className="flex flex-col p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="font-mono text-blue-400 font-bold text-sm">{cmd.name}</div>
-                <div className="text-[11px] text-zinc-500 mt-0.5">{cmd.description}</div>
-              </div>
-              <button 
-                onClick={() => handleRun(cmd.name, cmd.params)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 text-zinc-950 rounded-md font-bold text-xs hover:bg-white transition-colors"
-              >
-                <PlayCircle size={14} /> Run
-              </button>
-            </div>
-            
-            {cmd.params.length > 0 && (
-              <div className="space-y-2 mt-2 pt-2 border-t border-zinc-800">
-                {cmd.params.map(p => (
-                  <div key={p} className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase font-bold text-zinc-600 tracking-wider">{p}</label>
-                    <input 
-                      type="text" 
-                      placeholder={`Enter ${p}...`}
-                      value={params[p] || ''}
-                      onChange={(e) => updateParam(p, e.target.value)}
-                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const TestingView = () => {
-  const [tests, setTests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
-
-  useEffect(() => {
-    invoke<string>('get_workspace_root').then(root => {
-      setWorkspaceRoot(root);
-      loadTests(root);
-    });
-
-    const unlisten = listen('file-changed', (event: any) => {
-      if (event.payload.path.endsWith('testing.yaml')) {
-        loadTests(workspaceRoot);
-      }
-    });
-
-    return () => {
-      unlisten.then(f => f());
-    };
-  }, [workspaceRoot]);
-
-  const loadTests = async (root: string) => {
-    try {
-      const path = `${root}/implementation/testing.yaml`;
-      const content = await invoke<string>('read_file_content', { path });
-      const data: any = yaml.load(content);
-      if (data && data.tests) {
-        setTests(data.tests);
-      }
-      setLoading(false);
-    } catch (e) {
-      console.error('Error loading tests:', e);
-      setLoading(false);
-    }
-  };
-
-  const updateStepStatus = async (testId: string, stepId: string, status: string) => {
-    try {
-      await invoke('run_vibe_command', { 
-        command: 'testing', 
-        args: ['step', testId, stepId, status] 
-      });
-      // Test will be reloaded via file-changed event
-    } catch (e) {
-      console.error('Error updating step status:', e);
-    }
-  };
-
-  if (loading) {
-    return <div className="h-full flex items-center justify-center text-zinc-500 animate-pulse">Loading test board...</div>;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-100">Interactive Test Board</h2>
-        <div className="flex gap-2 text-xs">
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-zinc-600" /> Pending</span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> In Progress</span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /> Passed</span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500" /> Failed</span>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {tests.map((test) => (
-          <div key={test.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col shadow-lg">
-            <div className="p-4 border-b border-zinc-800 bg-zinc-800/30">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono text-zinc-500 font-bold">{test.id}</span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
-                  test.status === 'passed' ? "bg-green-500/10 text-green-500" :
-                  test.status === 'failed' ? "bg-red-500/10 text-red-500" :
-                  test.status === 'in_progress' ? "bg-blue-500/10 text-blue-500" : "bg-zinc-800 text-zinc-500"
-                )}>
-                  {test.status}
-                </span>
-              </div>
-              <h3 className="font-bold text-zinc-100 leading-tight">{test.title}</h3>
-              <p className="text-[11px] text-zinc-500 mt-1 line-clamp-2">{test.description}</p>
-            </div>
-            
-            <div className="flex-1 p-4 space-y-3">
-              {test.steps.map((step: any, idx: number) => (
-                <div key={step.id} className="flex gap-3 group">
-                  <div className="flex flex-col items-center">
-                    <button 
-                      onClick={() => {
-                        const nextStatus = step.status === 'passed' ? 'pending' : 'passed';
-                        updateStepStatus(test.id, step.id, nextStatus);
-                      }}
-                      className={cn(
-                        "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                        step.status === 'passed' ? "bg-green-500 border-green-500 text-zinc-950" :
-                        step.status === 'failed' ? "bg-red-500 border-red-500 text-zinc-950" :
-                        step.status === 'in_progress' ? "bg-blue-500 border-blue-500 text-zinc-950" : "bg-transparent border-zinc-700 hover:border-zinc-500"
-                      )}
-                    >
-                      {step.status === 'passed' && <CheckCircle2 size={12} strokeWidth={3} />}
-                      {step.status === 'failed' && <AlertCircle size={12} strokeWidth={3} />}
-                      {step.status === 'in_progress' && <Clock size={12} strokeWidth={3} />}
-                    </button>
-                    {idx < test.steps.length - 1 && <div className="w-0.5 flex-1 bg-zinc-800 my-1" />}
-                  </div>
-                  <div className="flex-1 min-w-0 pb-1">
-                    <div className={cn(
-                      "text-xs transition-colors",
-                      step.status === 'passed' ? "text-zinc-500 line-through" : "text-zinc-300"
-                    )}>
-                      {step.text}
-                    </div>
-                    <div className="flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => updateStepStatus(test.id, step.id, 'in_progress')}
-                        className="text-[9px] font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest"
-                      >
-                        Start
-                      </button>
-                      <button 
-                        onClick={() => updateStepStatus(test.id, step.id, 'failed')}
-                        className="text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-widest"
-                      >
-                        Fail
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        {tests.length === 0 && (
-          <div className="col-span-full h-48 flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-xl">
-             <TestTube size={32} className="mb-2 opacity-20" />
-             <p className="text-sm">No interactive tests found in implementation/testing.yaml</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 export default App;

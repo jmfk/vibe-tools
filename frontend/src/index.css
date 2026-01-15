@@ -19,6 +19,18 @@ body {
 
 @import 'highlight.js/styles/github-dark.css';
 
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle] {
+  width: 4px;
+  background-color: transparent;
+  transition: background-color 0.2s;
+  cursor: col-resize;
+}
+
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:hover,
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle][data-resize-handle-active] {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
 .prose pre {
   background-color: transparent !important;
   padding: 0 !important;
