@@ -90,8 +90,14 @@ fn log_to_app(state: &AppState, window: &Window, level: &str, source: &str, mess
     let _ = window.emit("app-log", log);
 }
 
-fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args: &[String], level: &str) {
-    let full_command = format!("vibe {} {}", command, args.join(" "));
+fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args: &[String], level: &str, is_server: bool) {
+    let mut full_command = format!("vibe {}", command);
+    if is_server {
+        full_command = format!("vibe --server {}", command);
+    }
+    if !args.is_empty() {
+        full_command = format!("{} {}", full_command, args.join(" "));
+    }
     log_to_app(state, window, level, "Command", &format!("Executing: {}", full_command), None);
     
     // Persistent file logging
@@ -200,7 +206,7 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    log_vibe_command_call(&state, &window, &command, &args, "INFO");
+    log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
     let mut cmd = Command::new("vibe");
     cmd.arg("--server");
@@ -259,11 +265,30 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
             let formatted_line = format!("ERR: {}", line);
             {
                 let state = handle_stderr.state::<AppState>();
+                let mut logs = state.app_logs.lock().unwrap();
+                if logs.len() >= 1000 {
+                    logs.pop_front();
+                }
+                logs.push_back(AppLog {
+                    timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+                    level: "ERROR".to_string(),
+                    source: "Command".to_string(),
+                    message: line.clone(),
+                    data: None,
+                });
+                
                 let mut buffers = state.terminal_buffers.lock().unwrap();
                 let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
                 buffer.push(formatted_line.clone());
             }
             window_stderr.emit("log-line", formatted_line).unwrap();
+            window_stderr.emit("app-log", AppLog {
+                timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+                level: "ERROR".to_string(),
+                source: "Command".to_string(),
+                message: line,
+                data: None,
+            }).unwrap();
         }
     });
 
@@ -488,7 +513,7 @@ fn update_project_registry(
 async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, command: String, args: Vec<String>) -> Result<serde_json::Value, String> {
     use std::process::Command;
 
-    log_vibe_command_call(&state, &window, &command, &args, "INFO");
+    log_vibe_command_call(&state, &window, &command, &args, "INFO", false);
 
     let mut all_args = vec![command];
     all_args.extend(args);
