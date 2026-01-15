@@ -6,10 +6,9 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Build Targets
-build: install-backend build-desktop ## Build the entire project (CLI and Desktop)
+build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
 
 build-cli: install-backend ## Install the Python CLI in editable mode
-	pip install -e .
 
 build-desktop: ## Build the production Tauri desktop application
 	cd frontend && npm run tauri build
