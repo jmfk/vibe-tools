@@ -56,13 +56,13 @@
 id: PRD-044
 title: Tauri Planner Tab
 type: FEATURE
-status: planned
+status: in_progress
 group: tauri
 depends_on:
 - PRD-042
 - PRD-043
 created_at: '2026-01-15T12:00:00.000000'
-updated_at: '2026-01-15T10:40:17.591178'
+updated_at: '2026-01-15T11:40:22.330427'
 ```
 </details>
 

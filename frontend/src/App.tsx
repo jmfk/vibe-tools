@@ -35,7 +35,8 @@ import {
   Bug,
   Cpu,
   Coins,
-  ChevronDown
+  ChevronDown,
+  Network
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -46,6 +47,9 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { listen } from '@tauri-apps/api/event';
 import yaml from 'js-yaml';
 import mermaid from 'mermaid';
+import { PlannerBoard } from './components/PlannerBoard';
+import { PlannerGraph } from './components/PlannerGraph';
+import { AgentLogMonitor } from './components/AgentLogMonitor';
 
 mermaid.initialize({
   startOnLoad: false,
@@ -1426,6 +1430,8 @@ const App: React.FC = () => {
     }
   };
 
+  const [plannerView, setPlannerView] = useState<'board' | 'graph'>('board');
+
   const activeProject = useMemo(() => {
     return projectRegistry.projects.find(p => p.id === projectRegistry.last_active_project_id);
   }, [projectRegistry]);
@@ -1561,10 +1567,83 @@ const App: React.FC = () => {
 
           <main className="flex-1 overflow-y-auto relative p-6 no-scrollbar">
             {activeTab === 'planner' && (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-600">
-                <Kanban size={48} className="mb-4 opacity-10" />
-                <h3 className="text-lg font-medium text-zinc-400">Planner View</h3>
-                <p className="text-sm mt-1">Board and Graph views coming soon</p>
+              <div className="h-full flex flex-col gap-6 relative">
+                <div className="flex items-center justify-between shrink-0">
+                  <div>
+                    <h2 className="text-2xl font-bold text-zinc-100">Project Planner</h2>
+                    <p className="text-sm text-zinc-500 mt-1">Manage PRDs and track dependencies</p>
+                  </div>
+                  <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+                    <button 
+                      onClick={() => setPlannerView('board')}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
+                        plannerView === 'board' ? "bg-zinc-800 text-blue-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Kanban size={12} />
+                        Board
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => setPlannerView('graph')}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
+                        plannerView === 'graph' ? "bg-zinc-800 text-blue-400 shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Network size={12} />
+                        Graph
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0">
+                  {plannerView === 'board' ? (
+                    <PlannerBoard 
+                      workspaceRoot={workspaceRoot} 
+                      onSelectPRD={(prd) => {
+                        setSelectedArtifact({
+                          id: prd.id,
+                          name: prd.filename,
+                          path: prd.path,
+                          type: 'prd',
+                          status: prd.status,
+                          owner: prd.owner,
+                          relPath: prd.path.replace(workspaceRoot, '')
+                        });
+                        setActiveTab('create');
+                      }}
+                      onRefresh={loadRegistry}
+                    />
+                  ) : (
+                    <PlannerGraph 
+                      workspaceRoot={workspaceRoot}
+                      onSelectPRD={async (id) => {
+                         // Find PRD info
+                         const entries = await invoke<any[]>('list_directory', { path: `${workspaceRoot}/product/in_progress` });
+                         const entry = entries.find(e => e.name.includes(id));
+                         if (entry) {
+                            setSelectedArtifact({
+                              id: id,
+                              name: entry.name,
+                              path: entry.path,
+                              type: 'prd',
+                              relPath: entry.path.replace(workspaceRoot, '')
+                            });
+                            setActiveTab('create');
+                         }
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div className="shrink-0 -mx-6 -mb-6 mt-4">
+                  <AgentLogMonitor />
+                </div>
               </div>
             )}
             {activeTab === 'create' && (
