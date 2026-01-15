@@ -47,7 +47,20 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+      setAutoScroll(isAtBottom);
+    }
+  };
+
+  useEffect(() => {
+    setAutoScroll(true);
+  }, [activeTab, searchQuery, isFullView, isExpanded]);
 
   useEffect(() => {
     // Initial load
@@ -111,10 +124,10 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && autoScroll) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs, isExpanded, isFullView, activeTab, searchQuery]);
+  }, [logs, isExpanded, isFullView, activeTab, searchQuery, autoScroll]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
@@ -224,7 +237,11 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
           </div>
         </div>
         
-        <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-xs space-y-0.5 p-4 bg-input rounded-xl border border-border/50 shadow-inner">
+        <div 
+          ref={scrollRef} 
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto font-mono text-xs space-y-0.5 p-4 bg-input rounded-xl border border-border/50 shadow-inner"
+        >
           {filteredLogs.map((log) => (
             <div 
               key={log.id} 
@@ -348,7 +365,11 @@ export const UnifiedLogMonitor = ({ accentColor }: { accentColor?: string }) => 
                 <Trash2 size={12} />
               </button>
           </div>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4 pt-2 font-mono text-[10px] space-y-0.5">
+          <div 
+            ref={scrollRef} 
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto px-4 pb-4 pt-2 font-mono text-[10px] space-y-0.5"
+          >
             {filteredLogs.slice(-100).map((log) => (
               <div 
                 key={log.id} 
