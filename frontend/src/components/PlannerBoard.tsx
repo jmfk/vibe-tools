@@ -10,6 +10,7 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
+  useDroppable
 } from '@dnd-kit/core';
 import { 
   arrayMove, 
@@ -27,11 +28,14 @@ import {
   PlayCircle, 
   User,
   GripVertical,
-  Eye,
+  Eye, 
   EyeOff,
   Plus,
   X,
-  Check
+  Check,
+  Pencil,
+  Save,
+  ArrowLeft
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
