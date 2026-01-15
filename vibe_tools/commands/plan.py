@@ -97,6 +97,34 @@ def _display_prd_list(files: List[pathlib.Path], title: Optional[str] = None):
     console.print(table)
 
 
+def get_interactive_prompt():
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.key_binding import KeyBindings
+
+    kb = KeyBindings()
+
+    @kb.add("c-s")
+    @kb.add("c-a")
+    def _(event):
+        event.app.exit(result=event.app.current_buffer.text)
+
+    @kb.add("c-q")
+    def _(event):
+        event.app.exit(result=None)
+
+    session = PromptSession(key_bindings=kb)
+
+    click.echo(
+        click.style(
+            "Enter prompt (Ctrl-S or Ctrl-A to save, Ctrl-Q to quit):", fg="cyan"
+        )
+    )
+    click.echo(click.style("-" * 60, fg="bright_black"))
+
+    result = session.prompt(multiline=True)
+    return result
+
+
 def register_plan(cli):
     @click.group(name="plan", invoke_without_command=True)
     @click.pass_context
@@ -777,7 +805,6 @@ def register_plan(cli):
     def add_item(prompt, title, severity, service, prd):
         """Create a new item (Issue/PRD) from a prompt."""
         if not prompt:
-            from vibe_tools.commands.issue_add import get_interactive_prompt
             prompt = get_interactive_prompt()
             if not prompt:
                 click.echo("Aborted.")
@@ -849,6 +876,83 @@ def register_plan(cli):
     def test_setup_cmd(ctx, prompt):
         """Setup tests from a prompt (Phase 6 pre-work)."""
         _run_test_setup_interactive(ctx, prompt)
+
+    @plan_group.command(name="close")
+    @click.argument("item_id")
+    def close_item(item_id):
+        """Close an item and move to history."""
+        item = load_prd_by_id(item_id)
+        if not item:
+            click.echo(f"Error: Item {item_id} not found.")
+            return
+
+        item.status = "done"
+        item.updated_at = datetime.datetime.now().isoformat()
+
+        new_path = PRODUCT_HISTORY_DIR / item.path.name
+        item.save(new_path)
+        if item.path.exists():
+            item.path.unlink()
+
+        click.echo(f"Item {item_id} marked as done and moved to history.")
+
+    @plan_group.command(name="status")
+    @click.argument("item_id")
+    @click.argument("status")
+    def status_item(item_id, status):
+        """Update item status."""
+        item = load_prd_by_id(item_id)
+        if not item:
+            click.echo(f"Error: Item {item_id} not found.")
+            return
+        item.status = status
+        item.save()
+        click.echo(f"Item {item_id} status updated to {status}.")
+
+    @plan_group.command(name="assign")
+    @click.argument("item_id")
+    @click.argument("agent")
+    def assign_item(item_id, agent):
+        """Assign an agent to an item."""
+        item = load_prd_by_id(item_id)
+        if not item:
+            click.echo(f"Error: Item {item_id} not found.")
+            return
+        item.metadata["agent"] = agent
+        item.save()
+        click.echo(f"Item {item_id} assigned to {agent}.")
+
+    @plan_group.command(name="link")
+    @click.argument("item_id")
+    @click.argument("prd_id")
+    def link_item(item_id, prd_id):
+        """Link an item to another PRD."""
+        item = load_prd_by_id(item_id)
+        if not item:
+            click.echo(f"Error: Item {item_id} not found.")
+            return
+        item.metadata["prd_id"] = prd_id
+        item.save()
+        click.echo(f"Item {item_id} linked to PRD {prd_id}.")
+
+    @plan_group.command(name="investigate")
+    @click.argument("query", required=False)
+    @click.pass_context
+    def investigate_cmd(ctx, query):
+        """Investigate an issue using logs and agent."""
+        from vibe_tools.commands.investigate import register_investigate
+        # This is a bit tricky since investigate is a group/command itself.
+        # For now, let's just import the implementation if possible.
+        from vibe_tools.commands.investigate import investigate_impl
+        investigate_impl(ctx, query)
+
+    @plan_group.command(name="solve")
+    @click.argument("item_id", required=False)
+    @click.pass_context
+    def solve_cmd(ctx, item_id):
+        """Solve an item using the implement loop."""
+        from vibe_tools.commands.solve import solve_impl
+        solve_impl(ctx, item_id)
 
     cli.add_command(plan_group)
 

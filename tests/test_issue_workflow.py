@@ -28,10 +28,10 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     # 1. Add an issue
     with monkeypatch.context() as m:
         m.setattr(
-            "vibe_tools.commands.issue_add.run_llm",
+            "vibe_tools.commands.plan.run_llm",
             lambda x: '{"title": "Test Issue", "summary": "Test Summary", "severity": "high", "service": "core"}',
         )
-        result = runner.invoke(cli, ["issue", "add", "Test prompt"])
+        result = runner.invoke(cli, ["plan", "add", "Test prompt"])
         assert result.exit_code == 0
         assert "Issue created successfully" in result.output
 

@@ -15,7 +15,7 @@ body {
   padding: 0;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: #09090b !important;
+  background-color: transparent;
 }
 
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle] {

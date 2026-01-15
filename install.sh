@@ -40,6 +40,35 @@ if ! command -v pip3 &> /dev/null; then
     exit 1
 fi
 
+# Helper to determine if we should use editable mode (-e)
+# Default is standalone (not -e) unless config has standalone: false
+get_install_flags() {
+    local config_file="implementation/config.json"
+    local standalone="true"
+    
+    if [[ -f "$config_file" ]]; then
+        if command -v jq &> /dev/null; then
+            standalone=$(jq -r '.setup.standalone // true' "$config_file")
+        else
+            # Fallback to python for JSON parsing
+            standalone=$(python3 -c "import json, pathlib; p = pathlib.Path('$config_file'); print(str(json.loads(p.read_text()).get('setup', {}).get('standalone', True)).lower())" 2>/dev/null || echo "true")
+        fi
+    fi
+    
+    if [[ "$standalone" == "false" ]]; then
+        echo "-e"
+    else
+        echo ""
+    fi
+}
+
+INSTALL_FLAGS=$(get_install_flags)
+if [[ -n "$INSTALL_FLAGS" ]]; then
+    echo "💡 Using editable mode based on config (standalone: false)"
+else
+    echo "📦 Using standalone installation mode (default)"
+fi
+
 # Helper for global install
 install_vibe_globally() {
     if ! command -v pipx &> /dev/null; then
@@ -59,18 +88,18 @@ install_vibe_globally() {
 
     if command -v pipx &> /dev/null; then
         echo "Installing vibe-tools globally via pipx..."
-        pipx install -e . --force
+        pipx install $INSTALL_FLAGS . --force
         echo "✅ Global installation via pipx complete."
     else
         # Fallback to older method if pipx unavailable
         if command -v pyenv &> /dev/null; then
             GLOBAL_PY=$(pyenv global | head -n 1)
             echo "Fallback: Installing to pyenv global ($GLOBAL_PY)..."
-            pyenv exec pip install -e .
+            pyenv exec pip install $INSTALL_FLAGS .
             pyenv rehash
         else
             echo "Fallback: Installing to system python..."
-            python3 -m pip install -e .
+            python3 -m pip install $INSTALL_FLAGS .
         fi
     fi
 }
@@ -96,7 +125,7 @@ if [[ $DESKTOP_MODE == true ]]; then
 
     # 2. Global Environment Setup
     echo "Initializing global environment..."
-    python3 -m pip install -e .
+    python3 -m pip install $INSTALL_FLAGS .
     python3 -m vibe_tools.setup desktop-init
 
     # 3. Frontend Build
@@ -150,7 +179,7 @@ echo "Do you want to set up a project-specific managed Python environment (pyenv
 read -p "(y/n): " use_managed
 if [[ $use_managed == "y" || $use_managed == "Y" ]]; then
     echo "Installing bootstrap dependencies..."
-    python3 -m pip install -e .
+    python3 -m pip install $INSTALL_FLAGS .
     
     # Now run the env setup
     python3 -m vibe_tools.setup env
@@ -162,7 +191,7 @@ fi
 
 # Standard installation if managed setup is skipped
 echo "Installing package..."
-python3 -m pip install -e .
+python3 -m pip install $INSTALL_FLAGS .
 
 echo ""
 echo "--- Installation Complete ---"

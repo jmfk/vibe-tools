@@ -5,6 +5,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import datetime
 from typing import Any, Dict, List, Optional
 
 import click
@@ -735,7 +736,7 @@ def api():
             del config["google_api_key"]
             save_config(config)
         click.echo(
-            "✅ Google API Key saved to .env (and removed from .vibe_config.json)"
+            "✅ Google API Key saved to config.json (and removed from old locations)"
         )
     else:
         click.echo("⏩ Google API Key skipped.")
@@ -906,13 +907,18 @@ def install_deps(
         click.echo("Installing essential tools (ruff, pytest, mypy)...")
         run_command(["pip", "install", "ruff", "pytest", "pytest-cov", "mypy"])
 
-        # Project-specific Python dependencies
-        if pathlib.Path("pyproject.toml").exists():
+    # Project-specific Python dependencies
+    if pathlib.Path("pyproject.toml").exists():
+        standalone = config.get("setup", {}).get("standalone", True)
+        if standalone:
+            click.echo("Found pyproject.toml. Installing in standalone mode...")
+            run_command(["pip", "install", "."])
+        else:
             click.echo("Found pyproject.toml. Installing in editable mode...")
             run_command(["pip", "install", "-e", "."])
-        elif pathlib.Path("requirements.txt").exists():
-            click.echo("Found requirements.txt. Installing...")
-            run_command(["pip", "install", "-r", "requirements.txt"])
+    elif pathlib.Path("requirements.txt").exists():
+        click.echo("Found requirements.txt. Installing...")
+        run_command(["pip", "install", "-r", "requirements.txt"])
 
     # 3. Frontend dependencies
     if run_all or only_frontend:
@@ -938,24 +944,30 @@ def install_deps(
 
 
 @setup_cli.command()
+@click.option("--name", default="local", help="Name of the environment to set up")
 @click.option("--python-version", default="3.11.10", help="Python version to install")
-def env(python_version):
+def env(name, python_version):
     """Set up and verify a managed Python environment."""
-    click.echo(f"\n--- Environment Setup & Verification (Python {python_version}) ---")
+    click.echo(f"\n--- Environment Setup & Verification: {name} (Python {python_version}) ---")
 
     config = load_config()
-    env_config = config.get("env")
+    if "envs" not in config:
+        config["envs"] = {}
+    
+    # Set as current environment
+    config["current_env"] = name
+    env_config = config["envs"].get(name, {})
 
     # If env is already configured, verify it
     if env_config:
         from vibe_tools.utils import check_env_health
 
         if check_env_health():
-            click.echo("✅ Current environment is healthy and correctly configured.")
+            click.echo(f"✅ Environment '{name}' is healthy and correctly configured.")
             if not click.confirm("Re-run full setup anyway?", default=False):
                 return
         else:
-            click.echo("⚠️  Current environment verification failed.")
+            click.echo(f"⚠️  Environment '{name}' verification failed.")
             if not click.confirm(
                 "Attempt to fix/re-setup the environment?", default=True
             ):
@@ -1003,7 +1015,7 @@ def env(python_version):
 
     # 5. Create Virtualenv
     project_name = get_project_name().replace("_", "-")
-    venv_name = f"{project_name}-{python_version}"
+    venv_name = f"{project_name}-{python_version}-{name}"
 
     output, code = run_command(["pyenv", "virtualenvs"], check=False)
     if venv_name not in output:
@@ -1016,6 +1028,17 @@ def env(python_version):
     click.echo(f"Setting local python version to {venv_name}...")
     run_command(["pyenv", "local", venv_name])
 
+    # Update config.json
+    config["envs"][name] = {
+        "type": "pyenv-virtualenv",
+        "python_version": python_version,
+        "venv_name": venv_name,
+        "path": str(pathlib.Path.cwd()),
+        "last_setup": datetime.datetime.now().isoformat(),
+        "vars": env_config.get("vars", {})
+    }
+    save_config(config)
+
     # 7. Initialize Project Infrastructure
     ensure_infrastructure()
 
@@ -1027,7 +1050,7 @@ def env(python_version):
     except Exception as e:
         click.echo(f"⚠️ Warning: Failed to install dependencies: {e}")
 
-    click.echo("\n✅ Environment setup complete.")
+    click.echo(f"\n✅ Environment setup complete: {name}")
     click.echo(f"Virtualenv: {venv_name}")
     click.echo(
         "\nTo ensure your shell is configured for pyenv (safer macOS config), add these to your ~/.zshrc:"

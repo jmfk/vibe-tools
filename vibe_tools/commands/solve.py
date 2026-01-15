@@ -72,6 +72,41 @@ def _solve_issue(issue: PRD, mode: str, agent: str, stream: bool = False):
         click.echo("Investigation mode currently updates the issue state.")
 
 
+def solve_impl(ctx, issue_id=None, solve_next=False, solve_all=False, mode="solve", agent="cursor-agent", stream=False):
+    """Internal implementation of solve."""
+    if issue_id:
+        issue = load_prd_by_id(issue_id)
+        if not issue:
+            click.echo(f"Error: Issue {issue_id} not found.")
+            return
+        _solve_issue(issue, mode, agent, stream)
+    elif solve_next:
+        issues = [
+            i
+            for i in load_all_issue_prds()
+            if i.status in ("backlog", "in_progress")
+        ]
+        if not issues:
+            click.echo("No issues in backlog or in progress.")
+            return
+        _solve_issue(issues[0], mode, agent, stream)
+    elif solve_all:
+        issues = [
+            i
+            for i in load_all_issue_prds()
+            if i.status in ("backlog", "in_progress")
+        ]
+        if not issues:
+            click.echo("No issues in backlog or in progress.")
+            return
+        click.echo(f"Solving {len(issues)} issues...")
+        for issue in issues:
+            _solve_issue(issue, mode, agent, stream)
+            click.echo("-" * 40)
+    else:
+        click.echo("Error: Please provide an issue_id, --next, or --all.")
+
+
 def register_solve(cli):
     @click.command(name="solve")
     @click.argument("issue_id", required=False)
@@ -104,37 +139,6 @@ def register_solve(cli):
         stream: bool,
     ):
         """Resolve issue(s) via agent-driven loop."""
-        if issue_id:
-            issue = load_prd_by_id(issue_id)
-            if not issue:
-                click.echo(f"Error: Issue {issue_id} not found.")
-                return
-            _solve_issue(issue, mode, agent, stream)
-        elif solve_next:
-            issues = [
-                i
-                for i in load_all_issue_prds()
-                if i.status in ("backlog", "in_progress")
-            ]
-            if not issues:
-                click.echo("No issues in backlog or in progress.")
-                return
-            _solve_issue(issues[0], mode, agent, stream)
-        elif solve_all:
-            issues = [
-                i
-                for i in load_all_issue_prds()
-                if i.status in ("backlog", "in_progress")
-            ]
-            if not issues:
-                click.echo("No issues in backlog or in progress.")
-                return
-            click.echo(f"Solving {len(issues)} issues...")
-            for issue in issues:
-                _solve_issue(issue, mode, agent, stream)
-                click.echo("-" * 40)
-        else:
-            click.echo("Error: Please provide an issue_id, --next, or --all.")
-            click.echo(ctx.get_help())
+        solve_impl(ctx, issue_id, solve_next, solve_all, mode, agent, stream)
 
     cli.add_command(solve_command)

@@ -213,6 +213,42 @@ def get_total_cost():
     return total
 
 
+def get_cost_for_period(start_date: datetime.datetime, end_date: datetime.datetime) -> float:
+    """Returns total cost for a given date range [start_date, end_date)."""
+    if not USAGE_LOG_CSV.exists():
+        return 0.0
+
+    total = 0.0
+    try:
+        with open(USAGE_LOG_CSV) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ts_str = row.get("Timestamp")
+                if not ts_str:
+                    continue
+                
+                try:
+                    # Format: 2024-01-15 10:30:00
+                    dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                    if start_date <= dt < end_date:
+                        total += float(row.get("Cost (USD)", 0.0))
+                except (ValueError, TypeError):
+                    continue
+    except Exception:
+        pass
+    return total
+
+
+def get_month_bounds(date: datetime.datetime):
+    """Returns (start_of_month, start_of_next_month) for the given date."""
+    start_of_month = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start_of_month.month == 12:
+        start_of_next_month = start_of_month.replace(year=start_of_month.year + 1, month=1)
+    else:
+        start_of_next_month = start_of_month.replace(month=start_of_month.month + 1)
+    return start_of_month, start_of_next_month
+
+
 def get_session_cost():
     """Returns the total cost incurred in the current execution session."""
     return sum(run["cost"] for run in _session_runs)

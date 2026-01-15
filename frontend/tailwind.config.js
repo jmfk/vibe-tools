@@ -8,13 +8,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
         },
-        border: 'hsl(var(--border))',
+        accent: {
+          DEFAULT: 'var(--accent-color)',
+          foreground: 'var(--accent-foreground, white)',
+        },
+        panel: 'var(--panel)',
+        border: 'var(--border)',
+        muted: 'var(--muted)',
+        input: 'var(--input)',
       },
     },
   },

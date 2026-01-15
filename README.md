@@ -125,7 +125,7 @@ vibe --help
 - `vibe memory`: Save a global instruction ("memory") always sent to the agent.
 - `vibe memory`: Save a global instruction.
 - `vibe history`: Check the status of all PRDs.
-- `vibe cost`: View total estimated cost of LLM usage.
+- `vibe usage`: View LLM costs and usage statistics.
 - `vibe-setup api`: Configure API keys for Google Gemini/DSPy.
 - `vibe-setup google`: Configure Google Sheets for cost logging.
 

@@ -1,34 +1,34 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  DndContext, 
-  DragOverlay, 
-  closestCorners, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
   useSensors,
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
   useDroppable
 } from '@dnd-kit/core';
-import { 
-  arrayMove, 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { invoke } from '@tauri-apps/api/tauri';
-import { 
-  MoreVertical, 
-  Clock, 
-  CheckCircle2, 
-  PlayCircle, 
+import {
+  MoreVertical,
+  Clock,
+  CheckCircle2,
+  PlayCircle,
   User,
   GripVertical,
-  Eye, 
+  Eye,
   EyeOff,
   Plus,
   X,
@@ -96,8 +96,8 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
     transform,
     transition,
     isDragging
-  } = useSortable({ 
-    id: prd.id, 
+  } = useSortable({
+    id: prd.id,
     data: prd,
     disabled: isEditingTitle
   });
@@ -142,10 +142,10 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[10px] font-mono font-bold" style={{ color: accentColor }}>{prd.id}</span>
             {prd.owner && (
-               <div className="flex items-center gap-1 px-1 py-0.5 rounded bg-panel border border-border text-[8px] text-muted">
+              <div className="flex items-center gap-1 px-1 py-0.5 rounded bg-panel border border-border text-[8px] text-muted">
                 <User size={8} />
                 {prd.owner}
-               </div>
+              </div>
             )}
           </div>
           {isEditingTitle ? (
@@ -161,7 +161,7 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
               style={{ "--tw-ring-color": accentColor } as any}
             />
           ) : (
-            <h4 
+            <h4
               className="text-xs font-semibold text-foreground line-clamp-2 leading-snug hover:text-accent cursor-text"
               onDoubleClick={(e) => {
                 e.stopPropagation();
@@ -173,7 +173,7 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
           )}
         </div>
         <div className="flex items-center gap-1">
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit?.(prd);
@@ -187,7 +187,7 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
           </div>
         </div>
       </div>
-      
+
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {prd.columnId === 'in_progress' ? (
@@ -207,7 +207,7 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor }: S
             </div>
           )}
         </div>
-        
+
         {prd.depends_on && prd.depends_on.length > 0 && (
           <div className="text-[9px] text-muted font-medium opacity-70">
             {prd.depends_on.length} dep{prd.depends_on.length > 1 ? 's' : ''}
@@ -227,17 +227,17 @@ const DroppableColumn = ({ id, children, className }: { id: string, children: Re
   );
 };
 
-const PRDEditor = ({ 
-  prd, 
-  content, 
-  onContentChange, 
-  onSave, 
-  onCancel, 
+const PRDEditor = ({
+  prd,
+  content,
+  onContentChange,
+  onSave,
+  onCancel,
   accentColor,
   isDark
-}: { 
-  prd: PRD; 
-  content: string; 
+}: {
+  prd: PRD;
+  content: string;
   onContentChange: (content: string) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -257,7 +257,7 @@ const PRDEditor = ({
     <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={onCancel}
             className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors"
           >
@@ -274,7 +274,7 @@ const PRDEditor = ({
 
         <div className="flex items-center gap-2">
           <div className="flex bg-panel border border-border rounded-lg p-1 mr-4">
-            <button 
+            <button
               onClick={() => setViewMode('edit')}
               className={cn(
                 "p-1.5 rounded transition-all",
@@ -285,7 +285,7 @@ const PRDEditor = ({
             >
               <Pencil size={14} />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('split')}
               className={cn(
                 "p-1.5 rounded transition-all",
@@ -296,7 +296,7 @@ const PRDEditor = ({
             >
               <Split size={14} />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('preview')}
               className={cn(
                 "p-1.5 rounded transition-all",
@@ -309,15 +309,15 @@ const PRDEditor = ({
             </button>
           </div>
 
-          <button 
+          <button
             onClick={handleCopy}
             className="p-2 hover:bg-zinc-800 rounded-lg text-muted transition-colors mr-2"
             title="Copy to Clipboard"
           >
             {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
           </button>
-          
-          <button 
+
+          <button
             onClick={onSave}
             className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-accent/10 hover:brightness-110"
             style={{ backgroundColor: accentColor }}
@@ -350,8 +350,8 @@ const PRDEditor = ({
               "prose prose-sm max-w-none transition-colors duration-300",
               isDark ? "prose-invert" : "prose-zinc"
             )}>
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]} 
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
               >
                 {content}
@@ -364,14 +364,14 @@ const PRDEditor = ({
   );
 };
 
-export const PlannerBoard = ({ 
-  workspaceRoot, 
+export const PlannerBoard = ({
+  workspaceRoot,
   onSelectPRD,
   onRefresh,
   accentColor,
   isDark
-}: { 
-  workspaceRoot: string; 
+}: {
+  workspaceRoot: string;
   onSelectPRD: (prd: PRD) => void;
   onRefresh?: () => void;
   accentColor?: string;
@@ -393,9 +393,9 @@ export const PlannerBoard = ({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-        activationConstraint: {
-            distance: 5,
-        },
+      activationConstraint: {
+        distance: 5,
+      },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -419,9 +419,9 @@ export const PlannerBoard = ({
               if (match) {
                 try {
                   meta = yaml.load(match[1]);
-                } catch (e) {}
+                } catch (e) { }
               }
-              
+
               allPRDs.push({
                 id: meta.id || entry.name.replace('.md', ''),
                 title: meta.title || entry.name,
@@ -434,10 +434,10 @@ export const PlannerBoard = ({
               });
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       setPrds(allPRDs);
-      
+
       // Auto-show/hide inbox based on content
       const inboxItems = allPRDs.filter(p => p.columnId === 'inbox');
       if (inboxItems.length > 0 || isAddingPRD) {
@@ -456,7 +456,7 @@ export const PlannerBoard = ({
 
   const handleCreatePRD = async () => {
     if (!newPRDTitle.trim() || !workspaceRoot || isSubmitting) return;
-    
+
     setIsSubmitting(true);
     try {
       // 1. Generate ID
@@ -469,14 +469,14 @@ export const PlannerBoard = ({
         }
       });
       const newId = `PRD-${(maxId + 1).toString().padStart(3, '0')}`;
-      
+
       // 2. Sanitize filename
       const safeTitle = newPRDTitle.toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       const filename = `${newId}-${safeTitle}.md`;
       const path = `${workspaceRoot}/product/inbox/${filename}`;
-      
+
       // 3. Construct content
       const content = `# ${newPRDTitle}
 
@@ -504,7 +504,7 @@ updated_at: '${new Date().toISOString()}'
 
       // 4. Write file
       await invoke('write_file_content', { path, content });
-      
+
       // 5. Refresh and cleanup
       setNewPRDTitle('');
       setIsAddingPRD(false);
@@ -539,7 +539,7 @@ updated_at: '${new Date().toISOString()}'
     const newColumnId = overColumn ? overColumn.id : overPRD?.columnId;
 
     if (newColumnId && activePRD.columnId !== newColumnId) {
-      setPrds(prev => prev.map(p => 
+      setPrds(prev => prev.map(p =>
         p.id === activeId ? { ...p, columnId: newColumnId } : p
       ));
     }
@@ -564,11 +564,11 @@ updated_at: '${new Date().toISOString()}'
     if (!newColumnId) return;
 
     const oldColumnId = active.data.current?.columnId;
-    
+
     if (newColumnId !== oldColumnId) {
       const targetColumn = [...COLUMNS, IN_PROGRESS_COLUMN].find(c => c.id === newColumnId)!;
       const newPath = `${workspaceRoot}/${targetColumn.folder}/${activePRD.filename}`;
-      
+
       try {
         if (newColumnId === 'in_progress') {
           const alreadyInProgress = prds.find(p => p.columnId === 'in_progress' && p.id !== activeId);
@@ -577,12 +577,12 @@ updated_at: '${new Date().toISOString()}'
             loadPRDs();
             return;
           }
-          
+
           await invoke('move_file', { from: activePRD.path, to: newPath });
           await invoke('update_artifact_meta', { path: newPath, status: 'in_progress' });
-          await invoke('run_vibe_command', { 
-            command: 'implement', 
-            args: [activePRD.id] 
+          await invoke('run_vibe_command', {
+            command: 'implement',
+            args: [activePRD.id]
           });
         } else if (oldColumnId === 'in_progress' && newColumnId === 'next') {
           await invoke('send_vibe_input', { input: JSON.stringify({ type: 'cancel' }) });
@@ -592,7 +592,7 @@ updated_at: '${new Date().toISOString()}'
           await invoke('move_file', { from: activePRD.path, to: newPath });
           await invoke('update_artifact_meta', { path: newPath, status: newColumnId === 'history' ? 'completed' : newColumnId });
         }
-        
+
         loadPRDs();
         onRefresh?.();
       } catch (err) {
@@ -635,7 +635,7 @@ updated_at: '${new Date().toISOString()}'
   const handleUpdatePRDTitle = async (prd: PRD, newTitle: string) => {
     try {
       let content = await invoke<string>('read_file_content', { path: prd.path });
-      
+
       // 1. Update markdown header (first line starting with #)
       const lines = content.split('\n');
       if (lines[0].startsWith('# ')) {
@@ -676,12 +676,12 @@ updated_at: '${new Date().toISOString()}'
 
   if (editingPRD) {
     return (
-      <PRDEditor 
-        prd={editingPRD} 
-        content={editContent} 
-        onContentChange={setEditContent} 
-        onSave={handleSavePRD} 
-        onCancel={() => setEditingPRD(null)} 
+      <PRDEditor
+        prd={editingPRD}
+        content={editContent}
+        onContentChange={setEditContent}
+        onSave={handleSavePRD}
+        onCancel={() => setEditingPRD(null)}
         accentColor={accentColor}
         isDark={isDark}
       />
@@ -693,8 +693,8 @@ updated_at: '${new Date().toISOString()}'
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h3 className="text-sm font-bold text-muted uppercase tracking-widest">Project Roadmap</h3>
-          
-          <button 
+
+          <button
             onClick={() => {
               setIsAddingPRD(true);
               setVisibleColumns(prev => ({ ...prev, inbox: true }));
@@ -713,8 +713,8 @@ updated_at: '${new Date().toISOString()}'
                 onClick={() => setVisibleColumns(prev => ({ ...prev, [col.id]: !prev[col.id] }))}
                 className={cn(
                   "px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
-                  visibleColumns[col.id] 
-                    ? "bg-zinc-800 text-foreground" 
+                  visibleColumns[col.id]
+                    ? "bg-zinc-800 text-foreground"
                     : "text-muted hover:text-foreground/70"
                 )}
               >
@@ -724,8 +724,8 @@ updated_at: '${new Date().toISOString()}'
             ))}
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={loadPRDs}
           className="p-1.5 hover:bg-zinc-800 rounded text-muted transition-colors"
         >
@@ -746,8 +746,8 @@ updated_at: '${new Date().toISOString()}'
               <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               <span className="text-[10px] font-bold text-foreground uppercase tracking-widest">Active Implementation</span>
             </div>
-            
-            <DroppableColumn 
+
+            <DroppableColumn
               id="in_progress"
               className={cn(
                 "h-24 rounded-xl border border-dashed flex items-center justify-center transition-all",
@@ -761,12 +761,12 @@ updated_at: '${new Date().toISOString()}'
               >
                 {inProgressPRD ? (
                   <div className="w-full max-w-2xl">
-                    <SortablePRDCard 
-                      prd={inProgressPRD} 
-                      onClick={onSelectPRD} 
-                      onEdit={handleEditPRD} 
+                    <SortablePRDCard
+                      prd={inProgressPRD}
+                      onClick={onSelectPRD}
+                      onEdit={handleEditPRD}
                       onTitleUpdate={handleUpdatePRDTitle}
-                      accentColor={accentColor} 
+                      accentColor={accentColor}
                     />
                   </div>
                 ) : (
@@ -781,7 +781,7 @@ updated_at: '${new Date().toISOString()}'
 
           <div className="flex-1 flex gap-4 min-h-0 overflow-x-auto pb-4 no-scrollbar">
             {COLUMNS.filter(col => visibleColumns[col.id]).map(column => (
-              <div key={column.id} className="flex flex-col gap-3 w-[150px] shrink-0">
+              <div key={column.id} className="flex flex-col gap-3 w-[250px] shrink-0">
                 <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-80">{column.title}</span>
@@ -790,14 +790,14 @@ updated_at: '${new Date().toISOString()}'
                     </span>
                   </div>
                 </div>
-                
+
                 <DroppableColumn id={column.id} className="flex-1 bg-panel/30 rounded-xl border border-border/50 p-2 overflow-y-auto no-scrollbar">
                   <SortableContext
                     id={column.id}
                     items={prds.filter(p => p.columnId === column.id).map(p => p.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="space-y-2 min-h-[150px]">
+                    <div className="space-y-2 min-h-[250px]">
                       {column.id === 'inbox' && isAddingPRD && (
                         <div className="bg-panel border border-accent/30 rounded-lg p-3 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
                           <input
@@ -843,13 +843,13 @@ updated_at: '${new Date().toISOString()}'
                       {prds
                         .filter(p => p.columnId === column.id)
                         .map(prd => (
-                          <SortablePRDCard 
-                            key={prd.id} 
-                            prd={prd} 
-                            onClick={onSelectPRD} 
-                            onEdit={handleEditPRD} 
+                          <SortablePRDCard
+                            key={prd.id}
+                            prd={prd}
+                            onClick={onSelectPRD}
+                            onEdit={handleEditPRD}
                             onTitleUpdate={handleUpdatePRDTitle}
-                            accentColor={accentColor} 
+                            accentColor={accentColor}
                           />
                         ))}
                     </div>
@@ -862,11 +862,11 @@ updated_at: '${new Date().toISOString()}'
 
         <DragOverlay>
           {activePRD ? (
-            <SortablePRDCard 
-              prd={activePRD} 
-              onEdit={handleEditPRD} 
+            <SortablePRDCard
+              prd={activePRD}
+              onEdit={handleEditPRD}
               onTitleUpdate={handleUpdatePRDTitle}
-              accentColor={accentColor} 
+              accentColor={accentColor}
             />
           ) : null}
         </DragOverlay>

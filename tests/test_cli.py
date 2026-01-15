@@ -68,14 +68,6 @@ def test_load_save_config(tmp_path):
                 assert loaded["test"] == "value"
 
 
-def test_normalize_command(runner):
-    with patch("vibe_tools.commands.normalize.normalize_prd") as mock_normalize:
-        # Command doesn't take input file as argument in current version
-        result = runner.invoke(cli, ["normalize", "--yes"])
-        assert result.exit_code == 0
-        mock_normalize.assert_called_once()
-
-
 def test_test_fix_command(runner):
     # Patch the reference held by the command module
     with patch("vibe_tools.commands.test_fix.run_test_fix_loop") as mock_loop:

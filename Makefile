@@ -34,7 +34,14 @@ test-core: ## Run Rust-specific Cargo tests
 install: install-backend install-frontend ## Install all dependencies for development
 
 install-backend: ## Install Python backend dependencies
-	pip install -e .
+	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
+	if [ "$$STANDALONE" = "false" ]; then \
+		echo "Installing in editable mode..."; \
+		pip install -e .; \
+	else \
+		echo "Installing in standalone mode..."; \
+		pip install .; \
+	fi
 
 install-frontend: ## Install Node.js frontend dependencies
 	cd frontend && npm install

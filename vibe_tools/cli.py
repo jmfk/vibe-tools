@@ -175,8 +175,6 @@ class OrderedGroup(click.Group):
             "deploy",         # Phase 9: Deployment
             # Supporting tools
             "status",
-            "cost",
-            "stats",
             "usage",
             "docs",
             "memory",
@@ -330,10 +328,6 @@ def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
 
     default_budget = config.get("default_budget", 5.0)
     ctx.obj["default_budget"] = default_budget
-
-    if ctx.invoked_subcommand in ["cost", "stats", "usage"]:
-        from vibe_tools.stats import ensure_daily_usage
-        ensure_daily_usage(ctx)
 
     if ctx.invoked_subcommand is None:
         click.echo("vibe-tools configuration:")
