@@ -1108,9 +1108,23 @@ const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
-  const [currentTheme, setCurrentTheme] = useState<ThemeMode>('night');
-  const [accentColor, setAccentColor] = useState('#3b82f6');
-  const [customThemeColors, setCustomThemeColors] = useState<Record<ThemeMode, ThemeColors>>(DEFAULT_THEMES);
+  const [currentTheme, setCurrentTheme] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('vibe-theme') as ThemeMode) || 'night';
+  });
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    return localStorage.getItem('vibe-accent-color') || '#3b82f6';
+  });
+  const [customThemeColors, setCustomThemeColors] = useState<Record<ThemeMode, ThemeColors>>(() => {
+    const saved = localStorage.getItem('vibe-custom-theme-colors');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return DEFAULT_THEMES;
+      }
+    }
+    return DEFAULT_THEMES;
+  });
   const [interactionMode, setInteractionMode] = useState<'ASK' | 'AGENT'>(() => {
     return (localStorage.getItem('vibe-interaction-mode') as 'ASK' | 'AGENT') || 'ASK';
   });
@@ -1119,6 +1133,18 @@ const App: React.FC = () => {
     localStorage.setItem('vibe-active-tab', activeTab);
     invoke('emit_log', { level: 'INFO', source: 'UI', message: `Tab changed to: ${activeTab}`, data: null }).catch(() => {});
   }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-theme', currentTheme);
+  }, [currentTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-accent-color', accentColor);
+  }, [accentColor]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-custom-theme-colors', JSON.stringify(customThemeColors));
+  }, [customThemeColors]);
 
   useEffect(() => {
     localStorage.setItem('vibe-interaction-mode', interactionMode);
@@ -1264,7 +1290,22 @@ const App: React.FC = () => {
     const modes: ThemeMode[] = ['night', 'day', 'morning', 'sunset'];
     const currentIndex = modes.indexOf(currentTheme);
     const nextIndex = (currentIndex + 1) % modes.length;
-    setCurrentTheme(modes[nextIndex]);
+    const newTheme = modes[nextIndex];
+    setCurrentTheme(newTheme);
+    
+    if (activeProject) {
+      invoke('update_project_registry', {
+        id: activeProject.id,
+        name: activeProject.name,
+        path: activeProject.path,
+        description: activeProject.description,
+        metadata: { 
+          ...activeProject.metadata, 
+          theme: newTheme
+        },
+        secrets: activeProject.secrets || {}
+      }).then(() => loadRegistry()).catch(console.error);
+    }
   };
 
   const activeProject = useMemo(() => {
@@ -1476,7 +1517,7 @@ const App: React.FC = () => {
 
         {/* Center Pane: Main Content */}
         <Panel id="main-content" minSize={400} className="flex flex-col min-w-0">
-          <main className="flex-1 overflow-y-auto relative p-6 no-scrollbar">
+          <main className="flex-1 overflow-hidden relative p-6">
             {activeTab === 'planner' && (
               <div className="h-full flex flex-col gap-6 relative">
                 <div className="flex items-center justify-between shrink-0">
