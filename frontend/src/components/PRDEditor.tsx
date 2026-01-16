@@ -478,9 +478,9 @@ export const PRDEditor = ({
       <div
         key={i}
         className={cn(
-          "group relative min-h-[1.5rem] transition-colors px-2",
+          "group relative min-h-[1.5rem] px-2 rounded-md border border-transparent",
           !isPreview && (focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : "hover:bg-zinc-800/20"),
-          !isPartofBlock && "rounded-md border border-transparent my-0.5",
+          !isPartofBlock && "my-0.5",
           isPartofBlock && "font-mono py-0",
           !isPartofBlock && context.isInsideCodeBlock && (isDark ? "bg-zinc-900/50 font-mono" : "bg-zinc-100 font-mono")
         )}
@@ -570,7 +570,7 @@ export const PRDEditor = ({
           </div>
         ) : (
           <div className={cn(
-            "max-w-none transition-colors duration-300",
+            "max-w-none",
             !line && "opacity-20 italic text-[10px]"
           )}>
             {(() => {
@@ -656,7 +656,7 @@ export const PRDEditor = ({
           </div>
         )}
 
-        <div className="absolute -left-8 top-1 opacity-0 group-hover:opacity-40 transition-opacity">
+        <div className="absolute -left-8 top-1 opacity-0 group-hover:opacity-40">
           <Type size={12} className="text-muted" />
         </div>
       </div>
@@ -805,7 +805,7 @@ export const PRDEditor = ({
 
       <div 
         ref={scrollContainerRef}
-        className="flex-1 bg-panel border border-border rounded-xl overflow-y-auto scrollbar-thin p-6"
+        className="flex-1 bg-panel border border-border rounded-xl overflow-y-auto overflow-x-hidden scrollbar-thin p-6"
         onClick={(e) => {
           if (isPreview) return;
           if (e.target === e.currentTarget) {
