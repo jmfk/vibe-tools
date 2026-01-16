@@ -17,6 +17,7 @@ from vibe_tools.utils import (
     ensure_dir,
     get_agent_command,
     get_automerge_branch,
+    get_cursor_api_key,
     get_google_api_key,
     get_main_branch,
     get_project_name,
@@ -26,6 +27,7 @@ from vibe_tools.utils import (
     run_command,
     save_config,
     save_google_api_key,
+    save_cursor_api_key,
     safe_yaml_dump,
     check_and_install_build_tools,
     ensure_project_structure,
@@ -721,6 +723,7 @@ def api():
     """Configure API keys for LLM access."""
     click.echo("\n--- API Key Configuration ---")
 
+    # 1. Google API Key
     current_google_key = get_google_api_key() or ""
     new_google_key = click.prompt(
         "Enter Google API Key (for Gemini/google-genai)",
@@ -730,16 +733,28 @@ def api():
 
     if new_google_key:
         save_google_api_key(new_google_key)
-        # Also ensure it's removed from the old location in .vibe_config.json if present
+        # Also ensure it's removed from the old location in config.json if present
         config = load_config()
         if "google_api_key" in config:
             del config["google_api_key"]
             save_config(config)
-        click.echo(
-            "✅ Google API Key saved to config.json (and removed from old locations)"
-        )
+        click.echo("✅ Google API Key saved to .env")
     else:
         click.echo("⏩ Google API Key skipped.")
+
+    # 2. Cursor API Key
+    current_cursor_key = get_cursor_api_key() or ""
+    new_cursor_key = click.prompt(
+        "Enter Cursor API Key (for direct usage/stats)",
+        default=current_cursor_key,
+        hide_input=True,
+    )
+
+    if new_cursor_key:
+        save_cursor_api_key(new_cursor_key)
+        click.echo("✅ Cursor API Key saved to .env")
+    else:
+        click.echo("⏩ Cursor API Key skipped.")
 
 
 @setup_cli.command()

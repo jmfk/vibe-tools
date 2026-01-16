@@ -53,6 +53,18 @@ GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
 # Core lifecycle files
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
+# ... (rest of files)
+
+SENSITIVE_KEYS = {
+    "GOOGLE_API_KEY",
+    "CURSOR_API_KEY",
+    "GITHUB_TOKEN",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+    "STRIPE_SECRET_KEY",
+    "DATABASE_URL",
+}
 ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
 OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
@@ -264,6 +276,15 @@ def load_config(global_scope: bool = False) -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any], global_scope: bool = False):
     """Saves the project or global configuration."""
+    # Never save envs or vars to config.json
+    if not global_scope:
+        if "envs" in config:
+            del config["envs"]
+        if "env" in config:
+            del config["env"]
+        if "vars" in config:
+            del config["vars"]
+
     target = GLOBAL_CONFIG_FILE if global_scope else CONFIG_FILE
     ensure_dir(target.parent)
     target.write_text(json.dumps(config, indent=2))
@@ -765,102 +786,50 @@ def cleanup_stale_processes() -> List[str]:
 
 
 def get_google_api_key() -> Optional[str]:
-    """Retrieves the Google API key from environment variables or config.json."""
-    # 1. Check environment variables (for backward compatibility and overrides)
-    if os.environ.get("GOOGLE_API_KEY"):
-        return os.environ.get("GOOGLE_API_KEY")
-    
-    # 2. Check config.json
-    config = load_config()
-    current_env = config.get("current_env", "local")
-    envs = config.get("envs", {})
-    env_config = envs.get(current_env, {})
-    return env_config.get("vars", {}).get("GOOGLE_API_KEY")
+    """Retrieves the Google API key from environment variables."""
+    return os.environ.get("GOOGLE_API_KEY")
 
 
 def get_cursor_api_key() -> Optional[str]:
-    """Retrieves the Cursor API key from environment variables or config.json."""
-    # 1. Check environment variables
-    if os.environ.get("CURSOR_API_KEY"):
-        return os.environ.get("CURSOR_API_KEY")
+    """Retrieves the Cursor API key from environment variables."""
+    return os.environ.get("CURSOR_API_KEY")
+
+
+def set_env_var(key: str, value: str):
+    """Sets an environment variable in the .env file and current process."""
+    env_file = find_dotenv() or ".env"
     
-    # 2. Check config.json
-    config = load_config()
-    current_env = config.get("current_env", "local")
-    envs = config.get("envs", {})
-    env_config = envs.get(current_env, {})
-    return env_config.get("vars", {}).get("CURSOR_API_KEY")
+    if os.path.exists(env_file):
+        content = pathlib.Path(env_file).read_text()
+        lines = content.splitlines()
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith(f"{key}="):
+                lines[i] = f"{key}={value}"
+                found = True
+                break
+        if not found:
+            lines.append(f"{key}={value}")
+        pathlib.Path(env_file).write_text("\n".join(lines) + "\n")
+    else:
+        pathlib.Path(env_file).write_text(f"{key}={value}\n")
+    
+    os.environ[key] = value
+
+
+def save_cursor_api_key(api_key: str):
+    """Saves the Cursor API key to the .env file."""
+    set_env_var("CURSOR_API_KEY", api_key)
 
 
 def save_google_api_key(api_key: str):
-    """Saves the Google API key to the config.json current environment."""
-    config = load_config()
-    current_env = config.get("current_env", "local")
-    if "envs" not in config:
-        config["envs"] = {}
-    if current_env not in config["envs"]:
-        # Migrate old 'env' if it exists
-        if "env" in config:
-            config["envs"][current_env] = config["env"]
-            del config["env"]
-        else:
-            config["envs"][current_env] = {}
-    
-    if "vars" not in config["envs"][current_env]:
-        config["envs"][current_env]["vars"] = {}
-    
-    config["envs"][current_env]["vars"]["GOOGLE_API_KEY"] = api_key
-    save_config(config)
-    
-    # Also update current session's environment
-    os.environ["GOOGLE_API_KEY"] = api_key
+    """Saves the Google API key to the .env file."""
+    set_env_var("GOOGLE_API_KEY", api_key)
 
 
 def migrate_env_to_config():
-    """Migrates old 'env' key and .env file content to the new 'envs' structure in config.json."""
-    config = load_config()
-    changed = False
-
-    # 1. Migrate old 'env' key to 'envs.local'
-    if "env" in config and "envs" not in config:
-        config["current_env"] = "local"
-        config["envs"] = {"local": config["env"]}
-        del config["env"]
-        changed = True
-    elif "envs" not in config:
-        config["current_env"] = "local"
-        config["envs"] = {"local": {}}
-        changed = True
-
-    # 2. Migrate .env file content
-    env_file = find_dotenv() or ".env"
-    if os.path.exists(env_file):
-        try:
-            content = pathlib.Path(env_file).read_text()
-            current_env = config.get("current_env", "local")
-            if "vars" not in config["envs"][current_env]:
-                config["envs"][current_env]["vars"] = {}
-            
-            for line in content.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip().strip("'").strip('"')
-                    if key and key not in config["envs"][current_env]["vars"]:
-                        config["envs"][current_env]["vars"][key] = value
-                        changed = True
-            
-            # After successful migration, we could rename/delete .env, 
-            # but let's keep it for now and just prioritize config.json
-        except Exception as e:
-            logger.error(f"Error migrating .env to config.json: {e}")
-
-    if changed:
-        save_config(config)
-        logger.info("Successfully migrated environment configuration to config.json")
+    """DEPRECATED: We no longer migrate envs to config.json."""
+    pass
 
 
 def get_vibe_status_report() -> str:
@@ -1773,16 +1742,8 @@ def save_google_api_key(api_key: str):
 
 
 def sync_env_file():
-    """Syncs project configuration to the .env file."""
-    env_file = find_dotenv() or ".env"
-
-    # This is a simplified version for now to satisfy imports
-    if not os.path.exists(env_file):
-        with open(env_file, "w") as f:
-            f.write("# Vibe-Tools Environment\n")
-
-    # Add logic if needed, but for now just ensure it exists
-    out_info("Syncing .env file...")
+    """DEPRECATED: We no longer sync project config to .env."""
+    pass
 
 
 def get_instructions_context():

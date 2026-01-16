@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: forbid-secrets-in-config
+        name: Forbid secrets in config.json
+        entry: python scripts/check_secrets.py
+        language: python
+        files: implementation/config\.json$
+        pass_filenames: true

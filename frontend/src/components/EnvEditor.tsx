@@ -36,22 +36,21 @@ export const EnvEditor: React.FC<EnvEditorProps> = ({ workspaceRoot, accentColor
     setLoading(true);
     setError(null);
     try {
-      const path = `${workspaceRoot}/implementation/config.json`;
+      const path = `${workspaceRoot}/.env`;
       const content = await invoke<string>('read_file_content', { path });
-      const config = JSON.parse(content);
-      const currentEnv = config.current_env || 'local';
-      const envs = config.envs || {};
-      const envConfig = envs[currentEnv] || {};
-      const envVarsObj = envConfig.vars || {};
       
-      const vars: EnvVar[] = Object.entries(envVarsObj).map(([key, value]) => ({
-        key,
-        value: String(value)
-      }));
+      const vars: EnvVar[] = content.split('\n')
+        .filter(line => line.trim() && !line.startsWith('#') && line.includes('='))
+        .map(line => {
+          const [key, ...valueParts] = line.split('=');
+          return {
+            key: key.trim(),
+            value: valueParts.join('=').trim().replace(/^["']|["']$/g, '')
+          };
+        });
       setEnvVars(vars);
     } catch (err) {
-      console.error("Error loading config.json for env vars:", err);
-      // It's okay if config.json doesn't have the structure yet
+      console.error("Error loading .env file:", err);
       setEnvVars([]);
     } finally {
       setLoading(false);
@@ -68,26 +67,15 @@ export const EnvEditor: React.FC<EnvEditorProps> = ({ workspaceRoot, accentColor
     setSaving(true);
     setError(null);
     try {
-      const path = `${workspaceRoot}/implementation/config.json`;
-      const content = await invoke<string>('read_file_content', { path });
-      const config = JSON.parse(content);
-      
-      const currentEnv = config.current_env || 'local';
-      if (!config.envs) config.envs = {};
-      if (!config.envs[currentEnv]) config.envs[currentEnv] = {};
-      
-      const envVarsObj: Record<string, string> = {};
-      envVars.forEach(v => {
-        if (v.key.trim()) {
-          envVarsObj[v.key.trim()] = v.value.trim();
-        }
-      });
-      
-      config.envs[currentEnv].vars = envVarsObj;
+      const path = `${workspaceRoot}/.env`;
+      const content = envVars
+        .filter(v => v.key.trim())
+        .map(v => `${v.key.trim()}=${v.value.trim()}`)
+        .join('\n') + '\n';
       
       await invoke('write_file_content', { 
         path, 
-        content: JSON.stringify(config, null, 2) 
+        content
       });
     } catch (err: any) {
       setError(err.toString());
@@ -128,7 +116,7 @@ export const EnvEditor: React.FC<EnvEditorProps> = ({ workspaceRoot, accentColor
           </div>
           <div>
             <h2 className="text-xl font-bold text-foreground">Environment Variables</h2>
-            <p className="text-xs text-muted">Manage your project's environment variables in config.json</p>
+            <p className="text-xs text-muted">Manage your project's environment variables in .env</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -212,7 +200,7 @@ export const EnvEditor: React.FC<EnvEditorProps> = ({ workspaceRoot, accentColor
 
       <div className="flex items-center gap-2 px-2 text-[10px] text-muted">
         <AlertCircle size={12} />
-        Changes are saved directly to the project's config.json file under the current environment.
+        Changes are saved to the .env file.
       </div>
     </div>
   );
