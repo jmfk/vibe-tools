@@ -540,7 +540,7 @@ async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, comma
 
     log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
-    let mut child = spawn_vibe_process(command.clone(), args).await?;
+    let mut child = spawn_vibe_process(command.clone(), args.clone()).await?;
     
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
@@ -549,7 +549,7 @@ async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, comma
     let mut err_reader = BufReader::new(stderr).lines();
     
     let mut result_json: Option<serde_json::Value> = None;
-    let mut error_msg = String::new();
+    let error_msg;
 
     // Spawn a task to capture stderr
     let error_capture = tokio::spawn(async move {
