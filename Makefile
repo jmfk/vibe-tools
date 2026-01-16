@@ -31,7 +31,24 @@ test-core: ## Run Rust-specific Cargo tests
 	cd frontend/src-tauri && cargo test
 
 # Development Targets
-install: install-backend install-frontend ## Install all dependencies for development
+install: install-backend install-frontend setup-hooks ## Install all dependencies for development
+
+setup-hooks: ## Install git hooks
+	@echo "Installing git hooks..."
+	@cp scripts/check_secrets.py .git/hooks/pre-push.py
+	@cat <<'EOF' > .git/hooks/pre-push
+#!/bin/bash
+echo "Running sanity check for keys and passwords..."
+python3 scripts/check_secrets.py
+if [ $$? -ne 0 ]; then
+    echo "Push aborted: Potential secrets detected."
+    exit 1
+fi
+echo "Sanity check passed."
+exit 0
+EOF
+	@chmod +x .git/hooks/pre-push
+	@echo "Git hooks installed."
 
 install-backend: ## Install Python backend dependencies
 	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \

@@ -98,6 +98,23 @@ def check_dict(d, filepath, prefix=""):
 
 if __name__ == "__main__":
     files = sys.argv[1:]
+    
+    if not files:
+        # If no files provided, check staged files and changed files
+        print("No files provided, checking changed and staged files...")
+        try:
+            import subprocess
+            # Get staged files
+            staged = subprocess.check_output(["git", "diff", "--cached", "--name-only"], text=True).splitlines()
+            # Get unstaged changes
+            changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+            # Get untracked files
+            untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard"], text=True).splitlines()
+            files = list(set(staged + changed + untracked))
+        except Exception as e:
+            print(f"Error getting git files: {e}")
+            sys.exit(1)
+
     overall_success = True
     for file in files:
         if not check_file(file):

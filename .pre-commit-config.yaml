@@ -9,9 +9,10 @@ repos:
       - id: trailing-whitespace
   - repo: local
     hooks:
-      - id: forbid-secrets-in-config
-        name: Forbid secrets in config.json
+      - id: forbid-secrets
+        name: Forbid secrets in codebase
         entry: python scripts/check_secrets.py
         language: python
-        files: implementation/config\.json$
+        files: \.(py|js|ts|tsx|json|yaml|yml|md)$
+        exclude: ^\.env$|^scripts/check_secrets\.py$
         pass_filenames: true
