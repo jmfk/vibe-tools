@@ -1092,7 +1092,7 @@ export const PRDEditor = ({
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '_', '_')} icon={<Italic size={14} />} label="Italic (Ctrl+I)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '~~', '~~')} icon={<Strikethrough size={14} />} label="Strikethrough" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '`', '`')} icon={<Code size={14} />} label="Inline Code" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertCodeBlock(focusedIndex)} icon={<Terminal size={14} />} label="Insert Code Block" disabled={focusedIndex !== null && (lineContexts[focusedIndex]?.isInsideCodeBlock || lineContexts[focusedIndex]?.isInsideDetails)} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertCodeBlock(focusedIndex)} icon={<Terminal size={14} />} label="Insert Code Block" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && removeCodeBlock(focusedIndex)} icon={<Trash2 size={14} className="text-red-400" />} label="Remove Code Block" disabled={focusedIndex !== null && !lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'link', '')} icon={<Link size={14} />} label="Link (Ctrl+K)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <div className="w-px h-4 bg-border mx-1 self-center" />
@@ -1164,7 +1164,7 @@ export const PRDEditor = ({
           </ContextMenuSubMenu>
 
           <ContextMenuSubMenu isDark={isDark} icon={<Plus size={12} />} label="Insert Block">
-            <ContextMenuItem isDark={isDark} onClick={() => { insertCodeBlock(contextMenu.index); setContextMenu(null); }} icon={<Terminal size={12} />} label="Code Block" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock || lineContexts[contextMenu.index]?.isInsideDetails} />
+            <ContextMenuItem isDark={isDark} onClick={() => { insertCodeBlock(contextMenu.index); setContextMenu(null); }} icon={<Terminal size={12} />} label="Code Block" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
             <ContextMenuItem isDark={isDark} onClick={() => { insertDetails(contextMenu.index); setContextMenu(null); }} icon={<ChevronDown size={12} />} label="Details Section" disabled={lineContexts[contextMenu.index]?.isInsideDetails || lineContexts[contextMenu.index]?.isInsideCodeBlock} />
             <ContextMenuItem isDark={isDark} onClick={() => { toggleList(contextMenu.index); setContextMenu(null); }} icon={<Type size={12} />} label="List Item" shortcut="Ctrl+L" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
             <ContextMenuItem isDark={isDark} onClick={() => { toggleChecklist(contextMenu.index); setContextMenu(null); }} icon={<ListTodo size={12} />} label="Checklist Item" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />

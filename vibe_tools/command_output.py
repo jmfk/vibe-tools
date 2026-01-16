@@ -284,12 +284,15 @@ class OutputManager:
                 if ref_path.exists():
                     try:
                         content = ref_path.read_text(encoding="utf-8")
-                        escaped_content = html.escape(content).replace("\n", "<br/>")
 
                         md_entry += ">\n"
                         md_entry += "> <details>\n"
                         md_entry += f"> <summary>{event_name}</summary>\n"
-                        md_entry += f"> {escaped_content}\n"
+                        md_entry += ">\n"
+                        md_entry += "> ```\n"
+                        for line in content.splitlines():
+                            md_entry += f"> {line}\n"
+                        md_entry += "> ```\n"
                         md_entry += "> </details>\n"
                     except Exception as e:
                         md_entry += f">\n> *Could not include content: {e}*\n"

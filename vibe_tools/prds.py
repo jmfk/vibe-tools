@@ -141,13 +141,13 @@ class PRD:
 
             # Clean content/history from the bottom metadata block
             content = re.sub(
-                r"\n*---\s*<details>.*?</details>\s*<!-- vibe-id: .*? -->",
+                r"\n*---\s*<details>\s*<summary>Metadata</summary>.*?</details>\s*<!-- vibe-id: .*? -->",
                 "",
                 content,
                 flags=re.DOTALL,
             ).strip()
             content = re.sub(
-                r"\n*---\s*<details>.*?</details>", "", content, flags=re.DOTALL
+                r"\n*---\s*<details>\s*<summary>Metadata</summary>.*?</details>", "", content, flags=re.DOTALL
             ).strip()
             content = re.sub(
                 r"\n*<!-- vibe-id: .*? -->", "", content, flags=re.DOTALL
