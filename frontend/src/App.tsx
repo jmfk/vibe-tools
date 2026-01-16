@@ -1175,6 +1175,10 @@ const App: React.FC = () => {
           status: payload.status,
           progress: payload.progress
         });
+      } else if (payload.type === 'stats_result') {
+        if (payload.total_cost !== undefined) {
+          setTotalCost(payload.total_cost);
+        }
       } else if (payload.type === 'result') {
         setPendingPrompt(null);
         setServerStatus(null);
@@ -1188,6 +1192,26 @@ const App: React.FC = () => {
     
     return () => {
       unlistenServer.then(f => f());
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchUsage = () => {
+      // Periodic background usage fetch
+      invoke('run_vibe_command', { command: 'usage', args: [] }).catch(() => {});
+    };
+
+    fetchUsage();
+
+    const unlistenFinished = listen('command-finished', () => {
+      fetchUsage();
+    });
+
+    const interval = setInterval(fetchUsage, 5 * 60 * 1000);
+
+    return () => {
+      unlistenFinished.then(f => f());
+      clearInterval(interval);
     };
   }, []);
 
