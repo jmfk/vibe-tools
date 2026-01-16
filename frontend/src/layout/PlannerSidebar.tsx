@@ -13,6 +13,7 @@ interface PlannerSidebarProps {
   workspaceRoot: string;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (a: Artifact) => void;
+  onEditArtifact: (a: Artifact) => void;
   accentColor: string;
   isDark: boolean;
   totalCost: number;
@@ -23,6 +24,7 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
   workspaceRoot,
   selectedArtifact,
   onSelectArtifact,
+  onEditArtifact,
   accentColor,
   isDark,
   totalCost,
@@ -36,6 +38,7 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
             <VibeSidebar 
               root={workspaceRoot} 
               onSelect={onSelectArtifact} 
+              onEdit={onEditArtifact}
               selectedPath={selectedArtifact?.path} 
               accentColor={accentColor} 
               isDark={isDark} 

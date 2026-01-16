@@ -238,12 +238,14 @@ const DroppableColumn = ({ id, children, className }: { id: string, children: Re
 export const PlannerBoard = ({
   workspaceRoot,
   onSelectPRD,
+  onEditPRD,
   onRefresh,
   accentColor,
   isDark
 }: {
   workspaceRoot: string;
   onSelectPRD: (prd: PRD) => void;
+  onEditPRD: (prd: PRD) => void;
   onRefresh?: () => void;
   accentColor?: string;
   isDark?: boolean;
@@ -259,8 +261,6 @@ export const PlannerBoard = ({
     next: true,
     history: false
   });
-  const [editingPRD, setEditingPRD] = useState<PRD | null>(null);
-  const [editContent, setEditContent] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -480,27 +480,7 @@ updated_at: '${new Date().toISOString()}'
   };
 
   const handleEditPRD = async (prd: PRD) => {
-    try {
-      const content = await invoke<string>('read_file_content', { path: prd.path });
-      setEditingPRD(prd);
-      setEditContent(content);
-    } catch (err) {
-      console.error('Failed to load PRD content:', err);
-    }
-  };
-
-  const handleSavePRD = async () => {
-    if (!editingPRD) return;
-    try {
-      await invoke('write_file_content', { path: editingPRD.path, content: editContent });
-      setEditingPRD(null);
-      setEditContent('');
-      loadPRDs();
-      onRefresh?.();
-    } catch (err) {
-      console.error('Failed to save PRD:', err);
-      alert('Failed to save PRD.');
-    }
+    onEditPRD(prd);
   };
 
   const handleUpdatePRDTitle = async (prd: PRD, newTitle: string) => {
@@ -555,20 +535,6 @@ updated_at: '${new Date().toISOString()}'
       scrollContainerRef.current.scrollLeft += e.deltaY;
     }
   };
-
-  if (editingPRD) {
-    return (
-      <PRDEditor
-        prd={editingPRD}
-        content={editContent}
-        onContentChange={setEditContent}
-        onSave={handleSavePRD}
-        onCancel={() => setEditingPRD(null)}
-        accentColor={accentColor}
-        isDark={isDark}
-      />
-    );
-  }
 
   return (
     <div className="h-full flex flex-col gap-4">

@@ -69,6 +69,7 @@ import { EnvEditor } from './components/EnvEditor';
 import { StatsView } from './components/StatsView';
 import { InterfaceDesigner } from './components/InterfaceDesigner';
 import { DatabaseDesigner } from './components/DatabaseDesigner';
+import { PRDEditor } from './components/PRDEditor';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -829,6 +830,41 @@ const App: React.FC = () => {
     return localStorage.getItem('vibe-stats-period') || 'month';
   });
 
+  const [editingPRD, setEditingPRD] = useState<any | null>(null);
+  const [editContent, setEditContent] = useState('');
+
+  const handleEditPRD = async (prd: any) => {
+    try {
+      const content = await invoke<string>('read_file_content', { path: prd.path });
+      // Map sidebar Artifact to PRD if needed, but PRDEditor only needs id, title, path, filename
+      const prdData = {
+        id: prd.id || prd.name.replace('.md', ''),
+        title: prd.name, // Will be updated by metadata if needed, but for now name is title
+        path: prd.path,
+        filename: prd.name,
+        status: prd.status || '',
+        columnId: '' // Not strictly needed for editor
+      };
+      setEditingPRD(prdData);
+      setEditContent(content);
+    } catch (err) {
+      console.error('Failed to load PRD content:', err);
+    }
+  };
+
+  const handleSavePRD = async () => {
+    if (!editingPRD) return;
+    try {
+      await invoke('write_file_content', { path: editingPRD.path, content: editContent });
+      setEditingPRD(null);
+      setEditContent('');
+      // We might need to refresh the board if it's visible
+    } catch (err) {
+      console.error('Failed to save PRD:', err);
+      alert('Failed to save PRD.');
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('vibe-stats-period', statsPeriod);
   }, [statsPeriod]);
@@ -1236,6 +1272,7 @@ const App: React.FC = () => {
                 workspaceRoot={workspaceRoot}
                 selectedArtifact={selectedArtifact}
                 onSelectArtifact={setSelectedArtifact}
+                onEditArtifact={handleEditPRD}
                 accentColor={accentColor}
                 isDark={themeColors.isDark}
                 totalCost={totalCost}
@@ -1270,7 +1307,17 @@ const App: React.FC = () => {
           {/* Center Pane: Main Content */}
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
             <main className="flex-1 overflow-y-auto relative p-6">
-              {activeTab === 'planner' && (
+              {editingPRD ? (
+                <PRDEditor
+                  prd={editingPRD}
+                  content={editContent}
+                  onContentChange={setEditContent}
+                  onSave={handleSavePRD}
+                  onCancel={() => setEditingPRD(null)}
+                  accentColor={accentColor}
+                  isDark={themeColors.isDark}
+                />
+              ) : activeTab === 'planner' ? (
                 <div className="h-full flex flex-col gap-6 relative">
                   <div className="flex items-center justify-between shrink-0">
                     <div>
@@ -1324,6 +1371,7 @@ const App: React.FC = () => {
                             relPath: prd.path.replace(workspaceRoot, '')
                           });
                         }}
+                        onEditPRD={handleEditPRD}
                         onRefresh={loadRegistry}
                         accentColor={accentColor}
                         isDark={themeColors.isDark}
@@ -1348,15 +1396,13 @@ const App: React.FC = () => {
                     )}
                   </div>
                 </div>
-              )}
-              {activeTab === 'issues' && (
+              ) : activeTab === 'issues' ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted">
                   <Bug size={48} className="mb-4 opacity-10" />
                   <h3 className="text-lg font-medium text-foreground">Issue Management</h3>
                   <p className="text-sm mt-1">Local and GitHub issues integration coming soon</p>
                 </div>
-              )}
-              {activeTab === 'stats' && (
+              ) : activeTab === 'stats' ? (
                 <div className="h-full">
                   <StatsView 
                     accentColor={accentColor} 
@@ -1364,8 +1410,7 @@ const App: React.FC = () => {
                     period={statsPeriod}
                   />
                 </div>
-              )}
-              {activeTab === 'projects' && (
+              ) : activeTab === 'projects' ? (
                 <div className="h-full">
                   <ProjectManagerView 
                     registry={projectRegistry} 
@@ -1376,8 +1421,7 @@ const App: React.FC = () => {
                     onRefresh={loadRegistry} 
                   />
                 </div>
-              )}
-              {activeTab === 'settings' && activeProject && (
+              ) : activeTab === 'settings' && activeProject ? (
                 <div className="h-full">
                   <ProjectSettingsEditor 
                     project={activeProject}
@@ -1390,7 +1434,7 @@ const App: React.FC = () => {
                     onColorChange={setAccentColor}
                   />
                 </div>
-              )}
+              ) : null}
             </main>
           </Panel>
 
@@ -1400,9 +1444,9 @@ const App: React.FC = () => {
           <Panel id="sidebar-right" defaultSize={25} minSize={20} className="flex flex-col border-l transition-colors duration-300 bg-background border-border">
             {activeTab === 'planner' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-            <AgentInteraction 
-              id="planner-chat"
-              messages={plannerMessages}
+                <AgentInteraction 
+                  id="planner-chat"
+                  messages={plannerMessages}
                   onClearChat={() => setPlannerMessages([])}
                   interactionMode={interactionMode}
                   setInteractionMode={setInteractionMode}
@@ -1416,22 +1460,13 @@ const App: React.FC = () => {
                   setInputValue={setPlannerInputValue}
                   onSendMessage={() => handleSendMessage('planner')}
                 />
-                <div className="h-48 border-t p-2 overflow-hidden flex flex-col transition-colors duration-300 bg-background border-border">
-                  <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-widest mb-1 text-muted">
-                    <Terminal size={10} />
-                    Command Output
-                  </div>
-                  <div className="flex-1 overflow-y-auto font-mono text-[10px] p-2 rounded scrollbar-none transition-colors duration-300 bg-panel border-border border shadow-inner">
-                    <TerminalOutputView />
-                  </div>
-                </div>
               </div>
             )}
             {activeTab === 'issues' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-            <AgentInteraction 
-              id="issues-chat"
-              messages={issuesMessages}
+                <AgentInteraction 
+                  id="issues-chat"
+                  messages={issuesMessages}
                   onClearChat={() => setIssuesMessages([])}
                   interactionMode={interactionMode}
                   setInteractionMode={setInteractionMode}
@@ -1445,15 +1480,6 @@ const App: React.FC = () => {
                   setInputValue={setIssuesInputValue}
                   onSendMessage={() => handleSendMessage('issues')}
                 />
-                <div className="h-48 border-t p-2 overflow-hidden flex flex-col transition-colors duration-300 bg-background border-border">
-                  <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-widest mb-1 text-muted">
-                    <Terminal size={10} />
-                    Command Output
-                  </div>
-                  <div className="flex-1 overflow-y-auto font-mono text-[10px] p-2 rounded scrollbar-none transition-colors duration-300 bg-panel border-border border shadow-inner">
-                    <TerminalOutputView />
-                  </div>
-                </div>
               </div>
             )}
             {activeTab !== 'planner' && activeTab !== 'issues' && (
