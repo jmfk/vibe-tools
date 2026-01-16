@@ -965,29 +965,6 @@ def env(name, python_version):
     """Set up and verify a managed Python environment."""
     click.echo(f"\n--- Environment Setup & Verification: {name} (Python {python_version}) ---")
 
-    config = load_config()
-    if "envs" not in config:
-        config["envs"] = {}
-    
-    # Set as current environment
-    config["current_env"] = name
-    env_config = config["envs"].get(name, {})
-
-    # If env is already configured, verify it
-    if env_config:
-        from vibe_tools.utils import check_env_health
-
-        if check_env_health():
-            click.echo(f"✅ Environment '{name}' is healthy and correctly configured.")
-            if not click.confirm("Re-run full setup anyway?", default=False):
-                return
-        else:
-            click.echo(f"⚠️  Environment '{name}' verification failed.")
-            if not click.confirm(
-                "Attempt to fix/re-setup the environment?", default=True
-            ):
-                return
-
     # 1. Check for Homebrew
     try:
         subprocess.run(["brew", "--version"], check=True, capture_output=True)
@@ -1042,17 +1019,6 @@ def env(name, python_version):
     # 6. Set local version
     click.echo(f"Setting local python version to {venv_name}...")
     run_command(["pyenv", "local", venv_name])
-
-    # Update config.json
-    config["envs"][name] = {
-        "type": "pyenv-virtualenv",
-        "python_version": python_version,
-        "venv_name": venv_name,
-        "path": str(pathlib.Path.cwd()),
-        "last_setup": datetime.datetime.now().isoformat(),
-        "vars": env_config.get("vars", {})
-    }
-    save_config(config)
 
     # 7. Initialize Project Infrastructure
     ensure_infrastructure()

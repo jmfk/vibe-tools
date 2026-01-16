@@ -268,7 +268,13 @@ def load_config(global_scope: bool = False) -> Dict[str, Any]:
     target = GLOBAL_CONFIG_FILE if global_scope else CONFIG_FILE
     if target.exists():
         try:
-            return json.loads(target.read_text())
+            config = json.loads(target.read_text())
+            # DEFENSIVE: Never return envs/vars from config.json
+            if not global_scope:
+                for key in ["envs", "env", "vars", "current_env"]:
+                    if key in config:
+                        del config[key]
+            return config
         except json.JSONDecodeError:
             return {}
     return {}
@@ -278,12 +284,9 @@ def save_config(config: Dict[str, Any], global_scope: bool = False):
     """Saves the project or global configuration."""
     # Never save envs or vars to config.json
     if not global_scope:
-        if "envs" in config:
-            del config["envs"]
-        if "env" in config:
-            del config["env"]
-        if "vars" in config:
-            del config["vars"]
+        for key in ["envs", "env", "vars", "current_env"]:
+            if key in config:
+                del config[key]
 
     target = GLOBAL_CONFIG_FILE if global_scope else CONFIG_FILE
     ensure_dir(target.parent)
@@ -1063,11 +1066,6 @@ def get_vibe_status_report() -> str:
 
 def check_env_health() -> bool:
     """Checks if the current environment is healthy and correctly configured."""
-    config = load_config()
-    current_env = config.get("current_env", "local")
-    envs = config.get("envs", {})
-    env_config = envs.get(current_env)
-
     # 1. Check if project package is importable
     project_name = get_project_name()
     package_found = False
@@ -1088,19 +1086,6 @@ def check_env_health() -> bool:
         # We don't return False here yet as it might be a fresh project
     else:
         logger.debug("✅ Project package structure verified.")
-
-    # 2. If managed env is configured, check if we're in it
-    if env_config:
-        venv_name = env_config.get("venv_name")
-        if venv_name:
-            current_prefix = sys.prefix
-            if venv_name not in current_prefix:
-                logger.warning(
-                    f"⚠️  Managed environment '{venv_name}' is configured but not active."
-                )
-                logger.warning(f"   Current environment: {current_prefix}")
-                return False
-            logger.debug(f"✅ Running in managed environment: {venv_name}")
 
     return True
 

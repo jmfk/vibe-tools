@@ -69,15 +69,6 @@ export const DEFAULT_CONFIG = {
     standalone: true,
     deps_branch_enabled: false
   },
-  current_env: "local",
-  envs: {
-    local: {
-      type: "pyenv-virtualenv",
-      python_version: "3.11.10",
-      venv_name: "vibe-tools",
-      vars: {}
-    }
-  },
   staging: {
     namespace: "vibe-staging",
     environment: "local"
@@ -464,18 +455,6 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange, accent
       </Section>
 
       <Section title="Environment & Setup" icon={Layers} accentColor={accentColor}>
-        <Field label="Current Environment" description="The active environment name." isOverride={isOverride('current_env')}>
-          <Input value={getVal('current_env')} onChange={(v) => handleChange('current_env', v)} />
-        </Field>
-        <Field label="Env Type" description="Virtual environment manager (e.g. 'pyenv-virtualenv')." isOverride={isOverride(`envs.${getVal('current_env')}.type`)}>
-          <Input value={getVal(`envs.${getVal('current_env')}.type`)} onChange={(v) => handleChange(`envs.${getVal('current_env')}.type`, v)} />
-        </Field>
-        <Field label="Python Version" isOverride={isOverride(`envs.${getVal('current_env')}.python_version`)}>
-          <Input value={getVal(`envs.${getVal('current_env')}.python_version`)} onChange={(v) => handleChange(`envs.${getVal('current_env')}.python_version`, v)} />
-        </Field>
-        <Field label="Venv Name" isOverride={isOverride(`envs.${getVal('current_env')}.venv_name`)}>
-          <Input value={getVal(`envs.${getVal('current_env')}.venv_name`)} onChange={(v) => handleChange(`envs.${getVal('current_env')}.venv_name`, v)} />
-        </Field>
         <Field label="Standalone Mode" description="Run services locally without external dependencies." isOverride={isOverride('setup.standalone')}>
           <Switch checked={getVal('setup.standalone')} onChange={(v) => handleChange('setup.standalone', v)} accentColor={accentColor} />
         </Field>

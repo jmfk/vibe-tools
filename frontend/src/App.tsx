@@ -264,7 +264,7 @@ const ProjectSettingsEditor = ({
   onThemeChange: (theme: ThemeMode) => void,
   onColorChange: (color: string) => void
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'colors' | 'config' | 'envs'>('config');
+  const [activeSubTab, setActiveSubTab] = useState<'colors' | 'config'>('config');
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -506,63 +506,23 @@ const ProjectSettingsEditor = ({
           </div>
         )}
 
-        {activeSubTab === 'config' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-1 space-y-6">
-              <section className="bg-panel/50 border border-border/50 rounded-2xl p-6">
-                <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest mb-4">
-                  <Activity size={16} />
-                  Project Info
+        {activeSubTab === 'config' && config && (
+          <div className="lg:col-span-2">
+            <div className="bg-panel border border-border rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
+              <div className="px-6 py-4 bg-panel border-b border-border flex items-center justify-between shrink-0">
+                <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
+                  <Settings size={16} />
+                  Project Rules & Agent Configuration
                 </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Project Name</label>
-                    <input 
-                      type="text" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">Local Path</label>
-                    <input 
-                      type="text" 
-                      value={path}
-                      onChange={(e) => setPath(e.target.value)}
-                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent text-muted"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1.5 block">GitHub URL</label>
-                    <input 
-                      type="text" 
-                      value={githubUrl}
-                      onChange={(e) => setGithubUrl(e.target.value)}
-                      className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
-                    />
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <div className="lg:col-span-2">
-              <div className="bg-panel border border-border rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
-                <div className="px-6 py-4 bg-panel border-b border-border flex items-center justify-between shrink-0">
-                  <h3 className="text-xs font-bold text-muted flex items-center gap-2 uppercase tracking-widest">
-                    <Settings size={16} />
-                    Project Rules & Agent Configuration
-                  </h3>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-                  <ConfigForm config={config} onChange={setConfig} accentColor={color} />
-                </div>
               </div>
-              <p className="mt-3 text-[10px] text-muted flex items-center gap-1.5 px-2">
-                <AlertCircle size={10} />
-                These settings are stored in `implementation/config.json` and affect how AI agents interact with your codebase.
-              </p>
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                <ConfigForm config={config} onChange={setConfig} accentColor={color} />
+              </div>
             </div>
+            <p className="mt-3 text-[10px] text-muted flex items-center gap-1.5 px-2">
+              <AlertCircle size={10} />
+              These settings are stored in `implementation/config.json` and affect how AI agents interact with your codebase.
+            </p>
           </div>
         )}
 
