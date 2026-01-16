@@ -8,6 +8,7 @@ import {
   PlayCircle, 
   TestTube, 
   LayoutDashboard,
+  Layout,
   ChevronLeft,
   ChevronRight,
   Terminal,
@@ -66,12 +67,14 @@ import { UnifiedLogMonitor } from './components/UnifiedLogMonitor';
 import { ConfigForm } from './components/ConfigForm';
 import { EnvEditor } from './components/EnvEditor';
 import { StatsView } from './components/StatsView';
+import { InterfaceDesigner } from './components/InterfaceDesigner';
+import { DatabaseDesigner } from './components/DatabaseDesigner';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Tab = 'planner' | 'issues' | 'projects' | 'settings' | 'env' | 'stats';
+type Tab = 'planner' | 'issues' | 'projects' | 'settings' | 'env' | 'stats' | 'interface-designer' | 'database-designer';
 
 type ThemeMode = 'night' | 'day' | 'morning' | 'sunset';
 
@@ -776,6 +779,18 @@ const App: React.FC = () => {
       content: "Hello! I am the Issues Agent. How can I help you with your bug tracking today?"
     }
   ]);
+  const [interfaceMessages, setInterfaceMessages] = useState<Message[]>([
+    {
+      role: 'Architect',
+      content: "Hello! I am the Interface Designer Agent. How can I help you design your UI today?"
+    }
+  ]);
+  const [databaseMessages, setDatabaseMessages] = useState<Message[]>([
+    {
+      role: 'Architect',
+      content: "Hello! I am the Database Designer Agent. How can I help you architect your schema today?"
+    }
+  ]);
   useEffect(() => {
     if (selectedArtifact) {
       localStorage.setItem('vibe-selected-artifact', JSON.stringify(selectedArtifact));
@@ -786,6 +801,8 @@ const App: React.FC = () => {
 
   const [plannerInputValue, setPlannerInputValue] = useState('');
   const [issuesInputValue, setIssuesInputValue] = useState('');
+  const [interfaceInputValue, setInterfaceInputValue] = useState('');
+  const [databaseInputValue, setDatabaseInputValue] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>(() => {
@@ -943,10 +960,10 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handlePromptSubmit = async (context: 'planner' | 'issues' = activeTab === 'issues' ? 'issues' : 'planner') => {
-    const inputValue = context === 'planner' ? plannerInputValue : issuesInputValue;
-    const setMessages = context === 'planner' ? setPlannerMessages : setIssuesMessages;
-    const setInputValue = context === 'planner' ? setPlannerInputValue : setIssuesInputValue;
+  const handlePromptSubmit = async (context: 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
+    const inputValue = context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
+    const setMessages = context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
+    const setInputValue = context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
 
     if (!inputValue.trim()) return;
     const val = inputValue.trim();
@@ -973,14 +990,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSendMessage = (context: 'planner' | 'issues' = activeTab === 'issues' ? 'issues' : 'planner') => {
+  const handleSendMessage = (context: 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
     if (pendingPrompt) {
       handlePromptSubmit(context);
       return;
     }
-    const inputValue = context === 'planner' ? plannerInputValue : issuesInputValue;
-    const setMessages = context === 'planner' ? setPlannerMessages : setIssuesMessages;
-    const setInputValue = context === 'planner' ? setPlannerInputValue : setIssuesInputValue;
+    const inputValue = context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
+    const setMessages = context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
+    const setInputValue = context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
 
     if (!inputValue.trim()) return;
     
@@ -1101,6 +1118,22 @@ const App: React.FC = () => {
               isDark={themeColors.isDark}
             />
             <TabButton 
+              active={activeTab === 'interface-designer'} 
+              onClick={() => setActiveTab('interface-designer')}
+              icon={<Layout size={14} />}
+              label="Interface"
+              accentColor={accentColor}
+              isDark={themeColors.isDark}
+            />
+            <TabButton 
+              active={activeTab === 'database-designer'} 
+              onClick={() => setActiveTab('database-designer')}
+              icon={<Database size={14} />}
+              label="Database"
+              accentColor={accentColor}
+              isDark={themeColors.isDark}
+            />
+            <TabButton 
               active={activeTab === 'stats'} 
               onClick={() => setActiveTab('stats')}
               icon={<BarChart3 size={14} />}
@@ -1150,7 +1183,52 @@ const App: React.FC = () => {
       </header>
 
       <div className="flex-1 flex flex-col min-h-0">
-        <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
+        {activeTab === 'interface-designer' ? (
+          <div className="flex-1 flex overflow-hidden">
+            <div className="w-96 border-r flex flex-col bg-background border-border">
+              <AgentInteraction 
+                id="interface-designer-chat"
+                messages={interfaceMessages}
+                onClearChat={() => setInterfaceMessages([])}
+                interactionMode={interactionMode}
+                setInteractionMode={setInteractionMode}
+                accentColor={accentColor}
+                isDark={themeColors.isDark}
+                activeAgents={activeAgents}
+                onCancelCommand={handleCancelCommand}
+                pendingPrompt={pendingPrompt}
+                serverStatus={serverStatus}
+                inputValue={interfaceInputValue}
+                setInputValue={setInterfaceInputValue}
+                onSendMessage={() => handleSendMessage('interface')}
+              />
+            </div>
+            <InterfaceDesigner accentColor={accentColor} isDark={themeColors.isDark} />
+          </div>
+        ) : activeTab === 'database-designer' ? (
+          <div className="flex-1 flex overflow-hidden">
+            <div className="w-96 border-r flex flex-col bg-background border-border">
+              <AgentInteraction 
+                id="database-designer-chat"
+                messages={databaseMessages}
+                onClearChat={() => setDatabaseMessages([])}
+                interactionMode={interactionMode}
+                setInteractionMode={setInteractionMode}
+                accentColor={accentColor}
+                isDark={themeColors.isDark}
+                activeAgents={activeAgents}
+                onCancelCommand={handleCancelCommand}
+                pendingPrompt={pendingPrompt}
+                serverStatus={serverStatus}
+                inputValue={databaseInputValue}
+                setInputValue={setDatabaseInputValue}
+                onSendMessage={() => handleSendMessage('database')}
+              />
+            </div>
+            <DatabaseDesigner accentColor={accentColor} isDark={themeColors.isDark} />
+          </div>
+        ) : (
+          <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
           {/* Left Pane */}
           <Panel id="sidebar-left" defaultSize={20} minSize={15} className="flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border">
             {activeTab === 'planner' && (
@@ -1389,6 +1467,7 @@ const App: React.FC = () => {
             )}
           </Panel>
         </PanelGroup>
+        )}
       </div>
       <UnifiedLogMonitor accentColor={accentColor} isDark={themeColors.isDark} />
     </div>
