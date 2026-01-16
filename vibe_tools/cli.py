@@ -10,35 +10,6 @@ from typing import List
 import click
 from dotenv import find_dotenv, load_dotenv
 
-from vibe_tools.version import __version__
-from vibe_tools.commands import register_all_commands
-from vibe_tools.cost import finalize_cost_report
-from vibe_tools.setup import SERVICE_DEFINITIONS
-from vibe_tools.normalize import normalize_to_data
-from vibe_tools.utils import (
-    ARCHITECTURE_SPEC,
-    DEV_ENV_CURRENT,
-    DEV_SPEC,
-    LOGS_DIR,
-    VIBE_PROJECT_DIR,
-    enable_console_debug,
-    get_file_hash,
-    get_google_api_key,
-    is_test_mode,
-    load_config,
-    logger,
-    run_command,
-    output_manager,
-    load_pids,
-    save_pids,
-    get_services,
-    test_build_services,
-    check_and_install_build_tools,
-    setup_logging,
-    safe_yaml_load,
-    safe_yaml_dump,
-)
-
 # Load environment variables from .env file at startup
 load_dotenv(find_dotenv() or ".env")
 
@@ -127,6 +98,34 @@ if "--server" in sys.argv:
 
     builtins.input = server_input
 
+from vibe_tools.version import __version__
+from vibe_tools.commands import register_all_commands
+from vibe_tools.cost import finalize_cost_report
+from vibe_tools.setup import SERVICE_DEFINITIONS
+from vibe_tools.normalize import normalize_to_data
+from vibe_tools.utils import (
+    ARCHITECTURE_SPEC,
+    DEV_ENV_CURRENT,
+    DEV_SPEC,
+    LOGS_DIR,
+    VIBE_PROJECT_DIR,
+    enable_console_debug,
+    get_file_hash,
+    get_google_api_key,
+    is_test_mode,
+    load_config,
+    logger,
+    run_command,
+    output_manager,
+    load_pids,
+    save_pids,
+    get_services,
+    test_build_services,
+    check_and_install_build_tools,
+    setup_logging,
+    safe_yaml_load,
+    safe_yaml_dump,
+)
 
 CONFIG_FILE = pathlib.Path(".vibe_config.json")
 SPECS_DIR = pathlib.Path("product")
@@ -315,7 +314,11 @@ def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
     else:
         # Default to WARNING level for terminal if not verbose
         if verbose is None:
-            verbose = config.get("verbose", False)
+            # In server mode, default to non-verbose unless specified
+            if server:
+                verbose = False
+            else:
+                verbose = config.get("verbose", False)
 
         from vibe_tools.utils import set_console_level
 

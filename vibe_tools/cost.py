@@ -9,8 +9,13 @@ from vibe_tools.utils import COSTS_DIR, logger
 # Source: Standard LLM pricing as of late 2024 / early 2025
 PRICING = {
     "gemini-3-flash": {"input": 0.1, "output": 0.4},
+    "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+    "gemini-2.0-flash-exp": {"input": 0.1, "output": 0.4},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.3},
     "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},
+    "claude-3-5-sonnet-20240620": {"input": 3.0, "output": 15.0},
+    "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
+    "claude-3-5-sonnet-latest": {"input": 3.0, "output": 15.0},
     "claude-3-opus": {"input": 15.0, "output": 75.0},
     "gpt-4o": {"input": 2.5, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "output": 0.6},
@@ -48,7 +53,24 @@ class CostLogger:
     def calculate_cost(
         self, model: str, input_tokens: int, output_tokens: int
     ) -> float:
-        pricing = PRICING.get(model, DEFAULT_PRICING)
+        # Exact match first
+        pricing = PRICING.get(model)
+        
+        # Fuzzy match if not found
+        if not pricing:
+            if "gemini-3-flash" in model:
+                pricing = PRICING["gemini-3-flash"]
+            elif "gemini-1.5-flash" in model:
+                pricing = PRICING["gemini-1.5-flash"]
+            elif "claude-3-5-sonnet" in model:
+                pricing = PRICING["claude-3-5-sonnet"]
+            elif "gpt-4o-mini" in model:
+                pricing = PRICING["gpt-4o-mini"]
+            elif "gpt-4o" in model:
+                pricing = PRICING["gpt-4o"]
+            else:
+                pricing = DEFAULT_PRICING
+                
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
         return input_cost + output_cost
@@ -272,6 +294,6 @@ def finalize_cost_report():
     logger.debug(report)
 
     # Print total cost to terminal
-    import click
-
-    click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD")
+    if "--server" not in sys.argv:
+        import click
+        click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD")

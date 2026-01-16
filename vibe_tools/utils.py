@@ -424,9 +424,12 @@ def setup_logging(command_name: str):
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
-    # Console handler (default to INFO)
+    # Console handler (default to INFO, but WARNING in server mode)
     stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.INFO)
+    if "--server" in sys.argv:
+        stream_handler.setLevel(logging.WARNING)
+    else:
+        stream_handler.setLevel(logging.INFO)
     console_formatter = logging.Formatter("%(message)s")
     stream_handler.setFormatter(console_formatter)
     logger.addHandler(stream_handler)

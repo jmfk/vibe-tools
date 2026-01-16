@@ -190,6 +190,9 @@ class OutputManager:
             self._history.append(out_msg)
 
         if self._server_mode:
+            # In server mode, only emit errors by default.
+            # Don't emit debug/info logs unless specifically requested via a flag (not yet implemented)
+            # or if it's an error.
             if level == "error":
                 self.emit_server_message(
                     "error",
@@ -199,7 +202,8 @@ class OutputManager:
                         "timestamp": out_msg.timestamp.isoformat(),
                     },
                 )
-            else:
+            elif level in ("info", "success", "warning"):
+                # Still allow info/success/warning logs in server mode
                 self.emit_server_message(
                     "log",
                     {
@@ -210,6 +214,7 @@ class OutputManager:
                         "data": data,
                     },
                 )
+            # Note: "debug" level is suppressed in server mode
 
         if self._print_to_stdout:
             if flush:
