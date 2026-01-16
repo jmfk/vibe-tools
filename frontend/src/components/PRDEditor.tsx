@@ -833,7 +833,7 @@ export const PRDEditor = ({
       const context = lineContexts[i];
       const parsed = parseLine(lines[i]);
 
-      if (isPreview && parsed.type === 'details-open') {
+      if (parsed.type === 'details-open') {
         let detailsLines = [];
         let summary = "Details";
         let j = i + 1;
@@ -849,10 +849,13 @@ export const PRDEditor = ({
         }
         
         rendered.push(
-          <details key={`details-${i}`} className="my-4 border border-border rounded-lg overflow-hidden bg-panel/30 shadow-sm group/details">
-            <summary className="px-4 py-3 font-bold cursor-pointer hover:bg-accent/5 transition-colors list-none flex items-center gap-2 group select-none border-b border-transparent group-open/details:border-border/20 [&::-webkit-details-marker]:hidden">
+          <details key={`details-${i}`} open={true} className="my-4 border border-border rounded-lg overflow-hidden bg-panel/30 shadow-sm group/details">
+            <summary className={cn(
+              "px-4 py-2 font-bold cursor-pointer hover:bg-accent/5 transition-colors list-none flex items-center gap-2 group select-none border-b border-transparent group-open/details:border-border/20 [&::-webkit-details-marker]:hidden",
+              !isDark && "bg-emerald-50/50"
+            )}>
               <ChevronRight size={14} className="text-accent group-open/details:rotate-90 transition-transform" />
-              <span className="text-sm tracking-tight">{summary}</span>
+              <span className="text-xs uppercase tracking-widest opacity-70">{summary}</span>
             </summary>
             <div className="p-4 bg-black/5">
                {(() => {
