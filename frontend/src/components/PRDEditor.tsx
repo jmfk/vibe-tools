@@ -19,7 +19,11 @@ import {
   Strikethrough,
   Code,
   ListTodo,
-  Quote
+  Quote,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -166,6 +170,7 @@ export const PRDEditor = ({
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, index: number } | null>(null);
   const lines = content.split('\n');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
     e.preventDefault();
@@ -182,9 +187,13 @@ export const PRDEditor = ({
   };
 
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleLineChange = (index: number, newText: string) => {
@@ -273,7 +282,7 @@ export const PRDEditor = ({
     }
     const hrMatch = line.match(/^(---|---|\*\*\*|___)$/);
     if (hrMatch) {
-      return { type: 'hr' as const, prefix: hrMatch[1], content: '', suffix: '' };
+      return { type: 'hr' as const, prefix: '', content: hrMatch[1], suffix: '' };
     }
     const checkMatch = line.match(/^(\s*[-*+]\s+\[([ x])\]\s+)(.*)/);
     if (checkMatch) {
@@ -461,6 +470,42 @@ export const PRDEditor = ({
     }
   };
 
+  const insertDetails = (index: number) => {
+    const newLines = [...lines];
+    const targetIndex = index === -1 ? lines.length : index + 1;
+    newLines.splice(targetIndex, 0, '<details>', '<summary>New Section</summary>', '', '</details>');
+    onContentChange(newLines.join('\n'));
+    setFocusedIndex(targetIndex + 1);
+  };
+
+  const removeDetails = (index: number) => {
+    let start = -1;
+    let end = -1;
+    
+    for (let i = index; i >= 0; i--) {
+      if (lines[i].trim() === '<details>') {
+        start = i;
+        break;
+      }
+      if (i !== index && lines[i].trim() === '</details>') break;
+    }
+    
+    if (start !== -1) {
+      for (let i = start; i < lines.length; i++) {
+        if (lines[i].trim() === '</details>') {
+          end = i;
+          break;
+        }
+      }
+    }
+    
+    if (start !== -1 && end !== -1) {
+      const newLines = lines.filter((_, i) => i < start || i > end);
+      onContentChange(newLines.join('\n'));
+      setFocusedIndex(Math.max(0, start - 1));
+    }
+  };
+
   const renderLinesStartIdx = (idx: number) => {
     let start = idx;
     while (start > 0 && lineContexts[start - 1] && lineContexts[start - 1].isInsideCodeBlock) {
@@ -523,7 +568,58 @@ export const PRDEditor = ({
                 visualMarker = <div className="w-1 self-stretch bg-accent opacity-30 rounded-full" />;
                 textStyle = "italic text-muted pl-2";
               } else if (parsed.type === 'hr') {
-                return <div className="w-full h-px bg-border my-4" />;
+                visualMarker = <div className="w-full h-px bg-border my-4 absolute left-0 right-0 top-1/2 -translate-y-1/2 pointer-events-none" />;
+                textStyle = "text-center font-mono opacity-20 hover:opacity-100 transition-opacity relative z-10 bg-panel px-4 text-xs";
+              } else if (parsed.type === 'details-open' || parsed.type === 'details-close' || parsed.type === 'summary') {
+                return (
+                  <div 
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace' || e.key === 'Delete') {
+                        e.preventDefault();
+                        const newLines = lines.filter((_, idx) => idx !== i);
+                        onContentChange(newLines.join('\n'));
+                        setFocusedIndex(i > 0 ? i - 1 : 0);
+                      } else {
+                        handleKeyDown(e, i);
+                      }
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center gap-2 py-1 px-2 rounded border select-none transition-colors focus:outline-none focus:ring-1 focus:ring-accent",
+                      isDark ? "bg-zinc-800/20 border-border/30" : "bg-zinc-100/50 border-border/50",
+                      parsed.type === 'summary' ? "cursor-default" : "opacity-60"
+                    )}
+                  >
+                    <div className="text-accent opacity-50">
+                      {parsed.type === 'summary' ? <ChevronDown size={12} /> : <Code size={12} />}
+                    </div>
+                    <span className="text-[10px] font-mono text-muted uppercase tracking-widest">
+                      {parsed.type === 'details-open' ? 'Details Start' : 
+                       parsed.type === 'details-close' ? 'Details End' : 
+                       'Summary'}
+                    </span>
+                    <span className={cn(
+                      "text-xs ml-2",
+                      parsed.type === 'summary' ? "font-bold text-foreground" : "font-mono opacity-40"
+                    )}>
+                      {parsed.type === 'summary' ? parsed.content : line}
+                    </span>
+                    {parsed.type === 'summary' && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newTitle = prompt('Enter section title:', parsed.content);
+                          if (newTitle !== null) {
+                            handleLineChange(i, `<summary>${newTitle}</summary>`);
+                          }
+                        }}
+                        className="ml-auto p-1 hover:bg-accent/20 rounded text-accent transition-colors"
+                      >
+                        <Pencil size={10} />
+                      </button>
+                    )}
+                  </div>
+                );
               } else if (parsed.type === 'header') {
                 const level = parsed.prefix.trim().length;
                 textStyle = cn(
@@ -775,6 +871,9 @@ export const PRDEditor = ({
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && toggleChecklist(focusedIndex)} icon={<ListTodo size={14} />} label="Toggle Checklist" />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'quote', '')} icon={<Quote size={14} />} label="Quote" />
               <div className="w-px h-4 bg-border mx-1 self-center" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertDetails(focusedIndex)} icon={<Plus size={14} />} label="Insert Details Block" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && removeDetails(focusedIndex)} icon={<Trash2 size={14} />} label="Remove Details Block" />
+              <div className="w-px h-4 bg-border mx-1 self-center" />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 1)} icon={<Heading1 size={14} />} label="H1 (Ctrl+1)" />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 2)} icon={<Heading2 size={14} />} label="H2 (Ctrl+2)" />
               <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 3)} icon={<Heading3 size={14} />} label="H3 (Ctrl+3)" />
@@ -820,6 +919,7 @@ export const PRDEditor = ({
 
       {contextMenu && (
         <div 
+          ref={contextMenuRef}
           className={cn(
             "fixed z-[100] w-[200px] bg-panel border border-border rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] p-1.5 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md",
             isDark ? "bg-zinc-900/95" : "bg-white/95"
@@ -829,26 +929,28 @@ export const PRDEditor = ({
           <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50 border-b border-border/50">
             Formatting
           </div>
-          <ContextMenuItem isDark={isDark} onClick={() => applyFormat(contextMenu.index, '**', '**')} icon={<Bold size={12} />} label="Bold" shortcut="Ctrl+B" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyFormat(contextMenu.index, '_', '_')} icon={<Italic size={12} />} label="Italic" shortcut="Ctrl+I" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyFormat(contextMenu.index, '~~', '~~')} icon={<Strikethrough size={12} />} label="Strikethrough" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyFormat(contextMenu.index, 'link', '')} icon={<Link size={12} />} label="Link" shortcut="Ctrl+K" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '**', '**'); setContextMenu(null); }} icon={<Bold size={12} />} label="Bold" shortcut="Ctrl+B" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '_', '_'); setContextMenu(null); }} icon={<Italic size={12} />} label="Italic" shortcut="Ctrl+I" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '~~', '~~'); setContextMenu(null); }} icon={<Strikethrough size={12} />} label="Strikethrough" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'link', ''); setContextMenu(null); }} icon={<Link size={12} />} label="Link" shortcut="Ctrl+K" />
           
           <div className="h-px bg-border/50 my-1.5 mx-1" />
           <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50">
             Structure
           </div>
-          <ContextMenuItem isDark={isDark} onClick={() => toggleList(contextMenu.index)} icon={<Type size={12} />} label="List" shortcut="Ctrl+L" />
-          <ContextMenuItem isDark={isDark} onClick={() => toggleChecklist(contextMenu.index)} icon={<ListTodo size={12} />} label="Checklist" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyFormat(contextMenu.index, 'quote', '')} icon={<Quote size={12} />} label="Quote" />
+          <ContextMenuItem isDark={isDark} onClick={() => { toggleList(contextMenu.index); setContextMenu(null); }} icon={<Type size={12} />} label="List" shortcut="Ctrl+L" />
+          <ContextMenuItem isDark={isDark} onClick={() => { toggleChecklist(contextMenu.index); setContextMenu(null); }} icon={<ListTodo size={12} />} label="Checklist" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'quote', ''); setContextMenu(null); }} icon={<Quote size={12} />} label="Quote" />
+          <ContextMenuItem isDark={isDark} onClick={() => { insertDetails(contextMenu.index); setContextMenu(null); }} icon={<Plus size={12} />} label="Insert Details" />
+          <ContextMenuItem isDark={isDark} onClick={() => { removeDetails(contextMenu.index); setContextMenu(null); }} icon={<Trash2 size={12} />} label="Remove Details" />
           
           <div className="h-px bg-border/50 my-1.5 mx-1" />
           <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50">
             Headings
           </div>
-          <ContextMenuItem isDark={isDark} onClick={() => applyHeader(contextMenu.index, 1)} icon={<Heading1 size={12} />} label="Header 1" shortcut="Ctrl+1" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyHeader(contextMenu.index, 2)} icon={<Heading2 size={12} />} label="Header 2" shortcut="Ctrl+2" />
-          <ContextMenuItem isDark={isDark} onClick={() => applyHeader(contextMenu.index, 3)} icon={<Heading3 size={12} />} label="Header 3" shortcut="Ctrl+3" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 1); setContextMenu(null); }} icon={<Heading1 size={12} />} label="Header 1" shortcut="Ctrl+1" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 2); setContextMenu(null); }} icon={<Heading2 size={12} />} label="Header 2" shortcut="Ctrl+2" />
+          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 3); setContextMenu(null); }} icon={<Heading3 size={12} />} label="Header 3" shortcut="Ctrl+3" />
         </div>
       )}
     </div>
