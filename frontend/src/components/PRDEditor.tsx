@@ -23,7 +23,8 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ChevronRight
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -632,7 +633,7 @@ export const PRDEditor = ({
                     )}
                   >
                     <div className={cn("opacity-50", isComment ? "text-orange-500" : "text-accent")}>
-                      {isComment ? <Type size={12} /> : <ChevronDown size={12} />}
+                      {isComment ? <Type size={12} /> : <ChevronRight size={12} />}
                     </div>
                     <span className={cn(
                       "text-[10px] font-mono uppercase tracking-widest",
@@ -683,7 +684,7 @@ export const PRDEditor = ({
                   level >= 4 && "text-lg"
                 );
               } else if (parsed.type === 'summary') {
-                visualMarker = <div className="mt-1 text-muted transform rotate-90 scale-75">▶</div>;
+                visualMarker = <div className="mt-1 text-accent/50 shrink-0"><ChevronRight size={12} /></div>;
                 textStyle = "font-bold text-lg text-foreground";
               }
 
@@ -738,8 +739,8 @@ export const PRDEditor = ({
               if (parsed.type === 'summary') {
                 return (
                   <div className="flex items-center gap-2 py-1 group/summary">
-                    <div className="w-4 h-4 flex items-center justify-center text-muted">
-                      <span className="transform rotate-90 scale-75">▶</span>
+                    <div className="w-4 h-4 flex items-center justify-center text-accent/50">
+                      <ChevronRight size={12} />
                     </div>
                     <h4 className="text-base font-bold text-foreground m-0">{parsed.content}</h4>
                   </div>
@@ -849,8 +850,8 @@ export const PRDEditor = ({
         
         rendered.push(
           <details key={`details-${i}`} className="my-4 border border-border rounded-lg overflow-hidden bg-panel/30 shadow-sm group/details">
-            <summary className="px-4 py-3 font-bold cursor-pointer hover:bg-accent/5 transition-colors list-none flex items-center gap-2 group select-none border-b border-transparent group-open/details:border-border/20">
-              <ChevronDown size={14} className="text-accent group-open/details:rotate-180 transition-transform" />
+            <summary className="px-4 py-3 font-bold cursor-pointer hover:bg-accent/5 transition-colors list-none flex items-center gap-2 group select-none border-b border-transparent group-open/details:border-border/20 [&::-webkit-details-marker]:hidden">
+              <ChevronRight size={14} className="text-accent group-open/details:rotate-90 transition-transform" />
               <span className="text-sm tracking-tight">{summary}</span>
             </summary>
             <div className="p-4 bg-black/5">
