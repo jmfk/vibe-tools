@@ -66,20 +66,30 @@ const InlineRowEditor = ({
   onKeyDown, 
   onBlur,
   className,
-  placeholder
+  placeholder,
+  isPlainText
 }: { 
   initialContent: string, 
-  onChange: (text: string) => void,
-  onKeyDown: (e: React.KeyboardEvent) => void,
+  onChange: (text: string) => void, 
+  onKeyDown: (e: React.KeyboardEvent) => void, 
   onBlur: () => void,
   className?: string,
-  placeholder?: string
+  placeholder?: string,
+  isPlainText?: boolean
 }) => {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== initialContent) {
-      ref.current.innerHTML = initialContent;
+    if (ref.current) {
+      if (isPlainText) {
+        if (ref.current.textContent !== initialContent) {
+          ref.current.textContent = initialContent;
+        }
+      } else {
+        if (ref.current.innerHTML !== initialContent) {
+          ref.current.innerHTML = initialContent;
+        }
+      }
     }
   }, []);
 
@@ -102,11 +112,11 @@ const InlineRowEditor = ({
       contentEditable
       suppressContentEditableWarning
       className={cn(
-        "flex-1 bg-transparent p-0 focus:outline-none min-h-[1.5rem]",
+        "flex-1 bg-transparent p-0 focus:outline-none",
         className
       )}
       onInput={(e) => {
-        onChange(e.currentTarget.innerHTML);
+        onChange(isPlainText ? e.currentTarget.textContent || '' : e.currentTarget.innerHTML);
       }}
       onKeyDown={onKeyDown}
       onBlur={onBlur}
@@ -288,6 +298,10 @@ export const PRDEditor = ({
     if (checkMatch) {
       return { type: 'checklist' as const, prefix: checkMatch[1], content: checkMatch[3], isChecked: checkMatch[2] === 'x', suffix: '' };
     }
+    const commentMatch = line.match(/^<!--\s*(.*)\s*-->$/);
+    if (commentMatch) {
+      return { type: 'comment' as const, prefix: '<!-- ', content: commentMatch[1], suffix: ' -->' };
+    }
     return { type: 'paragraph' as const, prefix: '', content: line, suffix: '' };
   };
 
@@ -376,12 +390,27 @@ export const PRDEditor = ({
     } else if (e.key === 'ArrowUp') {
       if (index > 0) {
         e.preventDefault();
-        setFocusedIndex(index - 1);
+        let nextIndex = index - 1;
+        while (nextIndex > 0 && (parseLine(lines[nextIndex]).type === 'details-open' || parseLine(lines[nextIndex]).type === 'details-close')) {
+          nextIndex--;
+        }
+        // If the top line is a details tag, don't move focus there unless it's the only option
+        const finalType = parseLine(lines[nextIndex]).type;
+        if (finalType !== 'details-open' && finalType !== 'details-close') {
+          setFocusedIndex(nextIndex);
+        }
       }
     } else if (e.key === 'ArrowDown') {
       if (index < lines.length - 1) {
         e.preventDefault();
-        setFocusedIndex(index + 1);
+        let nextIndex = index + 1;
+        while (nextIndex < lines.length - 1 && (parseLine(lines[nextIndex]).type === 'details-open' || parseLine(lines[nextIndex]).type === 'details-close')) {
+          nextIndex++;
+        }
+        const finalType = parseLine(lines[nextIndex]).type;
+        if (finalType !== 'details-open' && finalType !== 'details-close') {
+          setFocusedIndex(nextIndex);
+        }
       }
     }
   };
@@ -524,13 +553,14 @@ export const PRDEditor = ({
         key={i}
         className={cn(
           "group relative min-h-[1.5rem] px-2 rounded-md border border-transparent",
-          !isPreview && (focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : "hover:bg-zinc-800/20"),
+          !isPreview && (focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : (parsed.type === 'details-open' || parsed.type === 'details-close' ? "" : "hover:bg-zinc-800/20")),
           !isPartofBlock && "my-0.5",
           isPartofBlock && "font-mono py-0",
           !isPartofBlock && context.isInsideCodeBlock && (isDark ? "bg-zinc-900/50 font-mono" : "bg-zinc-100 font-mono")
         )}
         onClick={(e) => {
           if (isPreview) return;
+          if (parsed.type === 'details-open' || parsed.type === 'details-close') return;
           e.stopPropagation();
           setFocusedIndex(i);
         }}
@@ -570,41 +600,64 @@ export const PRDEditor = ({
               } else if (parsed.type === 'hr') {
                 visualMarker = <div className="w-full h-px bg-border my-4 absolute left-0 right-0 top-1/2 -translate-y-1/2 pointer-events-none" />;
                 textStyle = "text-center font-mono opacity-20 hover:opacity-100 transition-opacity relative z-10 bg-panel px-4 text-xs";
-              } else if (parsed.type === 'details-open' || parsed.type === 'details-close' || parsed.type === 'summary') {
+              } else if (parsed.type === 'details-open' || parsed.type === 'details-close') {
                 return (
                   <div 
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' || e.key === 'Delete') {
-                        e.preventDefault();
-                        const newLines = lines.filter((_, idx) => idx !== i);
-                        onContentChange(newLines.join('\n'));
-                        setFocusedIndex(i > 0 ? i - 1 : 0);
-                      } else {
-                        handleKeyDown(e, i);
-                      }
-                    }}
                     className={cn(
-                      "flex-1 flex items-center gap-2 py-1 px-2 rounded border select-none transition-colors focus:outline-none focus:ring-1 focus:ring-accent",
+                      "flex-1 flex items-center gap-2 py-1 px-2 rounded border select-none transition-colors",
                       isDark ? "bg-zinc-800/20 border-border/30" : "bg-zinc-100/50 border-border/50",
-                      parsed.type === 'summary' ? "cursor-default" : "opacity-60"
+                      "opacity-60 pointer-events-none"
                     )}
                   >
                     <div className="text-accent opacity-50">
-                      {parsed.type === 'summary' ? <ChevronDown size={12} /> : <Code size={12} />}
+                      <Code size={12} />
                     </div>
                     <span className="text-[10px] font-mono text-muted uppercase tracking-widest">
-                      {parsed.type === 'details-open' ? 'Details Start' : 
-                       parsed.type === 'details-close' ? 'Details End' : 
-                       'Summary'}
+                      {parsed.type === 'details-open' ? 'Details Start' : 'Details End'}
                     </span>
+                    <span className="text-xs ml-2 font-mono opacity-40">
+                      {line}
+                    </span>
+                  </div>
+                );
+              } else if (parsed.type === 'summary' || parsed.type === 'comment') {
+                const isComment = parsed.type === 'comment';
+                return (
+                  <div 
+                    className={cn(
+                      "flex-1 flex items-center gap-2 py-1 px-2 rounded border transition-colors focus-within:ring-1 focus-within:ring-accent",
+                      isComment 
+                        ? (isDark ? "bg-orange-500/10 border-orange-500/20" : "bg-orange-50 border-orange-200")
+                        : (isDark ? "bg-zinc-800/20 border-border/30" : "bg-zinc-100/50 border-border/50")
+                    )}
+                  >
+                    <div className={cn("opacity-50", isComment ? "text-orange-500" : "text-accent")}>
+                      {isComment ? <Type size={12} /> : <ChevronDown size={12} />}
+                    </div>
                     <span className={cn(
-                      "text-xs ml-2",
-                      parsed.type === 'summary' ? "font-bold text-foreground" : "font-mono opacity-40"
+                      "text-[10px] font-mono uppercase tracking-widest",
+                      isComment ? "text-orange-500/70" : "text-muted"
                     )}>
-                      {parsed.type === 'summary' ? parsed.content : line}
+                      {isComment ? 'Comment' : 'Summary'}
                     </span>
-                    {parsed.type === 'summary' && (
+                    <InlineRowEditor
+                      initialContent={parsed.content}
+                      isPlainText={isComment}
+                      onChange={(text) => {
+                        if (isComment) {
+                          handleLineChange(i, `<!-- ${text} -->`);
+                        } else {
+                          handleLineChange(i, `<summary>${htmlToMd(text)}</summary>`);
+                        }
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, i)}
+                      onBlur={() => {}}
+                      className={cn(
+                        "text-xs ml-2",
+                        isComment ? "font-mono text-orange-500/90" : "font-bold text-foreground"
+                      )}
+                    />
+                    {!isComment && (
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -639,15 +692,16 @@ export const PRDEditor = ({
                   {visualMarker}
                   <InlineRowEditor
                     initialContent={context.isInsideCodeBlock ? (parsed.type === 'code-fence' ? parsed.content : line) : mdToHtml(parsed.content)}
-                    onChange={(html) => {
+                    isPlainText={context.isInsideCodeBlock}
+                    onChange={(text) => {
                       if (context.isInsideCodeBlock) {
                         if (parsed.type === 'code-fence') {
-                          handleLineChange(i, '```' + htmlToMd(html));
+                          handleLineChange(i, '```' + text);
                         } else {
-                          handleLineChange(i, htmlToMd(html));
+                          handleLineChange(i, text);
                         }
                       } else {
-                        handleLineChange(i, parsed.prefix + htmlToMd(html) + parsed.suffix);
+                        handleLineChange(i, parsed.prefix + htmlToMd(text) + parsed.suffix);
                       }
                     }}
                     onKeyDown={(e) => handleKeyDown(e, i)}
@@ -658,7 +712,7 @@ export const PRDEditor = ({
                         }
                       }, 100);
                     }}
-                    className={textStyle}
+                    className={cn("min-h-[1.5rem]", textStyle)}
                   />
                 </>
               );
@@ -670,6 +724,17 @@ export const PRDEditor = ({
             !line && "opacity-20 italic text-[10px]"
           )}>
             {(() => {
+              if (parsed.type === 'comment') {
+                return (
+                  <div className={cn(
+                    "flex items-center gap-2 py-1.5 px-3 rounded-md border text-xs font-mono mb-2",
+                    isDark ? "bg-orange-500/10 border-orange-500/20 text-orange-400/80" : "bg-orange-50 border-orange-200 text-orange-600/80"
+                  )}>
+                    <div className="opacity-50"><Type size={12} /></div>
+                    {parsed.content}
+                  </div>
+                );
+              }
               if (parsed.type === 'summary') {
                 return (
                   <div className="flex items-center gap-2 py-1 group/summary">
@@ -682,7 +747,7 @@ export const PRDEditor = ({
               }
               if (parsed.type === 'details-open' || parsed.type === 'details-close') {
                 return (
-                  <div className="text-[10px] font-mono text-muted opacity-40 py-1">
+                  <div className="text-[10px] font-mono text-muted opacity-40 py-1 select-none">
                     {line}
                   </div>
                 );
