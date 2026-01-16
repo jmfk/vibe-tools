@@ -18,6 +18,7 @@ import {
   Link,
   Strikethrough,
   Code,
+  Terminal,
   ListTodo,
   Quote,
   Plus,
@@ -42,18 +43,21 @@ interface ToolbarButtonProps {
   icon: React.ReactNode;
   label: string;
   isDark?: boolean;
+  disabled?: boolean;
 }
 
-const ToolbarButton = ({ onClick, icon, label, isDark }: ToolbarButtonProps) => (
+const ToolbarButton = ({ onClick, icon, label, isDark, disabled }: ToolbarButtonProps) => (
   <button
     onClick={(e) => {
       e.preventDefault();
       e.stopPropagation();
-      onClick();
+      if (!disabled) onClick();
     }}
+    disabled={disabled}
     className={cn(
       "p-1.5 rounded transition-all flex items-center gap-1",
-      isDark ? "hover:bg-zinc-800 text-muted hover:text-foreground" : "hover:bg-zinc-200 text-muted hover:text-foreground"
+      isDark ? "hover:bg-zinc-800 text-muted hover:text-foreground" : "hover:bg-zinc-200 text-muted hover:text-foreground",
+      disabled && "opacity-20 cursor-not-allowed hover:bg-transparent"
     )}
     title={label}
   >
@@ -127,23 +131,26 @@ const InlineRowEditor = ({
 };
 
 interface ContextMenuItemProps {
-  onClick: () => void;
+  onClick?: () => void;
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
   isDark?: boolean;
+  disabled?: boolean;
+  hasSubmenu?: boolean;
 }
 
-const ContextMenuItem = ({ onClick, icon, label, shortcut, isDark }: ContextMenuItemProps) => (
+const ContextMenuItem = ({ onClick, icon, label, shortcut, isDark, disabled, hasSubmenu }: ContextMenuItemProps) => (
   <button 
     onClick={(e) => {
       e.preventDefault();
       e.stopPropagation();
-      onClick();
+      if (!disabled && onClick) onClick();
     }}
+    disabled={disabled}
     className={cn(
-      "w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors rounded-md",
-      isDark ? "hover:bg-accent text-foreground hover:text-white" : "hover:bg-accent text-foreground hover:text-white"
+      "w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors rounded-md group relative",
+      disabled ? "opacity-20 cursor-not-allowed" : (isDark ? "hover:bg-accent text-foreground hover:text-white" : "hover:bg-accent text-foreground hover:text-white")
     )}
   >
     <div className="flex items-center gap-2">
@@ -152,11 +159,57 @@ const ContextMenuItem = ({ onClick, icon, label, shortcut, isDark }: ContextMenu
       </div>
       <span>{label}</span>
     </div>
-    {shortcut && (
-      <span className="text-[10px] opacity-40 font-mono ml-4">{shortcut}</span>
-    )}
+    <div className="flex items-center gap-2">
+      {shortcut && !hasSubmenu && (
+        <span className="text-[10px] opacity-40 font-mono ml-4">{shortcut}</span>
+      )}
+      {hasSubmenu && (
+        <ChevronRight size={10} className="opacity-40" />
+      )}
+    </div>
   </button>
 );
+
+const ContextMenuSubMenu = ({ 
+  label, 
+  icon, 
+  children, 
+  isDark, 
+  disabled 
+}: { 
+  label: string, 
+  icon: React.ReactNode, 
+  children: React.ReactNode, 
+  isDark?: boolean, 
+  disabled?: boolean 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div 
+      className="relative"
+      onMouseEnter={() => !disabled && setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <ContextMenuItem 
+        label={label} 
+        icon={icon} 
+        isDark={isDark} 
+        disabled={disabled} 
+        hasSubmenu 
+      />
+      {isOpen && (
+        <div className={cn(
+          "absolute left-[calc(100%-4px)] top-0 w-[180px] p-1.5 rounded-xl border border-border shadow-xl animate-in fade-in slide-in-from-left-2 duration-100",
+          isDark ? "bg-zinc-900/95 backdrop-blur-md" : "bg-white/95 backdrop-blur-md"
+        )}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export const PRDEditor = ({
   prd,
@@ -308,13 +361,23 @@ export const PRDEditor = ({
 
   const getLineContexts = () => {
     let isInsideCodeBlock = false;
+    let detailsDepth = 0;
     return lines.map(line => {
       const parsed = parseLine(line);
-      const wasInside = isInsideCodeBlock;
+      
+      const wasInsideCode = isInsideCodeBlock;
       if (parsed.type === 'code-fence') {
         isInsideCodeBlock = !isInsideCodeBlock;
       }
-      return { isInsideCodeBlock: wasInside || (parsed.type === 'code-fence') };
+
+      const wasInsideDetails = detailsDepth > 0;
+      if (parsed.type === 'details-open') detailsDepth++;
+      if (parsed.type === 'details-close') detailsDepth--;
+
+      return { 
+        isInsideCodeBlock: wasInsideCode || (parsed.type === 'code-fence'),
+        isInsideDetails: wasInsideDetails || (parsed.type === 'details-open') || (parsed.type === 'details-close')
+      };
     });
   };
 
@@ -501,6 +564,9 @@ export const PRDEditor = ({
   };
 
   const insertDetails = (index: number) => {
+    // Prevent nesting: check if already inside details
+    if (lineContexts[index]?.isInsideDetails) return;
+
     const newLines = [...lines];
     const targetIndex = index === -1 ? lines.length : index + 1;
     newLines.splice(targetIndex, 0, '<details>', '<summary>New Section</summary>', '', '</details>');
@@ -523,6 +589,41 @@ export const PRDEditor = ({
     if (start !== -1) {
       for (let i = start; i < lines.length; i++) {
         if (lines[i].trim() === '</details>') {
+          end = i;
+          break;
+        }
+      }
+    }
+    
+    if (start !== -1 && end !== -1) {
+      const newLines = lines.filter((_, i) => i < start || i > end);
+      onContentChange(newLines.join('\n'));
+      setFocusedIndex(Math.max(0, start - 1));
+    }
+  };
+
+  const insertCodeBlock = (index: number) => {
+    const newLines = [...lines];
+    const targetIndex = index === -1 ? lines.length : index + 1;
+    newLines.splice(targetIndex, 0, '```', '', '```');
+    onContentChange(newLines.join('\n'));
+    setFocusedIndex(targetIndex + 1);
+  };
+
+  const removeCodeBlock = (index: number) => {
+    let start = -1;
+    let end = -1;
+    
+    for (let i = index; i >= 0; i--) {
+      if (lines[i].startsWith('```')) {
+        start = i;
+        break;
+      }
+    }
+    
+    if (start !== -1) {
+      for (let i = start + 1; i < lines.length; i++) {
+        if (lines[i].startsWith('```')) {
           end = i;
           break;
         }
@@ -576,7 +677,7 @@ export const PRDEditor = ({
               if (context.isInsideCodeBlock) {
                 textStyle = "font-mono text-xs opacity-90";
                 if (parsed.type === 'code-fence') {
-                  visualMarker = <div className="text-accent font-bold opacity-50">#</div>;
+                  visualMarker = null;
                 }
               } else if (parsed.type === 'list') {
                 visualMarker = <div className="mt-2 w-1.5 h-1.5 rounded-full bg-muted shrink-0" />;
@@ -692,15 +793,11 @@ export const PRDEditor = ({
                 <>
                   {visualMarker}
                   <InlineRowEditor
-                    initialContent={context.isInsideCodeBlock ? (parsed.type === 'code-fence' ? parsed.content : line) : mdToHtml(parsed.content)}
+                    initialContent={context.isInsideCodeBlock ? line : mdToHtml(parsed.content)}
                     isPlainText={context.isInsideCodeBlock}
                     onChange={(text) => {
                       if (context.isInsideCodeBlock) {
-                        if (parsed.type === 'code-fence') {
-                          handleLineChange(i, '```' + text);
-                        } else {
-                          handleLineChange(i, text);
-                        }
+                        handleLineChange(i, text);
                       } else {
                         handleLineChange(i, parsed.prefix + htmlToMd(text) + parsed.suffix);
                       }
@@ -758,6 +855,7 @@ export const PRDEditor = ({
                 let colorClass = "text-foreground opacity-90";
 
                 if (parsed.type === 'code-fence') {
+                  if (isPreview) return null;
                   displayLine = `\`\`\`${parsed.content}`;
                   colorClass = "text-accent font-bold opacity-50";
                 } else if (isPartofBlock && lines[renderLinesStartIdx(i)]?.match(/^```json/)) {
@@ -990,22 +1088,24 @@ export const PRDEditor = ({
 
           {!isPreview && (
             <div className="flex bg-panel border border-border rounded-lg p-1 mr-4 animate-in fade-in zoom-in-95 duration-200">
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '**', '**')} icon={<Bold size={14} />} label="Bold (Ctrl+B)" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '_', '_')} icon={<Italic size={14} />} label="Italic (Ctrl+I)" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '~~', '~~')} icon={<Strikethrough size={14} />} label="Strikethrough" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '`', '`')} icon={<Code size={14} />} label="Inline Code" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'link', '')} icon={<Link size={14} />} label="Link (Ctrl+K)" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '**', '**')} icon={<Bold size={14} />} label="Bold (Ctrl+B)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '_', '_')} icon={<Italic size={14} />} label="Italic (Ctrl+I)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '~~', '~~')} icon={<Strikethrough size={14} />} label="Strikethrough" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, '`', '`')} icon={<Code size={14} />} label="Inline Code" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertCodeBlock(focusedIndex)} icon={<Terminal size={14} />} label="Insert Code Block" disabled={focusedIndex !== null && (lineContexts[focusedIndex]?.isInsideCodeBlock || lineContexts[focusedIndex]?.isInsideDetails)} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && removeCodeBlock(focusedIndex)} icon={<Trash2 size={14} className="text-red-400" />} label="Remove Code Block" disabled={focusedIndex !== null && !lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'link', '')} icon={<Link size={14} />} label="Link (Ctrl+K)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <div className="w-px h-4 bg-border mx-1 self-center" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && toggleList(focusedIndex)} icon={<Type size={14} />} label="Toggle List (Ctrl+L)" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && toggleChecklist(focusedIndex)} icon={<ListTodo size={14} />} label="Toggle Checklist" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'quote', '')} icon={<Quote size={14} />} label="Quote" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && toggleList(focusedIndex)} icon={<Type size={14} />} label="Toggle List (Ctrl+L)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && toggleChecklist(focusedIndex)} icon={<ListTodo size={14} />} label="Toggle Checklist" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyFormat(focusedIndex, 'quote', '')} icon={<Quote size={14} />} label="Quote" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
               <div className="w-px h-4 bg-border mx-1 self-center" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertDetails(focusedIndex)} icon={<Plus size={14} />} label="Insert Details Block" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && removeDetails(focusedIndex)} icon={<Trash2 size={14} />} label="Remove Details Block" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && insertDetails(focusedIndex)} icon={<Plus size={14} />} label="Insert Details Block" disabled={focusedIndex !== null && (lineContexts[focusedIndex]?.isInsideDetails || lineContexts[focusedIndex]?.isInsideCodeBlock)} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && removeDetails(focusedIndex)} icon={<Trash2 size={14} />} label="Remove Details Block" disabled={focusedIndex !== null && !lineContexts[focusedIndex]?.isInsideDetails} />
               <div className="w-px h-4 bg-border mx-1 self-center" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 1)} icon={<Heading1 size={14} />} label="H1 (Ctrl+1)" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 2)} icon={<Heading2 size={14} />} label="H2 (Ctrl+2)" />
-              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 3)} icon={<Heading3 size={14} />} label="H3 (Ctrl+3)" />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 1)} icon={<Heading1 size={14} />} label="H1 (Ctrl+1)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 2)} icon={<Heading2 size={14} />} label="H2 (Ctrl+2)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
+              <ToolbarButton isDark={isDark} onClick={() => focusedIndex !== null && applyHeader(focusedIndex, 3)} icon={<Heading3 size={14} />} label="H3 (Ctrl+3)" disabled={focusedIndex !== null && lineContexts[focusedIndex]?.isInsideCodeBlock} />
             </div>
           )}
 
@@ -1050,36 +1150,46 @@ export const PRDEditor = ({
         <div 
           ref={contextMenuRef}
           className={cn(
-            "fixed z-[100] w-[200px] bg-panel border border-border rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] p-1.5 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md",
+            "fixed z-[100] w-[180px] bg-panel border border-border rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] p-1.5 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md",
             isDark ? "bg-zinc-900/95" : "bg-white/95"
           )}
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50 border-b border-border/50">
-            Formatting
-          </div>
-          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '**', '**'); setContextMenu(null); }} icon={<Bold size={12} />} label="Bold" shortcut="Ctrl+B" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '_', '_'); setContextMenu(null); }} icon={<Italic size={12} />} label="Italic" shortcut="Ctrl+I" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '~~', '~~'); setContextMenu(null); }} icon={<Strikethrough size={12} />} label="Strikethrough" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'link', ''); setContextMenu(null); }} icon={<Link size={12} />} label="Link" shortcut="Ctrl+K" />
-          
-          <div className="h-px bg-border/50 my-1.5 mx-1" />
-          <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50">
-            Structure
-          </div>
-          <ContextMenuItem isDark={isDark} onClick={() => { toggleList(contextMenu.index); setContextMenu(null); }} icon={<Type size={12} />} label="List" shortcut="Ctrl+L" />
-          <ContextMenuItem isDark={isDark} onClick={() => { toggleChecklist(contextMenu.index); setContextMenu(null); }} icon={<ListTodo size={12} />} label="Checklist" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'quote', ''); setContextMenu(null); }} icon={<Quote size={12} />} label="Quote" />
-          <ContextMenuItem isDark={isDark} onClick={() => { insertDetails(contextMenu.index); setContextMenu(null); }} icon={<Plus size={12} />} label="Insert Details" />
-          <ContextMenuItem isDark={isDark} onClick={() => { removeDetails(contextMenu.index); setContextMenu(null); }} icon={<Trash2 size={12} />} label="Remove Details" />
-          
-          <div className="h-px bg-border/50 my-1.5 mx-1" />
-          <div className="px-2 py-1 mb-1 text-[10px] font-bold text-muted uppercase tracking-wider opacity-50">
-            Headings
-          </div>
-          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 1); setContextMenu(null); }} icon={<Heading1 size={12} />} label="Header 1" shortcut="Ctrl+1" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 2); setContextMenu(null); }} icon={<Heading2 size={12} />} label="Header 2" shortcut="Ctrl+2" />
-          <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 3); setContextMenu(null); }} icon={<Heading3 size={12} />} label="Header 3" shortcut="Ctrl+3" />
+          <ContextMenuSubMenu isDark={isDark} icon={<Pencil size={12} />} label="Text Style">
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '**', '**'); setContextMenu(null); }} icon={<Bold size={12} />} label="Bold" shortcut="Ctrl+B" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '_', '_'); setContextMenu(null); }} icon={<Italic size={12} />} label="Italic" shortcut="Ctrl+I" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '~~', '~~'); setContextMenu(null); }} icon={<Strikethrough size={12} />} label="Strikethrough" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, '`', '`'); setContextMenu(null); }} icon={<Code size={12} />} label="Inline Code" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'link', ''); setContextMenu(null); }} icon={<Link size={12} />} label="Link" shortcut="Ctrl+K" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+          </ContextMenuSubMenu>
+
+          <ContextMenuSubMenu isDark={isDark} icon={<Plus size={12} />} label="Insert Block">
+            <ContextMenuItem isDark={isDark} onClick={() => { insertCodeBlock(contextMenu.index); setContextMenu(null); }} icon={<Terminal size={12} />} label="Code Block" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock || lineContexts[contextMenu.index]?.isInsideDetails} />
+            <ContextMenuItem isDark={isDark} onClick={() => { insertDetails(contextMenu.index); setContextMenu(null); }} icon={<ChevronDown size={12} />} label="Details Section" disabled={lineContexts[contextMenu.index]?.isInsideDetails || lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { toggleList(contextMenu.index); setContextMenu(null); }} icon={<Type size={12} />} label="List Item" shortcut="Ctrl+L" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { toggleChecklist(contextMenu.index); setContextMenu(null); }} icon={<ListTodo size={12} />} label="Checklist Item" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyFormat(contextMenu.index, 'quote', ''); setContextMenu(null); }} icon={<Quote size={12} />} label="Quote" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+          </ContextMenuSubMenu>
+
+          <ContextMenuSubMenu isDark={isDark} icon={<Heading1 size={12} />} label="Headings">
+            <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 1); setContextMenu(null); }} icon={<Heading1 size={12} />} label="Heading 1" shortcut="Ctrl+1" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 2); setContextMenu(null); }} icon={<Heading2 size={12} />} label="Heading 2" shortcut="Ctrl+2" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+            <ContextMenuItem isDark={isDark} onClick={() => { applyHeader(contextMenu.index, 3); setContextMenu(null); }} icon={<Heading3 size={12} />} label="Heading 3" shortcut="Ctrl+3" disabled={lineContexts[contextMenu.index]?.isInsideCodeBlock} />
+          </ContextMenuSubMenu>
+
+          <div className="h-px bg-border/50 my-1 mx-1" />
+
+          <ContextMenuItem 
+            isDark={isDark} 
+            onClick={() => { 
+              if (lineContexts[contextMenu.index]?.isInsideCodeBlock) removeCodeBlock(contextMenu.index);
+              else if (lineContexts[contextMenu.index]?.isInsideDetails) removeDetails(contextMenu.index);
+              setContextMenu(null); 
+            }} 
+            icon={<Trash2 size={12} className="text-red-400" />} 
+            label="Remove Block" 
+            disabled={!lineContexts[contextMenu.index]?.isInsideCodeBlock && !lineContexts[contextMenu.index]?.isInsideDetails} 
+          />
         </div>
       )}
     </div>
