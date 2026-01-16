@@ -37,6 +37,7 @@ interface StatsData {
 interface StatsViewProps {
   accentColor: string;
   isDark: boolean;
+  period: string;
 }
 
 const StatCard = ({ title, value, subValue, icon: Icon, accentColor, isDark }: { title: string, value: string, subValue?: string, icon: any, accentColor: string, isDark: boolean }) => (
@@ -78,29 +79,21 @@ const ProgressBar = ({ label, value, max, color, subLabel, isDark }: { label: st
   );
 };
 
-export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark, period }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<StatsData | null>(null);
-  const [period, setPeriod] = useState<string>(() => {
-    return localStorage.getItem('vibe-stats-period') || 'month';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('vibe-stats-period', period);
-  }, [period]);
 
   const fetchStats = async (p: string) => {
     setLoading(true);
-    setPeriod(p);
     try {
       const flag = p === 'today' ? '--today' :
         p === 'yesterday' ? '--yesterday' :
-          p === 'week' ? '--week' :
-            p === 'prev-week' ? '--prev-week' :
-              p === 'month' ? '--month' :
-                p === 'prev-month' ? '--prev-month' :
-                  p === '3-months' ? '--last-3-months' :
-                    p === '6-months' ? '--last-6-months' : '--year';
+        p === 'week' ? '--week' :
+        p === 'prev-week' ? '--prev-week' :
+        p === 'month' ? '--month' :
+        p === 'prev-month' ? '--prev-month' :
+        p === '3-months' ? '--last-3-months' :
+        p === '6-months' ? '--last-6-months' : '--year';
 
       await invoke('run_vibe_command', {
         command: 'usage',
@@ -113,16 +106,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark }) => 
   };
 
   useEffect(() => {
+    fetchStats(period);
+  }, [period]);
+
+  useEffect(() => {
     let mounted = true;
-
-    // Only fetch once even in StrictMode
-    const initFetch = async () => {
-      if (mounted) {
-        fetchStats(period);
-      }
-    };
-
-    initFetch();
 
     const unlisten = listen('vibe-server-event', (event: any) => {
       if (!mounted) return;
@@ -171,34 +159,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark }) => 
           <p className="text-muted mt-2">Track your AI resource consumption and costs</p>
         </div>
 
-        <div className="flex items-center gap-2 bg-panel border border-border p-1 rounded-xl">
-          {[
-            { id: 'today', label: 'Today' },
-            { id: 'yesterday', label: 'Yday' },
-            { id: 'week', label: 'Week' },
-            { id: 'prev-week', label: 'L.Week' },
-            { id: 'month', label: 'Month' },
-            { id: 'prev-month', label: 'L.Month' },
-            { id: '3-months', label: '3M' },
-            { id: '6-months', label: '6M' },
-            { id: 'year', label: 'Year' },
-          ].map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => fetchStats(p.id)}
-                  disabled={loading}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
-                    period === p.id
-                      ? (isDark ? "bg-zinc-800 text-white shadow-sm" : "bg-zinc-200 text-zinc-900 shadow-sm")
-                      : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/50" : "text-muted hover:text-foreground hover:bg-zinc-200/50")
-                  )}
-                  style={period === p.id ? { color: accentColor } : {}}
-                >
-              {p.label}
-            </button>
-          ))}
-          <div className="w-px h-6 bg-border mx-1" />
+        <div className="flex items-center gap-2">
           <button
             onClick={() => fetchStats(period)}
             disabled={loading}
