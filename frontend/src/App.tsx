@@ -764,6 +764,18 @@ const App: React.FC = () => {
     }
   });
 
+  const [plannerMessages, setPlannerMessages] = useState<Message[]>([
+    {
+      role: 'Architect',
+      content: "Hello! I am the Planner Architect. How can I help you with your PRDs today?"
+    }
+  ]);
+  const [issuesMessages, setIssuesMessages] = useState<Message[]>([
+    {
+      role: 'Architect',
+      content: "Hello! I am the Issues Agent. How can I help you with your bug tracking today?"
+    }
+  ]);
   useEffect(() => {
     if (selectedArtifact) {
       localStorage.setItem('vibe-selected-artifact', JSON.stringify(selectedArtifact));
@@ -771,13 +783,9 @@ const App: React.FC = () => {
       localStorage.removeItem('vibe-selected-artifact');
     }
   }, [selectedArtifact]);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Architect agent. How can I help you today?"
-    }
-  ]);
-  const [inputValue, setInputValue] = useState('');
+
+  const [plannerInputValue, setPlannerInputValue] = useState('');
+  const [issuesInputValue, setIssuesInputValue] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>(() => {
@@ -935,14 +943,21 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handlePromptSubmit = async () => {
+  const handlePromptSubmit = async (context: 'planner' | 'issues' = activeTab === 'issues' ? 'issues' : 'planner') => {
+    const inputValue = context === 'planner' ? plannerInputValue : issuesInputValue;
+    const setMessages = context === 'planner' ? setPlannerMessages : setIssuesMessages;
+    const setInputValue = context === 'planner' ? setPlannerInputValue : setIssuesInputValue;
+
     if (!inputValue.trim()) return;
     const val = inputValue.trim();
     setMessages(prev => [...prev, { role: 'User', content: val }]);
     setInputValue('');
     setPendingPrompt(null);
     try {
-      await invoke('send_vibe_input', { input: val });
+      await invoke('send_vibe_input', { 
+        input: val,
+        context: context // Assuming backend can handle context or uses the set mode
+      });
     } catch (e) {
       console.error('Error sending prompt response:', e);
     }
@@ -958,11 +973,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = (context: 'planner' | 'issues' = activeTab === 'issues' ? 'issues' : 'planner') => {
     if (pendingPrompt) {
-      handlePromptSubmit();
+      handlePromptSubmit(context);
       return;
     }
+    const inputValue = context === 'planner' ? plannerInputValue : issuesInputValue;
+    const setMessages = context === 'planner' ? setPlannerMessages : setIssuesMessages;
+    const setInputValue = context === 'planner' ? setPlannerInputValue : setIssuesInputValue;
+
     if (!inputValue.trim()) return;
     
     const content = inputValue.trim();
@@ -972,13 +991,25 @@ const App: React.FC = () => {
     if (content.startsWith('/')) {
       const cmd = content.slice(1);
       const [base, ...args] = cmd.split(' ');
-      invoke('run_vibe_command', { command: base, args })
+      invoke('run_vibe_command', { 
+        command: base, 
+        args: [...args, `--context=${context}`, `--chat-id=${context}`] 
+      })
         .catch(err => {
           setMessages(prev => [...prev, { 
             role: 'Architect', 
             content: `Error running command \`${cmd}\`: ${err}` 
           }]);
         });
+    } else {
+      // Normal message - ensure it uses context-specific RAG/history
+      invoke('send_vibe_input', { 
+        input: content,
+        context: context,
+        chat_id: context
+      }).catch(err => {
+        console.error(`Error sending message to ${context} agent:`, err);
+      });
     }
   };
 
@@ -1289,11 +1320,12 @@ const App: React.FC = () => {
 
           {/* Right Pane: AI / Interaction */}
           <Panel id="sidebar-right" defaultSize={25} minSize={20} className="flex flex-col border-l transition-colors duration-300 bg-background border-border">
-            {(activeTab === 'planner' || activeTab === 'issues') ? (
+            {activeTab === 'planner' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                <AgentInteraction 
-                  messages={messages}
-                  onClearChat={() => setMessages([])}
+            <AgentInteraction 
+              id="planner-chat"
+              messages={plannerMessages}
+                  onClearChat={() => setPlannerMessages([])}
                   interactionMode={interactionMode}
                   setInteractionMode={setInteractionMode}
                   accentColor={accentColor}
@@ -1302,9 +1334,9 @@ const App: React.FC = () => {
                   onCancelCommand={handleCancelCommand}
                   pendingPrompt={pendingPrompt}
                   serverStatus={serverStatus}
-                  inputValue={inputValue}
-                  setInputValue={setInputValue}
-                  onSendMessage={handleSendMessage}
+                  inputValue={plannerInputValue}
+                  setInputValue={setPlannerInputValue}
+                  onSendMessage={() => handleSendMessage('planner')}
                 />
                 <div className="h-48 border-t p-2 overflow-hidden flex flex-col transition-colors duration-300 bg-background border-border">
                   <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-widest mb-1 text-muted">
@@ -1316,7 +1348,37 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : (
+            )}
+            {activeTab === 'issues' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+            <AgentInteraction 
+              id="issues-chat"
+              messages={issuesMessages}
+                  onClearChat={() => setIssuesMessages([])}
+                  interactionMode={interactionMode}
+                  setInteractionMode={setInteractionMode}
+                  accentColor={accentColor}
+                  isDark={themeColors.isDark}
+                  activeAgents={activeAgents}
+                  onCancelCommand={handleCancelCommand}
+                  pendingPrompt={pendingPrompt}
+                  serverStatus={serverStatus}
+                  inputValue={issuesInputValue}
+                  setInputValue={setIssuesInputValue}
+                  onSendMessage={() => handleSendMessage('issues')}
+                />
+                <div className="h-48 border-t p-2 overflow-hidden flex flex-col transition-colors duration-300 bg-background border-border">
+                  <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-widest mb-1 text-muted">
+                    <Terminal size={10} />
+                    Command Output
+                  </div>
+                  <div className="flex-1 overflow-y-auto font-mono text-[10px] p-2 rounded scrollbar-none transition-colors duration-300 bg-panel border-border border shadow-inner">
+                    <TerminalOutputView />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeTab !== 'planner' && activeTab !== 'issues' && (
               <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
                 <div>
                   <MessageSquare size={32} className="mx-auto mb-4 opacity-10" />

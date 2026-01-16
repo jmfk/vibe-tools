@@ -27,6 +27,7 @@ export interface AgentProcess {
 }
 
 interface AgentInteractionProps {
+  id: string; // Added to distinguish between chat instances
   messages: Message[];
   onClearChat: () => void;
   interactionMode: 'ASK' | 'AGENT';
