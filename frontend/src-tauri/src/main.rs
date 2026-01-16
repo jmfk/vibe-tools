@@ -336,7 +336,10 @@ async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: S
             }
         }
 
-        window_finished.emit("command-finished", status.map(|s| s.to_string()).ok()).unwrap();
+        window_finished.emit("command-finished", serde_json::json!({
+            "command": command_name,
+            "status": status.map(|s| s.to_string()).ok()
+        })).unwrap();
     });
 
     Ok(())

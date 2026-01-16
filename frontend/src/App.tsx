@@ -1195,23 +1195,24 @@ const App: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const fetchUsage = () => {
-      // Periodic background usage fetch
-      invoke('run_vibe_command', { command: 'usage', args: [] }).catch(() => {});
-    };
+  const fetchUsage = () => {
+    // Periodic background usage fetch
+    invoke('run_vibe_command', { command: 'usage', args: [] }).catch(() => {});
+  };
 
+  useEffect(() => {
     fetchUsage();
 
-    const unlistenFinished = listen('command-finished', () => {
-      fetchUsage();
+    const unlistenFinished = listen('command-finished', (event) => {
+      const payload = event.payload as { command: string, status: any };
+      // Only fetch if command was 'update'
+      if (payload.command === 'update') {
+        fetchUsage();
+      }
     });
-
-    const interval = setInterval(fetchUsage, 5 * 60 * 1000);
 
     return () => {
       unlistenFinished.then(f => f());
-      clearInterval(interval);
     };
   }, []);
 
@@ -1483,14 +1484,18 @@ const App: React.FC = () => {
             </Accordion>
           </div>
 
-          <div className="p-4 border-t transition-colors duration-300 bg-panel border-border">
+          <div 
+            className="p-4 border-t transition-colors duration-300 bg-panel border-border cursor-pointer hover:bg-zinc-800/30 group/cost"
+            onClick={fetchUsage}
+          >
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-muted">
+              <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-muted group-hover/cost:text-foreground transition-colors">
                 <Coins size={12} className="text-amber-500/70" />
                 Cost Tracking
               </div>
+              <RefreshCw size={10} className="text-muted opacity-0 group-hover/cost:opacity-100 transition-all" />
             </div>
-            <div className="rounded-lg p-3 border shadow-inner transition-colors duration-300 bg-background border-border">
+            <div className="rounded-lg p-3 border shadow-inner transition-colors duration-300 bg-background border-border group-hover/cost:border-accent/30">
               <div className="text-lg font-bold">${totalCost.toFixed(4)}</div>
               <div className="text-[9px] mt-0.5 uppercase font-medium text-muted">Estimated Usage</div>
             </div>
