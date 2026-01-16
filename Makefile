@@ -37,16 +37,16 @@ setup-hooks: ## Install git hooks
 	@echo "Installing git hooks..."
 	@cp scripts/check_secrets.py .git/hooks/pre-push.py
 	@cat <<'EOF' > .git/hooks/pre-push
-#!/bin/bash
-echo "Running sanity check for keys and passwords..."
-python3 scripts/check_secrets.py
-if [ $$? -ne 0 ]; then
-    echo "Push aborted: Potential secrets detected."
-    exit 1
-fi
-echo "Sanity check passed."
-exit 0
-EOF
+	#!/bin/bash
+	echo "Running sanity check for keys and passwords..."
+	python3 scripts/check_secrets.py
+	if [ $$? -ne 0 ]; then
+	    echo "Push aborted: Potential secrets detected."
+	    exit 1
+	fi
+	echo "Sanity check passed."
+	exit 0
+	EOF
 	@chmod +x .git/hooks/pre-push
 	@echo "Git hooks installed."
 
