@@ -832,6 +832,66 @@ export const PRDEditor = ({
       const context = lineContexts[i];
       const parsed = parseLine(lines[i]);
 
+      if (isPreview && parsed.type === 'details-open') {
+        let detailsLines = [];
+        let summary = "Details";
+        let j = i + 1;
+        while (j < lines.length) {
+          const nextParsed = parseLine(lines[j]);
+          if (nextParsed.type === 'details-close') break;
+          if (nextParsed.type === 'summary' && summary === "Details") {
+            summary = nextParsed.content;
+          } else {
+            detailsLines.push(j);
+          }
+          j++;
+        }
+        
+        rendered.push(
+          <details key={`details-${i}`} className="my-4 border border-border rounded-lg overflow-hidden bg-panel/30 shadow-sm group/details">
+            <summary className="px-4 py-3 font-bold cursor-pointer hover:bg-accent/5 transition-colors list-none flex items-center gap-2 group select-none border-b border-transparent group-open/details:border-border/20">
+              <ChevronDown size={14} className="text-accent group-open/details:rotate-180 transition-transform" />
+              <span className="text-sm tracking-tight">{summary}</span>
+            </summary>
+            <div className="p-4 bg-black/5">
+               {(() => {
+                 const innerRendered = [];
+                 let currentInnerCodeBlock: { lines: number[], lang: string } | null = null;
+                 for (let k = 0; k < detailsLines.length; k++) {
+                   const idx = detailsLines[k];
+                   const ctx = lineContexts[idx];
+                   const p = parseLine(lines[idx]);
+                   if (ctx.isInsideCodeBlock) {
+                     if (!currentInnerCodeBlock) currentInnerCodeBlock = { lines: [], lang: '' };
+                     if (p.type === 'code-fence' && currentInnerCodeBlock.lines.length === 0) currentInnerCodeBlock.lang = p.content;
+                     currentInnerCodeBlock.lines.push(idx);
+                     if (k === detailsLines.length - 1 || !lineContexts[detailsLines[k+1]].isInsideCodeBlock) {
+                       innerRendered.push(
+                         <div key={`code-block-${currentInnerCodeBlock.lines[0]}`} className={cn(
+                           "my-4 rounded-lg overflow-hidden border border-border/50",
+                           isDark ? "bg-zinc-900/80" : "bg-zinc-100/80"
+                         )}>
+                           {currentInnerCodeBlock.lang && (
+                             <div className="px-3 py-1.5 bg-black/20 border-b border-white/5 text-[10px] font-bold uppercase tracking-widest text-muted opacity-50">{currentInnerCodeBlock.lang}</div>
+                           )}
+                           <div className="p-0">{currentInnerCodeBlock.lines.map(lIdx => renderLine(lIdx, true))}</div>
+                         </div>
+                       );
+                       currentInnerCodeBlock = null;
+                     }
+                   } else {
+                     innerRendered.push(renderLine(idx, false));
+                   }
+                 }
+                 return innerRendered;
+               })()}
+            </div>
+          </details>
+        );
+        i = j;
+        continue;
+      }
+
       if (context.isInsideCodeBlock) {
         if (!currentCodeBlock) {
           currentCodeBlock = { lines: [], lang: '' };
