@@ -236,8 +236,7 @@ export const PRDEditor = ({
       .replace(/`[\s]*`/g, '')          
       .replace(/\[[\s]*\]\((.*?)\)/g, '') 
 
-      // 4. Final whitespace normalization:
-      // Ensure single space between any adjacent markdown markers
+      // 4. Final whitespace normalization
       .replace(/(\*\*\*|\*\*|__|___|_|~~|`|\]\(\S+\))\s*(\*\*\*|\*\*|__|___|_|~~|`|\[)/g, '$1 $2')
       .replace(/\s+/g, ' ') 
       .trim();
@@ -379,9 +378,6 @@ export const PRDEditor = ({
   };
 
   const applyFormat = (index: number, prefix: string, suffix: string) => {
-    // When using contenteditable, we can use document.execCommand
-    // To prevent "inline inside inline", we toggle off other active formats before applying the new one
-    
     if (prefix === '**') {
       if (document.queryCommandState('italic')) document.execCommand('italic', false);
       if (document.queryCommandState('strikeThrough')) document.execCommand('strikeThrough', false);
@@ -395,14 +391,38 @@ export const PRDEditor = ({
       if (document.queryCommandState('italic')) document.execCommand('italic', false);
       document.execCommand('strikeThrough', false);
     } else if (prefix === '`') {
-      // Inline code usually clears everything else
-      if (document.queryCommandState('bold')) document.execCommand('bold', false);
-      if (document.queryCommandState('italic')) document.execCommand('italic', false);
-      if (document.queryCommandState('strikeThrough')) document.execCommand('strikeThrough', false);
-      document.execCommand('formatBlock', false, 'code');
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        if (range.toString().length > 0) {
+          const code = document.createElement('code');
+          code.textContent = range.toString();
+          range.deleteContents();
+          range.insertNode(code);
+          const editor = range.startContainer.parentElement?.closest('[contenteditable]');
+          if (editor) {
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
     } else if (prefix === 'link') {
       const url = prompt('Enter URL:');
-      if (url) document.execCommand('createLink', false, url);
+      if (url) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const text = range.toString() || url;
+          const a = document.createElement('a');
+          a.href = url;
+          a.textContent = text;
+          range.deleteContents();
+          range.insertNode(a);
+          const editor = range.startContainer.parentElement?.closest('[contenteditable]');
+          if (editor) {
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
     } else if (prefix === 'quote') {
       const parsed = parseLine(lines[index]);
       if (parsed.type === 'quote') {
@@ -439,6 +459,260 @@ export const PRDEditor = ({
     } else {
       handleLineChange(index, '- [ ] ' + parsed.content + parsed.suffix);
     }
+  };
+
+  const renderLinesStartIdx = (idx: number) => {
+    let start = idx;
+    while (start > 0 && lineContexts[start - 1] && lineContexts[start - 1].isInsideCodeBlock) {
+      start--;
+    }
+    return start;
+  };
+
+  const renderLine = (i: number, isPartofBlock: boolean) => {
+    const line = lines[i];
+    const context = lineContexts[i];
+    const parsed = parseLine(line);
+
+    return (
+      <div
+        key={i}
+        className={cn(
+          "group relative min-h-[1.5rem] transition-colors px-2",
+          !isPreview && (focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : "hover:bg-zinc-800/20"),
+          !isPartofBlock && "rounded-md border border-transparent my-0.5",
+          isPartofBlock && "font-mono py-0",
+          !isPartofBlock && context.isInsideCodeBlock && (isDark ? "bg-zinc-900/50 font-mono" : "bg-zinc-100 font-mono")
+        )}
+        onClick={(e) => {
+          if (isPreview) return;
+          e.stopPropagation();
+          setFocusedIndex(i);
+        }}
+        onContextMenu={(e) => !isPreview && handleContextMenu(e, i)}
+      >
+        {!isPreview && focusedIndex === i ? (
+          <div className="flex items-start gap-2 w-full">
+            {(() => {
+              let visualMarker = null;
+              let textStyle = "text-sm leading-relaxed";
+
+              if (context.isInsideCodeBlock) {
+                textStyle = "font-mono text-xs opacity-90";
+                if (parsed.type === 'code-fence') {
+                  visualMarker = <div className="text-accent font-bold opacity-50">#</div>;
+                }
+              } else if (parsed.type === 'list') {
+                visualMarker = <div className="mt-2 w-1.5 h-1.5 rounded-full bg-muted shrink-0" />;
+              } else if (parsed.type === 'checklist') {
+                visualMarker = (
+                  <div
+                    className={cn(
+                      "mt-1 w-4 h-4 border rounded flex items-center justify-center cursor-pointer transition-colors",
+                      parsed.isChecked ? "bg-accent border-accent" : "bg-transparent border-border hover:border-accent"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleChecklist(i);
+                    }}
+                  >
+                    {parsed.isChecked && <Check size={10} className="text-white" />}
+                  </div>
+                );
+              } else if (parsed.type === 'quote') {
+                visualMarker = <div className="w-1 self-stretch bg-accent opacity-30 rounded-full" />;
+                textStyle = "italic text-muted pl-2";
+              } else if (parsed.type === 'hr') {
+                return <div className="w-full h-px bg-border my-4" />;
+              } else if (parsed.type === 'header') {
+                const level = parsed.prefix.trim().length;
+                textStyle = cn(
+                  "font-bold text-foreground",
+                  level === 1 && "text-3xl",
+                  level === 2 && "text-2xl",
+                  level === 3 && "text-xl",
+                  level >= 4 && "text-lg"
+                );
+              } else if (parsed.type === 'summary') {
+                visualMarker = <div className="mt-1 text-muted transform rotate-90 scale-75">▶</div>;
+                textStyle = "font-bold text-lg text-foreground";
+              }
+
+              return (
+                <>
+                  {visualMarker}
+                  <InlineRowEditor
+                    initialContent={context.isInsideCodeBlock ? (parsed.type === 'code-fence' ? parsed.content : line) : mdToHtml(parsed.content)}
+                    onChange={(html) => {
+                      if (context.isInsideCodeBlock) {
+                        if (parsed.type === 'code-fence') {
+                          handleLineChange(i, '```' + htmlToMd(html));
+                        } else {
+                          handleLineChange(i, htmlToMd(html));
+                        }
+                      } else {
+                        handleLineChange(i, parsed.prefix + htmlToMd(html) + parsed.suffix);
+                      }
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, i)}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        if (document.activeElement?.tagName !== 'BUTTON') {
+                          // setFocusedIndex(null);
+                        }
+                      }, 100);
+                    }}
+                    className={textStyle}
+                  />
+                </>
+              );
+            })()}
+          </div>
+        ) : (
+          <div className={cn(
+            "max-w-none transition-colors duration-300",
+            !line && "opacity-20 italic text-[10px]"
+          )}>
+            {(() => {
+              if (parsed.type === 'summary') {
+                return (
+                  <div className="flex items-center gap-2 py-1 group/summary">
+                    <div className="w-4 h-4 flex items-center justify-center text-muted">
+                      <span className="transform rotate-90 scale-75">▶</span>
+                    </div>
+                    <h4 className="text-base font-bold text-foreground m-0">{parsed.content}</h4>
+                  </div>
+                );
+              }
+              if (parsed.type === 'details-open' || parsed.type === 'details-close') {
+                return (
+                  <div className="text-[10px] font-mono text-muted opacity-40 py-1">
+                    {line}
+                  </div>
+                );
+              }
+              if (context.isInsideCodeBlock) {
+                let displayLine = line;
+                let colorClass = "text-foreground opacity-90";
+
+                if (parsed.type === 'code-fence') {
+                  displayLine = `\`\`\`${parsed.content}`;
+                  colorClass = "text-accent font-bold opacity-50";
+                } else if (isPartofBlock && lines[renderLinesStartIdx(i)]?.match(/^```json/)) {
+                  // Basic JSON highlighting: keys vs values
+                  const isKey = displayLine.trim().match(/^".*"\s*:/);
+                  if (isKey) {
+                    return (
+                      <div className={cn("font-mono text-xs py-0.5 whitespace-pre", colorClass)}>
+                        <span className="text-blue-400">{displayLine.split(':')[0]}</span>
+                        <span className="text-foreground">:</span>
+                        <span className="text-orange-300">{displayLine.split(':').slice(1).join(':')}</span>
+                      </div>
+                    );
+                  }
+                }
+
+                return (
+                  <div className={cn("font-mono text-xs py-0.5 whitespace-pre", colorClass)}>
+                    {displayLine}
+                  </div>
+                );
+              }
+
+              let textStyle = "text-sm leading-relaxed text-foreground";
+              if (parsed.type === 'header') {
+                const level = parsed.prefix.trim().length;
+                textStyle = cn(
+                  "font-bold text-foreground",
+                  level === 1 && "text-3xl",
+                  level === 2 && "text-2xl",
+                  level === 3 && "text-xl",
+                  level >= 4 && "text-lg"
+                );
+              } else if (parsed.type === 'quote') {
+                textStyle = "italic text-muted pl-2 border-l-2 border-accent/30";
+              }
+
+              return (
+                <div className={textStyle}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                      p: ({ node, ...props }) => <span {...props} />,
+                      h1: ({ node, ...props }) => <span {...props} />,
+                      h2: ({ node, ...props }) => <span {...props} />,
+                      h3: ({ node, ...props }) => <span {...props} />,
+                      h4: ({ node, ...props }) => <span {...props} />,
+                      h5: ({ node, ...props }) => <span {...props} />,
+                      h6: ({ node, ...props }) => <span {...props} />,
+                    }}
+                  >
+                    {line || 'Click to add text...'}
+                  </ReactMarkdown>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        <div className="absolute -left-8 top-1 opacity-0 group-hover:opacity-40 transition-opacity">
+          <Type size={12} className="text-muted" />
+        </div>
+      </div>
+    );
+  };
+
+  const renderLines = () => {
+    const rendered = [];
+    let currentCodeBlock: { lines: number[], lang: string } | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const context = lineContexts[i];
+      const parsed = parseLine(lines[i]);
+
+      if (context.isInsideCodeBlock) {
+        if (!currentCodeBlock) {
+          currentCodeBlock = { lines: [], lang: '' };
+        }
+        if (parsed.type === 'code-fence' && currentCodeBlock.lines.length === 0) {
+          currentCodeBlock.lang = parsed.content;
+        }
+        currentCodeBlock.lines.push(i);
+
+        // Check if this is the last line of the code block
+        const isLastLine = i === lines.length - 1 || !lineContexts[i + 1].isInsideCodeBlock;
+        if (isLastLine) {
+          const blockLines = currentCodeBlock.lines;
+          const lang = currentCodeBlock.lang;
+
+          rendered.push(
+            <div
+              key={`code-block-${blockLines[0]}`}
+              className={cn(
+                "my-4 rounded-lg overflow-hidden border border-border/50",
+                isDark ? "bg-zinc-900/80" : "bg-zinc-100/80",
+                lang === 'json' && "border-accent/20 shadow-lg shadow-accent/5"
+              )}
+            >
+              {lang && (
+                <div className="flex items-center justify-between px-3 py-1.5 bg-black/20 border-b border-white/5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted opacity-50">{lang}</span>
+                  {lang === 'json' && <span className="text-[10px] text-accent/70 font-mono">Formatted JSON Block</span>}
+                </div>
+              )}
+              <div className="p-0">
+                {blockLines.map(idx => renderLine(idx, true))}
+              </div>
+            </div>
+          );
+          currentCodeBlock = null;
+        }
+      } else {
+        rendered.push(renderLine(i, false));
+      }
+    }
+    return rendered;
   };
 
   const handleCopy = () => {
@@ -540,162 +814,7 @@ export const PRDEditor = ({
         }}
       >
         <div className="max-w-4xl mx-auto">
-          {lines.map((line, i) => {
-            const context = lineContexts[i];
-            const isFirstInCode = context.isInsideCodeBlock && (i === 0 || !lineContexts[i-1].isInsideCodeBlock);
-            const isLastInCode = context.isInsideCodeBlock && (i === lines.length - 1 || !lineContexts[i+1].isInsideCodeBlock);
-            
-            return (
-              <div 
-                key={i} 
-                className={cn(
-                  "group relative min-h-[1.5rem] transition-colors px-2",
-                  !isPreview && focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : "hover:bg-zinc-800/20",
-                  !context.isInsideCodeBlock && "rounded-md my-1",
-                  context.isInsideCodeBlock && (isDark ? "bg-zinc-900/50 font-mono" : "bg-zinc-100 font-mono"),
-                  isFirstInCode && "rounded-t-md mt-2 pt-1",
-                  isLastInCode && "rounded-b-md mb-2 pb-1",
-                  context.isInsideCodeBlock && !isFirstInCode && !isLastInCode && "py-0"
-                )}
-                onClick={(e) => {
-                  if (isPreview) return;
-                  e.stopPropagation();
-                  setFocusedIndex(i);
-                }}
-                onContextMenu={(e) => !isPreview && handleContextMenu(e, i)}
-              >
-                {!isPreview && focusedIndex === i ? (
-                <div className="flex items-start gap-2 w-full">
-                  {(() => {
-                    const parsed = parseLine(line);
-                    const context = lineContexts[i];
-                    let visualMarker = null;
-                    let textStyle = "text-sm leading-relaxed";
-
-                    if (context.isInsideCodeBlock) {
-                      textStyle = "font-mono text-xs opacity-90";
-                      if (parsed.type === 'code-fence') {
-                        visualMarker = <div className="text-accent font-bold opacity-50">#</div>;
-                      }
-                    } else if (parsed.type === 'list') {
-                      visualMarker = <div className="mt-2 w-1.5 h-1.5 rounded-full bg-muted shrink-0" />;
-                    } else if (parsed.type === 'checklist') {
-                      visualMarker = (
-                        <div 
-                          className={cn(
-                            "mt-1 w-4 h-4 border rounded flex items-center justify-center cursor-pointer transition-colors",
-                            parsed.isChecked ? "bg-accent border-accent" : "bg-transparent border-border hover:border-accent"
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleChecklist(i);
-                          }}
-                        >
-                          {parsed.isChecked && <Check size={10} className="text-white" />}
-                        </div>
-                      );
-                    } else if (parsed.type === 'quote') {
-                      visualMarker = <div className="w-1 self-stretch bg-accent opacity-30 rounded-full" />;
-                      textStyle = "italic text-muted pl-2";
-                    } else if (parsed.type === 'hr') {
-                      return <div className="w-full h-px bg-border my-4" />;
-                    } else if (parsed.type === 'header') {
-                      const level = parsed.prefix.trim().length;
-                      textStyle = cn(
-                        "font-bold text-foreground",
-                        level === 1 && "text-3xl",
-                        level === 2 && "text-2xl",
-                        level === 3 && "text-xl",
-                        level >= 4 && "text-lg"
-                      );
-                    } else if (parsed.type === 'summary') {
-                      visualMarker = <div className="mt-1 text-muted transform rotate-90 scale-75">▶</div>;
-                      textStyle = "font-bold text-lg text-foreground";
-                    }
-
-                    return (
-                      <>
-                        {visualMarker}
-                        <InlineRowEditor
-                          initialContent={context.isInsideCodeBlock ? (parsed.type === 'code-fence' ? parsed.content : line) : mdToHtml(parsed.content)}
-                          onChange={(html) => {
-                            if (context.isInsideCodeBlock) {
-                              if (parsed.type === 'code-fence') {
-                                handleLineChange(i, '```' + htmlToMd(html));
-                              } else {
-                                handleLineChange(i, htmlToMd(html));
-                              }
-                            } else {
-                              handleLineChange(i, parsed.prefix + htmlToMd(html) + parsed.suffix);
-                            }
-                          }}
-                          onKeyDown={(e) => handleKeyDown(e, i)}
-                          onBlur={() => {
-                            // Delay to allow toolbar clicks
-                            setTimeout(() => {
-                              if (document.activeElement?.tagName !== 'BUTTON') {
-                                // setFocusedIndex(null);
-                              }
-                            }, 100);
-                          }}
-                          className={textStyle}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div className={cn(
-                  "prose prose-sm max-w-none transition-colors duration-300",
-                  isDark ? "prose-invert" : "prose-zinc",
-                  !line && "opacity-20 italic text-[10px]"
-                )}>
-                  {(() => {
-                    const parsed = parseLine(line);
-                    if (parsed.type === 'summary') {
-                      return (
-                        <div className="flex items-center gap-2 py-1 group/summary">
-                          <div className="w-4 h-4 flex items-center justify-center text-muted">
-                            <span className="transform rotate-90 scale-75">▶</span>
-                          </div>
-                          <h4 className="text-base font-bold text-foreground m-0">{parsed.content}</h4>
-                        </div>
-                      );
-                    }
-                    if (parsed.type === 'details-open' || parsed.type === 'details-close') {
-                      return (
-                        <div className="text-[10px] font-mono text-muted opacity-40 py-1">
-                          {line}
-                        </div>
-                      );
-                    }
-                    if (lineContexts[i].isInsideCodeBlock) {
-                      return (
-                        <div className={cn(
-                          "font-mono text-xs py-0.5",
-                          parsed.type === 'code-fence' ? "text-accent font-bold opacity-50" : "text-foreground opacity-90"
-                        )}>
-                          {parsed.type === 'code-fence' ? `\`\`\`${parsed.content}` : line}
-                        </div>
-                      );
-                    }
-                    return (
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                      >
-                        {line || 'Click to add text...'}
-                      </ReactMarkdown>
-                    );
-                  })()}
-                </div>
-              )}
-              
-              <div className="absolute -left-8 top-1 opacity-0 group-hover:opacity-40 transition-opacity">
-                <Type size={12} className="text-muted" />
-              </div>
-            </div>
-          ))}
+          {renderLines()}
         </div>
       </div>
 
