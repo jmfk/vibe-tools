@@ -478,7 +478,26 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         passed_gates = True
         if tests:
             if not prd.impl_tests_passed:
-                # Run tests, lint, and build to ensure total quality
+                # 3b-1. Automatic Quality Fixes (Agent-less)
+                from vibe_tools.testing import ProjectTester
+                tester = ProjectTester()
+                logger.info("🛠️ Running automatic quality fixes (agent-less)...")
+                tester.run_fixes()
+                
+                if is_dirty():
+                    logger.info("💾 Auto-fixes applied changes. Committing...")
+                    run_command(["git", "add", "."], check=False)
+                    run_command(
+                        [
+                            "git",
+                            "commit",
+                            "-m",
+                            f"vibe: automatic quality fixes for {prd.id}",
+                        ],
+                        check=False,
+                    )
+
+                # 3b-2. Full Quality Suite (with Agentic Debugging)
                 success_tests, test_summary = debugging_loop(
                     agent, ["test", "lint", "build-frontend"], stream=stream, iterations=max_debug_iterations
                 )

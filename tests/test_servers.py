@@ -26,10 +26,14 @@ def mock_global_servers(tmp_path, monkeypatch):
 
 
 def test_list_servers(runner, mock_global_servers):
-    with patch("vibe_tools.servers.run_command") as mock_run:
-        # Mock docker inspect response (not created)
-        mock_run.return_value = ("", 1)
+    def mock_run_command(cmd, **kwargs):
+        if cmd[0:2] == ["docker", "info"]:
+            return ("", 0) # Docker is running
+        if cmd[0:2] == ["docker", "inspect"]:
+            return ("", 1) # Container not found
+        return ("", 0)
 
+    with patch("vibe_tools.servers.run_command", side_effect=mock_run_command):
         result = runner.invoke(servers_cli, ["list"])
 
         assert result.exit_code == 0

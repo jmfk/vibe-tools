@@ -24,6 +24,11 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     )
     monkeypatch.setattr("vibe_tools.utils.PRODUCT_HISTORY_DIR", product_dir / "history")
     monkeypatch.setattr("vibe_tools.utils.PLANNING_INBOX_DIR", product_dir / "inbox")
+    monkeypatch.setattr("vibe_tools.commands.plan.PRODUCT_DIR", product_dir)
+    monkeypatch.setattr("vibe_tools.commands.plan.PRODUCT_BACKLOG_DIR", product_dir / "backlog")
+    monkeypatch.setattr("vibe_tools.commands.plan.PRODUCT_IN_PROGRESS_DIR", product_dir / "in_progress")
+    monkeypatch.setattr("vibe_tools.commands.plan.PRODUCT_HISTORY_DIR", product_dir / "history")
+    monkeypatch.setattr("vibe_tools.commands.plan.PLANNING_INBOX_DIR", product_dir / "inbox")
 
     # 1. Add an issue
     with monkeypatch.context() as m:
@@ -41,20 +46,20 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     issue_path = inbox_files[0]
     assert "PRD-001" in issue_path.name
 
-    # 2. List issues
-    result = runner.invoke(cli, ["issue", "list"])
+    # 2. List items
+    result = runner.invoke(cli, ["plan", "list"])
     assert result.exit_code == 0
     assert "PRD-001" in result.output
     assert "Test Issue" in result.output
 
-    # 3. Solve issue (this will transition status and move file)
+    # 3. Solve item (this will transition status and move file)
     # Mock implementation_loop to avoid running agent
     with monkeypatch.context() as m:
         m.setattr(
             "vibe_tools.commands.solve.implementation_loop",
             lambda agent, stream=False: True,
         )
-        result = runner.invoke(cli, ["solve", "PRD-001"])
+        result = runner.invoke(cli, ["plan", "solve", "PRD-001"])
         assert result.exit_code == 0
         assert "Starting solve mode" in result.output
 
@@ -63,8 +68,8 @@ def test_issue_workflow(runner, tmp_path, monkeypatch):
     assert len(in_progress_files) == 1
     assert not (product_dir / "inbox" / issue_path.name).exists()
 
-    # 4. Close issue
-    result = runner.invoke(cli, ["issue", "close", "PRD-001"])
+    # 4. Close item
+    result = runner.invoke(cli, ["plan", "close", "PRD-001"])
     assert result.exit_code == 0
     assert "marked as done and moved to history" in result.output
 

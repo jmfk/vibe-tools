@@ -27,6 +27,85 @@ class ProjectTester:
         except Exception:
             return False
 
+    def discover_backend_fix_cmd(self):
+        """Discovers the command to run backend auto-fixes."""
+        if self.has_make_target("fix-backend") or self.has_make_target("fix"):
+            return (
+                ["make", "fix-backend"]
+                if self.has_make_target("fix-backend")
+                else ["make", "fix"]
+            )
+
+        # Fallback to ruff if available
+        try:
+            subprocess.run(["ruff", "--version"], capture_output=True, check=True)
+            return ["ruff", "check", "--fix", "."]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+        return None
+
+    def discover_frontend_fix_cmd(self):
+        """Discovers the command to run frontend auto-fixes."""
+        if self.has_make_target("frontend-fix"):
+            return [["make", "frontend-fix"]]
+
+        if (
+            self.frontend_root.exists()
+            and (self.frontend_root / "package.json").exists()
+        ):
+            # We run multiple commands to ensure both eslint and stylelint are fixed
+            # because 'npm run lint -- --fix' might only pass --fix to the last command.
+            return [
+                ["npx", "--prefix", str(self.frontend_root), "eslint", ".", "--ext", "ts,tsx", "--fix"],
+                ["npx", "--prefix", str(self.frontend_root), "stylelint", "src/**/*.css", "--fix"]
+            ]
+
+        return None
+
+    def discover_tauri_fix_cmd(self):
+        """Discovers the command to run tauri auto-fixes."""
+        if self.has_make_target("tauri-fix"):
+            return [["make", "tauri-fix"]]
+
+        if self.tauri_root.exists() and (self.tauri_root / "Cargo.toml").exists():
+            return [[
+                "cargo",
+                "clippy",
+                "--fix",
+                "--allow-dirty",
+                "--manifest-path",
+                str(self.tauri_root / "Cargo.toml"),
+            ]]
+
+        return None
+
+    def run_fixes(self, components=None):
+        """Runs auto-fix commands for specified components."""
+        if components is None:
+            components = ["backend", "frontend", "tauri"]
+
+        results = []
+        for component in components:
+            cmds = None
+            if component == "backend":
+                found = self.discover_backend_fix_cmd()
+                cmds = [found] if found and isinstance(found[0], str) else found
+            elif component == "frontend":
+                cmds = self.discover_frontend_fix_cmd()
+            elif component == "tauri":
+                cmds = self.discover_tauri_fix_cmd()
+
+            if cmds:
+                for cmd in cmds:
+                    logger.info(f"🔧 Running auto-fixes for {component}: {' '.join(cmd)}")
+                    output, code = run_command(cmd, check=False)
+                    results.append({"component": component, "command": ' '.join(cmd), "output": output, "success": code == 0})
+            else:
+                logger.debug(f"No auto-fix command found for {component}")
+
+        return results
+
     def discover_backend_test_cmd(self):
         """Discovers the command to run backend tests."""
         if self.has_make_target("test"):

@@ -16,6 +16,7 @@ from .utils import (
     log_large_output,
     run_command,
     out_print,
+    out_debug,
 )
 
 logger = logging.getLogger("vibe_tools")
