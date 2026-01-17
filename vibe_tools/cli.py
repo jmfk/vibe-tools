@@ -217,6 +217,11 @@ class OrderedGroup(click.Group):
     help="Output verbose information (like prompts) to the terminal.",
 )
 @click.option(
+    "--log/--no-log",
+    default=None,
+    help="Enable or disable file logging (default is enabled only for 'implement').",
+)
+@click.option(
     "--stream/--no-stream",
     default=None,
     help="Stream agent output in real-time to the console.",
@@ -235,10 +240,18 @@ class OrderedGroup(click.Group):
 )
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, server, debug, verbose, stream, agent, no_branch_switch):
+def cli(ctx, server, debug, verbose, log, stream, agent, no_branch_switch):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
-    setup_logging(command_name)
+
+    # Determine if we should log to file
+    if log is not None:
+        should_log = log
+    else:
+        # Only implement command creates a log by default
+        should_log = command_name == "implement"
+
+    setup_logging(command_name, log=should_log)
 
     def emit_final_result():
         # This will be called at exit

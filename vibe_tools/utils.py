@@ -438,43 +438,45 @@ def rotate_log():
         file_handler.doRollover()
 
 
-def setup_logging(command_name: str):
+def setup_logging(command_name: str, log: bool = True):
     """Configures logging for a CLI command."""
     global stream_handler, file_handler, LOG_SESSION_DIR
-    ensure_dir(LOGS_DIR)
-
-    # Add datetime prefix to log filename
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = LOGS_DIR / f"{timestamp}_{command_name}.log"
-
-    # Set the directory for multi-row outputs
-    LOG_SESSION_DIR = LOGS_DIR / f"{timestamp}_{command_name}"
 
     # Root logger configuration
     logger = logging.getLogger("vibe_tools")
     logger.setLevel(logging.DEBUG)
 
-    # Initialize OutputManager with the log file
-    output_manager.set_log_file(log_file)
-
-    # Pass config to output_manager
-    config = load_config()
-    output_manager.set_config(config)
-
     # Prevent duplicate handlers if setup_logging is called multiple times
     if logger.handlers:
         return logger
 
-    # File handler (always DEBUG level)
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=10 * 1024 * 1024, backupCount=5
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
+    if log:
+        ensure_dir(LOGS_DIR)
+
+        # Add datetime prefix to log filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = LOGS_DIR / f"{timestamp}_{command_name}.log"
+
+        # Set the directory for multi-row outputs
+        LOG_SESSION_DIR = LOGS_DIR / f"{timestamp}_{command_name}"
+
+        # Initialize OutputManager with the log file
+        output_manager.set_log_file(log_file)
+
+        # File handler (always DEBUG level)
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+
+    # Pass config to output_manager
+    config = load_config()
+    output_manager.set_config(config)
 
     # Console handler (default to INFO, but WARNING in server mode)
     stream_handler = logging.StreamHandler()
