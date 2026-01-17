@@ -1051,6 +1051,9 @@ const App: React.FC = () => {
         setEditingPRD((prev: any) => ({ ...prev, initialContent: content }));
         setEditingPRDContent(content);
       }
+      
+      // Signal that the PRD has been updated (for sidebar refresh)
+      setVibeExplorerRefreshKey(prev => prev + 1);
     } catch (err) {
       console.error('Failed to save PRD:', err);
       alert('Failed to save PRD.');

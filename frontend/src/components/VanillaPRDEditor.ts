@@ -8,6 +8,7 @@ export class VanillaPRDEditor {
   private toolbar: HTMLDivElement;
   private editor: HTMLDivElement;
   private onChange: (content: string) => void;
+  private onSave?: () => void;
   private isFocused: boolean = false;
   private contextMenu: HTMLDivElement | null = null;
   private accentColor: string;
@@ -17,11 +18,13 @@ export class VanillaPRDEditor {
     container: HTMLDivElement,
     initialContent: string,
     onChange: (content: string) => void,
+    onSave?: () => void,
     accentColor: string = '#10b981',
     isDark: boolean = false
   ) {
     this.container = container;
     this.onChange = onChange;
+    this.onSave = onSave;
     this.accentColor = accentColor;
     this.isDark = isDark;
 
@@ -359,9 +362,11 @@ export class VanillaPRDEditor {
             break;
           case 's':
             e.preventDefault();
-            this.onChange(this.getContent());
-            // We might want a separate onSave for explicit save, 
-            // but for now onChange will notify App.tsx which can track dirty state.
+            if (this.onSave) {
+              this.onSave();
+            } else {
+              this.onChange(this.getContent());
+            }
             break;
           case '1': e.preventDefault(); this.runCommand('formatBlock', 'h1'); break;
           case '2': e.preventDefault(); this.runCommand('formatBlock', 'h2'); break;
