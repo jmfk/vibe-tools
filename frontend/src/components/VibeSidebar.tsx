@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Search, 
   FileText, 
@@ -42,7 +42,109 @@ interface FileEntry {
   is_dir: boolean;
 }
 
-export const VibeSidebar = ({ 
+function SidebarTree({ 
+  items, 
+  level = 0, 
+  selectedPath, 
+  onSelect,
+  onEdit,
+  accentColor,
+  isDark
+}: { 
+  items: TreeItem[], 
+  level?: number, 
+  selectedPath?: string, 
+  onSelect: (artifact: Artifact) => void,
+  onEdit?: (artifact: Artifact) => void,
+  accentColor?: string,
+  isDark: boolean
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (path: string) => {
+    setExpanded(prev => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {items.map(item => (
+        <div key={item.path}>
+          {item.is_dir ? (
+            <div>
+              <button
+                onClick={() => toggle(item.path)}
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 font-bold text-muted hover:text-foreground",
+                  isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20"
+                )}
+                style={{ paddingLeft: `${level * 12 + 8}px` }}
+              >
+                {expanded[item.path] ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
+                <Folder size={14} className="text-muted" />
+                <span className="truncate flex-1">{item.name}</span>
+                {item.is_dir && item.children && item.children.length > 0 && (
+                  <span className="text-[9px] text-muted/60 font-mono mr-1">
+                    {item.children.length}
+                  </span>
+                )}
+              </button>
+              {expanded[item.path] && item.children && (
+                <SidebarTree 
+                  items={item.children} 
+                  level={level + 1} 
+                  selectedPath={selectedPath} 
+                  onSelect={onSelect} 
+                  onEdit={onEdit} 
+                  accentColor={accentColor} 
+                  isDark={isDark} 
+                />
+              )}
+            </div>
+          ) : (
+            <div className="group/item relative">
+              <button
+                onClick={() => item.artifact && onSelect(item.artifact)}
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5",
+                  selectedPath === item.path
+                    ? (isDark ? "bg-accent/10 text-accent font-medium shadow-sm" : "bg-accent/10 text-accent font-medium shadow-sm")
+                    : "text-muted hover:text-foreground",
+                  isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20"
+                )}
+                style={{ 
+                  paddingLeft: `${level * 12 + 24}px`,
+                  color: selectedPath === item.path ? accentColor : undefined
+                }}
+              >
+                <FileText size={12} className={selectedPath === item.path ? "text-accent" : "text-muted/60"} style={{ color: selectedPath === item.path ? accentColor : undefined }} />
+                <span className="truncate flex-1">{item.name}</span>
+                {item.artifact?.status && (
+                  <span className="text-[8px] px-1 py-0.5 rounded border border-border bg-panel/50 font-bold uppercase tracking-tighter opacity-60 group-hover/item:opacity-100 transition-opacity">
+                    {item.artifact.status}
+                  </span>
+                )}
+              </button>
+              {item.artifact?.type === 'prd' && onEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (item.artifact) onEdit(item.artifact);
+                  }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent/20 text-muted hover:text-accent opacity-0 group-hover/item:opacity-100 transition-all"
+                  title="Edit PRD"
+                >
+                  <Pencil size={10} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const VibeSidebar = React.memo(({ 
   root, 
   onSelect, 
   onEdit,
@@ -67,11 +169,7 @@ export const VibeSidebar = ({
   const [issueTree, setIssueTree] = useState<TreeItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    if (root) loadArtifacts();
-  }, [root]);
-
-  const loadArtifacts = async () => {
+  const loadArtifacts = useCallback(async () => {
     try {
       const all: Artifact[] = [];
       const scan = async (dir: string, type: 'prd' | 'spec' | 'issue'): Promise<TreeItem[]> => {
@@ -142,7 +240,16 @@ export const VibeSidebar = ({
       setSpecTree(specs);
       setIssueTree([]);
     } catch (err) {}
-  };
+  }, [root]);
+
+  useEffect(() => {
+    if (root) {
+      const timer = setTimeout(() => {
+        loadArtifacts();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [root, loadArtifacts]);
 
   const filteredArtifacts = useMemo(() => {
     if (!searchQuery) return null;
@@ -174,23 +281,32 @@ export const VibeSidebar = ({
                     <button
                       onClick={() => onSelect(artifact)}
                       className={cn(
-                        "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2 pr-8",
-                        selectedPath === artifact.path 
-                          ? (isDark ? "bg-zinc-800/50 border shadow-sm font-bold" : "bg-zinc-200/50 border shadow-sm font-bold")
-                          : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/20" : "text-muted hover:text-foreground hover:bg-zinc-200/20")
+                        "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5",
+                        selectedPath === artifact.path
+                          ? (isDark ? "bg-accent/10 text-accent font-medium shadow-sm" : "bg-accent/10 text-accent font-medium shadow-sm")
+                          : "text-muted hover:text-foreground",
+                        isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20"
                       )}
-                      style={selectedPath === artifact.path ? { borderColor: `${accentColor}40`, color: accentColor } : {}}
+                      style={{ 
+                        color: selectedPath === artifact.path ? accentColor : undefined
+                      }}
                     >
-                      {artifact.type === 'prd' ? <FileText size={14} className="text-purple-500" /> :
-                       artifact.type === 'spec' ? <Database size={14} className="text-accent" /> :
-                       <AlertCircle size={14} className="text-emerald-500" />}
-                      <span className="truncate">{artifact.name}</span>
+                      <FileText size={12} className={selectedPath === artifact.path ? "text-accent" : "text-muted/60"} style={{ color: selectedPath === artifact.path ? accentColor : undefined }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{artifact.name}</div>
+                        <div className="truncate text-[8px] opacity-40 font-mono">{artifact.relPath}</div>
+                      </div>
+                      {artifact.status && (
+                        <span className="text-[8px] px-1 py-0.5 rounded border border-border bg-panel/50 font-bold uppercase tracking-tighter opacity-60">
+                          {artifact.status}
+                        </span>
+                      )}
                     </button>
-                    {artifact.name.endsWith('.md') && (
-                      <button 
+                    {artifact.type === 'prd' && onEdit && (
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (onEdit) {
+                          if (artifact.path.includes('.md')) {
                             onEdit(artifact);
                           } else {
                             invoke('run_vibe_command', { command: 'open', args: [artifact.path] });
@@ -239,108 +355,4 @@ export const VibeSidebar = ({
       </div>
     </div>
   );
-};
-
-const SidebarTree = ({ 
-  items, 
-  level = 0, 
-  selectedPath, 
-  onSelect,
-  onEdit,
-  accentColor,
-  isDark
-}: { 
-  items: TreeItem[], 
-  level?: number, 
-  selectedPath?: string, 
-  onSelect: (artifact: Artifact) => void,
-  onEdit?: (artifact: Artifact) => void,
-  accentColor?: string,
-  isDark: boolean
-}) => {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const toggle = (path: string) => {
-    setExpanded(prev => ({ ...prev, [path]: !prev[path] }));
-  };
-
-  return (
-    <div className="space-y-0.5">
-      {items.map(item => (
-        <div key={item.path}>
-          {item.is_dir ? (
-            <div>
-              <button
-                onClick={() => toggle(item.path)}
-                className={cn(
-                  "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 font-bold text-muted hover:text-foreground",
-                  isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20"
-                )}
-                style={{ paddingLeft: `${level * 12 + 8}px` }}
-              >
-                {expanded[item.path] ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}
-                <Folder size={14} className="text-muted" />
-                <span className="truncate flex-1">{item.name}</span>
-                {item.is_dir && item.children && item.children.length > 0 && (
-                  <span className="text-[9px] text-muted/60 font-mono mr-1">
-                    {item.children.length}
-                  </span>
-                )}
-              </button>
-              {expanded[item.path] && item.children && (
-                <SidebarTree 
-                  items={item.children} 
-                  level={level + 1} 
-                  selectedPath={selectedPath} 
-                  onSelect={onSelect} 
-                  onEdit={onEdit}
-                  accentColor={accentColor}
-                  isDark={isDark}
-                />
-              )}
-            </div>
-          ) : (
-            item.artifact && (
-              <div className="group/item relative">
-                <button
-                  onClick={() => onSelect(item.artifact!)}
-                  className={cn(
-                    "w-full text-left px-2 py-1.5 rounded text-xs transition-colors truncate flex items-center gap-2 pr-8",
-                    selectedPath === item.path 
-                      ? (isDark ? "bg-zinc-800/50 border shadow-sm font-bold" : "bg-zinc-200/50 border shadow-sm font-bold")
-                      : (isDark ? "text-muted hover:text-foreground hover:bg-zinc-800/20" : "text-muted hover:text-foreground hover:bg-zinc-200/20")
-                  )}
-                  style={{ 
-                    paddingLeft: `${level * 12 + 24}px`,
-                    ...(selectedPath === item.path ? { borderColor: `${accentColor}40`, color: accentColor } : {})
-                  }}
-                >
-                {item.artifact.type === 'prd' ? <FileText size={14} className="text-purple-500" /> :
-                 item.artifact.type === 'spec' ? <Database size={14} className="text-accent" /> :
-                 <AlertCircle size={14} className="text-emerald-500" />}
-                <span className="truncate">{item.name}</span>
-              </button>
-              {item.name.endsWith('.md') && (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onEdit) {
-                      onEdit(item.artifact!);
-                    } else {
-                      invoke('run_vibe_command', { command: 'open', args: [item.path] });
-                    }
-                  }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent/20 text-muted hover:text-accent opacity-0 group-hover/item:opacity-100 transition-all"
-                  title="Edit PRD"
-                >
-                  <Pencil size={10} />
-                </button>
-              )}
-            </div>
-            )
-          )}
-        </div>
-      ))}
-    </div>
-  );
-};
+});

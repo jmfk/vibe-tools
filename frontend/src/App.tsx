@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Ansi from 'ansi-to-react';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 import {
@@ -137,8 +137,8 @@ interface Project {
   id: string;
   name: string;
   path: string;
-  description: string;
-  last_active: string;
+  description?: string;
+  last_active?: string;
   metadata?: Record<string, any>;
   secrets?: Record<string, string>;
   theme?: ThemeMode;
@@ -149,10 +149,6 @@ interface ProjectRegistry {
   projects: Project[];
   last_active_project_id: string | null;
 }
-
-// Types moved to components
-
-// --- Components ---
 
 const ColorPicker = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
   <div className="flex items-center gap-3">
@@ -193,13 +189,13 @@ const ProjectSettingsEditor = ({
   onThemeChange: (theme: ThemeMode) => void,
   onColorChange: (color: string) => void
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'colors' | 'config'>('config');
+  const [activeSubTab, setActiveSubTab] = useState<'colors' | 'config' | 'envs'>('config');
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [name, setName] = useState(project.name);
-  const [path, setPath] = useState(project.path);
-  const [githubUrl, setGithubUrl] = useState(project.metadata?.github_url || '');
+  const [name] = useState(project.name);
+  const [path] = useState(project.path);
+  const [githubUrl] = useState(project.metadata?.github_url || '');
   const [theme, setTheme] = useState<ThemeMode>((project.metadata?.theme as ThemeMode) || 'night');
   const [color, setColor] = useState((project.metadata?.color as string) || '#3b82f6');
   const [themeColors, setThemeColors] = useState<Record<ThemeMode, ThemeColors>>({
@@ -250,12 +246,10 @@ const ProjectSettingsEditor = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      // 1. Save config.json
       const configPath = `${workspaceRoot}/implementation/config.json`;
       const finalConfig = JSON.stringify(config, null, 2);
       await invoke('write_file_content', { path: configPath, content: finalConfig });
 
-      // 2. Save project settings (theme and color) in registry
       await invoke('update_project_registry', {
         id: project.id,
         name: name,
@@ -501,8 +495,6 @@ const TerminalOutputView = () => {
   );
 };
 
-// --- Main App ---
-
 const ProjectManagerView = ({
   registry,
   onSwitch,
@@ -699,7 +691,7 @@ const ProjectManagerView = ({
                 )}
                 <div className="flex items-center gap-4 mt-3">
                   <div className="text-[10px] text-muted font-medium uppercase tracking-widest opacity-70">
-                    Last active: {new Date(project.last_active).toLocaleString()}
+                    Last active: {project.last_active ? new Date(project.last_active).toLocaleString() : 'Never'}
                   </div>
                   {project.metadata?.github_url && (
                     <div className="flex items-center gap-1 text-[10px] text-accent/70 font-medium uppercase tracking-widest">
@@ -760,7 +752,7 @@ const App: React.FC = () => {
     return (localStorage.getItem('vibe-active-tab') as Tab) || 'planner';
   });
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
-  const [activeAgents, setActiveAgents] = useState<AgentProcess[]>([]);
+  const [activeAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [projectRegistry, setProjectRegistry] = useState<ProjectRegistry>({ projects: [], last_active_project_id: null });
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(() => {
@@ -813,14 +805,14 @@ const App: React.FC = () => {
     localStorage.setItem('vibe-show-right', String(showRight));
   }, [showRight]);
 
-  const addToOpenArtifacts = (artifact: Artifact) => {
+  const addToOpenArtifacts = useCallback((artifact: Artifact) => {
     setOpenArtifacts(prev => {
       if (prev.find(a => a.path === artifact.path)) return prev;
       return [...prev, artifact];
     });
-  };
+  }, []);
 
-  const closeArtifact = (path: string) => {
+  const closeArtifact = useCallback((path: string) => {
     setOpenArtifacts(prev => {
       const filtered = prev.filter(a => a.path !== path);
       if (selectedArtifact?.path === path) {
@@ -828,9 +820,9 @@ const App: React.FC = () => {
       }
       return filtered;
     });
-  };
+  }, [selectedArtifact]);
 
-  const toggleGlobalLeft = () => {
+  const toggleGlobalLeft = useCallback(() => {
     const panel = globalLeftPanelRef.current;
     if (panel) {
       if (showGlobalLeft) {
@@ -841,9 +833,9 @@ const App: React.FC = () => {
         else panel.expand();
       }
     }
-  };
+  }, [showGlobalLeft]);
 
-  const toggleLeft = () => {
+  const toggleLeft = useCallback(() => {
     const panel = leftPanelRef.current;
     if (panel) {
       if (showLeft) {
@@ -854,9 +846,9 @@ const App: React.FC = () => {
         else panel.expand();
       }
     }
-  };
+  }, [showLeft]);
 
-  const toggleRight = () => {
+  const toggleRight = useCallback(() => {
     const panel = rightPanelRef.current;
     if (panel) {
       if (showRight) {
@@ -867,7 +859,7 @@ const App: React.FC = () => {
         else panel.expand();
       }
     }
-  };
+  }, [showRight]);
 
   const [plannerMessages, setPlannerMessages] = useState<Message[]>([
     {
@@ -907,13 +899,6 @@ const App: React.FC = () => {
     }
   }, [selectedArtifact]);
 
-  const [plannerInputValue, setPlannerInputValue] = useState('');
-  const [setupInputValue, setSetupInputValue] = useState('');
-  const [issuesInputValue, setIssuesInputValue] = useState('');
-  const [interfaceInputValue, setInterfaceInputValue] = useState('');
-  const [databaseInputValue, setDatabaseInputValue] = useState('');
-  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
-  const [serverStatus, setServerStatus] = useState<{ phase: string, status: string, progress: number } | null>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem('vibe-theme') as ThemeMode) || 'night';
   });
@@ -941,24 +926,23 @@ const App: React.FC = () => {
   const [editingPRD, setEditingPRD] = useState<any | null>(null);
   const [editContent, setEditContent] = useState('');
 
-  const handleEditPRD = async (prd: any) => {
+  const handleEditPRD = useCallback(async (prd: any) => {
     try {
       const content = await invoke<string>('read_file_content', { path: prd.path });
-      // Map sidebar Artifact to PRD if needed, but PRDEditor only needs id, title, path, filename
       const prdData = {
         id: prd.id || prd.name.replace('.md', ''),
-        title: prd.name, // Will be updated by metadata if needed, but for now name is title
+        title: prd.name,
         path: prd.path,
         filename: prd.name,
         status: prd.status || '',
-        columnId: '' // Not strictly needed for editor
+        columnId: ''
       };
 
       const artifact: Artifact = {
         id: prdData.id,
         name: prdData.filename,
         path: prdData.path,
-        type: 'prd',
+        type: 'prd' as const,
         status: prdData.status,
         relPath: prdData.path.replace(workspaceRoot, '')
       };
@@ -970,20 +954,19 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Failed to load PRD content:', err);
     }
-  };
+  }, [workspaceRoot, addToOpenArtifacts]);
 
-  const handleSavePRD = async () => {
+  const handleSavePRD = useCallback(async () => {
     if (!editingPRD) return;
     try {
       await invoke('write_file_content', { path: editingPRD.path, content: editContent });
       setEditingPRD(null);
       setEditContent('');
-      // We might need to refresh the board if it's visible
     } catch (err) {
       console.error('Failed to save PRD:', err);
       alert('Failed to save PRD.');
     }
-  };
+  }, [editingPRD, editContent]);
 
   useEffect(() => {
     localStorage.setItem('vibe-stats-period', statsPeriod);
@@ -1011,12 +994,11 @@ const App: React.FC = () => {
   }, [interactionMode]);
 
   useEffect(() => {
-    // Sync interaction mode with backend on startup
     const syncMode = async () => {
       try {
         await invoke('run_vibe_command', { command: 'mode', args: [interactionMode.toLowerCase()] });
       } catch (e) {
-        // Ignore errors on startup
+        // Ignore
       }
     };
     syncMode();
@@ -1026,7 +1008,7 @@ const App: React.FC = () => {
     return customThemeColors[currentTheme];
   }, [customThemeColors, currentTheme]);
 
-  const loadRegistry = async () => {
+  const loadRegistry = useCallback(async () => {
     try {
       const registry = await invoke<ProjectRegistry>('get_projects');
       setProjectRegistry(registry);
@@ -1045,9 +1027,9 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const switchProject = async (project: Project) => {
+  const switchProject = useCallback(async (project: Project) => {
     try {
       await invoke('emit_log', { level: 'INFO', source: 'UI', message: `Switching to project: ${project.name}`, data: null });
       await invoke('set_workspace_root', { path: project.path });
@@ -1056,7 +1038,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [loadRegistry]);
 
   useEffect(() => {
     invoke<string>('get_workspace_root')
@@ -1067,23 +1049,13 @@ const App: React.FC = () => {
 
     const unlistenServer = listen('vibe-server-event', (event: any) => {
       const payload = event.payload;
-      if (payload.type === 'prompt') {
-        setPendingPrompt(payload.message);
-      } else if (payload.type === 'status') {
-        setServerStatus({
-          phase: payload.phase,
-          status: payload.status,
-          progress: payload.progress
-        });
-      } else if (payload.type === 'stats_result') {
+      if (payload.type === 'stats_result') {
         if (payload.total_cost !== undefined) {
           setTotalCost(payload.total_cost);
         }
-      } else if (payload.type === 'result') {
-        setPendingPrompt(null);
-        setServerStatus(null);
       } else if (payload.type === 'error') {
-        setMessages(prev => [...prev, {
+        const setMessages = activeTab === 'setup' ? setSetupMessages : activeTab === 'issues' ? setIssuesMessages : activeTab === 'interface-designer' ? setInterfaceMessages : activeTab === 'database-designer' ? setDatabaseMessages : setPlannerMessages;
+        setMessages((prev: Message[]) => [...prev, {
           role: 'Architect',
           content: `❌ **Error**: ${payload.message}\n\n\`\`\`\n${payload.traceback || ''}\n\`\`\``
         }]);
@@ -1093,19 +1065,17 @@ const App: React.FC = () => {
     return () => {
       unlistenServer.then(f => f());
     };
-  }, []);
+  }, [activeTab, loadRegistry]);
 
-  const fetchUsage = () => {
-    // Periodic background usage fetch
+  const fetchUsage = useCallback(() => {
     invoke('run_vibe_command', { command: 'usage', args: [] }).catch(() => { });
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsage();
 
     const unlistenFinished = listen('command-finished', (event) => {
       const payload = event.payload as { command: string, status: any };
-      // Only fetch if command was 'update'
       if (payload.command === 'update') {
         fetchUsage();
       }
@@ -1114,29 +1084,9 @@ const App: React.FC = () => {
     return () => {
       unlistenFinished.then(f => f());
     };
-  }, []);
+  }, [fetchUsage]);
 
-  const handlePromptSubmit = async (context: 'setup' | 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'setup' ? 'setup' : activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
-    const inputValue = context === 'setup' ? setupInputValue : context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
-    const setMessages = context === 'setup' ? setSetupMessages : context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
-    const setInputValue = context === 'setup' ? setSetupInputValue : context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
-
-    if (!inputValue.trim()) return;
-    const val = inputValue.trim();
-    setMessages(prev => [...prev, { role: 'User', content: val }]);
-    setInputValue('');
-    setPendingPrompt(null);
-    try {
-      await invoke('send_vibe_input', {
-        input: val,
-        context: context // Assuming backend can handle context or uses the set mode
-      });
-    } catch (e) {
-      console.error('Error sending prompt response:', e);
-    }
-  };
-
-  const handleCancelCommand = async (pid?: number) => {
+  const handleCancelCommand = useCallback(async (pid?: number) => {
     try {
       await invoke('send_vibe_input', { input: JSON.stringify({ type: 'cancel' }) });
     } catch (e) {
@@ -1144,22 +1094,15 @@ const App: React.FC = () => {
         await invoke('run_vibe_command', { command: 'kill', args: [pid.toString()] });
       }
     }
-  };
+  }, []);
 
-  const handleSendMessage = (context: 'setup' | 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'setup' ? 'setup' : activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
-    if (pendingPrompt) {
-      handlePromptSubmit(context);
-      return;
-    }
-    const inputValue = context === 'setup' ? setupInputValue : context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
+  const handleSendMessage = useCallback((val: string, context: string) => {
     const setMessages = context === 'setup' ? setSetupMessages : context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
-    const setInputValue = context === 'setup' ? setSetupInputValue : context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
 
-    if (!inputValue.trim()) return;
+    if (!val.trim()) return;
 
-    const content = inputValue.trim();
+    const content = val.trim();
     setMessages(prev => [...prev, { role: 'User', content }]);
-    setInputValue('');
 
     if (content.startsWith('/')) {
       const cmd = content.slice(1);
@@ -1175,7 +1118,6 @@ const App: React.FC = () => {
           }]);
         });
     } else {
-      // Normal message - ensure it uses context-specific RAG/history
       invoke('send_vibe_input', {
         input: content,
         context: context,
@@ -1184,7 +1126,7 @@ const App: React.FC = () => {
         console.error(`Error sending message to ${context} agent:`, err);
       });
     }
-  };
+  }, []);
 
   const [plannerView, setPlannerView] = useState<'board' | 'graph'>(() => {
     return (localStorage.getItem('vibe-planner-view') as 'board' | 'graph') || 'board';
@@ -1193,6 +1135,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('vibe-planner-view', plannerView);
   }, [plannerView]);
+
+  const activeProject = useMemo(() => {
+    return projectRegistry.projects.find(p => p.id === projectRegistry.last_active_project_id);
+  }, [projectRegistry]);
 
   const cycleTheme = () => {
     const modes: ThemeMode[] = ['night', 'day', 'morning', 'sunset'];
@@ -1216,10 +1162,6 @@ const App: React.FC = () => {
     }
   };
 
-  const activeProject = useMemo(() => {
-    return projectRegistry.projects.find(p => p.id === projectRegistry.last_active_project_id);
-  }, [projectRegistry]);
-
   const {
     defaultLayout,
     onLayoutChanged,
@@ -1228,12 +1170,12 @@ const App: React.FC = () => {
     storage: localStorage,
   });
 
-  const handleSelectArtifact = (artifact: Artifact | null) => {
+  const handleSelectArtifact = useCallback((artifact: Artifact | null) => {
     setSelectedArtifact(artifact);
     if (artifact) {
       addToOpenArtifacts(artifact);
     }
-  };
+  }, [addToOpenArtifacts]);
 
   return (
     <div
@@ -1250,7 +1192,6 @@ const App: React.FC = () => {
         color: themeColors.text
       } as React.CSSProperties}
     >
-      {/* Global Header */}
       <header className={cn("h-12 border-b flex items-center justify-between px-4 backdrop-blur-sm z-20 bg-panel border-border")}>
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded flex items-center justify-center transition-all shadow-sm overflow-hidden border border-white/10">
@@ -1263,525 +1204,171 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 px-1.5 py-1 rounded-md border bg-panel border-border">
+            <button
+              onClick={toggleGlobalLeft}
+              className={cn("p-1.5 rounded-md transition-colors", showGlobalLeft ? "text-accent bg-accent/5" : "text-muted hover:text-foreground")}
+              title="Toggle Global Sidebar"
+              style={showGlobalLeft ? { color: accentColor } : {}}
+            >
+              <Columns size={16} />
+            </button>
+            <button
+              onClick={toggleLeft}
+              className={cn("p-1.5 rounded-md transition-colors", showLeft ? "text-accent bg-accent/5" : "text-muted hover:text-foreground")}
+              title="Toggle Project Sidebar"
+              style={showLeft ? { color: accentColor } : {}}
+            >
+              <PanelLeft size={16} />
+            </button>
+            <button
+              onClick={toggleRight}
+              className={cn("p-1.5 rounded-md transition-colors", showRight ? "text-accent bg-accent/5" : "text-muted hover:text-foreground")}
+              title="Toggle AI Sidebar"
+              style={showRight ? { color: accentColor } : {}}
+            >
+              <PanelRight size={16} />
+            </button>
+          </div>
+
           <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
-            <TabButton
-              active={activeTab === 'setup'}
-              onClick={() => setActiveTab('setup')}
-              icon={<Wrench size={14} />}
-              label="Setup"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'planner'}
-              onClick={() => setActiveTab('planner')}
-              icon={<Kanban size={14} />}
-              label="Planner"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'issues'}
-              onClick={() => setActiveTab('issues')}
-              icon={<Bug size={14} />}
-              label="Issues"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'interface-designer'}
-              onClick={() => setActiveTab('interface-designer')}
-              icon={<Layout size={14} />}
-              label="Interface"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'database-designer'}
-              onClick={() => setActiveTab('database-designer')}
-              icon={<Database size={14} />}
-              label="Database"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'stats'}
-              onClick={() => setActiveTab('stats')}
-              icon={<BarChart3 size={14} />}
-              label="Stats"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
-            <TabButton
-              active={activeTab === 'projects'}
-              onClick={() => setActiveTab('projects')}
-              icon={<LayoutDashboard size={14} />}
-              label="Projects"
-              accentColor={accentColor}
-              isDark={themeColors.isDark}
-            />
+            <TabButton active={activeTab === 'setup'} onClick={() => setActiveTab('setup')} icon={<Wrench size={14} />} label="Setup" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} icon={<Kanban size={14} />} label="Planner" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'issues'} onClick={() => setActiveTab('issues')} icon={<Bug size={14} />} label="Issues" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'interface-designer'} onClick={() => setActiveTab('interface-designer')} icon={<Layout size={14} />} label="Interface" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'database-designer'} onClick={() => setActiveTab('database-designer')} icon={<Database size={14} />} label="Database" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} icon={<BarChart3 size={14} />} label="Stats" accentColor={accentColor} isDark={themeColors.isDark} />
+            <TabButton active={activeTab === 'projects'} onClick={() => setActiveTab('projects')} icon={<LayoutDashboard size={14} />} label="Projects" accentColor={accentColor} isDark={themeColors.isDark} />
           </div>
 
           <div className="flex items-center gap-2 px-2 py-1 rounded bg-panel border border-border">
             <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", activeAgents.length > 0 ? "bg-green-500" : "bg-muted")} />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-              {activeAgents.length > 0 ? 'Working' : 'Idle'}
-            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{activeAgents.length > 0 ? 'Working' : 'Idle'}</span>
           </div>
 
-          <button
-            onClick={cycleTheme}
-            className="p-1.5 rounded-md hover:bg-panel text-muted hover:text-foreground transition-colors flex items-center justify-center"
-            title={`Switch Theme (Current: ${currentTheme})`}
-          >
+          <button onClick={cycleTheme} className="p-1.5 rounded-md hover:bg-panel text-muted hover:text-foreground transition-colors flex items-center justify-center" title={`Switch Theme (Current: ${currentTheme})`}>
             {currentTheme === 'night' && <Moon size={18} />}
             {currentTheme === 'day' && <Sun size={18} />}
             {currentTheme === 'morning' && <Sunrise size={18} />}
             {currentTheme === 'sunset' && <Sunset size={18} />}
           </button>
 
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={cn(
-              "p-1.5 rounded-md transition-colors",
-              activeTab === 'settings' ? "bg-accent text-white" : "hover:bg-panel text-muted hover:text-foreground"
-            )}
-            style={activeTab === 'settings' ? { backgroundColor: accentColor } : {}}
-          >
+          <button onClick={() => setActiveTab('settings')} className={cn("p-1.5 rounded-md transition-colors", activeTab === 'settings' ? "bg-accent text-white" : "hover:bg-panel text-muted hover:text-foreground")} style={activeTab === 'settings' ? { backgroundColor: accentColor } : {}}>
             <Settings size={18} />
           </button>
         </div>
       </header>
 
       <div className="flex-1 flex flex-col min-h-0">
-        {activeTab === 'interface-designer' ? (
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-96 border-r flex flex-col bg-background border-border">
-              <AgentInteraction
-                id="interface-designer-chat"
-                messages={interfaceMessages}
-                onClearChat={() => setInterfaceMessages([])}
-                interactionMode={interactionMode}
-                setInteractionMode={setInteractionMode}
-                accentColor={accentColor}
-                isDark={themeColors.isDark}
-                activeAgents={activeAgents}
-                onCancelCommand={handleCancelCommand}
-                pendingPrompt={pendingPrompt}
-                serverStatus={serverStatus}
-                inputValue={interfaceInputValue}
-                setInputValue={setInterfaceInputValue}
-                onSendMessage={() => handleSendMessage('interface')}
-              />
-            </div>
-            <InterfaceDesigner accentColor={accentColor} isDark={themeColors.isDark} />
-          </div>
-        ) : activeTab === 'database-designer' ? (
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-96 border-r flex flex-col bg-background border-border">
-              <AgentInteraction
-                id="database-designer-chat"
-                messages={databaseMessages}
-                onClearChat={() => setDatabaseMessages([])}
-                interactionMode={interactionMode}
-                setInteractionMode={setInteractionMode}
-                accentColor={accentColor}
-                isDark={themeColors.isDark}
-                activeAgents={activeAgents}
-                onCancelCommand={handleCancelCommand}
-                pendingPrompt={pendingPrompt}
-                serverStatus={serverStatus}
-                inputValue={databaseInputValue}
-                setInputValue={setDatabaseInputValue}
-                onSendMessage={() => handleSendMessage('database')}
-              />
-            </div>
-            <DatabaseDesigner accentColor={accentColor} isDark={themeColors.isDark} />
-          </div>
-        ) : (
-          <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
-            {/* Global Left: Open Documents */}
-            <Panel
-              ref={globalLeftPanelRef}
-              id="sidebar-global"
-              defaultSize={150}
-              minSize={150}
-              minSizePixels={150}
-              collapsible
-              collapsedSize={0}
-              onCollapse={() => setShowGlobalLeft(false)}
-              onExpand={() => setShowGlobalLeft(true)}
-              onResize={(size: any) => {
-                if (size < 150 && showGlobalLeft) {
-                  globalLeftPanelRef.current?.collapse();
-                }
-              }}
-              className={cn("flex flex-col border-r transition-colors duration-300 bg-background border-border", !showGlobalLeft && "hidden")}
-            >
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-3 border-b flex items-center justify-between shrink-0">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Open Documents</span>
-                  <span className="px-1.5 py-0.5 rounded-full bg-panel border text-[9px] font-mono text-muted">{openArtifacts.length}</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
-                  {openArtifacts.map((art) => (
-                    <div
-                      key={art.path}
-                      onClick={() => {
-                        handleSelectArtifact(art);
-                        if (art.type === 'prd') {
-                          handleEditPRD(art);
-                        }
-                      }}
-                      className={cn(
-                        "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all",
-                        selectedArtifact?.path === art.path
-                          ? "bg-accent/10 border border-accent/20"
-                          : "hover:bg-panel border border-transparent"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText size={12} className={selectedArtifact?.path === art.path ? "text-accent" : "text-muted"} />
-                        <span className={cn(
-                          "text-[11px] truncate",
-                          selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted"
-                        )}>
-                          {art.name}
-                        </span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeArtifact(art.path);
-                        }}
-                        className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X size={10} className="text-muted" />
-                      </button>
+        <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
+          <Panel
+            panelRef={globalLeftPanelRef}
+            id="sidebar-global"
+            defaultSize={150}
+            minSize={10}
+            collapsible
+            onResize={(size: any) => { if (size < 100 && showGlobalLeft) globalLeftPanelRef.current?.collapse(); }}
+            className={cn("flex flex-col border-r transition-colors duration-300 bg-background border-border", !showGlobalLeft && "hidden")}
+          >
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="p-3 border-b flex items-center justify-between shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Open Documents</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-panel border text-[9px] font-mono text-muted">{openArtifacts.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
+                {openArtifacts.map((art) => (
+                  <div key={art.path} onClick={() => { handleSelectArtifact(art); if (art.type === 'prd') handleEditPRD(art); }} className={cn("group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all", selectedArtifact?.path === art.path ? "bg-accent/10 border border-accent/20" : "hover:bg-panel border border-transparent")}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={12} className={selectedArtifact?.path === art.path ? "text-accent" : "text-muted"} />
+                      <span className={cn("text-[11px] truncate", selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted")}>{art.name}</span>
                     </div>
-                  ))}
-                  {openArtifacts.length === 0 && (
-                    <div className="py-8 text-center">
-                      <Files size={24} className="mx-auto mb-2 opacity-10" />
-                      <p className="text-[10px] text-muted opacity-50 uppercase tracking-tighter">No open docs</p>
+                    <button onClick={(e) => { e.stopPropagation(); closeArtifact(art.path); }} className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} className="text-muted" /></button>
+                  </div>
+                ))}
+                {openArtifacts.length === 0 && <div className="py-8 text-center"><Files size={24} className="mx-auto mb-2 opacity-10" /><p className="text-[10px] text-muted opacity-50 uppercase tracking-tighter">No open docs</p></div>}
+              </div>
+            </div>
+          </Panel>
+
+          {showGlobalLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
+
+          <Panel
+            panelRef={leftPanelRef}
+            id="sidebar-left"
+            defaultSize={200}
+            minSize={10}
+            collapsible
+            onResize={(size: any) => { if (size < 100 && showLeft) leftPanelRef.current?.collapse(); }}
+            className={cn("flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border", !showLeft && "hidden")}
+          >
+            {activeTab === 'setup' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto no-scrollbar">
+                  <Accordion title="System Specs" icon={Database} isDark={themeColors.isDark}>
+                    <div className="mt-2">
+                      <VibeSidebar root={workspaceRoot} onSelect={handleSelectArtifact} onEdit={handleEditPRD} selectedPath={selectedArtifact?.path} accentColor={accentColor} isDark={themeColors.isDark} showPrds={false} />
                     </div>
-                  )}
+                  </Accordion>
                 </div>
               </div>
-            </Panel>
+            )}
+            {activeTab === 'planner' && <PlannerSidebar workspaceRoot={workspaceRoot} selectedArtifact={selectedArtifact} onSelectArtifact={handleSelectArtifact} onEditArtifact={handleEditPRD} accentColor={accentColor} isDark={themeColors.isDark} totalCost={totalCost} onFetchUsage={fetchUsage} />}
+            {activeTab === 'issues' && <IssuesSidebar isDark={themeColors.isDark} accentColor={accentColor} />}
+            {activeTab === 'stats' && <StatsSidebar isDark={themeColors.isDark} accentColor={accentColor} period={statsPeriod} onPeriodChange={setStatsPeriod} loading={false} />}
+            {(activeTab === 'projects' || activeTab === 'settings') && <ProjectsSidebar projects={projectRegistry.projects} activeProjectId={projectRegistry.last_active_project_id} onSwitchProject={switchProject} isDark={themeColors.isDark} accentColor={accentColor} />}
+          </Panel>
 
-            {showGlobalLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
+          {showLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
 
-            {/* Left Pane */}
-            <Panel
-              ref={leftPanelRef}
-              id="sidebar-left"
-              defaultSize={200}
-              minSize={150}
-              minSizePixels={150}
-              collapsible
-              collapsedSize={0}
-              onCollapse={() => setShowLeft(false)}
-              onExpand={() => setShowLeft(true)}
-              onResize={(size: any) => {
-                if (size < 150 && showLeft) {
-                  leftPanelRef.current?.collapse();
-                }
-              }}
-              className={cn("flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border", !showLeft && "hidden")}
-            >
-              {activeTab === 'setup' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="flex-1 overflow-y-auto no-scrollbar">
-                    <Accordion title="System Specs" icon={Database} isDark={themeColors.isDark}>
-                      <div className="mt-2">
-                        <VibeSidebar
-                          root={workspaceRoot}
-                          onSelect={handleSelectArtifact}
-                          onEdit={handleEditPRD}
-                          selectedPath={selectedArtifact?.path}
-                          accentColor={accentColor}
-                          isDark={themeColors.isDark}
-                          showPrds={false}
-                        />
-                      </div>
-                    </Accordion>
-                  </div>
-                </div>
-              )}
-              {activeTab === 'planner' && (
-                <PlannerSidebar
-                  workspaceRoot={workspaceRoot}
-                  selectedArtifact={selectedArtifact}
-                  onSelectArtifact={handleSelectArtifact}
-                  onEditArtifact={handleEditPRD}
-                  accentColor={accentColor}
-                  isDark={themeColors.isDark}
-                  totalCost={totalCost}
-                  onFetchUsage={fetchUsage}
-                />
-              )}
-              {activeTab === 'issues' && (
-                <IssuesSidebar isDark={themeColors.isDark} accentColor={accentColor} />
-              )}
-              {activeTab === 'stats' && (
-                <StatsSidebar
-                  isDark={themeColors.isDark}
-                  accentColor={accentColor}
-                  period={statsPeriod}
-                  onPeriodChange={setStatsPeriod}
-                  loading={false}
-                />
-              )}
-              {(activeTab === 'projects' || activeTab === 'settings') && (
-                <ProjectsSidebar
-                  projects={projectRegistry.projects}
-                  activeProjectId={projectRegistry.last_active_project_id}
-                  onSwitchProject={switchProject}
-                  isDark={themeColors.isDark}
-                  accentColor={accentColor}
-                />
-              )}
-            </Panel>
+          <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
+            <main className="flex-1 overflow-y-auto relative p-6">
+              {editingPRD ? <PRDEditor prd={editingPRD} content={editContent} onContentChange={setEditContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
+               activeTab === 'setup' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Wrench size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Initial Setup</h3><p className="text-sm mt-1">Configure your workspace and environment here</p></div> :
+               activeTab === 'planner' ? <div className="h-full flex flex-col gap-6 relative">
+                 <div className="flex items-center justify-between shrink-0">
+                   <div><h2 className="text-2xl font-bold text-foreground">Project Planner</h2><p className="text-sm text-muted mt-1">Manage PRDs and track dependencies</p></div>
+                   <div className="flex bg-panel border border-border rounded-lg p-1">
+                     <button onClick={() => setPlannerView('board')} className={cn("px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all", plannerView === 'board' ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm") : "text-muted hover:text-foreground")}><div className="flex items-center gap-2"><Kanban size={12} />Board</div></button>
+                     <button onClick={() => setPlannerView('graph')} className={cn("px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all", plannerView === 'graph' ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm") : "text-muted hover:text-foreground")}><div className="flex items-center gap-2"><Network size={12} />Graph</div></button>
+                   </div>
+                 </div>
+                 <div className="flex-1 min-h-0">
+                   {plannerView === 'board' ? <PlannerBoard workspaceRoot={workspaceRoot} onSelectPRD={(prd) => { const artifact = { id: prd.id, name: prd.filename, path: prd.path, type: 'prd' as const, status: prd.status, owner: prd.owner, relPath: prd.path.replace(workspaceRoot, '') }; addToOpenArtifacts(artifact); setSelectedArtifact(artifact); }} onEditPRD={handleEditPRD} onRefresh={loadRegistry} accentColor={accentColor} isDark={themeColors.isDark} /> :
+                    <PlannerGraph workspaceRoot={workspaceRoot} onSelectPRD={async (id) => { const entries = await invoke<any[]>('list_directory', { path: `${workspaceRoot}/product/in_progress` }); const entry = entries.find(e => e.name.includes(id)); if (entry) { const artifact = { id: id, name: entry.name, path: entry.path, type: 'prd' as const, relPath: entry.path.replace(workspaceRoot, '') }; addToOpenArtifacts(artifact); setSelectedArtifact(artifact); } }} />}
+                 </div>
+               </div> :
+               activeTab === 'issues' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Bug size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Issue Management</h3><p className="text-sm mt-1">Local and GitHub issues integration coming soon</p></div> :
+               activeTab === 'interface-designer' ? <InterfaceDesigner accentColor={accentColor} isDark={themeColors.isDark} /> :
+               activeTab === 'database-designer' ? <DatabaseDesigner accentColor={accentColor} isDark={themeColors.isDark} /> :
+               activeTab === 'stats' ? <div className="h-full"><StatsView accentColor={accentColor} isDark={themeColors.isDark} period={statsPeriod} /></div> :
+               activeTab === 'projects' ? <div className="h-full"><ProjectManagerView registry={projectRegistry} onSwitch={(p) => { switchProject(p); setActiveTab('planner'); }} onRefresh={loadRegistry} /></div> :
+               activeTab === 'settings' && activeProject ? <div className="h-full"><ProjectSettingsEditor project={activeProject} workspaceRoot={workspaceRoot} onSave={() => { loadRegistry(); setActiveTab('planner'); }} onThemeChange={setCurrentTheme} onColorChange={setAccentColor} /></div> : null}
+            </main>
+          </Panel>
 
-            {showLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
+          {showRight && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
 
-            {/* Center Pane: Main Content */}
-            <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
-              <main className="flex-1 overflow-y-auto relative p-6">
-                {editingPRD ? (
-                  <PRDEditor
-                    prd={editingPRD}
-                    content={editContent}
-                    onContentChange={setEditContent}
-                    onSave={handleSavePRD}
-                    onCancel={() => setEditingPRD(null)}
-                    accentColor={accentColor}
-                    isDark={themeColors.isDark}
-                  />
-                ) : activeTab === 'setup' ? (
-                  <div className="h-full flex flex-col items-center justify-center text-muted">
-                    <Wrench size={48} className="mb-4 opacity-10" />
-                    <h3 className="text-lg font-medium text-foreground">Initial Setup</h3>
-                    <p className="text-sm mt-1">Configure your workspace and environment here</p>
-                  </div>
-                ) : activeTab === 'planner' ? (
-                  <div className="h-full flex flex-col gap-6 relative">
-                    <div className="flex items-center justify-between shrink-0">
-                      <div>
-                        <h2 className="text-2xl font-bold text-foreground">Project Planner</h2>
-                        <p className="text-sm text-muted mt-1">Manage PRDs and track dependencies</p>
-                      </div>
-                      <div className="flex bg-panel border border-border rounded-lg p-1">
-                        <button
-                          onClick={() => setPlannerView('board')}
-                          className={cn(
-                            "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                            plannerView === 'board'
-                              ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm")
-                              : "text-muted hover:text-foreground"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Kanban size={12} />
-                            Board
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setPlannerView('graph')}
-                          className={cn(
-                            "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                            plannerView === 'graph'
-                              ? (themeColors.isDark ? "bg-zinc-800 text-accent shadow-sm" : "bg-zinc-200 text-accent shadow-sm")
-                              : "text-muted hover:text-foreground"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Network size={12} />
-                            Graph
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 min-h-0">
-                      {plannerView === 'board' ? (
-                        <PlannerBoard
-                          workspaceRoot={workspaceRoot}
-                          onSelectPRD={(prd) => {
-                            const artifact: Artifact = {
-                              id: prd.id,
-                              name: prd.filename,
-                              path: prd.path,
-                              type: 'prd',
-                              status: prd.status,
-                              owner: prd.owner,
-                              relPath: prd.path.replace(workspaceRoot, '')
-                            };
-                            addToOpenArtifacts(artifact);
-                            setSelectedArtifact(artifact);
-                          }}
-                          onEditPRD={handleEditPRD}
-                          onRefresh={loadRegistry}
-                          accentColor={accentColor}
-                          isDark={themeColors.isDark}
-                        />
-                      ) : (
-                        <PlannerGraph
-                          workspaceRoot={workspaceRoot}
-                          onSelectPRD={async (id) => {
-                            const entries = await invoke<any[]>('list_directory', { path: `${workspaceRoot}/product/in_progress` });
-                            const entry = entries.find(e => e.name.includes(id));
-                            if (entry) {
-                              const artifact: Artifact = {
-                                id: id,
-                                name: entry.name,
-                                path: entry.path,
-                                type: 'prd',
-                                relPath: entry.path.replace(workspaceRoot, '')
-                              };
-                              addToOpenArtifacts(artifact);
-                              setSelectedArtifact(artifact);
-                            }
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ) : activeTab === 'issues' ? (
-                  <div className="h-full flex flex-col items-center justify-center text-muted">
-                    <Bug size={48} className="mb-4 opacity-10" />
-                    <h3 className="text-lg font-medium text-foreground">Issue Management</h3>
-                    <p className="text-sm mt-1">Local and GitHub issues integration coming soon</p>
-                  </div>
-                ) : activeTab === 'stats' ? (
-                  <div className="h-full">
-                    <StatsView
-                      accentColor={accentColor}
-                      isDark={themeColors.isDark}
-                      period={statsPeriod}
-                    />
-                  </div>
-                ) : activeTab === 'projects' ? (
-                  <div className="h-full">
-                    <ProjectManagerView
-                      registry={projectRegistry}
-                      onSwitch={(p) => {
-                        switchProject(p);
-                        setActiveTab('planner');
-                      }}
-                      onRefresh={loadRegistry}
-                    />
-                  </div>
-                ) : activeTab === 'settings' && activeProject ? (
-                  <div className="h-full">
-                    <ProjectSettingsEditor
-                      project={activeProject}
-                      workspaceRoot={workspaceRoot}
-                      onSave={() => {
-                        loadRegistry();
-                        setActiveTab('planner');
-                      }}
-                      onThemeChange={setCurrentTheme}
-                      onColorChange={setAccentColor}
-                    />
-                  </div>
-                ) : null}
-              </main>
-            </Panel>
-
-            {showRight && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
-
-            {/* Right Pane: AI / Interaction */}
-            <Panel
-              ref={rightPanelRef}
-              id="sidebar-right"
-              defaultSize={250}
-              minSize={150}
-              minSizePixels={150}
-              collapsible
-              collapsedSize={0}
-              onCollapse={() => setShowRight(false)}
-              onExpand={() => setShowRight(true)}
-              onResize={(size: any) => {
-                if (size < 150 && showRight) {
-                  rightPanelRef.current?.collapse();
-                }
-              }}
-              className={cn("flex flex-col border-l transition-colors duration-300 bg-background border-border", !showRight && "hidden")}
-            >
-              {activeTab === 'setup' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <AgentInteraction
-                    id="setup-chat"
-                    messages={setupMessages}
-                    onClearChat={() => setSetupMessages([])}
-                    interactionMode={interactionMode}
-                    setInteractionMode={setInteractionMode}
-                    accentColor={accentColor}
-                    isDark={themeColors.isDark}
-                    activeAgents={activeAgents}
-                    onCancelCommand={handleCancelCommand}
-                    pendingPrompt={pendingPrompt}
-                    serverStatus={serverStatus}
-                    inputValue={setupInputValue}
-                    setInputValue={setSetupInputValue}
-                    onSendMessage={() => handleSendMessage('setup')}
-                  />
-                </div>
-              )}
-              {activeTab === 'planner' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <AgentInteraction
-                    id="planner-chat"
-                    messages={plannerMessages}
-                    onClearChat={() => setPlannerMessages([])}
-                    interactionMode={interactionMode}
-                    setInteractionMode={setInteractionMode}
-                    accentColor={accentColor}
-                    isDark={themeColors.isDark}
-                    activeAgents={activeAgents}
-                    onCancelCommand={handleCancelCommand}
-                    pendingPrompt={pendingPrompt}
-                    serverStatus={serverStatus}
-                    inputValue={plannerInputValue}
-                    setInputValue={setPlannerInputValue}
-                    onSendMessage={() => handleSendMessage('planner')}
-                  />
-                </div>
-              )}
-              {activeTab === 'issues' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <AgentInteraction
-                    id="issues-chat"
-                    messages={issuesMessages}
-                    onClearChat={() => setIssuesMessages([])}
-                    interactionMode={interactionMode}
-                    setInteractionMode={setInteractionMode}
-                    accentColor={accentColor}
-                    isDark={themeColors.isDark}
-                    activeAgents={activeAgents}
-                    onCancelCommand={handleCancelCommand}
-                    pendingPrompt={pendingPrompt}
-                    serverStatus={serverStatus}
-                    inputValue={issuesInputValue}
-                    setInputValue={setIssuesInputValue}
-                    onSendMessage={() => handleSendMessage('issues')}
-                  />
-                </div>
-              )}
-              {activeTab !== 'setup' && activeTab !== 'planner' && activeTab !== 'issues' && (
-                <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
-                  <div>
-                    <MessageSquare size={32} className="mx-auto mb-4 opacity-10" />
-                    <p className="text-xs font-medium uppercase tracking-widest opacity-40">Agent chat hidden</p>
-                    <p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Setup, Planner and Issues views.</p>
-                  </div>
-                </div>
-              )}
-            </Panel>
-          </PanelGroup>
-        )}
+          <Panel
+            panelRef={rightPanelRef}
+            id="sidebar-right"
+            defaultSize={250}
+            minSize={10}
+            collapsible
+            onResize={(size: any) => { if (size < 100 && showRight) rightPanelRef.current?.collapse(); }}
+            className={cn("flex flex-col border-l transition-colors duration-300 bg-background border-border", !showRight && "hidden")}
+          >
+            {activeTab === 'setup' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="setup-chat" messages={setupMessages} onClearChat={() => setSetupMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'setup')} /></div>}
+            {activeTab === 'planner' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="planner-chat" messages={plannerMessages} onClearChat={() => setPlannerMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'planner')} /></div>}
+            {activeTab === 'issues' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="issues-chat" messages={issuesMessages} onClearChat={() => setIssuesMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'issues')} /></div>}
+            {activeTab === 'interface-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="interface-designer-chat" messages={interfaceMessages} onClearChat={() => setInterfaceMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'interface')} /></div>}
+            {activeTab === 'database-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="database-designer-chat" messages={databaseMessages} onClearChat={() => setDatabaseMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'database')} /></div>}
+            {activeTab !== 'setup' && activeTab !== 'planner' && activeTab !== 'issues' && activeTab !== 'interface-designer' && activeTab !== 'database-designer' && (
+              <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
+                <div><MessageSquare size={32} className="mx-auto mb-4 opacity-10" /><p className="text-xs font-medium uppercase tracking-widest opacity-40">Agent chat hidden</p><p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Setup, Planner, Issues, Interface and Database views.</p></div>
+              </div>
+            )}
+          </Panel>
+        </PanelGroup>
       </div>
       <UnifiedLogMonitor accentColor={accentColor} isDark={themeColors.isDark} />
     </div>
@@ -1798,16 +1385,7 @@ interface TabButtonProps {
 }
 
 const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label, accentColor, isDark }) => (
-  <button
-    onClick={onClick}
-    className={cn(
-      "flex items-center gap-2 px-3 py-2 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2",
-      active
-        ? cn("text-foreground", isDark ? "bg-zinc-800/50" : "bg-zinc-200/50")
-        : cn("border-transparent text-muted hover:text-foreground", isDark ? "hover:bg-zinc-800/30" : "hover:bg-zinc-200/30")
-    )}
-    style={active ? { borderBottomColor: accentColor } : {}}
-  >
+  <button onClick={onClick} className={cn("flex items-center gap-2 px-3 py-2 transition-all text-[10px] font-bold uppercase tracking-widest border-b-2", active ? cn("text-foreground", isDark ? "bg-zinc-800/50" : "bg-zinc-200/50") : cn("border-transparent text-muted hover:text-foreground", isDark ? "hover:bg-zinc-800/30" : "hover:bg-zinc-200/30"))} style={active ? { borderBottomColor: accentColor } : {}}>
     <div style={active ? { color: accentColor } : {}}>{icon}</div>
     <span>{label}</span>
   </button>

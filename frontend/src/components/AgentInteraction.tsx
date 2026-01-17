@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { StatusMonitor } from './StatusMonitor';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -36,14 +37,10 @@ interface AgentInteractionProps {
   isDark: boolean;
   activeAgents: AgentProcess[];
   onCancelCommand: (pid?: number) => void;
-  pendingPrompt: string | null;
-  serverStatus: { phase: string, status: string, progress: number } | null;
-  inputValue: string;
-  setInputValue: (val: string) => void;
-  onSendMessage: () => void;
+  onSendMessage: (value: string) => void;
 }
 
-export const AgentInteraction: React.FC<AgentInteractionProps> = ({
+export const AgentInteraction: React.FC<AgentInteractionProps> = React.memo(({
   messages,
   onClearChat,
   interactionMode,
@@ -52,12 +49,17 @@ export const AgentInteraction: React.FC<AgentInteractionProps> = ({
   isDark,
   activeAgents,
   onCancelCommand,
-  pendingPrompt,
-  serverStatus,
-  inputValue,
-  setInputValue,
   onSendMessage
 }) => {
+  const [localInput, setLocalInput] = React.useState('');
+
+  const handleSend = () => {
+    if (localInput.trim()) {
+      onSendMessage(localInput.trim());
+      setLocalInput('');
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="p-4 border-b flex items-center justify-between transition-colors duration-300 bg-panel border-border">
@@ -134,39 +136,21 @@ export const AgentInteraction: React.FC<AgentInteractionProps> = ({
       </div>
 
       <div className="p-4 border-t transition-colors duration-300 bg-panel border-border">
-        {pendingPrompt && (
-          <div className="mb-4 p-3 bg-accent/10 border border-accent/30 rounded-lg shadow-sm">
-            <div className="text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Input Required</div>
-            <div className="text-xs mb-2 font-medium">{pendingPrompt}</div>
-          </div>
-        )}
-        
-        {serverStatus && (
-          <div className="mb-4 p-3 border rounded-lg transition-colors duration-300 shadow-sm bg-background border-border">
-            <div className="flex justify-between items-center mb-1.5">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-muted">{serverStatus.phase}</div>
-              <div className="text-[9px] font-mono font-bold text-muted">{serverStatus.progress}%</div>
-            </div>
-            <div className="w-full bg-zinc-950/10 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className="h-full transition-all duration-500" 
-                style={{ width: `${serverStatus.progress}%`, backgroundColor: accentColor }} 
-              />
-            </div>
-          </div>
-        )}
+        <StatusMonitor 
+          accentColor={accentColor} 
+        />
 
         <div className="relative flex gap-2">
           <input 
             type="text" 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
+            value={localInput}
+            onChange={(e) => setLocalInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask the Architect..."
             className="flex-1 border rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-2 transition-all duration-300 bg-input border-border focus:ring-accent/50"
           />
           <button 
-            onClick={onSendMessage}
+            onClick={handleSend}
             className="p-2 text-white rounded-md transition-all shadow-lg active:scale-95"
             style={{ backgroundColor: accentColor }}
           >
@@ -176,4 +160,4 @@ export const AgentInteraction: React.FC<AgentInteractionProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -39,7 +39,121 @@ interface AppLog {
 
 type LogTab = 'All' | 'System' | 'Commands' | 'Errors' | 'Agent';
 
-export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?: string, isDark?: boolean }) => {
+const LogEntry = React.memo(({ 
+  log, 
+  isExpanded, 
+  onToggle, 
+  getLevelColor, 
+  getSourceIcon 
+}: { 
+  log: AppLog, 
+  isExpanded: boolean, 
+  onToggle: () => void,
+  getLevelColor: (l: string) => string,
+  getSourceIcon: (s: string) => React.ReactNode
+}) => {
+  return (
+    <div 
+      className={cn(
+        "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
+        isExpanded 
+          ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" 
+          : "hover:bg-zinc-800/20"
+      )}
+      onClick={onToggle}
+    >
+      <div className="flex gap-4 items-start">
+        <span className="text-muted shrink-0 opacity-40 text-[10px] w-24 pt-0.5">{log.timestamp}</span>
+        <span className={cn("shrink-0 font-bold text-[10px] w-16 pt-0.5", getLevelColor(log.level))}>
+          {log.level}
+        </span>
+        <span className="shrink-0 flex items-center gap-1.5 text-muted/60 text-[10px] w-24 pt-0.5">
+          {getSourceIcon(log.source)}
+          {log.source}
+        </span>
+        <span className={cn("break-all flex-1", log.level === 'ERROR' ? "text-red-400" : "text-foreground opacity-90")}>
+          <Ansi>{log.message}</Ansi>
+        </span>
+        <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
+          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </div>
+      </div>
+      
+      {isExpanded && (
+        <div className="mt-2 ml-10 p-3 bg-black/40 rounded-lg border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
+          {log.data && typeof log.data === 'object' && ('command_line' in log.data || 'stdio' in log.data || 'stdout' in log.data || 'stderr' in log.data) ? (
+            <div className="space-y-4">
+              {log.data.command_line && (
+                <div>
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <Terminal size={10} /> command line
+                  </div>
+                  <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
+                    {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {log.data.stdio && (
+                <div>
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <ChevronDown size={10} /> stdio (in)
+                  </div>
+                  <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
+                    {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {log.data.stdout && (
+                <div>
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <ChevronUp size={10} /> stdout (out)
+                  </div>
+                  <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
+                    {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {log.data.stderr && (
+                <div>
+                  <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <AlertCircle size={10} /> stderr (error)
+                  </div>
+                  <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
+                    {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : (
+            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+              {log.data 
+                ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
+              }
+            </pre>
+          )}
+          <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const detailText = log.data 
+                  ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
+                  : `[${log.timestamp}] [${log.level}] [${log.source}] ${log.message}`;
+                navigator.clipboard.writeText(detailText);
+              }}
+              className="text-[9px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest flex items-center gap-1.5"
+            >
+              <Copy size={10} />
+              Copy Detail
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const UnifiedLogMonitor = React.memo(({ accentColor, isDark = true }: { accentColor?: string, isDark?: boolean }) => {
   const [logs, setLogs] = useState<AppLog[]>([]);
   const [isExpanded, setIsExpanded] = useState(() => {
     return localStorage.getItem('vibe-logs-expanded') === 'true';
@@ -61,6 +175,8 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const logQueue = useRef<AppLog[]>([]);
+  const flushTimer = useRef<any>(null);
 
   const handleScroll = () => {
     if (scrollRef.current) {
@@ -74,14 +190,37 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
     setAutoScroll(true);
   }, [activeTab, searchQuery, isFullView, isExpanded]);
 
+  const addLogsToState = (newLogs: AppLog[]) => {
+    setLogs(prev => {
+      const combined = [...prev, ...newLogs];
+      return combined.slice(-500); // Limit total logs stored to 500
+    });
+  };
+
   useEffect(() => {
     // Initial load
     invoke<AppLog[]>('get_all_logs')
       .then(logs => {
         const logsWithId = logs.map(l => ({ ...l, id: l.id || `${Date.now()}-${Math.random()}` }));
-        setLogs(logsWithId);
+        setLogs(logsWithId.slice(-500));
       })
       .catch(console.error);
+
+    const flushLogs = () => {
+      if (logQueue.current.length > 0) {
+        const toAdd = [...logQueue.current];
+        logQueue.current = [];
+        addLogsToState(toAdd);
+      }
+      flushTimer.current = null;
+    };
+
+    const queueLog = (log: AppLog) => {
+      logQueue.current.push(log);
+      if (!flushTimer.current) {
+        flushTimer.current = setTimeout(flushLogs, 100); // Batch logs every 100ms
+      }
+    };
 
     // Listen for new logs
     const unlistenAppLog = listen('app-log', (event: any) => {
@@ -89,11 +228,12 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
         ...(event.payload as AppLog), 
         id: `${Date.now()}-${Math.random()}` 
       };
-      setLogs(prev => [...prev, log].slice(-1000));
+      queueLog(log);
     });
 
     const unlistenCleared = listen('logs-cleared', () => {
       setLogs([]);
+      logQueue.current = [];
     });
 
     // Support legacy Agent logs by converting them to AppLog
@@ -124,7 +264,7 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
           message,
           data
         };
-        setLogs(prev => [...prev, log].slice(-1000));
+        queueLog(log);
       }
     });
 
@@ -132,6 +272,7 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
       unlistenAppLog.then(f => f());
       unlistenCleared.then(f => f());
       unlistenAgent.then(f => f());
+      if (flushTimer.current) clearTimeout(flushTimer.current);
     };
   }, []);
 
@@ -256,105 +397,15 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto font-mono text-xs space-y-0.5 p-4 bg-input rounded-xl border border-border/50 shadow-inner"
         >
-          {filteredLogs.map((log) => (
-            <div 
-              key={log.id} 
-              className={cn(
-                "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
-                expandedId === log.id 
-                  ? (isDark ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "bg-zinc-200/30 ring-1 ring-border/50 my-1") 
-                  : (isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20")
-              )}
-              onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-            >
-              <div className="flex gap-4 items-start">
-                <span className="text-muted shrink-0 opacity-40 text-[10px] w-24 pt-0.5">{log.timestamp}</span>
-                <span className={cn("shrink-0 font-bold text-[10px] w-16 pt-0.5", getLevelColor(log.level))}>
-                  {log.level}
-                </span>
-                <span className="shrink-0 flex items-center gap-1.5 text-muted/60 text-[10px] w-24 pt-0.5">
-                  {getSourceIcon(log.source)}
-                  {log.source}
-                </span>
-                <span className={cn("break-all flex-1", log.level === 'ERROR' ? "text-red-400" : "text-foreground opacity-90")}>
-                  <Ansi>{log.message}</Ansi>
-                </span>
-                <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
-                  {expandedId === log.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </div>
-              </div>
-              
-              {expandedId === log.id && (
-                <div className="mt-2 ml-10 p-3 bg-black/40 rounded-lg border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                  {log.data && typeof log.data === 'object' && ('command_line' in log.data || 'stdio' in log.data || 'stdout' in log.data || 'stderr' in log.data) ? (
-                    <div className="space-y-4">
-                      {log.data.command_line && (
-                        <div>
-                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                            <Terminal size={10} /> command line
-                          </div>
-                          <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
-                            {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      {log.data.stdio && (
-                        <div>
-                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                            <ChevronDown size={10} /> stdio (in)
-                          </div>
-                          <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
-                            {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      {log.data.stdout && (
-                        <div>
-                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                            <ChevronUp size={10} /> stdout (out)
-                          </div>
-                          <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
-                            {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      {log.data.stderr && (
-                        <div>
-                          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                            <AlertCircle size={10} /> stderr (error)
-                          </div>
-                          <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
-                            {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
-                      {log.data 
-                        ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                        : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
-                      }
-                    </pre>
-                  )}
-                  <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const detailText = log.data 
-                          ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                          : `[${log.timestamp}] [${log.level}] [${log.source}] ${log.message}`;
-                        navigator.clipboard.writeText(detailText);
-                      }}
-                      className="text-[9px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                    >
-                      <Copy size={10} />
-                      Copy Detail
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+          {filteredLogs.slice(-200).map((log) => (
+            <LogEntry
+              key={log.id}
+              log={log}
+              isExpanded={expandedId === log.id}
+              onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
+              getLevelColor={getLevelColor}
+              getSourceIcon={getSourceIcon}
+            />
           ))}
           <div className="inline-block w-2 h-4 bg-muted ml-1 animate-pulse" />
         </div>
@@ -434,101 +485,14 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
             className="flex-1 overflow-y-auto px-4 pb-4 pt-2 font-mono text-[10px] space-y-0.5"
           >
             {filteredLogs.slice(-100).map((log) => (
-              <div 
-                key={log.id} 
-                className={cn(
-                  "flex flex-col group py-0.5 rounded px-1 transition-colors cursor-pointer",
-                  expandedId === log.id 
-                    ? (isDark ? "bg-zinc-800/30 ring-1 ring-border/50 my-1" : "bg-zinc-200/30 ring-1 ring-border/50 my-1") 
-                    : (isDark ? "hover:bg-zinc-800/20" : "hover:bg-zinc-200/20")
-                )}
-                onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-              >
-                <div className="flex gap-3 items-start">
-                  <span className="text-muted shrink-0 opacity-40 w-16 pt-0.5">{log.timestamp}</span>
-                  <span className={cn("shrink-0 font-bold w-12 pt-0.5", getLevelColor(log.level))}>
-                    {log.level}
-                  </span>
-                  <span className={cn("break-all flex-1", log.level === 'ERROR' ? "text-red-500/80" : "text-foreground opacity-80")}>
-                    <span className="text-muted/40 font-bold mr-2">{log.source}</span>
-                    <Ansi>{log.message}</Ansi>
-                  </span>
-                  <div className="shrink-0 text-muted/40 group-hover:text-muted/70 transition-colors">
-                    {expandedId === log.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </div>
-                </div>
-
-                {expandedId === log.id && (
-                  <div className="mt-2 ml-8 p-2 bg-black/40 rounded border border-border/30 overflow-x-auto animate-in slide-in-from-top-1 duration-200">
-                    {log.data && typeof log.data === 'object' && ('command_line' in log.data || 'stdio' in log.data || 'stdout' in log.data || 'stderr' in log.data) ? (
-                      <div className="space-y-4">
-                        {log.data.command_line && (
-                          <div>
-                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                              <Terminal size={10} /> command line
-                            </div>
-                            <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
-                              {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                        {log.data.stdio && (
-                          <div>
-                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                              <ChevronDown size={10} /> stdio (in)
-                            </div>
-                            <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
-                              {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                        {log.data.stdout && (
-                          <div>
-                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                              <ChevronUp size={10} /> stdout (out)
-                            </div>
-                            <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
-                              {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                        {log.data.stderr && (
-                          <div>
-                            <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
-                              <AlertCircle size={10} /> stderr (error)
-                            </div>
-                            <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
-                              {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <pre className="text-[9px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
-                        {log.data 
-                          ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                          : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
-                        }
-                      </pre>
-                    )}
-                    <div className="flex justify-end mt-2 pt-2 border-t border-border/20">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const detailText = log.data 
-                            ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
-                            : `[${log.timestamp}] [${log.level}] [${log.source}] ${log.message}`;
-                          navigator.clipboard.writeText(detailText);
-                        }}
-                        className="text-[9px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                      >
-                        <Copy size={10} />
-                        Copy Detail
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <LogEntry
+                key={log.id}
+                log={log}
+                isExpanded={expandedId === log.id}
+                onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                getLevelColor={getLevelColor}
+                getSourceIcon={getSourceIcon}
+              />
             ))}
             <div className="inline-block w-1.5 h-3 bg-muted ml-1 animate-pulse" />
           </div>
@@ -536,4 +500,4 @@ export const UnifiedLogMonitor = ({ accentColor, isDark = true }: { accentColor?
       )}
     </div>
   );
-};
+});
