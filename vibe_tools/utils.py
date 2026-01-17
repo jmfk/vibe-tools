@@ -47,6 +47,7 @@ STATE_FILE = VIBE_PROJECT_DIR / "legacy-state.json"
 LOGS_DIR = VIBE_PROJECT_DIR / "logs"
 COSTS_DIR = VIBE_PROJECT_DIR / "costs"
 INSTRUCTIONS_DIR = VIBE_PROJECT_DIR / "instructions"
+KNOWLEDGE_DIR = VIBE_PROJECT_DIR / "knowledge"
 VIBE_DATA_DIR = VIBE_PROJECT_DIR / "data"
 CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
@@ -756,6 +757,7 @@ def ensure_project_structure():
     ensure_dir(COSTS_DIR)
     ensure_dir(VIBE_DATA_DIR)
     ensure_dir(INSTRUCTIONS_DIR)
+    ensure_dir(KNOWLEDGE_DIR)
     ensure_dir(PRODUCT_DIR)
     ensure_dir(PRODUCT_BACKLOG_DIR)
     ensure_dir(PRODUCT_IN_PROGRESS_DIR)
@@ -1173,6 +1175,72 @@ def save_memory(text: str) -> pathlib.Path:
     filepath = INSTRUCTIONS_DIR / filename
     filepath.write_text(text)
     return filepath
+
+
+def merge_insights(old_memory: str, new_insights: str) -> str:
+    """Merges incremental agent insights into the current PRD's operational memory via LLM."""
+    if not new_insights:
+        return old_memory
+
+    merge_prompt = f"""
+Merge the following new insights into the existing short-term memory for this task.
+Keep it concise and focused on progress, architectural decisions, and blockers found.
+
+OLD MEMORY:
+{old_memory or "None"}
+
+NEW INSIGHTS:
+{new_insights}
+
+Output ONLY the updated memory text. No headers, no intro, no tags.
+"""
+    updated_memory = run_llm(merge_prompt, model="gemini-3-flash")
+    return updated_memory.strip() if updated_memory else old_memory
+
+
+def update_global_knowledge(prd_id: str, insights: str):
+    """Uses an LLM to categorize and update global knowledge files."""
+    if not insights:
+        return
+
+    ensure_dir(KNOWLEDGE_DIR)
+    existing_categories = [f.stem for f in KNOWLEDGE_DIR.glob("*.md")]
+
+    update_prompt = f"""
+You are a knowledge manager for the Ralph Loop. Based on the following insights from PRD {prd_id}, 
+determine which knowledge category (file) should be updated or if a new one is needed.
+
+Existing categories: {', '.join(existing_categories) if existing_categories else "None"}
+
+INSIGHTS:
+{insights}
+
+Output your response in the following format:
+CATEGORY: <category_name>
+CONTENT: <The complete updated content for this category .md file, incorporating the new insights logically into the existing patterns.>
+
+If multiple categories need updates, output them sequentially.
+If no category fits and a new one is needed, create a descriptive name.
+Output ONLY the categories and content as specified.
+"""
+    response = run_llm(update_prompt, model="gemini-3-flash")
+    if response:
+        # Simple parsing logic for the LLM output
+        category_matches = re.finditer(
+            r"CATEGORY:\s*(.*?)\nCONTENT:\s*(.*?)(?=\nCATEGORY:|$)",
+            response,
+            re.DOTALL,
+        )
+        for match in category_matches:
+            category = match.group(1).strip()
+            content = match.group(2).strip()
+
+            if category and content:
+                # Basic slugify for safety
+                category_slug = re.sub(r"[^a-zA-Z0-9_-]", "_", category)
+                kb_file = KNOWLEDGE_DIR / f"{category_slug}.md"
+                kb_file.write_text(content)
+                out_success(f"🧠 Updated global knowledge: {kb_file.name}")
 
 
 def perform_basic_init():
@@ -1782,6 +1850,24 @@ def get_instructions_context():
         return ""
 
     return "INSTRUCTIONS:\n" + "\n\n".join(sections)
+
+
+def get_knowledge_context() -> str:
+    """Reads all markdown files in KNOWLEDGE_DIR and returns their summary/links."""
+    if not KNOWLEDGE_DIR.exists():
+        return ""
+
+    knowledge_files = sorted(list(KNOWLEDGE_DIR.glob("*.md")))
+    if not knowledge_files:
+        return ""
+
+    context = "GLOBAL KNOWLEDGE BASE:\n"
+    context += "The following knowledge categories are available. Reference them if needed:\n"
+    for f in knowledge_files:
+        # Include just the filename/category and a preview or instruction to read it
+        context += f"- {f.name}: (Use 'read_file' on this path if you need details on this category)\n"
+
+    return context + "\n"
 
 
 def is_merged(branch_name):

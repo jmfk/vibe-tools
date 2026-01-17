@@ -22,6 +22,7 @@ from vibe_tools.utils import (
     get_agent_command,
     get_automerge_branch,
     get_file_hash,
+    get_knowledge_context,
     get_main_branch,
     get_prompt,
     is_dirty,
@@ -31,10 +32,12 @@ from vibe_tools.utils import (
     log_start,
     log_success,
     logger,
+    merge_insights,
     run_agent,
     run_command,
     save_project_state,
     switch_to_main,
+    update_global_knowledge,
     is_branch_switching_enabled,
 )
 
@@ -416,6 +419,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     success = False
     failure_reason = ""
     failure_context = ""
+    short_term_memory = prd.metadata.get("short_term_memory", "")
 
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
@@ -435,13 +439,26 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                 if i > 1 and failure_reason:
                     feedback_context = f"\n\nPREVIOUS ATTEMPT FAILED:\nReason: {failure_reason}\nContext: {failure_context}\n\nPlease address the issues above in this iteration."
 
+                knowledge_context = get_knowledge_context()
+
                 prompt = prompt_template.format(
                     title=prd.title,
                     description=prd.content + feedback_context,
                     success_criteria=success_criteria_str,
+                    global_knowledge=knowledge_context,
+                    short_term_memory=short_term_memory or "No insights yet.",
                 )
                 cmd = get_agent_command(agent, prompt)
                 output, code = run_agent(cmd, stream=stream)
+
+                # Extract Insights
+                insight_match = re.search(r"<INSIGHTS>(.*?)</INSIGHTS>", output, re.DOTALL)
+                if insight_match:
+                    new_insights = insight_match.group(1).strip()
+                    logger.info("🧠 Merging new insights into short-term memory...")
+                    short_term_memory = merge_insights(short_term_memory, new_insights)
+                    prd.metadata["short_term_memory"] = short_term_memory
+                    prd.save()
 
                 if code != 0 or COMPLETION_PROMISE not in output:
                     failure_reason = (
@@ -560,6 +577,12 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     # 4. Finalize
     if success:
         logger.info(f"✅ PRD {prd.id} completed successfully.")
+        
+        # Update global knowledge based on short-term memory accumulated
+        if short_term_memory:
+            logger.info("🧠 Updating global knowledge base from PRD insights...")
+            update_global_knowledge(prd.id, short_term_memory)
+            
         out_status(phase="implement", status="completed", progress=100, prd_id=prd.id)
         prd.status = "done"
         final_path = PRODUCT_HISTORY_DIR / prd.path.name

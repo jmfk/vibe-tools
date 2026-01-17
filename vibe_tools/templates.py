@@ -237,10 +237,16 @@ Description: {description}
 Success Criteria:
 {success_criteria}
 
+{global_knowledge}
+
+SHORT-TERM MEMORY (Current PRD Progress):
+{short_term_memory}
+
 TASK:
 1. Implement the code and configuration required for THIS PLAN.
 2. Verify your changes against the success criteria.
-3. Include <promise>DONE</promise> in your response when the implementation is finished.
+3. At the end of your response, if you have new insights about the project structure, reusable patterns, or discovered constraints, include them within <INSIGHTS> tags.
+4. Include <promise>DONE</promise> in your response when the implementation is finished.
 """,
     "implementation_review_prompt.txt": """Review the changes for the following plan:
 TITLE: {title}
