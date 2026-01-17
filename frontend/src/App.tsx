@@ -1506,7 +1506,7 @@ const App: React.FC = () => {
               </div>
             </Panel>
 
-            {showGlobalLeft && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
+            {showGlobalLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
 
             {/* Left Pane */}
             <Panel
@@ -1580,7 +1580,7 @@ const App: React.FC = () => {
               )}
             </Panel>
 
-            {showLeft && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
+            {showLeft && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
 
             {/* Center Pane: Main Content */}
             <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
@@ -1726,7 +1726,7 @@ const App: React.FC = () => {
               </main>
             </Panel>
 
-            {showRight && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
+            {showRight && <PanelResizeHandle className="w-1.5 bg-transparent hover:bg-zinc-500/10 active:bg-zinc-500/20 transition-all duration-150" />}
 
             {/* Right Pane: AI / Interaction */}
             <Panel
