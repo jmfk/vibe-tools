@@ -145,28 +145,30 @@ function SidebarTree({
   );
 }
 
-export const VibeSidebar = React.memo(({ 
+interface VibeSidebarProps {
+  root: string;
+  onSelect: (artifact: Artifact | null) => void;
+  onEdit?: (artifact: any) => void;
+  selectedPath?: string;
+  accentColor?: string;
+  isDark: boolean;
+  showPrds?: boolean;
+  showSpecs?: boolean;
+  refreshKey?: number;
+  onArtifactsLoaded?: (artifacts: Artifact[]) => void;
+}
+
+export const VibeSidebar: React.FC<VibeSidebarProps> = React.memo(({ 
   root, 
   onSelect, 
   onEdit,
   selectedPath, 
   accentColor, 
-  isDark: boolean,
-  showPrds?: boolean,
-  showSpecs?: boolean,
-  refreshKey?: number,
-  onArtifactsLoaded?: (artifacts: Artifact[]) => void
-}: { 
-  root: string, 
-  onSelect: (artifact: Artifact) => void, 
-  onEdit?: (artifact: Artifact) => void,
-  selectedPath?: string, 
-  accentColor?: string, 
-  isDark: boolean,
-  showPrds?: boolean,
-  showSpecs?: boolean,
-  refreshKey?: number,
-  onArtifactsLoaded?: (artifacts: Artifact[]) => void
+  isDark,
+  showPrds = true,
+  showSpecs = true,
+  refreshKey,
+  onArtifactsLoaded
 }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
@@ -261,7 +263,7 @@ export const VibeSidebar = React.memo(({
     } catch (err) {
       console.error('Failed to load artifacts:', err);
     }
-  }, [root]);
+  }, [root, onArtifactsLoaded]);
 
   useEffect(() => {
     if (root) {

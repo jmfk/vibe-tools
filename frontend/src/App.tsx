@@ -1369,7 +1369,7 @@ const App: React.FC = () => {
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="p-3 border-b flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Vibe Explorer</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Explorer</span>
                       <button 
                         onClick={() => setVibeExplorerRefreshKey(prev => prev + 1)}
                         className="p-1 rounded-md hover:bg-panel text-muted hover:text-foreground transition-colors"
@@ -1391,6 +1391,22 @@ const App: React.FC = () => {
                       refreshKey={vibeExplorerRefreshKey}
                       onArtifactsLoaded={handleArtifactsLoaded}
                     />
+                  </div>
+                  <div 
+                    className="p-4 border-t transition-colors duration-300 bg-panel border-border cursor-pointer hover:bg-zinc-800/30 group/cost shrink-0"
+                    onClick={fetchUsage}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-muted group-hover/cost:text-foreground transition-colors">
+                        <Coins size={12} className="text-amber-500/70" />
+                        Cost Tracking
+                      </div>
+                      <RefreshCw size={10} className="text-muted opacity-0 group-hover/cost:opacity-100 transition-all" />
+                    </div>
+                    <div className="rounded-lg p-3 border shadow-inner transition-colors duration-300 bg-background border-border group-hover/cost:border-accent/30">
+                      <div className="text-lg font-bold">${totalCost.toFixed(4)}</div>
+                      <div className="text-[9px] mt-0.5 uppercase font-medium text-muted">Estimated Usage</div>
+                    </div>
                   </div>
                 </div>
               </Panel>
@@ -1415,8 +1431,6 @@ const App: React.FC = () => {
                     onEditArtifact={handleEditPRD} 
                     accentColor={accentColor} 
                     isDark={themeColors.isDark} 
-                    totalCost={totalCost} 
-                    onFetchUsage={fetchUsage} 
                     openArtifacts={openArtifacts}
                     onCloseArtifact={closeArtifact}
                   />
@@ -1429,8 +1443,6 @@ const App: React.FC = () => {
                     onEditArtifact={handleEditPRD} 
                     accentColor={accentColor} 
                     isDark={themeColors.isDark} 
-                    totalCost={totalCost} 
-                    onFetchUsage={fetchUsage} 
                     openArtifacts={openArtifacts}
                     onCloseArtifact={closeArtifact}
                   />
