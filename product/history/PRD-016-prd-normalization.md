@@ -38,11 +38,11 @@ N/A - CLI command with progress output.
   - `--no`: Skip existing files
   - Default: Ask per file
 - **Global Truth Files**: Special handling for:
-  - `architecture.md` → `architecture.yaml`
-  - `infrastructure.md` → `infrastructure.yaml`
-  - `cicd.md` → `cicd.yaml`
-  - `testing.md` → `testing.yaml`
-  - `project_overview.md` → `project_overview.yaml`
+  - `SRD-architecture.md` → `architecture.yaml`
+  - `SRD-infrastructure.md` → `infrastructure.yaml`
+  - `SRD-cicd.md` → `cicd.yaml`
+  - `SRD-testing.md` → `testing.yaml`
+  - `SRD-project_overview.md` → `project_overview.yaml`
 - **Validation**: Checks YAML syntax, verifies required fields present, warns on potential issues.
 
 ## Infrastructure
@@ -70,7 +70,7 @@ N/A - CLI command with progress output.
 1. **Single File**: Normalize one spec file, verify YAML created correctly
 2. **Batch Processing**: Normalize all specs, verify all converted
 3. **Overwrite Protection**: Try to normalize existing file, verify prompt/behavior
-4. **Global Truth**: Normalize architecture.md, verify architecture.yaml created (not prd_architecture.yaml)
+4. **Global Truth**: Normalize SRD-architecture.md, verify architecture.yaml created (not prd_architecture.yaml)
 5. **Naming**: Normalize files with various names, verify correct YAML names
 6. **Validation**: Create invalid spec, verify error handling
 7. **Information Preservation**: Compare markdown and YAML, verify all info present

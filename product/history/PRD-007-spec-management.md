@@ -20,7 +20,7 @@ N/A - File system organization and CLI commands.
 
 ## Backend
 - **Spec File Types**:
-  - **Global Truths**: `architecture.md`, `infrastructure.md`, `cicd.md`, `testing.md`, `project_overview.md`
+  - **Global Truths**: `SRD-architecture.md`, `SRD-infrastructure.md`, `SRD-cicd.md`, `SRD-testing.md`, `SRD-project_overview.md`
     - Converted to: `architecture.yaml`, `infrastructure.yaml`, etc.
     - Injected into every agent prompt as context
   - **Feature PRDs**: `prd_*.md` or `*.md` (other specs)
@@ -64,12 +64,12 @@ N/A - File system organization and CLI commands.
 - Context injection reliable
 
 ## Acceptance Tests
-1. **Global Truth Identification**: Create architecture.md, normalize, verify architecture.yaml created
+1. **Global Truth Identification**: Create SRD-architecture.md, normalize, verify architecture.yaml created
 2. **Context Injection**: Run agent command, verify global truths in context
 3. **Spec Discovery**: Create multiple PRDs, verify all discovered
 4. **Workflow**: Write spec, normalize, implement, verify workflow works
 5. **File Organization**: Verify specs in specs/, PRDs in implementation/prds/
-6. **Global Truth Updates**: Update architecture.md, re-normalize, verify context updated
+6. **Global Truth Updates**: Update SRD-architecture.md, re-normalize, verify context updated
 7. **PRD Processing**: Verify only prd_*.yaml files processed by implement, not global truths
 
 ---

@@ -32,12 +32,12 @@ Start by writing human-readable markdown specifications in the `product/` direct
 
 Certain specifications represent persistent system state and are treated as "global truths":
 
-- **`product/architecture.md`**: System architecture
-- **`product/infrastructure.md`**: Infrastructure configuration
-- **`product/cicd.md`**: CI/CD pipeline configuration
+- **`product/SRD-architecture.md`**: System architecture
+- **`product/SRD-infrastructure.md`**: Infrastructure configuration
+- **`product/SRD-cicd.md`**: CI/CD pipeline configuration
 - **`product/testing.md`**: Testing strategy and configuration
-- **`product/dev_environment.md`**: Development environment specification
-- **`product/project_overview.md`**: Project overview and context
+- **`product/SRD-dev_environment.md`**: Development environment specification
+- **`product/SRD-project_overview.md`**: Project overview and context
 
 These files are:
 - Converted to YAML without the `prd_` prefix
@@ -54,8 +54,8 @@ Feature PRDs follow a naming convention:
 Example structure:
 ```
 product/
-├── architecture.md
-├── infrastructure.md
+├── SRD-architecture.md
+├── SRD-infrastructure.md
 ├── 01_user_authentication.md
 ├── 02_payment_processing.md
 └── features/

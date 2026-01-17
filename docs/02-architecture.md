@@ -17,7 +17,7 @@ vibe-tools is built around a modular, CLI-first architecture that separates conc
 │   ├── ui/                 # Frontend implementation (React/TypeScript)
 │   └── tauri.conf.json     # Tauri configuration
 ├── product/                  # Human-readable specifications
-│   ├── architecture.md     # System architecture spec
+│   ├── SRD-architecture.md     # System architecture spec
 │   └── *.md                # Feature PRDs
 ├── prompts/                # AI prompt templates
 │   ├── ralph_base_prompt.txt
@@ -163,7 +163,7 @@ flowchart TD
 ### Specs Directory (`product/`)
 - Human-readable markdown files
 - Naming: `NN_description.md` (e.g., `01_pm_prd_focus.md`)
-- Global truths: `architecture.md`, `infrastructure.md`, `cicd.md`, `testing.md`
+- Global truths: `SRD-architecture.md`, `SRD-infrastructure.md`, `SRD-cicd.md`, `SRD-testing.md`
 
 ### PRDs Directory (`implementation/prds/`)
 - Machine-readable YAML files

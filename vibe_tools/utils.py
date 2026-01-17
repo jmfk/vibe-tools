@@ -66,17 +66,17 @@ SENSITIVE_KEYS = {
     "STRIPE_SECRET_KEY",
     "DATABASE_URL",
 }
-ARCHITECTURE_SPEC = PLANNING_DIR / "architecture.md"
-OVERVIEW_SPEC = PLANNING_DIR / "project_overview.md"
+ARCHITECTURE_SPEC = PLANNING_DIR / "SRD-architecture.md"
+OVERVIEW_SPEC = PLANNING_DIR / "SRD-project_overview.md"
 INFRA_CURRENT = VIBE_PROJECT_DIR / "infrastructure-current.yaml"
-INFRA_SPEC = PLANNING_DIR / "infrastructure.md"
+INFRA_SPEC = PLANNING_DIR / "SRD-infrastructure.md"
 CICD_CURRENT = VIBE_PROJECT_DIR / "cicd-current.yaml"
-CICD_SPEC = PLANNING_DIR / "cicd.md"
+CICD_SPEC = PLANNING_DIR / "SRD-cicd.md"
 TESTING_CURRENT = VIBE_PROJECT_DIR / "testing-current.yaml"
-TESTING_SPEC = PLANNING_DIR / "testing.md"
+TESTING_SPEC = PLANNING_DIR / "SRD-testing.md"
 DEV_ENV_CURRENT = VIBE_PROJECT_DIR / "dev_environment-current.yaml"
-DEV_SPEC = PLANNING_DIR / "dev_environment.md"
-SETUP_SPEC = PLANNING_DIR / "setup.md"
+DEV_SPEC = PLANNING_DIR / "SRD-dev_environment.md"
+SETUP_SPEC = PLANNING_DIR / "SRD-setup.md"
 
 GLOBAL_CONFIG_FILE = GLOBAL_VIBE_DIR / "config.json"
 GLOBAL_VIBE_TOOLS_DIR = pathlib.Path.home() / ".vibe-tools"
@@ -549,7 +549,7 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
     if PLANNING_DIR.exists():
         for f in PLANNING_DIR.rglob("*.md"):
             name = f.stem
-            if name in [
+            if name.startswith("SRD-") or name in [
                 "architecture",
                 "infrastructure",
                 "cicd",
@@ -557,6 +557,8 @@ def collect_all_prd_info() -> List[Dict[str, Any]]:
                 "dev_environment",
                 "project-overview",
                 "project_overview",
+                "setup",
+                "widgets",
             ]:
                 continue
             prds[name] = {

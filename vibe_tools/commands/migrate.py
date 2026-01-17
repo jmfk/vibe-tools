@@ -28,6 +28,24 @@ def run_reconciliation(quiet=False):
 
     ensure_project_structure()
 
+    # 0. Migrate System Files to SRD- prefix
+    system_files = [
+        "architecture.md",
+        "infrastructure.md",
+        "cicd.md",
+        "testing.md",
+        "dev_environment.md",
+        "setup.md",
+        "project_overview.md",
+    ]
+    for sys_file in system_files:
+        old_path = PRODUCT_DIR / sys_file
+        new_path = PRODUCT_DIR / f"SRD-{sys_file}"
+        if old_path.exists() and not new_path.exists():
+            if not quiet:
+                click.echo(f"  📝 Renaming {sys_file} -> SRD-{sys_file}")
+            old_path.rename(new_path)
+
     # 1. Collect all initiatives
     all_prds: List[PRD] = []
 
@@ -63,6 +81,13 @@ def run_reconciliation(quiet=False):
         for md_file in md_dir.glob("*.md"):
             # Avoid system files
             if md_file.stem in [
+                "SRD-architecture",
+                "SRD-infrastructure",
+                "SRD-cicd",
+                "SRD-testing",
+                "SRD-dev_environment",
+                "SRD-setup",
+                "SRD-project_overview",
                 "architecture",
                 "infrastructure",
                 "cicd",
@@ -174,6 +199,13 @@ def run_reconciliation(quiet=False):
             continue
         for md_file in md_dir.glob("*.md"):
             if not md_file.name.startswith("PRD-") and md_file.stem not in [
+                "SRD-architecture",
+                "SRD-infrastructure",
+                "SRD-cicd",
+                "SRD-testing",
+                "SRD-dev_environment",
+                "SRD-setup",
+                "SRD-project_overview",
                 "architecture",
                 "infrastructure",
                 "cicd",

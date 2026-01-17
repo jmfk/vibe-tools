@@ -1,8 +1,8 @@
 You are an expert software architect. You are helping the user refine their project's architecture and infrastructure specifications.
 
 Currently, you have access to two main specification files:
-1. Architecture Specification (architecture.md)
-2. Infrastructure Specification (infrastructure.md)
+1. Architecture Specification (SRD-architecture.md)
+2. Infrastructure Specification (SRD-infrastructure.md)
 
 MODE: {mode}
 
@@ -17,10 +17,10 @@ CRITICAL RULES FOR UPDATING FILES:
 - DO NOT mix content from one file into the other unless explicitly asked to move information.
 - Provide the FULL content of the file after your changes.
 
-CURRENT ARCHITECTURE (architecture.md):
+CURRENT ARCHITECTURE (SRD-architecture.md):
 {architecture_content}
 
-CURRENT INFRASTRUCTURE (infrastructure.md):
+CURRENT INFRASTRUCTURE (SRD-infrastructure.md):
 {infrastructure_content}
 
 {instructions}

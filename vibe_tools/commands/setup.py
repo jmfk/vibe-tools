@@ -39,7 +39,7 @@ def register_setup(cli):
     )
     @click.pass_context
     def setup(ctx, import_code, only_arch, only_scaffold):
-        """Phase 1: Architecture Reconciliation. Reconciles architecture.md with architecture-current.yaml."""
+        """Phase 1: Architecture Reconciliation. Reconciles SRD-architecture.md with architecture-current.yaml."""
         state = load_project_state()
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
@@ -85,14 +85,14 @@ def register_setup(cli):
                 if only_arch:
                     return
             else:
-                # Normalize architecture.md just-in-time
+                # Normalize SRD-architecture.md just-in-time
                 click.echo(f"🔄 Normalizing {ARCHITECTURE_SPEC.name} in-memory...")
                 arch_data = normalize_to_data(
                     ARCHITECTURE_SPEC.read_text(), "architecture"
                 )
                 if not arch_data:
                     click.echo(
-                        "❌ Normalization failed. Please check the content of architecture.md."
+                        "❌ Normalization failed. Please check the content of SRD-architecture.md."
                     )
                     if only_arch:
                         return

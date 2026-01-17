@@ -6,7 +6,7 @@
 - **Success criteria**: Shell provides smooth interactive experience, persists sessions correctly, manages context files, supports both ASK and AGENT modes, and successfully updates architecture/infrastructure specs.
 
 ## Feature Inspiration
-The `vibe architect` command provides an interactive shell for managing architecture and infrastructure specifications. Users can have conversations with an AI agent to refine their `architecture.md` and `infrastructure.md` files. The shell supports two modes: ASK (advisory, no file changes) and AGENT (authorized to propose updates). Sessions persist between invocations, allowing users to continue conversations.
+The `vibe architect` command provides an interactive shell for managing architecture and infrastructure specifications. Users can have conversations with an AI agent to refine their `SRD-architecture.md` and `SRD-infrastructure.md` files. The shell supports two modes: ASK (advisory, no file changes) and AGENT (authorized to propose updates). Sessions persist between invocations, allowing users to continue conversations.
 
 **Key capabilities**:
 - Interactive shell with readline support (tab completion, history)
@@ -51,7 +51,7 @@ N/A - CLI interactive shell interface.
 - **Session Storage**: JSON file in `implementation/architect-session.json`.
 - **History Storage**: Readline history in `implementation/.architect_history`.
 - **Config Storage**: Editor preferences in `implementation/architect-config.json`.
-- **Spec Files**: Reads/writes `specs/architecture.md` and `specs/infrastructure.md`.
+- **Spec Files**: Reads/writes `specs/SRD-architecture.md` and `specs/SRD-infrastructure.md`.
 
 ## Architecture and Constraints
 - **Mode Safety**: ASK mode prevents accidental file modifications, AGENT mode requires explicit authorization.

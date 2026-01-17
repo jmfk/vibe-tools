@@ -1175,7 +1175,7 @@ def desktop_init():
 @setup_cli.command()
 @click.pass_context
 def scaffold(ctx):
-    """Generate development environment scaffolding (dev_environment.md, Makefile, Dockerfiles, etc.)."""
+    """Generate development environment scaffolding (SRD-dev_environment.md, Makefile, Dockerfiles, etc.)."""
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
         DEV_SPEC,
@@ -1198,7 +1198,7 @@ def scaffold(ctx):
         "focused on containerized workflows. If you are building a CLI or Tauri project,"
     )
     click.echo(
-        "you should manually configure your 'product/dev_environment.md' instead."
+        "you should manually configure your 'product/SRD-dev_environment.md' instead."
     )
 
     # Ensure project structure
@@ -1208,11 +1208,11 @@ def scaffold(ctx):
     agent = getattr(ctx.obj, "agent", "cursor-agent") if ctx.obj else "cursor-agent"
     stream = getattr(ctx.obj, "stream", False) if ctx.obj else False
 
-    # Check if dev_environment.md already exists
+    # Check if SRD-dev_environment.md already exists
     if DEV_SPEC.exists():
         click.echo(f"\n✅ {DEV_SPEC} already exists.")
         if not click.confirm(
-            "Regenerate dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)",
+            "Regenerate SRD-dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)",
             default=False,
         ):
             click.echo("Aborted.")
@@ -1221,7 +1221,7 @@ def scaffold(ctx):
         # Regenerate
         _generate_dev_spec(agent, stream)
     else:
-        # Generate dev_environment.md from architecture
+        # Generate SRD-dev_environment.md from architecture
         if not ARCHITECTURE_SPEC.exists():
             click.echo(
                 f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
@@ -1248,7 +1248,7 @@ def scaffold(ctx):
             "   Continuing with scaffold, but logging may not be fully configured."
         )
 
-    # Sync Makefile with the newly generated dev_environment.md
+    # Sync Makefile with the newly generated SRD-dev_environment.md
     sync_makefile(agent=agent, stream=stream)
 
     click.echo("\n✅ Development environment scaffolding complete.")
@@ -1258,7 +1258,7 @@ def scaffold(ctx):
 
 
 def _generate_dev_spec(agent, stream):
-    """Generate dev_environment.md from architecture.md."""
+    """Generate SRD-dev_environment.md from SRD-architecture.md."""
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
         DEV_SPEC,
@@ -1271,15 +1271,15 @@ def _generate_dev_spec(agent, stream):
         )
         return
 
-    click.echo("📋 Generating dev_environment.md from architecture.md...")
+    click.echo("📋 Generating SRD-dev_environment.md from SRD-architecture.md...")
 
-    # Read architecture.md
+    # Read SRD-architecture.md
     arch_content = ARCHITECTURE_SPEC.read_text()
 
-    # Generate dev_environment.md using agent
+    # Generate SRD-dev_environment.md using agent
     prompt = f"""You are generating a development environment specification based on the architecture.
 
-Analyze the architecture and create a comprehensive dev_environment.md file that specifies:
+Analyze the architecture and create a comprehensive SRD-dev_environment.md file that specifies:
 - How to build each application part (backend, frontend, etc.)
 - Build dependencies and requirements
 - Build commands and scripts
@@ -1312,7 +1312,7 @@ IMPORTANT REQUIREMENTS:
      * Install: `brew install stern` (macOS) or download binary for Linux
      * Usage: `stern .` to tail logs from all running pods
      * This provides minimum-friction log streaming for developers
-     * Document in dev_environment.md under "Logging" → "Quick Log Streaming"
+     * Document in SRD-dev_environment.md under "Logging" → "Quick Log Streaming"
      * Include in dev_environment.yaml under `logging.local.quickstream`:
        - tool: stern
        - install: "brew install stern" (or Linux equivalent)
@@ -1325,13 +1325,13 @@ IMPORTANT REQUIREMENTS:
      * Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
      * Grafana credentials: Retrieved during setup (default: admin/admin for local dev)
      * Log retention: 24-72 hours (configurable for local development)
-     * Document in dev_environment.md under "Logging" → "Centralized Log Aggregation"
+     * Document in SRD-dev_environment.md under "Logging" → "Centralized Log Aggregation"
    
    - **AI-Queryable Logs**: Ensure logs can be queried programmatically:
      * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
      * Authentication: Basic auth (username/password from setup) or API token
      * Example query: `{{namespace!="kube-system"}}`
-     * Document in dev_environment.md under "Logging" → "AI-Queryable Logs"
+     * Document in SRD-dev_environment.md under "Logging" → "AI-Queryable Logs"
      * Include in dev_environment.yaml under `observability.logs`:
        - provider: grafana-loki
        - access: http-api
@@ -1349,7 +1349,7 @@ IMPORTANT REQUIREMENTS:
    - **Issue Handling**: Logs are essential for debugging and issue handling:
      * Mention that `product/issues.md` (to be created) will guide issue handling workflows
      * Issue handling command (to be built) will rely on logging infrastructure and Skaffold
-     * Document in dev_environment.md under "Logging" → "Issue Handling"
+     * Document in SRD-dev_environment.md under "Logging" → "Issue Handling"
    
    - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
    - **Log Management**: Add Makefile targets for log management:
@@ -1366,11 +1366,11 @@ IMPORTANT REQUIREMENTS:
 
 4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
 
-The architecture specification is in product/architecture.md:
+The architecture specification is in product/SRD-architecture.md:
 
 {arch_content}
 
-Generate a complete dev_environment.md file following this structure:
+Generate a complete SRD-dev_environment.md file following this structure:
 
 # Development Environment Specification
 
@@ -1455,7 +1455,7 @@ Generate a complete dev_environment.md file following this structure:
 ### 4.4 CI/CD Build Steps
 [CI/CD pipeline steps and automation]
 
-Output ONLY the markdown content for dev_environment.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+Output ONLY the markdown content for SRD-dev_environment.md, starting with the title and ending with the last section. Do not include code fences or explanations.
 """
 
     cmd = get_agent_command(agent, prompt)
@@ -1463,7 +1463,7 @@ Output ONLY the markdown content for dev_environment.md, starting with the title
 
     if code != 0 or not output.strip():
         click.echo(
-            "❌ Failed to generate dev_environment.md. Please create it manually using 'vibe architect'."
+            "❌ Failed to generate SRD-dev_environment.md. Please create it manually using 'vibe architect'."
         )
         return
 
@@ -1477,7 +1477,7 @@ Output ONLY the markdown content for dev_environment.md, starting with the title
             lines = lines[:-1]
         clean_output = "\n".join(lines).strip()
 
-    # Write dev_environment.md
+    # Write SRD-dev_environment.md
     ensure_dir(DEV_SPEC.parent)
     DEV_SPEC.write_text(clean_output)
     click.echo(f"✅ Generated {DEV_SPEC}")

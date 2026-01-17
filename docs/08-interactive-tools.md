@@ -37,7 +37,7 @@ vibe architect "Review the current architecture"
 
 **AGENT Mode**
 - Agent is authorized to modify files
-- Updates `product/architecture.md` and `product/infrastructure.md`
+- Updates `product/SRD-architecture.md` and `product/SRD-infrastructure.md`
 - Use with caution
 
 **Switching Modes:**
@@ -162,7 +162,7 @@ Type /s to send, /r to reset, or keep typing to add more.
 
 (AGENT) 👤 /s
 
-[Agent updates architecture.md...]
+[Agent updates SRD-architecture.md...]
 ```
 
 ## vibe pm

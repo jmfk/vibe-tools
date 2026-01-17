@@ -47,18 +47,18 @@ def register_infra(cli):
             )
             if not INFRA_SPEC.exists():
                 click.echo(
-                    "❌ Failed to generate infrastructure spec. Please create infrastructure.md manually."
+                    "❌ Failed to generate infrastructure spec. Please create SRD-infrastructure.md manually."
                 )
                 return
             if only_spec:
                 return
 
-        # Normalize infrastructure.md just-in-time
+        # Normalize SRD-infrastructure.md just-in-time
         click.echo(f"🔄 Normalizing {INFRA_SPEC.name} in-memory...")
         infra_data = normalize_to_data(INFRA_SPEC.read_text(), "infrastructure")
         if not infra_data:
             click.echo(
-                "❌ Normalization failed. Please check the content of infrastructure.md."
+                "❌ Normalization failed. Please check the content of SRD-infrastructure.md."
             )
             return
 

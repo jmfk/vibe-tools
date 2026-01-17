@@ -592,12 +592,12 @@ class InteractiveArchitect:
         arch_content = (
             ARCHITECTURE_SPEC.read_text()
             if ARCHITECTURE_SPEC.exists()
-            else "No architecture.md found."
+            else "No SRD-architecture.md found."
         )
         infra_content = (
             INFRA_SPEC.read_text()
             if INFRA_SPEC.exists()
-            else "No infrastructure.md found."
+            else "No SRD-infrastructure.md found."
         )
 
         history_text = "\n".join(
@@ -621,7 +621,7 @@ class InteractiveArchitect:
         if self.mode == "ASK":
             mode_instructions = "CURRENT MODE: ASK. Do NOT generate any FILE_UPDATE commands. Only provide analysis, answers, or guidance. If the user asks for changes, explain what changes are needed but do NOT emit the machine-readable FILE_UPDATE tag."
         else:
-            mode_instructions = "CURRENT MODE: AGENT. You ARE authorized to propose changes to architecture.md or infrastructure.md using the FILE_UPDATE: [arch|infra] tag as specified in the rules."
+            mode_instructions = "CURRENT MODE: AGENT. You ARE authorized to propose changes to SRD-architecture.md or SRD-infrastructure.md using the FILE_UPDATE: [arch|infra] tag as specified in the rules."
 
         user_memory_text = ""
         if self.session_memory:
@@ -689,14 +689,14 @@ class InteractiveArchitect:
                 ARCHITECTURE_SPEC.write_text(content)
                 click.echo(f"✅ Updated {ARCHITECTURE_SPEC}")
                 self.history.append(
-                    {"role": "architect", "content": "Updated architecture.md"}
+                    {"role": "architect", "content": "Updated SRD-architecture.md"}
                 )
                 self._handle_response_display(content, ARCHITECTURE_SPEC)
             elif "infra" in header.lower():
                 INFRA_SPEC.write_text(content)
                 click.echo(f"✅ Updated {INFRA_SPEC}")
                 self.history.append(
-                    {"role": "architect", "content": "Updated infrastructure.md"}
+                    {"role": "architect", "content": "Updated SRD-infrastructure.md"}
                 )
                 self._handle_response_display(content, INFRA_SPEC)
             else:
@@ -922,7 +922,7 @@ class InteractiveArchitect:
 def generate_infrastructure_spec(
     agent: str = "cursor-agent",
 ):
-    """Generate infrastructure.md from PRDs in the specs directory."""
+    """Generate SRD-infrastructure.md from PRDs in the specs directory."""
     from vibe_tools.utils import (
         SPECS_DIR,
         get_agent_command,
@@ -951,7 +951,7 @@ def generate_infrastructure_spec(
     prd_text = "\n".join(prd_contents)
 
     # Build prompt
-    prompt = f"""Generate a comprehensive infrastructure specification (infrastructure.md) based on the following PRDs.
+    prompt = f"""Generate a comprehensive infrastructure specification (SRD-infrastructure.md) based on the following PRDs.
 
 The infrastructure specification should cover:
 - Overview of the infrastructure architecture
@@ -964,7 +964,7 @@ The infrastructure specification should cover:
 PRDs:
 {prd_text}
 
-Generate the infrastructure.md content in markdown format. Output ONLY the markdown content, no explanations or code blocks."""
+Generate the SRD-infrastructure.md content in markdown format. Output ONLY the markdown content, no explanations or code blocks."""
 
     click.echo("⏳ Generating infrastructure specification...")
     command = get_agent_command(agent, prompt)

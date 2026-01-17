@@ -1,13 +1,13 @@
 # Update architecture and infrastructure documentation
 
 ## Summary
-The `architecture.md` and `infrastructure.md` documentation files are currently outdated and labeled as "Desired," while the codebase has evolved significantly. Key architectural changes include a shift in directory structure, the introduction of a formal 8-phase lifecycle, and a more comprehensive set of infrastructure services and deployment options.
+The `SRD-architecture.md` and `SRD-infrastructure.md` documentation files are currently outdated and labeled as "Desired," while the codebase has evolved significantly. Key architectural changes include a shift in directory structure, the introduction of a formal 8-phase lifecycle, and a more comprehensive set of infrastructure services and deployment options.
 
 ## Reproduction Steps
 Discrepancies can be identified by comparing the current documentation in `product/` with the implementation in `vibe_tools/` and the actual project structure:
-1.  Check the directory structure: `architecture.md` refers to `specs/` and `implementation/`, while the project uses `product/` and `implementation/`.
-2.  Check the commands: `infrastructure.md` refers to `vibe-setup` and `vibe-servers`, but the primary interface is the unified `vibe` CLI with many subcommands.
-3.  Check infrastructure support: `infrastructure.md` only lists Redis and S3, but `vibe_tools/servers.py` and `vibe_tools/infrastructure.py` implement many more services and cloud deployment targets.
+1.  Check the directory structure: `SRD-architecture.md` refers to `specs/` and `implementation/`, while the project uses `product/` and `implementation/`.
+2.  Check the commands: `SRD-infrastructure.md` refers to `vibe-setup` and `vibe-servers`, but the primary interface is the unified `vibe` CLI with many subcommands.
+3.  Check infrastructure support: `SRD-infrastructure.md` only lists Redis and S3, but `vibe_tools/servers.py` and `vibe_tools/infrastructure.py` implement many more services and cloud deployment targets.
 
 ## Expected Behavior
 The documentation should accurately reflect the current project structure, the 8-phase development lifecycle, the actual tech stack (Python 3.11, dspy), the unified CLI command set, and the full range of supported infrastructure services (both local and cloud).
@@ -22,11 +22,11 @@ The documentation should accurately reflect the current project structure, the 8
 7.  **Configuration:** Environment management has evolved from simple `.env` files to a tiered JSON configuration system (`.vibe_config.json` and global `~/.vibe/config.json`).
 
 ## Acceptance Criteria
-- [ ] `product/architecture.md` updated to reflect the 8-phase lifecycle.
-- [ ] `product/architecture.md` updated with the correct directory structure (`product/` and `implementation/`).
-- [ ] `product/architecture.md` tech stack updated to Python 3.11 and `dspy`.
-- [ ] `product/infrastructure.md` updated to include all supported local services (Postgres, RabbitMQ, etc.).
-- [ ] `product/infrastructure.md` updated to include cloud deployment capabilities (K8s, Terraform, multiple providers).
+- [ ] `product/SRD-architecture.md` updated to reflect the 8-phase lifecycle.
+- [ ] `product/SRD-architecture.md` updated with the correct directory structure (`product/` and `implementation/`).
+- [ ] `product/SRD-architecture.md` tech stack updated to Python 3.11 and `dspy`.
+- [ ] `product/SRD-infrastructure.md` updated to include all supported local services (Postgres, RabbitMQ, etc.).
+- [ ] `product/SRD-infrastructure.md` updated to include cloud deployment capabilities (K8s, Terraform, multiple providers).
 - [ ] All command references updated to use the unified `vibe <command>` format.
 - [ ] Documentation reflects the actual implementation state, removing or updating "Desired" labels where features are complete.
 

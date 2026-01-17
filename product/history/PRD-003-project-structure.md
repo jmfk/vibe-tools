@@ -9,7 +9,7 @@
 The project structure defines standard directories for different types of content: `specs/` for human-written markdown specifications, `implementation/prds/` for machine-readable YAML PRDs, `prompts/` for AI prompt templates, `implementation/` for state files and logs, and `instructions/` for global agent instructions. The structure supports both new projects and adoption of existing codebases.
 
 **Key directories**:
-- `specs/`: Human-written markdown specs (architecture.md, infrastructure.md, etc.)
+- `specs/`: Human-written markdown specs (SRD-architecture.md, SRD-infrastructure.md, etc.)
 - `implementation/prds/`: Machine-readable YAML PRDs (prd_*.yaml, architecture.yaml, etc.)
 - `implementation/logs/`: Command-specific log files
 - `implementation/costs/`: Cost tracking CSV files
@@ -31,7 +31,7 @@ N/A - Directory structure only.
   - `instructions/`: Global instructions (user-created)
   - `implementation/`: State files (auto-managed)
 - **File Organization**:
-  - Specs: `specs/*.md` (architecture.md, infrastructure.md, cicd.md, testing.md, prd_*.md)
+  - Specs: `specs/*.md` (SRD-architecture.md, SRD-infrastructure.md, SRD-cicd.md, SRD-testing.md, prd_*.md)
   - PRDs: `implementation/prds/prd_*.yaml` (implementation PRDs), `implementation/prds/*.yaml` (global truths)
   - Logs: `implementation/logs/{command_name}.log`
   - Costs: `implementation/costs/usage.csv`

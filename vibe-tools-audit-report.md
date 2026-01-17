@@ -13,7 +13,7 @@ These commands represent the primary workflow for building projects with `vibe-t
 | `vibe architect` | 1 | Interactive architecture and infrastructure spec manager. | ✅ Working |
 | `vibe prd` | - | Unified PRD and initiative management (list, plan, history). | ✅ Working |
 | `vibe pm` | 2 | Interactive Product Manager for requirement and PRD management. | ✅ Working |
-| `vibe setup` | 3 | Architecture reconciliation (architecture.md vs current). | ✅ Working |
+| `vibe setup` | 3 | Architecture reconciliation (SRD-architecture.md vs current). | ✅ Working |
 | `vibe deps` | 4 | Installs Python and Frontend dependencies. | ✅ Working |
 | `vibe implement` | 5 | Main implementation loop for features and PRDs. | ✅ Working |
 | `vibe build` | - | Builds the app and verifies it starts. | ✅ Working |

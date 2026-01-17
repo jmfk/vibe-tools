@@ -37,12 +37,12 @@ def register_testing(cli):
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
 
-        # Normalize testing.md just-in-time
+        # Normalize SRD-testing.md just-in-time
         click.echo(f"🔄 Normalizing {TESTING_SPEC.name} in-memory...")
         testing_data = normalize_to_data(TESTING_SPEC.read_text(), "testing")
         if not testing_data:
             click.echo(
-                "❌ Normalization failed. Please check the content of testing.md."
+                "❌ Normalization failed. Please check the content of SRD-testing.md."
             )
             return
 

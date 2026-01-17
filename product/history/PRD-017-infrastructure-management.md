@@ -6,7 +6,7 @@
 - **Success criteria**: Infrastructure management successfully maintains infrastructure specs, integrates with architect shell, and supports infrastructure implementation.
 
 ## Feature Inspiration
-The `vibe infra` command manages infrastructure specifications. It integrates with the architect shell to refine `infrastructure.md`, converts it to YAML for machine processing, and supports infrastructure implementation via the Ralph loop.
+The `vibe infra` command manages infrastructure specifications. It integrates with the architect shell to refine `SRD-infrastructure.md`, converts it to YAML for machine processing, and supports infrastructure implementation via the Ralph loop.
 
 **Key capabilities**:
 - Infrastructure spec management
@@ -18,7 +18,7 @@ The `vibe infra` command manages infrastructure specifications. It integrates wi
 N/A - CLI command, integrates with architect shell.
 
 ## Backend
-- **Spec File**: `specs/infrastructure.md` (human-written markdown).
+- **Spec File**: `specs/SRD-infrastructure.md` (human-written markdown).
 - **YAML Conversion**: Converts to `implementation/prds/infrastructure.yaml` (global truth).
 - **Architect Integration**: Can be refined via `vibe architect` shell.
 - **Implementation**: Infrastructure can be implemented via Ralph loop:
@@ -33,7 +33,7 @@ N/A - CLI command, integrates with architect shell.
   - Local orchestration (Docker, etc.)
 
 ## Infrastructure
-- **Spec Storage**: `specs/infrastructure.md`.
+- **Spec Storage**: `specs/SRD-infrastructure.md`.
 - **YAML Storage**: `implementation/prds/infrastructure.yaml`.
 - **Integration**: Works with architect shell and Ralph loop.
 
@@ -49,9 +49,9 @@ N/A - CLI command, integrates with architect shell.
 - Implementation support works
 
 ## Acceptance Tests
-1. **Spec Management**: Create/edit infrastructure.md, verify saved
+1. **Spec Management**: Create/edit SRD-infrastructure.md, verify saved
 2. **Architect Integration**: Use architect shell, verify infrastructure spec accessible
-3. **YAML Conversion**: Normalize infrastructure.md, verify YAML created
+3. **YAML Conversion**: Normalize SRD-infrastructure.md, verify YAML created
 4. **Global Truth**: Verify infrastructure.yaml included in agent context
 5. **Implementation**: Run infrastructure implementation loop, verify works
 

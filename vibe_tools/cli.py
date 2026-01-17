@@ -431,12 +431,12 @@ def _build_reconciliation(ctx, force, only_makefile=False):
         )
         return
 
-    # Normalize dev_environment.md just-in-time
+    # Normalize SRD-dev_environment.md just-in-time
     click.echo(f"🔄 Normalizing {DEV_SPEC.name} in-memory...")
     dev_data = normalize_to_data(DEV_SPEC.read_text(), "dev_environment")
     if not dev_data:
         click.echo(
-            "❌ Normalization failed. Please check the content of dev_environment.md."
+            "❌ Normalization failed. Please check the content of SRD-dev_environment.md."
         )
         return
 
@@ -445,7 +445,7 @@ def _build_reconciliation(ctx, force, only_makefile=False):
 
     dev_hash = hashlib.sha256(dev_yaml.encode()).hexdigest()
 
-    # Check if dev_environment.md and dev_environment-current.yaml are identical (skip if so, unless forced)
+    # Check if SRD-dev_environment.md and dev_environment-current.yaml are identical (skip if so, unless forced)
     if not force and DEV_ENV_CURRENT.exists():
         if dev_hash == get_file_hash(DEV_ENV_CURRENT):
             click.echo("✅ Development environment is up-to-date. Skipping build.")
@@ -659,7 +659,7 @@ def build_debug(ctx):
         except Exception as e:
             click.echo(f"  ⚠️  Error detecting services: {e}")
 
-    # Show dev_environment.md content if it exists
+    # Show SRD-dev_environment.md content if it exists
     if DEV_SPEC.exists():
         click.echo(
             "\n📄 Development Environment Specification Preview (first 20 lines):"
@@ -680,7 +680,7 @@ def build_debug(ctx):
             else:
                 click.echo("\n  ⚠️  No logging section found in build specification")
         except Exception as e:
-            click.echo(f"  ⚠️  Error reading dev_environment.md: {e}")
+            click.echo(f"  ⚠️  Error reading SRD-dev_environment.md: {e}")
 
 
 @cli.command()

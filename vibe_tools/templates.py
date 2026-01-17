@@ -423,8 +423,8 @@ describe('dummy test', () => {
     "architect_prompt.txt": """You are an expert software architect. You are helping the user refine their project's architecture and infrastructure specifications.
 
 Currently, you have access to two main specification files:
-1. Architecture Specification (architecture.md)
-2. Infrastructure Specification (infrastructure.md)
+1. Architecture Specification (SRD-architecture.md)
+2. Infrastructure Specification (SRD-infrastructure.md)
 
 MODE: {mode}
 
@@ -439,10 +439,10 @@ CRITICAL RULES FOR UPDATING FILES:
 - DO NOT mix content from one file into the other unless explicitly asked to move information.
 - Provide the FULL content of the file after your changes.
 
-CURRENT ARCHITECTURE (architecture.md):
+CURRENT ARCHITECTURE (SRD-architecture.md):
 {architecture_content}
 
-CURRENT INFRASTRUCTURE (infrastructure.md):
+CURRENT INFRASTRUCTURE (SRD-infrastructure.md):
 {infrastructure_content}
 
 {instructions}
@@ -638,7 +638,7 @@ vibe --help
 - **Interactive Shell**: Persistent history, tab completion for slash commands, and multi-line prompt support.
 - **Two Modes**:
   - **ASK** (Default): The agent provides analysis and guidance without modifying files.
-  - **AGENT**: The agent is authorized to propose machine-readable updates to `architecture.md` and `infrastructure.md`.
+  - **AGENT**: The agent is authorized to propose machine-readable updates to `SRD-architecture.md` and `SRD-infrastructure.md`.
 - **Session Persistence**: Your history, pending prompts, and attached context files are saved between sessions in `implementation/architect-session.json`.
 - **Editor Integration**: Configure your favorite Markdown or Code editor (e.g., Typora, VS Code) to open response files or specifications.
 - **Context Management**: Attach additional files to the agent's context using `/f add`.
@@ -687,10 +687,10 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 1. **Start with a human spec.** Write a normative spec in `product/` (for example `product/01_platform_vision.md`). That markdown is the source of truth for requirements.
 2. **Global Truths.** Certain files in `product/` represent the persistent state of the system and are injected into every Ralph prompt as context:
-   - `architecture.md` -> `prds/architecture.yaml`
-   - `project_overview.md` -> `prds/project_overview.yaml`
-   - `infrastructure.md` -> `prds/infrastructure.yaml`
-   - `cicd.md` -> `prds/cicd.yaml`
+   - `SRD-architecture.md` -> `prds/architecture.yaml`
+   - `SRD-project_overview.md` -> `prds/project_overview.yaml`
+   - `SRD-infrastructure.md` -> `prds/infrastructure.yaml`
+   - `SRD-cicd.md` -> `prds/cicd.yaml`
 3. **Convert specs into Ralph-ready PRDs.** Ralph only reads `prds/prd_*.yaml` for implement tasks. Transform each spec into a YAML file using `vibe normalize`. Global truths are converted without the `prd_` prefix and are used purely for context.
 4. **Global Agent Instructions.** Use `vibe memory` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
 5. **Understand the Ralph loop.** [DEPRECATED] `vibe ralph` reads the `prds/` directory, loads the global truth context files, and sequentially processes `prd_*.yaml` files. It prompts the agent until it emits `<promise>DONE</promise>` before moving on to quality gates.

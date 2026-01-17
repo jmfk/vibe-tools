@@ -156,10 +156,10 @@ The local MinIO setup is configured to be "Linode-first," ensuring that developm
 
 1. **Start with a human spec.** Write a normative spec in `product/` (for example `product/01_platform_vision.md`). That markdown is the source of truth for requirements.
 2. **Global Truths.** Certain files in `product/` represent the persistent state of the system and are injected into every Ralph prompt as context:
-   - `architecture.md` -> `prds/architecture.yaml`
-   - `project_overview.md` -> `prds/project_overview.yaml`
-   - `infrastructure.md` -> `prds/infrastructure.yaml`
-   - `cicd.md` -> `prds/cicd.yaml`
+   - `SRD-architecture.md` -> `prds/architecture.yaml`
+   - `SRD-project_overview.md` -> `prds/project_overview.yaml`
+   - `SRD-infrastructure.md` -> `prds/infrastructure.yaml`
+   - `SRD-cicd.md` -> `prds/cicd.yaml`
 3. **Convert specs into Ralph-ready PRDs.** Ralph only reads `prds/prd_*.yaml` for implement tasks. Transform each spec into a YAML file using `vibe normalize`. Global truths are converted without the `prd_` prefix and are used purely for context.
 4. **Global Agent Instructions.** Use `vibe memory` to save global guidelines into `instructions/`. Ralph reads all files in this directory and injects them into every agent prompt.
 
