@@ -203,6 +203,41 @@ fn list_directory(_state: State<'_, AppState>, _window: Window, path: String) ->
 }
 
 #[tauri::command]
+fn list_directory_recursive(path: String) -> Result<Vec<FileEntry>, String> {
+    let mut all_files = Vec::new();
+    let root_path = PathBuf::from(&path);
+    
+    fn scan(dir: &Path, all: &mut Vec<FileEntry>) -> std::io::Result<()> {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                let metadata = entry.metadata()?;
+                
+                all.push(FileEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    path: path.to_string_lossy().into_owned(),
+                    is_dir: metadata.is_dir(),
+                });
+                
+                if metadata.is_dir() {
+                    // Skip node_modules and hidden folders
+                    let os_name = entry.file_name();
+                    let name = os_name.to_string_lossy();
+                    if name != "node_modules" && !name.starts_with('.') {
+                        scan(&path, all)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    scan(&root_path, &mut all_files).map_err(|e| e.to_string())?;
+    Ok(all_files)
+}
+
+#[tauri::command]
 fn read_file_content(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| e.to_string())
 }
@@ -617,7 +652,7 @@ fn main() {
             let handle = app.handle();
             let (tx, rx) = mpsc::channel();
 
-            let mut watcher = notify::RecommendedWatcher::new(tx, Config::default().with_poll_interval(Duration::from_millis(500)))
+            let mut watcher = notify::RecommendedWatcher::new(tx, Config::default())
                 .expect("Failed to create watcher");
 
             // Only watch relevant directories to avoid hanging on node_modules
@@ -661,6 +696,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             list_directory, 
+            list_directory_recursive,
             read_file_content,
             write_file_content,
             get_workspace_root,

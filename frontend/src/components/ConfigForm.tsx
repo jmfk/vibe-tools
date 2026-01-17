@@ -168,6 +168,8 @@ const ServiceLogOverlay = ({
   onAction: (action: string) => void 
 }) => {
   const [logs, setLogs] = useState<string[]>([]);
+  const logQueue = useRef<string[]>([]);
+  const flushTimer = useRef<any>(null);
   const isRunning = service.status === 'running';
   
   useEffect(() => {
@@ -179,12 +181,25 @@ const ServiceLogOverlay = ({
       args: ['logs', service.name, '-f'] 
     }).catch(console.error);
 
+    const flushLogs = () => {
+      if (logQueue.current.length > 0) {
+        const toAdd = [...logQueue.current];
+        logQueue.current = [];
+        setLogs(prev => [...prev, ...toAdd].slice(-500));
+      }
+      flushTimer.current = null;
+    };
+
     const unlisten = listen('log-line', (event: any) => {
-      setLogs(prev => [...prev, event.payload as string].slice(-500));
+      logQueue.current.push(event.payload as string);
+      if (!flushTimer.current) {
+        flushTimer.current = setTimeout(flushLogs, 100);
+      }
     });
 
     return () => {
       unlisten.then(f => f());
+      if (flushTimer.current) clearTimeout(flushTimer.current);
     };
   }, [service.name, isRunning]);
 

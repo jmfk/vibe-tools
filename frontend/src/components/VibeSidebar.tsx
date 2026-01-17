@@ -171,75 +171,82 @@ export const VibeSidebar = React.memo(({
 
   const loadArtifacts = useCallback(async () => {
     try {
-      const all: Artifact[] = [];
-      const scan = async (dir: string, type: 'prd' | 'spec' | 'issue'): Promise<TreeItem[]> => {
-        const items: TreeItem[] = [];
-        try {
-          const entries = await invoke<FileEntry[]>('list_directory', { path: dir });
-          for (const f of entries) {
-            if (f.is_dir) {
-              const children = await scan(f.path, type);
-              if (children.length > 0) {
-                items.push({
-                  name: f.name,
-                  path: f.path,
-                  is_dir: true,
-                  children: children.sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
-                });
-              }
-            } else if (f.name.endsWith('.md') || f.name.endsWith('.yaml')) {
-              let artifactType = type;
-              const artifact: Artifact = { 
-                name: f.name, 
-                path: f.path, 
-                type: artifactType, 
-                relPath: f.path.replace(root, '')
-              };
-              all.push(artifact);
-              items.push({ name: f.name, path: f.path, is_dir: false, artifact: artifact, type: artifactType });
-            }
-          }
-        } catch (e) {}
-        return items;
-      };
-
       const productDir = `${root}/product`;
-      const productEntries = await invoke<FileEntry[]>('list_directory', { path: productDir });
+      const allEntries = await invoke<FileEntry[]>('list_directory_recursive', { path: productDir });
       
-      const specs: TreeItem[] = [];
-      const prds: TreeItem[] = [];
+      const all: Artifact[] = [];
+      const entryMap = new Map<string, TreeItem[]>();
       
+      // Initialize groups
       const prdGroups = ['inbox', 'backlog', 'next', 'history'];
+      prdGroups.forEach(g => entryMap.set(`${productDir}/${g}`, []));
+      entryMap.set(productDir, []);
 
-      for (const f of productEntries) {
-        if (!f.is_dir && (f.name.endsWith('.md') || f.name.endsWith('.yaml'))) {
-          const artifact: Artifact = { 
-            name: f.name, 
-            path: f.path, 
-            type: 'spec', 
-            relPath: f.path.replace(root, '')
-          };
-          all.push(artifact);
-          specs.push({ name: f.name, path: f.path, is_dir: false, artifact, type: 'spec' });
+      // Group entries by parent directory
+      for (const entry of allEntries) {
+        const parentPath = entry.path.substring(0, entry.path.lastIndexOf('/'));
+        if (!entryMap.has(parentPath)) {
+          entryMap.set(parentPath, []);
         }
-      }
+        
+        let type: 'prd' | 'spec' | 'issue' = 'spec';
+        if (entry.path.includes('/product/')) {
+          if (prdGroups.some(g => entry.path.includes(`/product/${g}`))) {
+            type = 'prd';
+          }
+        }
 
-      for (const groupName of prdGroups) {
-        const groupPath = `${productDir}/${groupName}`;
-        const children = await scan(groupPath, 'prd');
-        prds.push({
-          name: groupName,
-          path: groupPath,
-          is_dir: true,
-          children: children.sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
+        const artifact: Artifact = {
+          name: entry.name,
+          path: entry.path,
+          type: type,
+          relPath: entry.path.replace(root, '')
+        };
+
+        if (!entry.is_dir && (entry.name.endsWith('.md') || entry.name.endsWith('.yaml'))) {
+          all.push(artifact);
+        }
+
+        entryMap.get(parentPath)?.push({
+          name: entry.name,
+          path: entry.path,
+          is_dir: entry.is_dir,
+          type: type,
+          artifact: !entry.is_dir ? artifact : undefined
         });
       }
+
+      // Build trees
+      const buildTree = (dirPath: string): TreeItem[] => {
+        const items = entryMap.get(dirPath) || [];
+        return items.map(item => {
+          if (item.is_dir) {
+            return {
+              ...item,
+              children: buildTree(item.path).sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
+            };
+          }
+          return item;
+        }).sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1));
+      };
+
+      const specs = (entryMap.get(productDir) || [])
+        .filter(item => !item.is_dir && (item.name.endsWith('.md') || item.name.endsWith('.yaml')));
+      
+      const prds = prdGroups.map(groupName => ({
+        name: groupName,
+        path: `${productDir}/${groupName}`,
+        is_dir: true,
+        children: buildTree(`${productDir}/${groupName}`)
+      }));
 
       setArtifacts(all);
       setPrdTree(prds);
       setSpecTree(specs);
       setIssueTree([]);
-    } catch (err) {}
+    } catch (err) {
+      console.error('Failed to load artifacts:', err);
+    }
   }, [root]);
 
   useEffect(() => {

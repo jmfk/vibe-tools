@@ -464,6 +464,83 @@ const ProjectSettingsEditor = ({
   );
 };
 
+const TerminalOutputView = ({ accentColor }: { accentColor: string }) => {
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [isLive, setIsLive] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const logQueue = useRef<string[]>([]);
+  const flushTimer = useRef<any>(null);
+
+  useEffect(() => {
+    invoke<string[]>('get_terminal_buffer', { session: 'main' })
+      .then(setTerminalOutput);
+
+    const flushLogs = () => {
+      if (logQueue.current.length > 0) {
+        const toAdd = [...logQueue.current];
+        logQueue.current = [];
+        setTerminalOutput(prev => [...prev, ...toAdd].slice(-1000));
+      }
+      flushTimer.current = null;
+    };
+
+    const unlisten = listen('log-line', (event: any) => {
+      if (!isLive) return;
+      logQueue.current.push(event.payload as string);
+      if (!flushTimer.current) {
+        flushTimer.current = setTimeout(flushLogs, 200);
+      }
+    });
+
+    return () => { 
+      unlisten.then(f => f()); 
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+    };
+  }, [isLive]);
+
+  useEffect(() => {
+    if (scrollRef.current && isLive) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [terminalOutput, isLive]);
+
+  return (
+    <div className="flex flex-col h-full bg-black/20 rounded-lg overflow-hidden border border-border/50">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-panel border-b border-border/50 shrink-0">
+        <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-muted">
+          <Terminal size={12} />
+          Terminal Output
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setIsLive(!isLive)}
+            className={cn(
+              "px-2 py-0.5 rounded text-[9px] font-bold uppercase transition-all",
+              isLive ? "bg-green-500/10 text-green-500 border border-green-500/20" : "bg-zinc-800 text-muted border border-border"
+            )}
+          >
+            {isLive ? 'Live' : 'Paused'}
+          </button>
+          <button 
+            onClick={() => setTerminalOutput([])}
+            className="px-2 py-0.5 rounded text-[9px] font-bold uppercase text-muted hover:text-foreground transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-0.5 scrollbar-thin">
+        {terminalOutput.map((line, i) => (
+          <div key={i} className="whitespace-pre-wrap break-all leading-relaxed text-muted/80">
+            <Ansi>{line}</Ansi>
+          </div>
+        ))}
+        {isLive && <div className="inline-block w-1.5 h-3 bg-accent/30 ml-1 animate-pulse" style={{ backgroundColor: accentColor + '33' }} />}
+      </div>
+    </div>
+  );
+};
+
 const ProjectManagerView = ({
   registry,
   onSwitch,
@@ -753,10 +830,17 @@ const App: React.FC = () => {
   const [showRight, setShowRight] = useState(() => {
     return localStorage.getItem('vibe-show-right') !== 'false';
   });
+  const [showTerminal, setShowTerminal] = useState(() => {
+    return localStorage.getItem('vibe-show-terminal') === 'true';
+  });
 
   useEffect(() => {
     localStorage.setItem('vibe-open-artifacts', JSON.stringify(openArtifacts));
   }, [openArtifacts]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-show-terminal', String(showTerminal));
+  }, [showTerminal]);
 
   useEffect(() => {
     localStorage.setItem('vibe-show-global-left', String(showGlobalLeft));
@@ -1162,6 +1246,14 @@ const App: React.FC = () => {
             >
               <PanelRight size={16} />
             </button>
+            <button
+              onClick={() => setShowTerminal(!showTerminal)}
+              className={cn("p-1.5 rounded-md transition-colors", showTerminal ? "text-accent bg-accent/5" : "text-muted hover:text-foreground")}
+              title="Toggle Terminal Output"
+              style={showTerminal ? { color: accentColor } : {}}
+            >
+              <Terminal size={16} />
+            </button>
           </div>
 
           <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
@@ -1296,6 +1388,11 @@ const App: React.FC = () => {
                 {activeTab === 'issues' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="issues-chat" context="issues" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'issues')} /></div>}
                 {activeTab === 'interface-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="interface-designer-chat" context="interface" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'interface')} /></div>}
                 {activeTab === 'database-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="database-designer-chat" context="database" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'database')} /></div>}
+                {showTerminal && (
+                  <div className="h-1/3 border-t border-border/50">
+                    <TerminalOutputView accentColor={accentColor} />
+                  </div>
+                )}
                 {activeTab !== 'setup' && activeTab !== 'planner' && activeTab !== 'issues' && activeTab !== 'interface-designer' && activeTab !== 'database-designer' && (
                   <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
                     <div><MessageSquare size={32} className="mx-auto mb-4 opacity-10" /><p className="text-xs font-medium uppercase tracking-widest opacity-40">Agent chat hidden</p><p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Setup, Planner, Issues, Interface and Database views.</p></div>
