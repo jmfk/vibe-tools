@@ -1,3 +1,5 @@
+import hljs from 'highlight.js';
+
 /**
  * VanillaPRDEditor - A vanilla JavaScript Markdown editor for PRDs.
  * Isolated from React rendering to ensure selection stability and performance.
@@ -47,7 +49,48 @@ export class VanillaPRDEditor {
     this.container.appendChild(this.toolbar);
     this.container.appendChild(this.editor);
 
+    this.injectStyles();
     this.initEventListeners();
+  }
+
+  private injectStyles() {
+    const styleId = 'vanilla-prd-styles';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .prd-code-block {
+        margin: 16px 0;
+        border-radius: 6px;
+        overflow: hidden;
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+      }
+      .prd-code-header {
+        background-color: #000000;
+        color: #10b981;
+        padding: 4px 12px;
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #30363d;
+      }
+      .prd-code-block pre {
+        margin: 0;
+        padding: 16px;
+        background: transparent;
+      }
+      .prd-code-block code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        tab-size: 4;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   private setupToolbar() {
@@ -74,11 +117,22 @@ export class VanillaPRDEditor {
           { label: 'Paragraph', icon: '⌘0', action: () => this.runCommand('formatBlock', 'p') },
           { type: 'separator' },
           { label: 'Quote', icon: '⌥⌘Q', action: () => this.runCommand('formatBlock', 'blockquote') },
-          { label: 'Code Fences', icon: '⌥⌘C', action: () => this.runCommand('insert-code-fence') },
           { label: 'Math Block', icon: '⌥⌘B', action: () => this.runCommand('insert-math-block') },
           { label: 'Table', icon: '', action: () => this.runCommand('insert-table') },
           { label: 'Horizontal Line', icon: '⌥⌘-', action: () => this.runCommand('insert-hr') },
           { label: 'YAML Front Matter', icon: '', action: () => this.runCommand('insert-yaml') },
+        ]
+      },
+      {
+        label: 'Code Block',
+        items: [
+          { label: 'Plain Text', action: () => this.runCommand('insert-code-fence', '') },
+          { label: 'Python', action: () => this.runCommand('insert-code-fence', 'python') },
+          { label: 'JavaScript', action: () => this.runCommand('insert-code-fence', 'javascript') },
+          { label: 'TypeScript', action: () => this.runCommand('insert-code-fence', 'typescript') },
+          { label: 'Rust', action: () => this.runCommand('insert-code-fence', 'rust') },
+          { label: 'JSON', action: () => this.runCommand('insert-code-fence', 'json') },
+          { label: 'YAML', action: () => this.runCommand('insert-code-fence', 'yaml') },
         ]
       },
       {
@@ -145,7 +199,7 @@ export class VanillaPRDEditor {
         zIndex: '100'
       });
 
-      menuInfo.items.forEach(item => {
+      menuInfo.items.forEach((item: any) => {
         if (item.type === 'separator') {
           const hr = document.createElement('div');
           Object.assign(hr.style, {
@@ -208,6 +262,7 @@ export class VanillaPRDEditor {
     const directButtons = [
       { label: 'B', title: 'Bold (Cmd+B)', action: () => this.runCommand('bold') },
       { label: 'I', title: 'Italic (Cmd+I)', action: () => this.runCommand('italic') },
+      { label: 'Code', title: 'Inline Code (Ctrl+`)', action: () => this.runCommand('insert-code') },
       { label: 'List', title: 'Bullet List (Opt+Cmd+U)', action: () => this.runCommand('insertUnorderedList') },
       { label: 'Check', title: 'Task List (Opt+Cmd+X)', action: () => this.runCommand('insert-checklist') },
       { label: 'Box', title: 'Details Block', action: () => this.runCommand('insert-details') },
@@ -289,7 +344,20 @@ export class VanillaPRDEditor {
       }, 100);
     });
 
-    this.editor.addEventListener('input', () => {
+    this.editor.addEventListener('input', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('prd-summary')) {
+        const text = target.textContent?.trim();
+        if (text === 'Metadata') {
+          // Check if there are other summaries named Metadata
+          const summaries = Array.from(this.editor.querySelectorAll('.prd-summary'));
+          const otherMetadata = summaries.find(s => s !== target && s.textContent?.trim() === 'Metadata');
+          if (otherMetadata) {
+            // Revert or change to New Section
+            target.textContent = 'New Section';
+          }
+        }
+      }
       this.onChange(this.getContent());
     });
 
@@ -318,21 +386,27 @@ export class VanillaPRDEditor {
   }
 
   private handleKeyDown(e: KeyboardEvent) {
-    // If in summary mode, block most things except basic text and Enter/Backspace
     const selection = window.getSelection();
-    const node = selection?.rangeCount ? selection.getRangeAt(0).startContainer : null;
-    const isSummary = node && !!this.getClosestElementByClass(node, 'prd-summary');
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const node = range?.startContainer;
+    const summary = node ? this.getClosestElementByClass(node, 'prd-summary') : null;
 
-    if (isSummary) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        return; // No new lines in summary
-      }
-      if (e.metaKey || e.ctrlKey) {
-        if (e.key !== 'z' && e.key !== 'y' && e.key !== 'a' && e.key !== 'c' && e.key !== 'v') {
+    if (summary) {
+      const isMetadata = summary.textContent?.trim() === 'Metadata';
+      
+      // If it's Metadata, prevent any changes
+      if (isMetadata) {
+        const allowedKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Control', 'Command', 'Alt', 'Shift'];
+        if (!allowedKeys.includes(e.key) && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           return;
         }
+      }
+
+      // If Enter is pressed in summary, prevent it
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        return;
       }
     }
 
@@ -457,7 +531,7 @@ export class VanillaPRDEditor {
 
     switch (command) {
       case 'insert-details':
-        this.execCommand('insertHTML', '<div class="prd-details-container"><div class="prd-summary" contenteditable="true">Metadata</div><div class="prd-details-content"><div><br></div></div></div>');
+        this.execCommand('insertHTML', '<div class="prd-details-container"><div class="prd-summary" contenteditable="true">New Section</div><div class="prd-details-content"><div><br></div></div></div>');
         break;
       case 'insert-comment':
         this.execCommand('insertHTML', '<div class="prd-comment" data-comment="Comment">&lt;!-- Comment --&gt;</div>');
@@ -469,7 +543,8 @@ export class VanillaPRDEditor {
         this.execCommand('insertHTML', '<hr>');
         break;
       case 'insert-code-fence':
-        this.execCommand('insertHTML', '<pre><code>\n\n</code></pre>');
+        const lang = value || '';
+        this.execCommand('insertHTML', `<div class="prd-code-block" data-lang="${lang}" contenteditable="false"><div class="prd-code-header">${lang || 'plaintext'}</div><pre contenteditable="true"><code>\n\n</code></pre></div>`);
         break;
       case 'insert-math-block':
         this.execCommand('insertHTML', '<div class="prd-math-block">$$\n\n$$</div>');
@@ -583,7 +658,27 @@ export class VanillaPRDEditor {
       // Quotes
       .replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>')
       // Code blocks
-      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      .replace(/```(.*?)\n([\s\S]*?)```/g, (match, lang, content) => {
+        const language = lang.trim() || 'plaintext';
+        let highlighted = content;
+        try {
+          if (language && hljs.getLanguage(language)) {
+            highlighted = hljs.highlight(content, { language }).value;
+          } else {
+            highlighted = hljs.highlightAuto(content).value;
+          }
+        } catch (e) {
+          console.error('Highlighting error:', e);
+        }
+        return `<div class="prd-code-block" data-lang="${language}" contenteditable="false"><div class="prd-code-header">${language}</div><pre contenteditable="true"><code>${highlighted}</code></pre></div>`;
+      })
+      .replace(/```([\s\S]*?)```/g, (match, content) => {
+        let highlighted = content;
+        try {
+          highlighted = hljs.highlightAuto(content).value;
+        } catch (e) {}
+        return `<div class="prd-code-block" data-lang="plaintext" contenteditable="false"><div class="prd-code-header">plaintext</div><pre contenteditable="true"><code>${highlighted}</code></pre></div>`;
+      })
       // Bold
       .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
       // Italic
@@ -621,14 +716,19 @@ export class VanillaPRDEditor {
         const el = node as HTMLElement;
         const tag = el.tagName.toLowerCase();
         
+        const children = Array.from(el.childNodes).map(processNode).join('');
+
         // Handle special divs
         if (tag === 'div') {
           if (el.classList.contains('prd-comment')) return `<!-- ${el.dataset.comment} -->\n`;
+          if (el.classList.contains('prd-code-block')) {
+            const lang = el.dataset.lang || '';
+            const code = el.querySelector('code')?.textContent || '';
+            return `\n\`\`\`${lang}\n${code}\n\`\`\`\n`;
+          }
           if (el.classList.contains('prd-details-container')) {
             const summary = el.querySelector('.prd-summary')?.textContent || 'Metadata';
-            const content = Array.from(el.querySelector('.prd-details-content')?.childNodes || [])
-              .map(processNode).join('');
-            return `<details>\n<summary>${summary}</summary>\n${content}\n</details>\n`;
+            return `<details>\n<summary>${summary}</summary>\n${children}\n</details>\n`;
           }
           if (el.classList.contains('prd-details-open')) return `<details>\n`;
           if (el.classList.contains('prd-details-close')) return `</details>\n`;
@@ -636,8 +736,6 @@ export class VanillaPRDEditor {
           if (el.classList.contains('prd-math-block')) return `${children}\n`;
           if (el.classList.contains('prd-yaml')) return `${children}\n`;
         }
-
-        const children = Array.from(el.childNodes).map(processNode).join('');
 
         switch (tag) {
           case 'h1': return `# ${children}\n`;
@@ -661,8 +759,14 @@ export class VanillaPRDEditor {
             }
             return `- ${children}\n`;
           case 'blockquote': return `> ${children}\n`;
-          case 'pre': return `\n\`\`\`\n${children}\n\`\`\`\n`;
-          case 'code': return el.parentElement?.tagName.toLowerCase() === 'pre' ? children : `\`${children}\``;
+          case 'pre': 
+            const codeEl = el.querySelector('code');
+            return codeEl ? codeEl.textContent || '' : el.textContent || '';
+          case 'code': 
+            if (el.parentElement?.tagName.toLowerCase() === 'pre') {
+              return el.textContent || '';
+            }
+            return `\`${children}\``;
           case 'hr': return `---\n`;
           case 'table': return `\n${this.htmlTableToMarkdown(el)}\n`;
           case 'br': return '';
