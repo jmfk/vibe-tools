@@ -63,6 +63,7 @@ export const PRDEditor = React.memo(({
   prd,
   initialContent,
   onSave,
+  onChange,
   onCancel,
   accentColor = '#10b981',
   isDark,
@@ -71,6 +72,7 @@ export const PRDEditor = React.memo(({
   prd: PRD;
   initialContent: string;
   onSave: (content: string) => void;
+  onChange?: (content: string) => void;
   onCancel: () => void;
   accentColor?: string;
   isDark?: boolean;
@@ -92,7 +94,7 @@ export const PRDEditor = React.memo(({
         initialContent,
         (content) => {
           setLastSyncedContent(content);
-          onSave(content);
+          if (onChange) onChange(content);
         },
         accentColor,
         isDark
@@ -129,7 +131,7 @@ export const PRDEditor = React.memo(({
   };
 
   const handleSave = () => {
-    if (editorRef.current) {
+    if (editorRef.current && initialContent !== lastSyncedContent) {
       const content = editorRef.current.getContent();
       setLastSyncedContent(content);
       onSave(content);
@@ -209,8 +211,14 @@ export const PRDEditor = React.memo(({
           <button 
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleSave} 
-            className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all shadow-lg hover:brightness-110" 
-            style={{ backgroundColor: accentColor }}
+            disabled={initialContent === lastSyncedContent}
+            className={cn(
+              "px-4 py-2 text-white rounded-lg text-xs font-bold transition-all shadow-lg",
+              initialContent === lastSyncedContent 
+                ? "opacity-50 cursor-not-allowed bg-zinc-500" 
+                : "hover:brightness-110"
+            )}
+            style={{ backgroundColor: initialContent === lastSyncedContent ? undefined : accentColor }}
           >
             <Save size={14} className="inline mr-2" />
             Save PRD
@@ -221,7 +229,7 @@ export const PRDEditor = React.memo(({
       <div className="flex-1 bg-panel border border-border rounded-xl overflow-hidden flex flex-col">
         {isPreview ? (
           <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-            <div className="max-w-4xl mx-auto">
+            <div className="w-full">
               <div className="prose prose-sm max-w-none dark:prose-invert">
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]} 
@@ -234,11 +242,7 @@ export const PRDEditor = React.memo(({
           </div>
         ) : (
           <div className="flex-1 relative group/vanilla flex flex-col overflow-hidden">
-            <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
-              {/* Visual indicator for Vanilla JS Engine */}
-              <div className="absolute top-2 right-4 text-[8px] font-mono text-emerald-500/30 group-hover/vanilla:text-emerald-500/60 uppercase tracking-widest select-none pointer-events-none transition-colors z-[11]">
-                Vanilla JS Engine Area
-              </div>
+            <div className="w-full h-full flex flex-col">
               <div 
                 ref={containerRef}
                 className={cn(
