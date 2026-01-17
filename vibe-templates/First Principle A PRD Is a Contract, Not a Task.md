@@ -287,3 +287,19 @@ If you want, next step could be:
 - a PRD schema per type
 - or rules for which types can depend on which others
 - or how normalization should treat each class differently
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRIN-001
+title: 'First Principle: A PRD Is a Contract, Not a Task'
+type: PRINCIPLE
+status: active
+```
+
+</details>
+
+<!-- vibe-id: PRIN-001 -->

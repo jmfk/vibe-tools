@@ -22,3 +22,20 @@ Small, high-density facts for quick retrieval.
 
 ## 6. Tool / Action Mappings
 Mapping of intent to specific agent tools or API calls.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: TEMPLATE-OMF
+title: OMF Template
+type: TEMPLATE
+status: draft
+```
+
+</details>
+
+<!-- vibe-id: TEMPLATE-OMF -->
+

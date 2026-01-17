@@ -597,3 +597,19 @@ For persistent issues, consider:
 - Checking for known issues
 - Reviewing recent changes
 - Testing in clean environment
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-012
+title: Troubleshooting
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-012 -->

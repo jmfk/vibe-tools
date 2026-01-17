@@ -240,7 +240,7 @@ The local MinIO setup is configured for seamless transition to Linode Object Sto
 
 The infrastructure specification is managed through:
 
-1. **Markdown spec**: `product/infrastructure.md`
+1. **Markdown spec**: `product/SRD-infrastructure.md`
 2. **Normalized YAML**: `implementation/prds/infrastructure.yaml`
 3. **Current state**: `implementation/infrastructure-current.yaml`
 
@@ -255,7 +255,7 @@ vibe architect
 
 **Via Normalization:**
 ```bash
-# Edit product/infrastructure.md
+# Edit product/SRD-infrastructure.md
 vibe normalize infrastructure
 ```
 
@@ -389,3 +389,19 @@ docker inspect <container_name>
 ```
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-007
+title: Infrastructure Management
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-007 -->

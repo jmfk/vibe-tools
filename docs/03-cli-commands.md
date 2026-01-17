@@ -227,6 +227,22 @@ vibe <command> --help
 vibe status
 ```
 
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-003
+title: CLI Commands Reference
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-003 -->
+
 ## Common Command Patterns
 
 **Complete workflow:**

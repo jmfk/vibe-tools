@@ -354,3 +354,19 @@ Migration happens automatically on first command execution.
 - Check `implementation/` directory for migrated files
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-004
+title: Configuration
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-004 -->

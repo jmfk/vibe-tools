@@ -517,3 +517,19 @@ ruff check vibe_tools/your_file.py
 ```
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-011
+title: Development Guide
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-011 -->

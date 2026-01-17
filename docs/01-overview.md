@@ -105,3 +105,19 @@ See [Configuration](04-configuration.md) for detailed configuration options.
 - Review [CLI Commands](03-cli-commands.md) for available commands
 - Learn about [PRD Workflow](05-prd-workflow.md) for development processes
 - Explore [Interactive Tools](08-interactive-tools.md) for architecture and PM management
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-001
+title: Overview
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-001 -->

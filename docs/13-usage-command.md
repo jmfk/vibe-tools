@@ -101,3 +101,19 @@ vibe --server usage --month
 
 *   **Local CSV**: All raw data is processed and stored in `implementation/costs/`.
 *   **Session Logs**: Individual command costs are still logged in the session log files in `implementation/logs/`.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-013
+title: Usage Command
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-013 -->

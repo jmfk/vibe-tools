@@ -308,3 +308,19 @@ These instructions:
 - Check YAML files in `implementation/prds/`
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-005
+title: PRD Workflow
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-005 -->

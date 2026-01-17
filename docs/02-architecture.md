@@ -240,3 +240,19 @@ Iterative improvement loops:
 - **pytest**: Testing framework
 
 See [Development](11-development.md) for more details on extending the system.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-002
+title: Architecture
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-002 -->

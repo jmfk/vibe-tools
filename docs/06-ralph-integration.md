@@ -343,3 +343,20 @@ Plans are executed in order, with dependencies respected.
 ## Troubleshooting
 
 See [Troubleshooting](12-troubleshooting.md) for common issues and solutions.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-006
+title: Ralph Integration
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-006 -->
+

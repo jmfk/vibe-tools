@@ -91,3 +91,21 @@ That’s how you end up with something closer to a build protocol than a spec li
 
 ```text
 PRD → SRD → DKB → Code → Simulation → Agent → PRD again
+```
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-014
+title: Protocol-Flavored Knowledge Architecture
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-014 -->
+

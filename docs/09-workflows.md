@@ -444,3 +444,19 @@ vibe normalize product/problematic.md
 ```
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-009
+title: Workflows
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-009 -->

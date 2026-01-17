@@ -329,3 +329,19 @@ Potential improvements:
 - Integration with billing systems
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-010
+title: Cost Tracking
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-010 -->

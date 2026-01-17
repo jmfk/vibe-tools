@@ -387,3 +387,19 @@ Session memory is sent with every prompt.
 - Check file permissions
 
 See [Troubleshooting](12-troubleshooting.md) for more help.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-008
+title: Interactive Tools
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-008 -->

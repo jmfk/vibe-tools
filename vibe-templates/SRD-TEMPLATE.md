@@ -22,3 +22,19 @@ Specific instructions on how agents interact with this system.
 
 ## 6. Error Codes & State Transitions
 Canonical list of states and error handling.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: TEMPLATE-SRD
+title: SRD Template
+type: TEMPLATE
+status: draft
+```
+
+</details>
+
+<!-- vibe-id: TEMPLATE-SRD -->

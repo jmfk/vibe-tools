@@ -25,3 +25,19 @@ What to avoid and how things usually break.
 
 ## 7. Style & Philosophy
 The underlying "why" behind the design choices.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: TEMPLATE-DKB
+title: DKB Template
+type: TEMPLATE
+status: draft
+```
+
+</details>
+
+<!-- vibe-id: TEMPLATE-DKB -->

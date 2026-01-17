@@ -43,3 +43,19 @@ graph TD
 1. **Do NOT** move the `contenteditable` logic back into React state.
 2. **Do NOT** trigger re-renders of the editor container while `editorRef.current.getIsFocused()` is true.
 3. **Always** update both `markdownToHtml` and `htmlToMarkdown` when adding new formatting features to ensure bidirectional consistency.
+
+---
+
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: DOC-015
+title: PRDEditor Architecture
+type: DOCUMENTATION
+status: active
+```
+
+</details>
+
+<!-- vibe-id: DOC-015 -->
