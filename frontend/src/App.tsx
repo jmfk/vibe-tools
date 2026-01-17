@@ -920,6 +920,22 @@ const App: React.FC = () => {
             setSelectedArtifact(updatedSelected);
           }
         }
+
+        // Also update editing PRD if it was updated
+        if (editingPRD) {
+          const updatedEditing = next.find(a => 
+            (editingPRD.id && a.id === editingPRD.id) || 
+            a.path === editingPRD.path
+          );
+          if (updatedEditing && (updatedEditing.path !== editingPRD.path || updatedEditing.name !== editingPRD.name || updatedEditing.deleted !== editingPRD.deleted)) {
+            setEditingPRD((prev: any) => ({ 
+              ...prev, 
+              ...updatedEditing,
+              filename: updatedEditing.name,
+              title: updatedEditing.name
+            }));
+          }
+        }
       }
 
       return changed ? next : prev;
@@ -1429,7 +1445,7 @@ const App: React.FC = () => {
 
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
             <main className="flex-1 overflow-y-auto relative p-6">
-              {editingPRD ? <PRDEditor key={editingPRD.path} prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
+              {editingPRD ? <PRDEditor key={editingPRD.id} prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} deleted={editingPRD.deleted} /> :
                activeTab === 'setup' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Wrench size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Initial Setup</h3><p className="text-sm mt-1">Configure your workspace and environment here</p></div> :
                activeTab === 'planner' ? <div className="h-full flex flex-col gap-6 relative">
                  <div className="flex items-center justify-between shrink-0">
