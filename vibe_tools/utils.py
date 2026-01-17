@@ -180,11 +180,15 @@ def run_command(
 
     try:
         # Log the command execution details
-        out_debug(f"Running command: {' '.join(command)}", source="vibe", data={
-            "command": command,
-            "cwd": cwd or os.getcwd(),
-        })
-        
+        out_debug(
+            f"Running command: {' '.join(command)}",
+            source="vibe",
+            data={
+                "command": command,
+                "cwd": cwd or os.getcwd(),
+            },
+        )
+
         result = subprocess.run(
             command,
             cwd=cwd,
@@ -194,40 +198,52 @@ def run_command(
         )
         if len(result.stdout.splitlines()) > 5:
             log_large_output(f"command_{command[0]}", result.stdout)
-        
+
         # Log successful completion with output summary if needed
-        out_debug(f"Command {command[0]} finished (code: {result.returncode})", source="vibe", data={
-            "command_line": f"$ {' '.join(command)}",
-            "stdio": "",
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "code": result.returncode
-        })
-        
+        out_debug(
+            f"Command {command[0]} finished (code: {result.returncode})",
+            source="vibe",
+            data={
+                "command_line": f"$ {' '.join(command)}",
+                "stdio": "",
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "code": result.returncode,
+            },
+        )
+
         return result.stdout, result.returncode
     except subprocess.CalledProcessError as e:
         output = (e.stdout or "") + (e.stderr or "")
         if len(output.splitlines()) > 5:
             log_large_output(f"command_{command[0]}_error", output)
-        
+
         # Log failure
-        out_error(f"Command {command[0]} failed (code: {e.returncode})", source="vibe", data={
-            "command_line": f"$ {' '.join(command)}",
-            "stdio": "",
-            "stdout": e.stdout,
-            "stderr": e.stderr,
-            "code": e.returncode
-        })
-        
+        out_error(
+            f"Command {command[0]} failed (code: {e.returncode})",
+            source="vibe",
+            data={
+                "command_line": f"$ {' '.join(command)}",
+                "stdio": "",
+                "stdout": e.stdout,
+                "stderr": e.stderr,
+                "code": e.returncode,
+            },
+        )
+
         return output, e.returncode
     except (FileNotFoundError, OSError) as e:
-        out_error(f"Command {command[0]} could not be executed: {e}", source="vibe", data={
-            "command_line": f"$ {' '.join(command)}",
-            "stdio": "",
-            "stdout": "",
-            "stderr": str(e),
-            "error": str(e)
-        })
+        out_error(
+            f"Command {command[0]} could not be executed: {e}",
+            source="vibe",
+            data={
+                "command_line": f"$ {' '.join(command)}",
+                "stdio": "",
+                "stdout": "",
+                "stderr": str(e),
+                "error": str(e),
+            },
+        )
         return str(e), 127
 
 
@@ -804,7 +820,7 @@ def get_cursor_api_key() -> Optional[str]:
 def set_env_var(key: str, value: str):
     """Sets an environment variable in the .env file and current process."""
     env_file = find_dotenv() or ".env"
-    
+
     if os.path.exists(env_file):
         content = pathlib.Path(env_file).read_text()
         lines = content.splitlines()
@@ -819,7 +835,7 @@ def set_env_var(key: str, value: str):
         pathlib.Path(env_file).write_text("\n".join(lines) + "\n")
     else:
         pathlib.Path(env_file).write_text(f"{key}={value}\n")
-    
+
     os.environ[key] = value
 
 
@@ -1187,9 +1203,7 @@ def perform_basic_init():
                 "tauri": 85,
                 "infra": 85,
             },
-            "setup": {
-                "standalone": True
-            }
+            "setup": {"standalone": True},
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
         out_success(f"✅ Created default configuration: {CONFIG_FILE}")
@@ -1277,13 +1291,14 @@ def get_services():
 
 def test_build_services(debug=False, return_report=False):
     """Test that services defined in build config can actually start and respond.
-    
+
     Returns:
         If return_report is False: bool (success)
         If return_report is True: (bool, str) (success, detailed_report)
     """
 
     report = []
+
     def log_report(msg, level="info"):
         report.append(msg)
         if level == "info":
@@ -1407,7 +1422,9 @@ def test_build_services(debug=False, return_report=False):
                         cwd=service.get("working_directory", "."),
                     )
                     started_processes.append((service_name, process))
-                    log_report(f"  ✓ Started {service_name} (PID: {process.pid})", "info")
+                    log_report(
+                        f"  ✓ Started {service_name} (PID: {process.pid})", "info"
+                    )
                     logger.debug(
                         f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
                     )
@@ -1428,19 +1445,24 @@ def test_build_services(debug=False, return_report=False):
                             cwd=service.get("working_directory", "."),
                         )
                         started_processes.append((service_name, process))
-                        log_report(f"  ✓ Started {service_name} (PID: {process.pid})", "info")
+                        log_report(
+                            f"  ✓ Started {service_name} (PID: {process.pid})", "info"
+                        )
                         logger.debug(
                             f"Service {service_name} started with PID {process.pid}, command: {start_cmd}"
                         )
                         time.sleep(0.5)
                     except Exception as e:
-                        log_report(f"  ✗ Failed to start {service_name}: {e}", "warning")
+                        log_report(
+                            f"  ✗ Failed to start {service_name}: {e}", "warning"
+                        )
                         logger.debug(
                             f"Service {service_name} startup error: {e}", exc_info=True
                         )
                 else:
                     log_report(
-                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}", "warning"
+                        f"  ✗ Command not found for {service_name}: {cmd_parts[0]}",
+                        "warning",
                     )
                     logger.debug(
                         f"Service {service_name}: Command '{cmd_parts[0]}' does not exist in PATH"
@@ -1469,7 +1491,8 @@ def test_build_services(debug=False, return_report=False):
                 # Process has already terminated - skip communicate() to avoid blocking
                 exit_code = process.returncode
                 log_report(
-                    f"  ✗ Service {service_name} exited immediately with code {exit_code}", "warning"
+                    f"  ✗ Service {service_name} exited immediately with code {exit_code}",
+                    "warning",
                 )
 
         # Check if services are actually running
@@ -1484,7 +1507,8 @@ def test_build_services(debug=False, return_report=False):
                 is_running = True
                 running_count += 1
                 log_report(
-                    f"  ✓ {service_name} is running - started process (PID: {process.pid})", "info"
+                    f"  ✓ {service_name} is running - started process (PID: {process.pid})",
+                    "info",
                 )
                 logger.debug(
                     f"Service {service_name} verified running via started process PID {process.pid}"
@@ -1517,7 +1541,9 @@ def test_build_services(debug=False, return_report=False):
                         running_reason = (
                             f"background service ({service_type}, PID: {bg_pid})"
                         )
-                        log_report(f"  ✓ {service_name} is running - {running_reason}", "info")
+                        log_report(
+                            f"  ✓ {service_name} is running - {running_reason}", "info"
+                        )
                         logger.debug(
                             f"Service {service_name} verified running via background service {service_type} (PID: {bg_pid})"
                         )
@@ -1544,7 +1570,8 @@ def test_build_services(debug=False, return_report=False):
                             running_count += 1
                             running_reason = f"main process (PID: {main_pid})"
                             log_report(
-                                f"  ✓ {service_name} is running - {running_reason}", "info"
+                                f"  ✓ {service_name} is running - {running_reason}",
+                                "info",
                             )
                             logger.debug(
                                 f"Service {service_name} verified running via main PID {main_pid}"
@@ -1573,7 +1600,8 @@ def test_build_services(debug=False, return_report=False):
                             running_count += 1
                             running_reason = f"process name match: {process_name}"
                             log_report(
-                                f"  ✓ {service_name} is running - {running_reason}", "info"
+                                f"  ✓ {service_name} is running - {running_reason}",
+                                "info",
                             )
                             logger.debug(
                                 f"Service {service_name} found running by process name: {process_name}"
@@ -1593,15 +1621,18 @@ def test_build_services(debug=False, return_report=False):
                 failed_services.append(service_name)
                 if not pid_info:
                     log_report(
-                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)", "warning"
+                        f"  ✗ {service_name} is not running - No PID information found (service may not have started)",
+                        "warning",
                     )
                 elif not background_services and not main_pid and not process_name:
                     log_report(
-                        f"  ✗ {service_name} is not running - No PID tracking data available", "warning"
+                        f"  ✗ {service_name} is not running - No PID tracking data available",
+                        "warning",
                     )
                 else:
                     log_report(
-                        f"  ✗ {service_name} is not running - Process not found", "warning"
+                        f"  ✗ {service_name} is not running - Process not found",
+                        "warning",
                     )
 
         # Check if URLs are responding
@@ -1647,7 +1678,8 @@ def test_build_services(debug=False, return_report=False):
 
         if success:
             log_report(
-                "  ✅ Service test PASSED - At least one service or URL is responding", "info"
+                "  ✅ Service test PASSED - At least one service or URL is responding",
+                "info",
             )
             logger.debug(
                 f"Service test passed: {running_count} service(s) running, {responding_urls} URL(s) responding"

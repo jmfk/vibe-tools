@@ -419,8 +419,8 @@ def parse_usage_events_csv(file_path: pathlib.Path) -> Dict[str, Any]:
                 model = row.get("Model", "N/A")
                 kind = row.get("Kind", "N/A")
 
-                # Only count included rows
-                if "Included" in kind:
+                # Count included rows or any row with a non-zero cost
+                if "Included" in kind or cost > 0:
                     data["rows"].append(row)
                     data["total_cost"] += cost
                     data["total_input_tokens"] += total_input
