@@ -231,20 +231,52 @@ export const PRDEditor = React.memo(({
         .prd-editor-container p { margin-bottom: 1rem; line-height: 1.6; }
         .prd-editor-container li { margin-bottom: 0.25rem; }
         .prd-editor-container blockquote { border-left: 4px solid ${accentColor}40; padding-left: 1rem; font-style: italic; color: #71717a; margin: 1rem 0; }
-        .prd-editor-container code { background-color: rgba(0,0,0,0.05); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875em; }
-        .dark .prd-editor-container code { background-color: rgba(255,255,255,0.1); }
-        .prd-editor-container pre { background-color: #18181b; color: #e4e4e7; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0; }
-        .prd-editor-container pre code { background-color: transparent; padding: 0; color: inherit; }
+        .prd-editor-container code { 
+          background-color: #27272a; 
+          color: #e4e4e7;
+          padding: 0.2rem 0.4rem; 
+          border-radius: 0.375rem; 
+          font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; 
+          font-size: 0.875em; 
+          border: 1px solid #3f3f46;
+        }
+        .prd-editor-container code::before, .prd-editor-container code::after {
+          content: "";
+        }
+        .prd-editor-container pre code::before, .prd-editor-container pre code::after {
+          content: none;
+        }
+        .dark .prd-editor-container code { 
+          background-color: #27272a; 
+          border-color: #3f3f46;
+        }
+        .prd-editor-container pre { 
+          background-color: #09090b; 
+          color: #e4e4e7; 
+          padding: 1.25rem; 
+          border-radius: 0.5rem; 
+          overflow-x: auto; 
+          margin: 1.5rem 0; 
+          border: 1px solid #27272a; 
+        }
+        .prd-editor-container pre code { 
+          background-color: transparent; 
+          padding: 0; 
+          color: inherit; 
+          font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          line-height: 1.7;
+          border: none;
+        }
         
-        .prd-comment { color: #f97316; font-family: ui-monospace; font-size: 0.875rem; background: #f9731610; padding: 2px 4px; border-radius: 4px; margin: 4px 0; }
-        .prd-details-open, .prd-details-close { color: ${accentColor}; font-family: ui-monospace; font-size: 0.75rem; opacity: 0.5; user-select: none; }
+        .prd-comment { color: #f97316; font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.875rem; background: #f9731610; padding: 2px 4px; border-radius: 4px; margin: 4px 0; }
+        .prd-details-open, .prd-details-close { color: ${accentColor}; font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.75rem; opacity: 0.5; user-select: none; }
         .prd-details-container { border: 1px solid ${accentColor}40; border-radius: 8px; margin: 1rem 0; overflow: hidden; }
         .prd-summary { font-weight: bold; color: ${accentColor}; background: ${accentColor}10; padding: 4px 12px; border-bottom: 1px solid ${accentColor}20; cursor: text; margin: 0 !important; }
         .prd-details-content { padding: 12px; min-height: 20px; }
         .prd-checklist-item { list-style: none; display: flex; align-items: center; gap: 8px; }
         .prd-checklist-item input { width: 14px; height: 14px; cursor: pointer; }
-        .prd-math-block { background: #18181b; color: #10b981; padding: 1rem; border-radius: 0.5rem; font-family: ui-monospace, monospace; margin: 1rem 0; text-align: center; }
-        .prd-yaml { border: 1px dashed #3f3f46; padding: 1rem; border-radius: 0.5rem; font-family: ui-monospace, monospace; color: #71717a; margin-bottom: 2rem; background: #f4f4f510; }
+        .prd-math-block { background: #09090b; color: #10b981; padding: 1rem; border-radius: 0.5rem; font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; margin: 1rem 0; text-align: center; border: 1px solid #27272a; }
+        .prd-yaml { border: 1px dashed #3f3f46; padding: 1rem; border-radius: 0.5rem; font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #71717a; margin-bottom: 2rem; background: #f4f4f510; }
         .dark .prd-yaml { background: #18181b50; }
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
         th, td { border: 1px solid #3f3f4640; padding: 8px; text-align: left; }

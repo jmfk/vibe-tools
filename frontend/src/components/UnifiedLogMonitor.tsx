@@ -88,7 +88,7 @@ const LogEntry = React.memo(({
                   <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
                     <Terminal size={10} /> command line
                   </div>
-                  <pre className="text-[10px] text-zinc-300 bg-zinc-900/50 p-2 rounded border border-white/5 whitespace-pre-wrap break-all font-mono">
+                  <pre className="text-[10px] text-zinc-300 bg-black/40 p-2 rounded border border-white/10 whitespace-pre-wrap break-all font-mono leading-relaxed">
                     {typeof log.data.command_line === 'string' ? log.data.command_line : JSON.stringify(log.data.command_line, null, 2)}
                   </pre>
                 </div>
@@ -98,7 +98,7 @@ const LogEntry = React.memo(({
                   <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
                     <ChevronDown size={10} /> stdio (in)
                   </div>
-                  <pre className="text-[10px] text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 whitespace-pre-wrap break-all font-mono">
+                  <pre className="text-[10px] text-blue-300/90 bg-blue-950/20 p-2 rounded border border-blue-500/20 whitespace-pre-wrap break-all font-mono leading-relaxed">
                     {typeof log.data.stdio === 'string' ? log.data.stdio : JSON.stringify(log.data.stdio, null, 2)}
                   </pre>
                 </div>
@@ -108,7 +108,7 @@ const LogEntry = React.memo(({
                   <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
                     <ChevronUp size={10} /> stdout (out)
                   </div>
-                  <pre className="text-[10px] text-emerald-300/80 bg-emerald-900/10 p-2 rounded border border-emerald-500/10 whitespace-pre-wrap break-all font-mono">
+                  <pre className="text-[10px] text-emerald-300/90 bg-emerald-950/20 p-2 rounded border border-emerald-500/20 whitespace-pre-wrap break-all font-mono leading-relaxed">
                     {typeof log.data.stdout === 'string' ? log.data.stdout : JSON.stringify(log.data.stdout, null, 2)}
                   </pre>
                 </div>
@@ -118,14 +118,14 @@ const LogEntry = React.memo(({
                   <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-2">
                     <AlertCircle size={10} /> stderr (error)
                   </div>
-                  <pre className="text-[10px] text-red-300/80 bg-red-900/10 p-2 rounded border border-red-500/10 whitespace-pre-wrap break-all font-mono">
+                  <pre className="text-[10px] text-red-300/90 bg-red-950/20 p-2 rounded border border-red-500/20 whitespace-pre-wrap break-all font-mono leading-relaxed">
                     {typeof log.data.stderr === 'string' ? log.data.stderr : JSON.stringify(log.data.stderr, null, 2)}
                   </pre>
                 </div>
               )}
             </div>
           ) : (
-            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono">
+            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all leading-relaxed font-mono bg-black/20 p-2 rounded border border-white/5">
               {log.data 
                 ? (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))
                 : `Timestamp: ${log.timestamp}\nLevel:     ${log.level}\nSource:    ${log.source}\nMessage:   ${log.message}`
