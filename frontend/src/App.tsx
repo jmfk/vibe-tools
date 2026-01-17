@@ -1263,42 +1263,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 px-1 rounded-md border h-10 bg-panel border-border mr-2">
-            <button
-              onClick={toggleGlobalLeft}
-              className={cn(
-                "p-1.5 rounded-md transition-all",
-                showGlobalLeft ? "text-accent" : "text-muted hover:text-foreground"
-              )}
-              title="Toggle Global Documents (L)"
-              style={showGlobalLeft ? { color: accentColor } : {}}
-            >
-              <Columns size={18} />
-            </button>
-            <button
-              onClick={toggleLeft}
-              className={cn(
-                "p-1.5 rounded-md transition-all",
-                showLeft ? "text-accent" : "text-muted hover:text-foreground"
-              )}
-              title="Toggle Sidebar (S)"
-              style={showLeft ? { color: accentColor } : {}}
-            >
-              <PanelLeft size={18} />
-            </button>
-            <button
-              onClick={toggleRight}
-              className={cn(
-                "p-1.5 rounded-md transition-all",
-                showRight ? "text-accent" : "text-muted hover:text-foreground"
-              )}
-              title="Toggle AI Chat (A)"
-              style={showRight ? { color: accentColor } : {}}
-            >
-              <PanelRight size={18} />
-            </button>
-          </div>
-
           <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
             <TabButton
               active={activeTab === 'setup'}
