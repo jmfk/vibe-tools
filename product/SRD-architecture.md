@@ -1,10 +1,3 @@
----
-discussion_id: D_kwDOQzI0Lc4AjlwH
-discussion_url: https://github.com/jmfk/vibe-tools/discussions/71
-last_synced_at: '2026-01-10T22:24:09.174372'
-sync_hash: a5866fdaf779618c765476d0466873864573ca7a28386ae8ec4e4e9633f86e6b
----
-
 # Architecture Specification
 
 ## 1. Core Philosophy
@@ -72,3 +65,25 @@ The project's operation follows a set of core phases, driven by the `vibe` CLI a
 - **PRD-Driven Development**: Changes start with a PRD in `product/`, which is then normalized into `implementation/`.
 - **Agentic Loops**: Uses `google-genai` and custom agents (like Ralph) for iterative code generation and improvement.
 - **Tiered Configuration**: Environment management via project-level `.vibe_config.json` and global `~/.vibe/config.json`.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: SRD-architecture
+title: Architecture Specification
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-17T22:38:42.108566'
+updated_at: '2026-01-17T22:40:12.033001'
+discussion_id: D_kwDOQzI0Lc4AjlwH
+discussion_url: https://github.com/jmfk/vibe-tools/discussions/71
+last_synced_at: '2026-01-10T22:24:09.174372'
+sync_hash: a5866fdaf779618c765476d0466873864573ca7a28386ae8ec4e4e9633f86e6b
+```
+</details>
+
+<!-- vibe-id: SRD-architecture -->

@@ -91,7 +91,7 @@ status: done
 group: null
 depends_on: []
 created_at: 2026-01-13
-updated_at: '2026-01-14T18:08:28.974575'
+updated_at: '2026-01-17T22:40:12.071389'
 owner: Core Platform
 implementation_id: v01-480
 implementation_yaml: v01-480_37_tauri_dashboard_core.yaml

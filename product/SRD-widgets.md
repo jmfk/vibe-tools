@@ -563,3 +563,21 @@ This taxonomy is intended to evolve into a **UI semantic standard** where:
 * Code exports enforce presets
 
 At that point, UI becomes a **typed language**, not a collection of divs.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: SRD-widgets
+title: "DKB-01 \u2014 Widget Preset Taxonomy & Design Semantics"
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-17T22:38:42.102419'
+updated_at: '2026-01-17T22:40:12.030950'
+```
+</details>
+
+<!-- vibe-id: SRD-widgets -->

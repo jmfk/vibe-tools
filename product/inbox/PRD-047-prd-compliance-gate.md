@@ -103,3 +103,21 @@ VIOLATED_CONSTRAINTS:
 UNCLEAR_REQUIREMENTS:
 - List (if any)
 </compliance>
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: PRD-047
+title: 'PRD: PRD Compliance Gate for Ralph Implementation Pipeline'
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-17T22:38:42.116846'
+updated_at: '2026-01-17T22:40:12.036829'
+```
+</details>
+
+<!-- vibe-id: PRD-047 -->

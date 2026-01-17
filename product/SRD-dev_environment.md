@@ -71,3 +71,21 @@ Installation is handled via the `install.sh` script, which:
 - **CLI Logs**: Stored in `implementation/logs/`.
 - **Desktop Logs**: Available via the Tauri console during development.
 - **Log Levels**: Support for `DEBUG`, `INFO`, `WARNING`, `ERROR`.
+
+---
+<details>
+<summary>Metadata</summary>
+
+```yaml
+id: SRD-dev_environment
+title: Development Environment Specification
+type: FEATURE
+status: backlog
+group: null
+depends_on: []
+created_at: '2026-01-17T22:38:42.112369'
+updated_at: '2026-01-17T22:40:12.033884'
+```
+</details>
+
+<!-- vibe-id: SRD-dev_environment -->

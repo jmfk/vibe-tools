@@ -48,7 +48,7 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-10T17:17:22Z'
-updated_at: '2026-01-13T23:56:53.354962'
+updated_at: '2026-01-17T22:40:12.041465'
 severity: medium
 service: unknown
 summary: ''

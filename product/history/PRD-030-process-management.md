@@ -68,7 +68,7 @@ status: done
 group: null
 depends_on: []
 created_at: '2026-01-13T18:35:15.015681'
-updated_at: '2026-01-13T23:56:53.401672'
+updated_at: '2026-01-17T22:40:12.074682'
 discussion_id: null
 discussion_url: https://github.com/jmfk/vibe-tools/discussions/45
 last_synced_at: null
