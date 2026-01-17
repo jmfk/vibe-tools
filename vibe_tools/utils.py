@@ -312,14 +312,7 @@ def save_config(config: Dict[str, Any], global_scope: bool = False):
 
 def load_project_state() -> Dict[str, Any]:
     """Loads the current project state from state.json."""
-    if PROJECT_STATE_FILE.exists():
-        try:
-            return json.loads(PROJECT_STATE_FILE.read_text())
-        except json.JSONDecodeError:
-            pass
-
-    # Fallback/Default state
-    return {
+    state = {
         "phases": {
             "setup": {"status": "pending", "hash": ""},
             "implement": {"status": "pending"},
@@ -331,11 +324,53 @@ def load_project_state() -> Dict[str, Any]:
         "plans": {},
     }
 
+    if PROJECT_STATE_FILE.exists():
+        try:
+            state.update(json.loads(PROJECT_STATE_FILE.read_text()))
+        except json.JSONDecodeError:
+            pass
+
+    # Dynamically compute completed_prds and started_prds from filesystem
+    if PRODUCT_HISTORY_DIR.exists():
+        completed = []
+        for f in PRODUCT_HISTORY_DIR.glob("*.md"):
+            # Extract PRD-NNN or similar from filename
+            match = re.search(
+                r"(PRD-\d+|SRD-[a-z0-9_-]+|ISSUE-[a-z0-9_-]+)", f.name, re.IGNORECASE
+            )
+            if match:
+                completed.append(match.group(1))
+            else:
+                completed.append(f.stem)
+        state["completed_prds"] = sorted(list(set(completed)))
+
+    if PRODUCT_IN_PROGRESS_DIR.exists():
+        started = []
+        for f in PRODUCT_IN_PROGRESS_DIR.glob("*.md"):
+            match = re.search(
+                r"(PRD-\d+|SRD-[a-z0-9_-]+|ISSUE-[a-z0-9_-]+)", f.name, re.IGNORECASE
+            )
+            if match:
+                started.append(match.group(1))
+            else:
+                started.append(f.stem)
+        state["started_prds"] = sorted(list(set(started)))
+
+    return state
+
 
 def save_project_state(state: Dict[str, Any]):
     """Saves the current project state to state.json."""
     ensure_dir(VIBE_PROJECT_DIR)
-    PROJECT_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+    # Don't save dynamic lists to the file to favor filesystem-based truth
+    to_save = state.copy()
+    if "completed_prds" in to_save:
+        to_save["completed_prds"] = []
+    if "started_prds" in to_save:
+        to_save["started_prds"] = []
+
+    PROJECT_STATE_FILE.write_text(json.dumps(to_save, indent=2))
 
 
 def is_branch_switching_enabled() -> bool:
@@ -577,15 +612,7 @@ def reset_prd_state(project_name: str) -> List[str]:
     messages = []
     state = load_project_state()
 
-    # 1. Remove from completed/started lists
-    if project_name in state.get("completed_prds", []):
-        state["completed_prds"].remove(project_name)
-        messages.append(f"Removed '{project_name}' from completed PRDs.")
-    if project_name in state.get("started_prds", []):
-        state["started_prds"].remove(project_name)
-        messages.append(f"Removed '{project_name}' from started PRDs.")
-
-    # 2. Reset progress flags in the PRD file itself if possible
+    # 1. Reset progress flags in the PRD file itself if possible
     from vibe_tools.prds import load_prd
 
     potential_files = list(PRODUCT_DIR.rglob(f"*{project_name}*.md"))
@@ -595,16 +622,23 @@ def reset_prd_state(project_name: str) -> List[str]:
             f for f in PRODUCT_DIR.rglob("*.md") if project_name in f.name
         ]
 
-    if len(potential_files) == 1:
+    for f in potential_files:
         try:
-            prd = load_prd(potential_files[0])
+            # If it was in history, move it back to backlog
+            if "history" in str(f):
+                new_path = PRODUCT_BACKLOG_DIR / f.name
+                f.rename(new_path)
+                f = new_path
+                messages.append(f"Moved '{project_name}' from history back to backlog.")
+
+            prd = load_prd(f)
             prd.reset_progress()
             prd.save()
             messages.append(f"Reset implementation progress flags for '{prd.id}'.")
         except Exception as e:
             messages.append(f"Could not reset PRD progress flags: {e}")
 
-    # 3. Reset plan status in state.json
+    # 2. Reset plan status in state.json
     plans = state.get("plans", {})
     if project_name in plans:
         plans[project_name]["status"] = "pending"
@@ -618,7 +652,12 @@ def reset_prd_state(project_name: str) -> List[str]:
             )
             if code == 0:
                 messages.append(f"Deleted local branch '{branch_name}'.")
-            # Also try to delete remote branch if tracking is set up (optional/safe)
+
+    # Clean up static lists to favor dynamic ones
+    if "completed_prds" in state:
+        state["completed_prds"] = []
+    if "started_prds" in state:
+        state["started_prds"] = []
 
     save_project_state(state)
     return messages

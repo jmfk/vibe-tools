@@ -72,6 +72,29 @@ class PRD:
         self.metadata["service"] = value
 
     @property
+    def acceptance_tests_passed(self) -> bool:
+        """Checks if all acceptance tests in the ## Acceptance Tests section are marked as done."""
+        if "## Acceptance Tests" not in self.content:
+            return False
+        
+        # Extract the Acceptance Tests section
+        parts = self.content.split("## Acceptance Tests", 1)
+        if len(parts) < 2:
+            return False
+            
+        # Stop at the next header or end of string
+        tests_content = parts[1].split("\n##", 1)[0]
+        
+        # Look for [ ] and [x] patterns
+        checkboxes = re.findall(r"-\s*\[([\s xX])\]", tests_content)
+        
+        if not checkboxes:
+            return False
+            
+        # Return True only if there are checkboxes and all are marked with x or X
+        return all(cb.lower() == "x" for cb in checkboxes)
+
+    @property
     def impl_code_ready(self) -> bool:
         return self.metadata.get("impl_code_ready", False)
 
@@ -170,6 +193,13 @@ class PRD:
             title = frontmatter.get("title", "")
             prd_type = frontmatter.get("type", "FEATURE")
 
+        status = frontmatter.get("status", "backlog")
+        if path:
+            if "history" in str(path):
+                status = "done"
+            elif "in_progress" in str(path):
+                status = "in_progress"
+
         if not prd_id and path:
             # Try to extract from filename
             match = re.search(r"(PRD-\d+|SRD-[a-z0-9_-]+)", path.name, re.IGNORECASE)
@@ -203,6 +233,7 @@ class PRD:
             content=content,
             history=history,
             path=path,
+            status=status,
         )
 
     def to_markdown(self) -> str:
@@ -242,6 +273,13 @@ class PRD:
         target_path = path or self.path
         if not target_path:
             raise ValueError("No path provided to save PRD")
+
+        if "history" in str(target_path):
+            self.status = "done"
+        elif "in_progress" in str(target_path):
+            self.status = "in_progress"
+        else:
+            self.status = "backlog"
 
         self.updated_at = datetime.datetime.now().isoformat()
         target_path.parent.mkdir(parents=True, exist_ok=True)

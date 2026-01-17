@@ -484,6 +484,15 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                 # Mark code as ready and persist
                 prd.impl_code_ready = True
                 prd.save()
+
+                # Check if acceptance tests are now passed
+                prd = load_prd(prd.path)
+                if prd.acceptance_tests_passed:
+                    logger.info(f"🎉 All acceptance tests passed for {prd.id}!")
+                    passed_gates = True
+                    success = True
+                    break
+
             except Exception as e:
                 failure_reason = str(e)
                 failure_context = str(e)
@@ -570,6 +579,15 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
             prd.reset_progress()
             prd.save()
 
+        # FINAL CHECK: Did the agent mark the PRD as done in the content?
+        prd = load_prd(prd.path)
+        if prd.acceptance_tests_passed:
+            logger.info(
+                f"🎉 All acceptance tests passed for {prd.id} (detected via content)!"
+            )
+            success = True
+            break
+
         if passed_gates:
             success = True
             break
@@ -589,12 +607,6 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         prd.save(final_path)
         prd.path.unlink()
         prd.path = final_path
-
-        # Update state
-        state = load_project_state()
-        if prd.id not in state["completed_prds"]:
-            state["completed_prds"].append(prd.id)
-        save_project_state(state)
 
         # Auto-merge if enabled
         if ralph_config.get("auto_merge", False):

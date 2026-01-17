@@ -237,7 +237,6 @@ def run_reconciliation(quiet=False):
     state = load_project_state()
     # Plans are now based on PRD-NNN IDs
     new_plans = {}
-    completed_prds = []
 
     for prd in new_prds:
         new_plans[prd.id] = {
@@ -246,12 +245,16 @@ def run_reconciliation(quiet=False):
             "type": prd.type,
             "depends_on": prd.depends_on,
         }
-        if prd.status == "done":
-            completed_prds.append(prd.id)
 
     state["plans"] = new_plans
-    state["completed_prds"] = completed_prds
     state["next_sequence"] = len(new_prds) + 1
+    
+    # Clean up static lists to favor dynamic ones
+    if "completed_prds" in state:
+        state["completed_prds"] = []
+    if "started_prds" in state:
+        state["started_prds"] = []
+        
     save_project_state(state)
 
     if not quiet:
