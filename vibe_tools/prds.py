@@ -220,7 +220,6 @@ class PRD:
             id=prd_id,
             title=title,
             type=prd_type,
-            status=frontmatter.get("status", "backlog"),
             group=frontmatter.get("group"),
             depends_on=frontmatter.get("depends_on") or [],
             created_at=frontmatter.get(
