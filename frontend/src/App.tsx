@@ -1349,7 +1349,7 @@ const App: React.FC = () => {
 
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
             <main className="flex-1 overflow-y-auto relative p-6">
-              {editingPRD ? <PRDEditor prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
+              {editingPRD ? <PRDEditor key={editingPRD.path} prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
                activeTab === 'setup' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Wrench size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Initial Setup</h3><p className="text-sm mt-1">Configure your workspace and environment here</p></div> :
                activeTab === 'planner' ? <div className="h-full flex flex-col gap-6 relative">
                  <div className="flex items-center justify-between shrink-0">
