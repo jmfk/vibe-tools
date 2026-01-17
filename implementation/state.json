@@ -65,16 +65,6 @@
   "active_task": null,
   "version": "1.2",
   "next_sequence": 1,
-  "completed_prds": [
-    "PRD-37",
-    "PRD-38",
-    "PRD-39",
-    "PRD-40",
-    "PRD-041",
-    "PRD-042",
-    "PRD-043",
-    "PRD-044",
-    "PRD-045"
-  ],
+  "completed_prds": [],
   "plans": {}
 }

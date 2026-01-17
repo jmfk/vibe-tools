@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Pencil,
-  Eye,
   Check,
   Copy,
   Save,
@@ -19,9 +17,6 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { PRD } from './PlannerBoard';
 import { VanillaPRDEditor } from './VanillaPRDEditor';
 
@@ -78,7 +73,6 @@ export const PRDEditor = React.memo(({
   isDark?: boolean;
   deleted?: boolean;
 }) => {
-  const [isPreview, setIsPreview] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasExternalChanges, setHasExternalChanges] = useState(false);
   const [lastSyncedContent, setLastSyncedContent] = useState(initialContent);
@@ -88,7 +82,7 @@ export const PRDEditor = React.memo(({
 
   // Initialize and manage the vanilla editor
   useEffect(() => {
-    if (!isPreview && containerRef.current && !editorRef.current) {
+    if (containerRef.current && !editorRef.current) {
       editorRef.current = new VanillaPRDEditor(
         containerRef.current,
         initialContent,
@@ -96,6 +90,7 @@ export const PRDEditor = React.memo(({
           setLastSyncedContent(content);
           if (onChange) onChange(content);
         },
+        handleSave,
         accentColor,
         isDark
       );
@@ -107,7 +102,20 @@ export const PRDEditor = React.memo(({
         editorRef.current = null;
       }
     };
-  }, [isPreview, accentColor, isDark]);
+  }, [accentColor, isDark]);
+
+  // Keep callbacks in sync to avoid stale closures
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateCallbacks(
+        (content) => {
+          setLastSyncedContent(content);
+          if (onChange) onChange(content);
+        },
+        handleSave
+      );
+    }
+  }, [onChange, handleSave]);
 
   // Handle external updates
   useEffect(() => {
@@ -183,21 +191,6 @@ export const PRDEditor = React.memo(({
           </div>
         )}
         <div className="flex items-center gap-2">
-          <div className="flex bg-panel border border-border rounded-lg p-1 mr-2">
-            <button 
-              onClick={() => setIsPreview(!isPreview)} 
-              className={cn(
-                "p-1.5 rounded transition-all flex items-center gap-2 px-3 text-[10px] font-bold uppercase tracking-wider", 
-                isPreview 
-                  ? (isDark ? "bg-zinc-800 text-accent" : "bg-zinc-200 text-accent") 
-                  : "text-muted hover:text-foreground"
-              )}
-            >
-              {isPreview ? <Pencil size={14} /> : <Eye size={14} />} 
-              {isPreview ? "Edit" : "Preview"}
-            </button>
-          </div>
-
           <button 
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCopy} 
@@ -227,32 +220,18 @@ export const PRDEditor = React.memo(({
       </div>
 
       <div className="flex-1 bg-panel border border-border rounded-xl overflow-hidden flex flex-col">
-        {isPreview ? (
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-            <div className="w-full">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]} 
-                  rehypePlugins={[rehypeHighlight]}
-                >
-                  {lastSyncedContent}
-                </ReactMarkdown>
-              </div>
-            </div>
+        <div className="flex-1 relative group/vanilla flex flex-col overflow-hidden">
+          <div className="w-full h-full flex flex-col">
+            <div 
+              ref={containerRef}
+              data-prd-path={prd.path}
+              className={cn(
+                "prd-editor-container flex-1 min-h-0 prose prose-sm max-w-none dark:prose-invert focus:outline-none",
+                isDark ? "prose-invert" : ""
+              )}
+            />
           </div>
-        ) : (
-          <div className="flex-1 relative group/vanilla flex flex-col overflow-hidden">
-            <div className="w-full h-full flex flex-col">
-              <div 
-                ref={containerRef}
-                className={cn(
-                  "prd-editor-container flex-1 min-h-0 prose prose-sm max-w-none dark:prose-invert focus:outline-none",
-                  isDark ? "prose-invert" : ""
-                )}
-              />
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       <style>{`
