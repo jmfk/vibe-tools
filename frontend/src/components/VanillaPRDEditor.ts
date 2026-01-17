@@ -7,7 +7,7 @@ export class VanillaPRDEditor {
   private container: HTMLDivElement;
   private toolbar: HTMLDivElement;
   private editor: HTMLDivElement;
-  private onSave: (content: string) => void;
+  private onChange: (content: string) => void;
   private isFocused: boolean = false;
   private contextMenu: HTMLDivElement | null = null;
   private accentColor: string;
@@ -16,12 +16,12 @@ export class VanillaPRDEditor {
   constructor(
     container: HTMLDivElement,
     initialContent: string,
-    onSave: (content: string) => void,
+    onChange: (content: string) => void,
     accentColor: string = '#10b981',
     isDark: boolean = false
   ) {
     this.container = container;
-    this.onSave = onSave;
+    this.onChange = onChange;
     this.accentColor = accentColor;
     this.isDark = isDark;
 
@@ -281,9 +281,13 @@ export class VanillaPRDEditor {
       this.isFocused = false;
       setTimeout(() => {
         if (!this.editor.contains(document.activeElement)) {
-          this.onSave(this.getContent());
+          this.onChange(this.getContent());
         }
       }, 100);
+    });
+
+    this.editor.addEventListener('input', () => {
+      this.onChange(this.getContent());
     });
 
     this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -355,7 +359,9 @@ export class VanillaPRDEditor {
             break;
           case 's':
             e.preventDefault();
-            this.onSave(this.getContent());
+            this.onChange(this.getContent());
+            // We might want a separate onSave for explicit save, 
+            // but for now onChange will notify App.tsx which can track dirty state.
             break;
           case '1': e.preventDefault(); this.runCommand('formatBlock', 'h1'); break;
           case '2': e.preventDefault(); this.runCommand('formatBlock', 'h2'); break;

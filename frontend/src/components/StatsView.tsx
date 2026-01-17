@@ -154,7 +154,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark, perio
         <div>
           <h2 className="text-3xl font-bold text-foreground flex items-center gap-3">
             <BarChart3 size={28} style={{ color: accentColor }} />
-            Usage Statistics
+            Usage Statistics 
+            <span className="text-sm font-normal text-muted bg-panel px-3 py-1 rounded-full border border-border ml-2 uppercase tracking-widest">
+              {period === 'day' ? 'Today' : 
+               period === 'week' ? 'This Week' : 
+               period === 'month' ? 'This Month' : 
+               period === 'year' ? 'This Year' : period}
+            </span>
           </h2>
           <p className="text-muted mt-2">Track your AI resource consumption and costs</p>
         </div>
@@ -192,8 +198,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ accentColor, isDark, perio
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
               title="Total Cost"
-              value={`$${data.total_cost.toFixed(2)}`}
-              subValue="USD"
+              value={`$${Math.round(data.total_cost)}`}
+              subValue={period === 'day' ? 'Today' : 
+                        period === 'week' ? 'This Week' : 
+                        period === 'month' ? 'This Month' : 
+                        period === 'year' ? 'This Year' : 'Total'}
               icon={Coins}
               accentColor="#f59e0b"
               isDark={isDark}

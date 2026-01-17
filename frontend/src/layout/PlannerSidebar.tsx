@@ -43,31 +43,30 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
               </div>
               <span className="text-[10px] font-mono text-muted">{openArtifacts.length}</span>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-1 space-y-1 scrollbar-none">
               {openArtifacts.map((art) => (
-                <div 
-                  key={art.path} 
-                  onClick={() => { 
-                    onSelectArtifact(art); 
-                    if (art.type === 'prd') onEditArtifact(art); 
-                  }} 
+                <div
+                  key={art.path}
+                  onClick={() => {
+                    onSelectArtifact(art);
+                  }}
                   className={cn(
-                    "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all", 
+                    "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all",
                     selectedArtifact?.path === art.path ? "bg-accent/10 border border-accent/20" : "hover:bg-panel border border-transparent"
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <FileText 
-                      size={12} 
+                    <FileText
+                      size={12}
                       className={cn(
                         selectedArtifact?.path === art.path ? "text-accent" : "text-muted/60",
                         art.deleted && "text-red-500 opacity-100"
-                      )} 
-                      style={{ color: (selectedArtifact?.path === art.path && !art.deleted) ? accentColor : undefined }} 
+                      )}
+                      style={{ color: (selectedArtifact?.path === art.path && !art.deleted) ? accentColor : undefined }}
                     />
                     <span className={cn(
-                      "text-[11px] truncate", 
+                      "text-[11px] truncate",
                       selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted",
                       art.deleted && "text-red-400/80 italic line-through"
                     )}>
@@ -77,8 +76,8 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
                       <AlertCircle size={10} className="text-red-500 shrink-0" title="File not found on disk" />
                     )}
                   </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onCloseArtifact(art.path); }} 
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onCloseArtifact(art.path); }}
                     className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X size={10} className="text-muted" />

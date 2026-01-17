@@ -801,7 +801,11 @@ const App: React.FC = () => {
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
+  const [weeklyCost, setWeeklyCost] = useState<number>(0);
   const [projectRegistry, setProjectRegistry] = useState<ProjectRegistry>({ projects: [], last_active_project_id: null });
+  const [editingPRD, setEditingPRD] = useState<any | null>(null);
+  const [editingPRDContent, setEditingPRDContent] = useState<string>('');
+  const [showCloseConfirm, setShowCloseConfirm] = useState<{ path: string, content: string } | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(() => {
     const saved = localStorage.getItem('vibe-selected-artifact');
     if (!saved) return null;
@@ -863,6 +867,12 @@ const App: React.FC = () => {
   }, []);
 
   const closeArtifact = useCallback((path: string) => {
+    // Check if this document is currently being edited and has unsaved changes
+    if (editingPRD && editingPRD.path === path && editingPRDContent !== editingPRD.initialContent) {
+      setShowCloseConfirm({ path, content: editingPRDContent });
+      return;
+    }
+
     setOpenArtifacts(prev => {
       const filtered = prev.filter(a => a.path !== path);
       if (selectedArtifact?.path === path) {
@@ -870,7 +880,7 @@ const App: React.FC = () => {
       }
       return filtered;
     });
-  }, [selectedArtifact]);
+  }, [selectedArtifact, editingPRD, editingPRDContent]);
 
   const handleArtifactsLoaded = useCallback((freshArtifacts: Artifact[]) => {
     setOpenArtifacts(prev => {
@@ -989,9 +999,16 @@ const App: React.FC = () => {
     return localStorage.getItem('vibe-stats-period') || 'month';
   });
 
-  const [editingPRD, setEditingPRD] = useState<any | null>(null);
-
   const handleEditPRD = useCallback(async (prd: any) => {
+    if (editingPRD?.path === prd.path) return;
+
+    // Check for unsaved changes before switching
+    if (editingPRD && editingPRD.path !== prd.path && editingPRDContent !== editingPRD.initialContent) {
+      if (!confirm(`You have unsaved changes in "${editingPRD.filename}". Switch anyway?`)) {
+        return;
+      }
+    }
+
     try {
       const content = await invoke<string>('read_file_content', { path: prd.path });
       const prdData = {
@@ -1015,17 +1032,25 @@ const App: React.FC = () => {
 
       addToOpenArtifacts(artifact);
       setSelectedArtifact(artifact);
+      setEditingPRDContent(content);
       setEditingPRD(prdData);
     } catch (err) {
       console.error('Failed to load PRD content:', err);
     }
   }, [workspaceRoot, addToOpenArtifacts]);
 
-  const handleSavePRD = useCallback(async (content: string) => {
+  const handleSavePRD = useCallback(async (content: string, closeAfter: boolean = true) => {
     if (!editingPRD) return;
     try {
       await invoke('write_file_content', { path: editingPRD.path, content });
-      setEditingPRD(null);
+      if (closeAfter) {
+        setEditingPRD(null);
+        setEditingPRDContent('');
+      } else {
+        // Update initial content so it's no longer dirty
+        setEditingPRD((prev: any) => ({ ...prev, initialContent: content }));
+        setEditingPRDContent(content);
+      }
     } catch (err) {
       console.error('Failed to save PRD:', err);
       alert('Failed to save PRD.');
@@ -1123,6 +1148,9 @@ const App: React.FC = () => {
         pendingPromptRef.current = null;
       } else if (payload.type === 'stats_result') {
         if (payload.total_cost !== undefined) {
+          if (payload.period === 'week') {
+            setWeeklyCost(payload.total_cost);
+          }
           setTotalCost(payload.total_cost);
         }
       } else if (payload.type === 'error') {
@@ -1140,8 +1168,18 @@ const App: React.FC = () => {
   }, [activeTab, loadRegistry]);
 
   const fetchUsage = useCallback(() => {
-    invoke('run_vibe_command', { command: 'usage', args: [] }).catch(() => { });
-  }, []);
+    // We always want to update the weekly cost for the sidebar
+    invoke('run_vibe_command', { command: 'usage', args: ['--week'] }).catch(() => { });
+    
+    // Also update the current period if we're in the stats tab
+    if (activeTabRef.current === 'stats') {
+      const flag = statsPeriod === 'day' ? '--today' :
+                   statsPeriod === 'week' ? '--week' :
+                   statsPeriod === 'month' ? '--month' :
+                   statsPeriod === 'year' ? '--year' : '--all';
+      invoke('run_vibe_command', { command: 'usage', args: [flag] }).catch(() => { });
+    }
+  }, [statsPeriod]);
 
   useEffect(() => {
     fetchUsage();
@@ -1262,8 +1300,11 @@ const App: React.FC = () => {
     setSelectedArtifact(artifact);
     if (artifact) {
       addToOpenArtifacts(artifact);
+      if (artifact.type === 'prd' || artifact.type === 'spec') {
+        handleEditPRD(artifact);
+      }
     }
-  }, [addToOpenArtifacts]);
+  }, [addToOpenArtifacts, handleEditPRD]);
 
   return (
     <div
@@ -1404,7 +1445,12 @@ const App: React.FC = () => {
                       <RefreshCw size={10} className="text-muted opacity-0 group-hover/cost:opacity-100 transition-all" />
                     </div>
                     <div className="rounded-lg p-3 border shadow-inner transition-colors duration-300 bg-background border-border group-hover/cost:border-accent/30">
-                      <div className="text-lg font-bold">${totalCost.toFixed(4)}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-lg font-bold">${Math.round(weeklyCost)}</div>
+                        <div className="text-[8px] px-1.5 py-0.5 rounded-full bg-panel border border-border text-muted font-bold uppercase tracking-tighter">
+                          This Week
+                        </div>
+                      </div>
                       <div className="text-[9px] mt-0.5 uppercase font-medium text-muted">Estimated Usage</div>
                     </div>
                   </div>
@@ -1457,7 +1503,24 @@ const App: React.FC = () => {
 
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
             <main className="flex-1 overflow-y-auto relative p-6">
-              {editingPRD ? <PRDEditor key={editingPRD.id} prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} deleted={editingPRD.deleted} /> :
+              {editingPRD ? <PRDEditor 
+                key={editingPRD.id} 
+                prd={editingPRD} 
+                initialContent={editingPRD.initialContent} 
+                onSave={(content) => handleSavePRD(content, false)} 
+                onChange={setEditingPRDContent}
+                onCancel={() => {
+                  if (editingPRDContent !== editingPRD.initialContent) {
+                    setShowCloseConfirm({ path: editingPRD.path, content: editingPRDContent });
+                  } else {
+                    setEditingPRD(null);
+                    setEditingPRDContent('');
+                  }
+                }} 
+                accentColor={accentColor} 
+                isDark={themeColors.isDark} 
+                deleted={editingPRD.deleted} 
+              /> :
                activeTab === 'setup' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Wrench size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Initial Setup</h3><p className="text-sm mt-1">Configure your workspace and environment here</p></div> :
                activeTab === 'planner' ? <div className="h-full flex flex-col gap-6 relative">
                  <div className="flex items-center justify-between shrink-0">
@@ -1512,6 +1575,74 @@ const App: React.FC = () => {
         </PanelGroup>
       </div>
       <UnifiedLogMonitor accentColor={accentColor} isDark={themeColors.isDark} />
+
+      {showCloseConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className={cn(
+            "max-w-md w-full rounded-2xl border p-6 shadow-2xl animate-in fade-in zoom-in duration-200",
+            themeColors.isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+          )}>
+            <div className="flex items-center gap-3 mb-4 text-orange-500">
+              <AlertCircle size={24} />
+              <h3 className="text-lg font-bold">Unsaved Changes</h3>
+            </div>
+            <p className="text-sm text-muted mb-6 leading-relaxed">
+              The document "{openArtifacts.find(a => a.path === showCloseConfirm.path)?.name}" has unsaved changes. 
+              Do you want to save them before closing?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  const path = showCloseConfirm.path;
+                  const content = showCloseConfirm.content;
+                  await handleSavePRD(content, true);
+                  setOpenArtifacts(prev => {
+                    const filtered = prev.filter(a => a.path !== path);
+                    if (selectedArtifact?.path === path) {
+                      setSelectedArtifact(filtered.length > 0 ? filtered[filtered.length - 1] : null);
+                    }
+                    return filtered;
+                  });
+                  setShowCloseConfirm(null);
+                }}
+                className="w-full py-2.5 bg-accent text-white rounded-xl text-sm font-bold shadow-lg shadow-accent/20 hover:brightness-110 transition-all"
+                style={{ backgroundColor: accentColor }}
+              >
+                Save and Close
+              </button>
+              <button
+                onClick={() => {
+                  const path = showCloseConfirm.path;
+                  setOpenArtifacts(prev => {
+                    const filtered = prev.filter(a => a.path !== path);
+                    if (selectedArtifact?.path === path) {
+                      setSelectedArtifact(filtered.length > 0 ? filtered[filtered.length - 1] : null);
+                    }
+                    return filtered;
+                  });
+                  if (editingPRD?.path === path) {
+                    setEditingPRD(null);
+                    setEditingPRDContent('');
+                  }
+                  setShowCloseConfirm(null);
+                }}
+                className={cn(
+                  "w-full py-2.5 rounded-xl text-sm font-bold transition-all",
+                  themeColors.isDark ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                )}
+              >
+                Discard Changes
+              </button>
+              <button
+                onClick={() => setShowCloseConfirm(null)}
+                className="w-full py-2.5 text-sm font-medium text-muted hover:text-foreground transition-colors"
+              >
+                Cancel / Abort
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -245,6 +245,7 @@ def register_usage(cli):
             
             clean_data = {
                 "type": "stats_result",
+                "period": period,
                 "total_cost": data["total_cost"],
                 "total_input_tokens": data["total_input_tokens"],
                 "total_output_tokens": data["total_output_tokens"],
