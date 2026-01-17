@@ -122,7 +122,7 @@ class PRD:
         if "<!-- vibe-id:" in text or "<summary>Metadata</summary>" in text:
             # Extract YAML from <details> block
             yaml_match = re.search(
-                r"<details>\s*<summary>Metadata</summary>\s*```yaml\s*(.*?)\s*```\s*</details>",
+                r"<details>\s*<summary>Metadata</summary>\s*```(?:yaml)?\s*(.*?)\s*```\s*</details>",
                 text,
                 re.DOTALL,
             )
@@ -172,9 +172,13 @@ class PRD:
 
         if not prd_id and path:
             # Try to extract from filename
-            match = re.search(r"(PRD-\d+)", path.name)
+            match = re.search(r"(PRD-\d+|SRD-[a-z0-9_-]+)", path.name, re.IGNORECASE)
             if match:
                 prd_id = match.group(1)
+            else:
+                # Fallback to stem for SRD if it starts with SRD-
+                if path.name.startswith("SRD-"):
+                    prd_id = path.stem
 
         if not title and content:
             # Try to find first H1

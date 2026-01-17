@@ -46,6 +46,23 @@ def run_reconciliation(quiet=False):
                 click.echo(f"  📝 Renaming {sys_file} -> SRD-{sys_file}")
             old_path.rename(new_path)
 
+    # 0.1 Normalize Metadata for System Files (SRD)
+    for srd_file in PRODUCT_DIR.glob("SRD-*.md"):
+        try:
+            prd = load_prd(srd_file)
+            # Ensure it has an ID if missing
+            if not prd.id:
+                prd.id = srd_file.stem
+            # Ensure type is set for SRD
+            if not prd.type:
+                prd.type = "SYSTEM"
+            prd.save()
+            if not quiet:
+                click.echo(f"  ✨ Normalized metadata for {srd_file.name}")
+        except Exception as e:
+            if not quiet:
+                click.echo(f"  ⚠️  Failed to normalize {srd_file.name}: {e}")
+
     # 1. Collect all initiatives
     all_prds: List[PRD] = []
 
