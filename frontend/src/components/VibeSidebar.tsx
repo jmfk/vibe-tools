@@ -25,6 +25,7 @@ export interface Artifact {
   lastUpdated?: string;
   relPath?: string;
   id?: string;
+  deleted?: boolean;
 }
 
 interface TreeItem {
@@ -150,9 +151,11 @@ export const VibeSidebar = React.memo(({
   onEdit,
   selectedPath, 
   accentColor, 
-  isDark,
-  showPrds = true,
-  showSpecs = true
+  isDark: boolean,
+  showPrds?: boolean,
+  showSpecs?: boolean,
+  refreshKey?: number,
+  onArtifactsLoaded?: (artifacts: Artifact[]) => void
 }: { 
   root: string, 
   onSelect: (artifact: Artifact) => void, 
@@ -161,7 +164,9 @@ export const VibeSidebar = React.memo(({
   accentColor?: string, 
   isDark: boolean,
   showPrds?: boolean,
-  showSpecs?: boolean
+  showSpecs?: boolean,
+  refreshKey?: number,
+  onArtifactsLoaded?: (artifacts: Artifact[]) => void
 }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
@@ -196,24 +201,30 @@ export const VibeSidebar = React.memo(({
           }
         }
 
+        const idMatch = entry.name.match(/((?:PRD|SPEC|ISSUE)-\d+)/i);
+        const id = idMatch ? idMatch[1].toUpperCase() : undefined;
+
         const artifact: Artifact = {
           name: entry.name,
           path: entry.path,
           type: type,
-          relPath: entry.path.replace(root, '')
+          relPath: entry.path.replace(root, ''),
+          id: id
         };
 
-        if (!entry.is_dir && (entry.name.endsWith('.md') || entry.name.endsWith('.yaml'))) {
+        if (!entry.is_dir && entry.name.endsWith('.md')) {
           all.push(artifact);
         }
 
-        entryMap.get(parentPath)?.push({
-          name: entry.name,
-          path: entry.path,
-          is_dir: entry.is_dir,
-          type: type,
-          artifact: !entry.is_dir ? artifact : undefined
-        });
+        if (entry.is_dir || entry.name.endsWith('.md')) {
+          entryMap.get(parentPath)?.push({
+            name: entry.name,
+            path: entry.path,
+            is_dir: entry.is_dir,
+            type: type,
+            artifact: !entry.is_dir ? artifact : undefined
+          });
+        }
       }
 
       // Build trees
@@ -231,7 +242,7 @@ export const VibeSidebar = React.memo(({
       };
 
       const specs = (entryMap.get(productDir) || [])
-        .filter(item => !item.is_dir && (item.name.endsWith('.md') || item.name.endsWith('.yaml')));
+        .filter(item => !item.is_dir && item.name.endsWith('.md'));
       
       const prds = prdGroups.map(groupName => ({
         name: groupName,
@@ -244,6 +255,9 @@ export const VibeSidebar = React.memo(({
       setPrdTree(prds);
       setSpecTree(specs);
       setIssueTree([]);
+      if (onArtifactsLoaded) {
+        onArtifactsLoaded(all);
+      }
     } catch (err) {
       console.error('Failed to load artifacts:', err);
     }
@@ -251,12 +265,11 @@ export const VibeSidebar = React.memo(({
 
   useEffect(() => {
     if (root) {
-      const timer = setTimeout(() => {
-        loadArtifacts();
-      }, 200);
-      return () => clearTimeout(timer);
+      loadArtifacts();
+      const interval = setInterval(loadArtifacts, 15000);
+      return () => clearInterval(interval);
     }
-  }, [root, loadArtifacts]);
+  }, [root, loadArtifacts, refreshKey]);
 
   const filteredArtifacts = useMemo(() => {
     if (!searchQuery) return null;
