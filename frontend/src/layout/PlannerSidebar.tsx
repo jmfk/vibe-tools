@@ -42,6 +42,7 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
               selectedPath={selectedArtifact?.path} 
               accentColor={accentColor} 
               isDark={isDark} 
+              showSpecs={false}
             />
           </div>
         </Accordion>

@@ -48,14 +48,18 @@ export const VibeSidebar = ({
   onEdit,
   selectedPath, 
   accentColor, 
-  isDark 
+  isDark,
+  showPrds = true,
+  showSpecs = true
 }: { 
   root: string, 
   onSelect: (artifact: Artifact) => void, 
   onEdit?: (artifact: Artifact) => void,
   selectedPath?: string, 
   accentColor?: string, 
-  isDark: boolean 
+  isDark: boolean,
+  showPrds?: boolean,
+  showSpecs?: boolean
 }) => {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [prdTree, setPrdTree] = useState<TreeItem[]>([]);
@@ -163,7 +167,9 @@ export const VibeSidebar = ({
       <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar px-1">
         {filteredArtifacts ? (
           <div className="space-y-1">
-                {filteredArtifacts.map(artifact => (
+                {filteredArtifacts
+                  .filter(a => (showPrds && a.type === 'prd') || (showSpecs && a.type === 'spec'))
+                  .map(artifact => (
                   <div key={artifact.path} className="group/item relative">
                     <button
                       onClick={() => onSelect(artifact)}
@@ -201,7 +207,7 @@ export const VibeSidebar = ({
           </div>
         ) : (
           <>
-            {specTree.length > 0 && (
+            {showSpecs && specTree.length > 0 && (
               <div>
                 <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">
                   <div className="w-1 h-1 rounded-full bg-accent" />
@@ -210,13 +216,15 @@ export const VibeSidebar = ({
                 <SidebarTree items={specTree} selectedPath={selectedPath} onSelect={onSelect} onEdit={onEdit} accentColor={accentColor} isDark={isDark} />
               </div>
             )}
-            <div>
-              <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">
-                <div className="w-1 h-1 rounded-full bg-purple-500" />
-                Product (PRDs)
+            {showPrds && (
+              <div>
+                <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">
+                  <div className="w-1 h-1 rounded-full bg-purple-500" />
+                  Product (PRDs)
+                </div>
+                <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} onEdit={onEdit} accentColor={accentColor} isDark={isDark} />
               </div>
-              <SidebarTree items={prdTree} selectedPath={selectedPath} onSelect={onSelect} onEdit={onEdit} accentColor={accentColor} isDark={isDark} />
-            </div>
+            )}
             {issueTree.length > 0 && (
               <div>
                 <div className="text-[9px] font-bold uppercase tracking-widest mb-2 px-2 flex items-center gap-1.5 text-muted">

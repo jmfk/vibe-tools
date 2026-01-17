@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Terminal,
+  Wrench,
   Database,
   Folder,
   FileText,
@@ -75,7 +76,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-type Tab = 'planner' | 'issues' | 'projects' | 'settings' | 'env' | 'stats' | 'interface-designer' | 'database-designer';
+type Tab = 'setup' | 'planner' | 'issues' | 'projects' | 'settings' | 'env' | 'stats' | 'interface-designer' | 'database-designer';
 
 type ThemeMode = 'night' | 'day' | 'morning' | 'sunset';
 
@@ -774,6 +775,12 @@ const App: React.FC = () => {
       content: "Hello! I am the Planner Architect. How can I help you with your PRDs today?"
     }
   ]);
+  const [setupMessages, setSetupMessages] = useState<Message[]>([
+    {
+      role: 'Architect',
+      content: "Hello! I am the Setup Agent. I can help you configure your project and environment. What would you like to set up first?"
+    }
+  ]);
   const [issuesMessages, setIssuesMessages] = useState<Message[]>([
     {
       role: 'Architect',
@@ -801,6 +808,7 @@ const App: React.FC = () => {
   }, [selectedArtifact]);
 
   const [plannerInputValue, setPlannerInputValue] = useState('');
+  const [setupInputValue, setSetupInputValue] = useState('');
   const [issuesInputValue, setIssuesInputValue] = useState('');
   const [interfaceInputValue, setInterfaceInputValue] = useState('');
   const [databaseInputValue, setDatabaseInputValue] = useState('');
@@ -996,10 +1004,10 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handlePromptSubmit = async (context: 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
-    const inputValue = context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
-    const setMessages = context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
-    const setInputValue = context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
+  const handlePromptSubmit = async (context: 'setup' | 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'setup' ? 'setup' : activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
+    const inputValue = context === 'setup' ? setupInputValue : context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
+    const setMessages = context === 'setup' ? setSetupMessages : context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
+    const setInputValue = context === 'setup' ? setSetupInputValue : context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
 
     if (!inputValue.trim()) return;
     const val = inputValue.trim();
@@ -1026,14 +1034,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSendMessage = (context: 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
+  const handleSendMessage = (context: 'setup' | 'planner' | 'issues' | 'interface' | 'database' = activeTab === 'setup' ? 'setup' : activeTab === 'issues' ? 'issues' : activeTab === 'interface-designer' ? 'interface' : activeTab === 'database-designer' ? 'database' : 'planner') => {
     if (pendingPrompt) {
       handlePromptSubmit(context);
       return;
     }
-    const inputValue = context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
-    const setMessages = context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
-    const setInputValue = context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
+    const inputValue = context === 'setup' ? setupInputValue : context === 'planner' ? plannerInputValue : context === 'issues' ? issuesInputValue : context === 'interface' ? interfaceInputValue : databaseInputValue;
+    const setMessages = context === 'setup' ? setSetupMessages : context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
+    const setInputValue = context === 'setup' ? setSetupInputValue : context === 'planner' ? setPlannerInputValue : context === 'issues' ? setIssuesInputValue : context === 'interface' ? setInterfaceInputValue : setDatabaseInputValue;
 
     if (!inputValue.trim()) return;
     
@@ -1137,6 +1145,14 @@ const App: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
+            <TabButton 
+              active={activeTab === 'setup'} 
+              onClick={() => setActiveTab('setup')}
+              icon={<Wrench size={14} />}
+              label="Setup"
+              accentColor={accentColor}
+              isDark={themeColors.isDark}
+            />
             <TabButton 
               active={activeTab === 'planner'} 
               onClick={() => setActiveTab('planner')}
@@ -1267,6 +1283,25 @@ const App: React.FC = () => {
           <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
           {/* Left Pane */}
           <Panel id="sidebar-left" defaultSize={20} minSize={15} className="flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border">
+            {activeTab === 'setup' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto no-scrollbar">
+                  <Accordion title="System Specs" icon={Database} isDark={themeColors.isDark}>
+                    <div className="mt-2">
+                      <VibeSidebar 
+                        root={workspaceRoot} 
+                        onSelect={setSelectedArtifact} 
+                        onEdit={handleEditPRD}
+                        selectedPath={selectedArtifact?.path} 
+                        accentColor={accentColor} 
+                        isDark={themeColors.isDark} 
+                        showPrds={false}
+                      />
+                    </div>
+                  </Accordion>
+                </div>
+              </div>
+            )}
             {activeTab === 'planner' && (
               <PlannerSidebar 
                 workspaceRoot={workspaceRoot}
@@ -1317,6 +1352,12 @@ const App: React.FC = () => {
                   accentColor={accentColor}
                   isDark={themeColors.isDark}
                 />
+              ) : activeTab === 'setup' ? (
+                <div className="h-full flex flex-col items-center justify-center text-muted">
+                  <Wrench size={48} className="mb-4 opacity-10" />
+                  <h3 className="text-lg font-medium text-foreground">Initial Setup</h3>
+                  <p className="text-sm mt-1">Configure your workspace and environment here</p>
+                </div>
               ) : activeTab === 'planner' ? (
                 <div className="h-full flex flex-col gap-6 relative">
                   <div className="flex items-center justify-between shrink-0">
@@ -1442,6 +1483,26 @@ const App: React.FC = () => {
 
           {/* Right Pane: AI / Interaction */}
           <Panel id="sidebar-right" defaultSize={25} minSize={20} className="flex flex-col border-l transition-colors duration-300 bg-background border-border">
+            {activeTab === 'setup' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <AgentInteraction 
+                  id="setup-chat"
+                  messages={setupMessages}
+                  onClearChat={() => setSetupMessages([])}
+                  interactionMode={interactionMode}
+                  setInteractionMode={setInteractionMode}
+                  accentColor={accentColor}
+                  isDark={themeColors.isDark}
+                  activeAgents={activeAgents}
+                  onCancelCommand={handleCancelCommand}
+                  pendingPrompt={pendingPrompt}
+                  serverStatus={serverStatus}
+                  inputValue={setupInputValue}
+                  setInputValue={setSetupInputValue}
+                  onSendMessage={() => handleSendMessage('setup')}
+                />
+              </div>
+            )}
             {activeTab === 'planner' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 <AgentInteraction 
@@ -1482,12 +1543,12 @@ const App: React.FC = () => {
                 />
               </div>
             )}
-            {activeTab !== 'planner' && activeTab !== 'issues' && (
+            {activeTab !== 'setup' && activeTab !== 'planner' && activeTab !== 'issues' && (
               <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
                 <div>
                   <MessageSquare size={32} className="mx-auto mb-4 opacity-10" />
                   <p className="text-xs font-medium uppercase tracking-widest opacity-40">Agent chat hidden</p>
-                  <p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Planner and Issues views.</p>
+                  <p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Setup, Planner and Issues views.</p>
                 </div>
               </div>
             )}
