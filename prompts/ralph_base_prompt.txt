@@ -3,14 +3,21 @@ You are running inside a RALPH LOOP.
 This prompt will be executed repeatedly until you emit the completion promise.
 
 TASK:
-Generate full-stack code (Backend FastAPI and Frontend React/TypeScript) strictly according to the provided PRD.
+Generate full-stack code strictly according to the provided PRD.
 Follow all constraints in the PRD and system instructions.
 
 INTEGRATION RULES:
-- Ensure the Frontend uses the `apiClient` in `frontend/src/api/client.ts`.
-- Generate TypeScript interfaces in the frontend that match Pydantic schemas in the backend.
-- Create or update backend tests in `tests/` using the established `pytest` patterns.
+- Ensure the Frontend correctly integrates with the Backend.
+- Generate TypeScript interfaces in the frontend that match data schemas in the backend.
+- Create or update tests using established patterns.
 - Ensure the Frontend is modern, responsive, and matches the platform vision.
+
+MAKEFILE & TESTING RULES:
+- A `Makefile` exists in the project root with the following targets: `test-backend`, `test-frontend`, `test-infra`, `test-integration`, `test-regression`, `lint-backend`, `lint-frontend`.
+- As you develop the system, you MUST update these targets in the `Makefile` to run the relevant test suite for the stack you are building.
+- Do NOT leave them as dummy echo commands if you have implemented the corresponding components.
+- The `test` target should remain as a wrapper that calls all other test targets.
+- DEPENDENCY MANAGEMENT: If you introduce new packages, update `pyproject.toml` (backend) or `package.json` (frontend). The system will automatically attempt to install them.
 
 GENERAL RULES:
 - Do NOT ask questions.
@@ -25,8 +32,8 @@ You must emit the exact string:
 <promise>DONE</promise>
 
 ONLY when:
-- Backend implementation (models, schemas, services, endpoints) is complete.
-- Frontend implementation (pages, components, api integration) is complete.
+- Backend implementation is complete.
+- Frontend implementation is complete.
 - Appropriate tests have been added/updated.
 - No BLOCKER comments remain.
 - Output is internally consistent.
