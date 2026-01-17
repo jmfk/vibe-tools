@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Ansi from 'ansi-to-react';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, useDefaultLayout, ImperativePanelHandle } from 'react-resizable-panels';
 import { 
   MessageSquare, 
   Files, 
@@ -43,7 +43,11 @@ import {
   Moon,
   Sunrise,
   Sunset,
-  BarChart3
+  BarChart3,
+  PanelLeft,
+  PanelRight,
+  Columns,
+  X
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -769,6 +773,87 @@ const App: React.FC = () => {
     }
   });
 
+  const [openArtifacts, setOpenArtifacts] = useState<Artifact[]>(() => {
+    const saved = localStorage.getItem('vibe-open-artifacts');
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [showGlobalLeft, setShowGlobalLeft] = useState(() => {
+    return localStorage.getItem('vibe-show-global-left') !== 'false';
+  });
+  const [showLeft, setShowLeft] = useState(() => {
+    return localStorage.getItem('vibe-show-left') !== 'false';
+  });
+  const [showRight, setShowRight] = useState(() => {
+    return localStorage.getItem('vibe-show-right') !== 'false';
+  });
+
+  const globalLeftPanelRef = useRef<ImperativePanelHandle>(null);
+  const leftPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightPanelRef = useRef<ImperativePanelHandle>(null);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-open-artifacts', JSON.stringify(openArtifacts));
+  }, [openArtifacts]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-show-global-left', String(showGlobalLeft));
+  }, [showGlobalLeft]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-show-left', String(showLeft));
+  }, [showLeft]);
+
+  useEffect(() => {
+    localStorage.setItem('vibe-show-right', String(showRight));
+  }, [showRight]);
+
+  const addToOpenArtifacts = (artifact: Artifact) => {
+    setOpenArtifacts(prev => {
+      if (prev.find(a => a.path === artifact.path)) return prev;
+      return [...prev, artifact];
+    });
+  };
+
+  const closeArtifact = (path: string) => {
+    setOpenArtifacts(prev => {
+      const filtered = prev.filter(a => a.path !== path);
+      if (selectedArtifact?.path === path) {
+        setSelectedArtifact(filtered.length > 0 ? filtered[filtered.length - 1] : null);
+      }
+      return filtered;
+    });
+  };
+
+  const toggleGlobalLeft = () => {
+    const panel = globalLeftPanelRef.current;
+    if (panel) {
+      if (showGlobalLeft) panel.collapse();
+      else panel.expand();
+    }
+  };
+
+  const toggleLeft = () => {
+    const panel = leftPanelRef.current;
+    if (panel) {
+      if (showLeft) panel.collapse();
+      else panel.expand();
+    }
+  };
+
+  const toggleRight = () => {
+    const panel = rightPanelRef.current;
+    if (panel) {
+      if (showRight) panel.collapse();
+      else panel.expand();
+    }
+  };
+
   const [plannerMessages, setPlannerMessages] = useState<Message[]>([
     {
       role: 'Architect',
@@ -853,6 +938,18 @@ const App: React.FC = () => {
         status: prd.status || '',
         columnId: '' // Not strictly needed for editor
       };
+
+      const artifact: Artifact = {
+        id: prdData.id,
+        name: prdData.filename,
+        path: prdData.path,
+        type: 'prd',
+        status: prdData.status,
+        relPath: prdData.path.replace(workspaceRoot, '')
+      };
+      
+      addToOpenArtifacts(artifact);
+      setSelectedArtifact(artifact);
       setEditingPRD(prdData);
       setEditContent(content);
     } catch (err) {
@@ -1116,6 +1213,13 @@ const App: React.FC = () => {
     storage: localStorage,
   });
 
+  const handleSelectArtifact = (artifact: Artifact | null) => {
+    setSelectedArtifact(artifact);
+    if (artifact) {
+      addToOpenArtifacts(artifact);
+    }
+  };
+
   return (
     <div 
       className={cn("flex flex-col h-screen w-full overflow-hidden font-sans transition-colors duration-500")}
@@ -1144,6 +1248,42 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 px-1 rounded-md border h-10 bg-panel border-border mr-2">
+            <button 
+              onClick={toggleGlobalLeft}
+              className={cn(
+                "p-1.5 rounded-md transition-all",
+                showGlobalLeft ? "text-accent" : "text-muted hover:text-foreground"
+              )}
+              title="Toggle Global Documents (L)"
+              style={showGlobalLeft ? { color: accentColor } : {}}
+            >
+              <Columns size={18} />
+            </button>
+            <button 
+              onClick={toggleLeft}
+              className={cn(
+                "p-1.5 rounded-md transition-all",
+                showLeft ? "text-accent" : "text-muted hover:text-foreground"
+              )}
+              title="Toggle Sidebar (S)"
+              style={showLeft ? { color: accentColor } : {}}
+            >
+              <PanelLeft size={18} />
+            </button>
+            <button 
+              onClick={toggleRight}
+              className={cn(
+                "p-1.5 rounded-md transition-all",
+                showRight ? "text-accent" : "text-muted hover:text-foreground"
+              )}
+              title="Toggle AI Chat (A)"
+              style={showRight ? { color: accentColor } : {}}
+            >
+              <PanelRight size={18} />
+            </button>
+          </div>
+
           <div className="flex items-center gap-2 px-1 rounded-md border h-10 bg-panel border-border">
             <TabButton 
               active={activeTab === 'setup'} 
@@ -1280,9 +1420,85 @@ const App: React.FC = () => {
             <DatabaseDesigner accentColor={accentColor} isDark={themeColors.isDark} />
           </div>
         ) : (
-          <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
+        <PanelGroup orientation="horizontal" onLayoutChanged={onLayoutChanged} defaultLayout={defaultLayout}>
+          {/* Global Left: Open Documents */}
+          <Panel 
+            ref={globalLeftPanelRef}
+            id="sidebar-global" 
+            defaultSize={15} 
+            minSize={10} 
+            collapsible
+            collapsedSize={0}
+            onCollapse={() => setShowGlobalLeft(false)}
+            onExpand={() => setShowGlobalLeft(true)}
+            className={cn("flex flex-col border-r transition-colors duration-300 bg-background border-border", !showGlobalLeft && "hidden")}
+          >
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="p-3 border-b flex items-center justify-between shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Open Documents</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-panel border text-[9px] font-mono text-muted">{openArtifacts.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
+                {openArtifacts.map((art) => (
+                  <div 
+                    key={art.path}
+                    onClick={() => {
+                      handleSelectArtifact(art);
+                      if (art.type === 'prd') {
+                        handleEditPRD(art);
+                      }
+                    }}
+                    className={cn(
+                      "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all",
+                      selectedArtifact?.path === art.path 
+                        ? "bg-accent/10 border border-accent/20" 
+                        : "hover:bg-panel border border-transparent"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={12} className={selectedArtifact?.path === art.path ? "text-accent" : "text-muted"} />
+                      <span className={cn(
+                        "text-[11px] truncate",
+                        selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted"
+                      )}>
+                        {art.name}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeArtifact(art.path);
+                      }}
+                      className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={10} className="text-muted" />
+                    </button>
+                  </div>
+                ))}
+                {openArtifacts.length === 0 && (
+                  <div className="py-8 text-center">
+                    <Files size={24} className="mx-auto mb-2 opacity-10" />
+                    <p className="text-[10px] text-muted opacity-50 uppercase tracking-tighter">No open docs</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Panel>
+
+          {showGlobalLeft && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
+
           {/* Left Pane */}
-          <Panel id="sidebar-left" defaultSize={20} minSize={15} className="flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border">
+          <Panel 
+            ref={leftPanelRef}
+            id="sidebar-left" 
+            defaultSize={20} 
+            minSize={15} 
+            collapsible
+            collapsedSize={0}
+            onCollapse={() => setShowLeft(false)}
+            onExpand={() => setShowLeft(true)}
+            className={cn("flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border", !showLeft && "hidden")}
+          >
             {activeTab === 'setup' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto no-scrollbar">
@@ -1290,7 +1506,7 @@ const App: React.FC = () => {
                     <div className="mt-2">
                       <VibeSidebar 
                         root={workspaceRoot} 
-                        onSelect={setSelectedArtifact} 
+                        onSelect={handleSelectArtifact} 
                         onEdit={handleEditPRD}
                         selectedPath={selectedArtifact?.path} 
                         accentColor={accentColor} 
@@ -1306,7 +1522,7 @@ const App: React.FC = () => {
               <PlannerSidebar 
                 workspaceRoot={workspaceRoot}
                 selectedArtifact={selectedArtifact}
-                onSelectArtifact={setSelectedArtifact}
+                onSelectArtifact={handleSelectArtifact}
                 onEditArtifact={handleEditPRD}
                 accentColor={accentColor}
                 isDark={themeColors.isDark}
@@ -1337,7 +1553,7 @@ const App: React.FC = () => {
             )}
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />
+          {showLeft && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
 
           {/* Center Pane: Main Content */}
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
@@ -1402,7 +1618,7 @@ const App: React.FC = () => {
                       <PlannerBoard 
                         workspaceRoot={workspaceRoot} 
                         onSelectPRD={(prd) => {
-                          setSelectedArtifact({
+                          const artifact: Artifact = {
                             id: prd.id,
                             name: prd.filename,
                             path: prd.path,
@@ -1410,7 +1626,9 @@ const App: React.FC = () => {
                             status: prd.status,
                             owner: prd.owner,
                             relPath: prd.path.replace(workspaceRoot, '')
-                          });
+                          };
+                          addToOpenArtifacts(artifact);
+                          setSelectedArtifact(artifact);
                         }}
                         onEditPRD={handleEditPRD}
                         onRefresh={loadRegistry}
@@ -1424,13 +1642,15 @@ const App: React.FC = () => {
                            const entries = await invoke<any[]>('list_directory', { path: `${workspaceRoot}/product/in_progress` });
                            const entry = entries.find(e => e.name.includes(id));
                            if (entry) {
-                              setSelectedArtifact({
+                              const artifact: Artifact = {
                                 id: id,
                                 name: entry.name,
                                 path: entry.path,
                                 type: 'prd',
                                 relPath: entry.path.replace(workspaceRoot, '')
-                              });
+                              };
+                              addToOpenArtifacts(artifact);
+                              setSelectedArtifact(artifact);
                            }
                         }}
                       />
@@ -1479,10 +1699,20 @@ const App: React.FC = () => {
             </main>
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />
+          {showRight && <PanelResizeHandle className="w-1 bg-transparent hover:bg-accent/20 transition-colors" />}
 
           {/* Right Pane: AI / Interaction */}
-          <Panel id="sidebar-right" defaultSize={25} minSize={20} className="flex flex-col border-l transition-colors duration-300 bg-background border-border">
+          <Panel 
+            ref={rightPanelRef}
+            id="sidebar-right" 
+            defaultSize={25} 
+            minSize={20} 
+            collapsible
+            collapsedSize={0}
+            onCollapse={() => setShowRight(false)}
+            onExpand={() => setShowRight(true)}
+            className={cn("flex flex-col border-l transition-colors duration-300 bg-background border-border", !showRight && "hidden")}
+          >
             {activeTab === 'setup' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 <AgentInteraction 
