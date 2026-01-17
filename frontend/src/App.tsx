@@ -797,6 +797,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     return (localStorage.getItem('vibe-active-tab') as Tab) || 'planner';
   });
+  const [vibeExplorerRefreshKey, setVibeExplorerRefreshKey] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [activeAgents] = useState<AgentProcess[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
@@ -868,6 +869,60 @@ const App: React.FC = () => {
         setSelectedArtifact(filtered.length > 0 ? filtered[filtered.length - 1] : null);
       }
       return filtered;
+    });
+  }, [selectedArtifact]);
+
+  const handleArtifactsLoaded = useCallback((freshArtifacts: Artifact[]) => {
+    setOpenArtifacts(prev => {
+      let changed = false;
+      const next = prev.map(art => {
+        // 1. Try to find by exact path
+        const fresh = freshArtifacts.find(f => f.path === art.path);
+        if (fresh) {
+          if (art.deleted) {
+            changed = true;
+            return { ...fresh, deleted: false };
+          }
+          // Check if name or status changed
+          if (fresh.name !== art.name || fresh.status !== art.status) {
+            changed = true;
+            return { ...art, ...fresh, deleted: false };
+          }
+          return art;
+        }
+
+        // 2. Not found by path, try to find by ID
+        if (art.id) {
+          const byId = freshArtifacts.find(f => f.id === art.id);
+          if (byId) {
+            changed = true;
+            // Update path and name (rename/move)
+            return { ...art, ...byId, deleted: false };
+          }
+        }
+
+        // 3. Truly not found
+        if (!art.deleted) {
+          changed = true;
+          return { ...art, deleted: true };
+        }
+        return art;
+      });
+
+      if (changed) {
+        // Also update selected artifact if it was updated
+        if (selectedArtifact) {
+          const updatedSelected = next.find(a => 
+            (selectedArtifact.id && a.id === selectedArtifact.id) || 
+            a.path === selectedArtifact.path
+          );
+          if (updatedSelected && (updatedSelected.path !== selectedArtifact.path || updatedSelected.name !== selectedArtifact.name || updatedSelected.deleted !== selectedArtifact.deleted)) {
+            setSelectedArtifact(updatedSelected);
+          }
+        }
+      }
+
+      return changed ? next : prev;
     });
   }, [selectedArtifact]);
 
@@ -1297,20 +1352,29 @@ const App: React.FC = () => {
               >
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="p-3 border-b flex items-center justify-between shrink-0">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Open Documents</span>
-                    <span className="px-1.5 py-0.5 rounded-full bg-panel border text-[9px] font-mono text-muted">{openArtifacts.length}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted">Vibe Explorer</span>
+                      <button 
+                        onClick={() => setVibeExplorerRefreshKey(prev => prev + 1)}
+                        className="p-1 rounded-md hover:bg-panel text-muted hover:text-foreground transition-colors"
+                        title="Reload Explorer"
+                      >
+                        <RefreshCw size={10} />
+                      </button>
+                    </div>
+                    <Files size={12} className="text-muted" />
                   </div>
-                  <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
-                    {openArtifacts.map((art) => (
-                      <div key={art.path} onClick={() => { handleSelectArtifact(art); if (art.type === 'prd') handleEditPRD(art); }} className={cn("group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all", selectedArtifact?.path === art.path ? "bg-accent/10 border border-accent/20" : "hover:bg-panel border border-transparent")}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={12} className={selectedArtifact?.path === art.path ? "text-accent" : "text-muted/60"} style={{ color: selectedArtifact?.path === art.path ? accentColor : undefined }} />
-                          <span className={cn("text-[11px] truncate", selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted")}>{art.name}</span>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); closeArtifact(art.path); }} className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} className="text-muted" /></button>
-                      </div>
-                    ))}
-                    {openArtifacts.length === 0 && <div className="py-8 text-center"><Files size={24} className="mx-auto mb-2 opacity-10" /><p className="text-[10px] text-muted opacity-50 uppercase tracking-tighter">No open docs</p></div>}
+                  <div className="flex-1 overflow-y-auto p-2 scrollbar-none">
+                    <VibeSidebar 
+                      root={workspaceRoot} 
+                      onSelect={handleSelectArtifact} 
+                      onEdit={handleEditPRD} 
+                      selectedPath={selectedArtifact?.path} 
+                      accentColor={accentColor} 
+                      isDark={themeColors.isDark} 
+                      refreshKey={vibeExplorerRefreshKey}
+                      onArtifactsLoaded={handleArtifactsLoaded}
+                    />
                   </div>
                 </div>
               </Panel>
@@ -1328,17 +1392,33 @@ const App: React.FC = () => {
                 className={cn("flex flex-col border-r shadow-sm transition-colors duration-300 bg-background border-border")}
               >
                 {activeTab === 'setup' && (
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto no-scrollbar">
-                      <Accordion title="System Specs" icon={Database} isDark={themeColors.isDark}>
-                        <div className="mt-2">
-                          <VibeSidebar root={workspaceRoot} onSelect={handleSelectArtifact} onEdit={handleEditPRD} selectedPath={selectedArtifact?.path} accentColor={accentColor} isDark={themeColors.isDark} showPrds={false} />
-                        </div>
-                      </Accordion>
-                    </div>
-                  </div>
+                  <PlannerSidebar 
+                    workspaceRoot={workspaceRoot} 
+                    selectedArtifact={selectedArtifact} 
+                    onSelectArtifact={handleSelectArtifact} 
+                    onEditArtifact={handleEditPRD} 
+                    accentColor={accentColor} 
+                    isDark={themeColors.isDark} 
+                    totalCost={totalCost} 
+                    onFetchUsage={fetchUsage} 
+                    openArtifacts={openArtifacts}
+                    onCloseArtifact={closeArtifact}
+                  />
                 )}
-                {activeTab === 'planner' && <PlannerSidebar workspaceRoot={workspaceRoot} selectedArtifact={selectedArtifact} onSelectArtifact={handleSelectArtifact} onEditArtifact={handleEditPRD} accentColor={accentColor} isDark={themeColors.isDark} totalCost={totalCost} onFetchUsage={fetchUsage} />}
+                {activeTab === 'planner' && (
+                  <PlannerSidebar 
+                    workspaceRoot={workspaceRoot} 
+                    selectedArtifact={selectedArtifact} 
+                    onSelectArtifact={handleSelectArtifact} 
+                    onEditArtifact={handleEditPRD} 
+                    accentColor={accentColor} 
+                    isDark={themeColors.isDark} 
+                    totalCost={totalCost} 
+                    onFetchUsage={fetchUsage} 
+                    openArtifacts={openArtifacts}
+                    onCloseArtifact={closeArtifact}
+                  />
+                )}
                 {activeTab === 'issues' && <IssuesSidebar isDark={themeColors.isDark} accentColor={accentColor} />}
                 {activeTab === 'stats' && <StatsSidebar isDark={themeColors.isDark} accentColor={accentColor} period={statsPeriod} onPeriodChange={setStatsPeriod} loading={false} />}
                 {(activeTab === 'projects' || activeTab === 'settings') && <ProjectsSidebar projects={projectRegistry.projects} activeProjectId={projectRegistry.last_active_project_id} onSwitchProject={switchProject} isDark={themeColors.isDark} accentColor={accentColor} />}

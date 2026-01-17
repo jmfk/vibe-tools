@@ -1,5 +1,5 @@
 import React from 'react';
-import { Files, Tag, Coins, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Files, Tag, Coins, RefreshCw, LayoutDashboard, FileText, X, AlertCircle } from 'lucide-react';
 import { Accordion } from '../components/Accordion';
 import { VibeSidebar, Artifact } from '../components/VibeSidebar';
 import { clsx, type ClassValue } from 'clsx';
@@ -18,6 +18,8 @@ interface PlannerSidebarProps {
   isDark: boolean;
   totalCost: number;
   onFetchUsage: () => void;
+  openArtifacts: Artifact[];
+  onCloseArtifact: (path: string) => void;
 }
 
 export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
@@ -28,22 +30,61 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
   accentColor,
   isDark,
   totalCost,
-  onFetchUsage
+  onFetchUsage,
+  openArtifacts,
+  onCloseArtifact
 }) => {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <Accordion title="Vibe Explorer (PRDs)" icon={Files} isDark={isDark}>
-          <div className="mt-2">
-            <VibeSidebar 
-              root={workspaceRoot} 
-              onSelect={onSelectArtifact} 
-              onEdit={onEditArtifact}
-              selectedPath={selectedArtifact?.path} 
-              accentColor={accentColor} 
-              isDark={isDark} 
-              showSpecs={false}
-            />
+        <Accordion title="Open Documents" icon={Files} isDark={isDark}>
+          <div className="flex-1 overflow-y-auto p-1 space-y-1 scrollbar-none">
+            {openArtifacts.map((art) => (
+              <div 
+                key={art.path} 
+                onClick={() => { 
+                  onSelectArtifact(art); 
+                  if (art.type === 'prd') onEditArtifact(art); 
+                }} 
+                className={cn(
+                  "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all", 
+                  selectedArtifact?.path === art.path ? "bg-accent/10 border border-accent/20" : "hover:bg-panel border border-transparent"
+                )}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText 
+                    size={12} 
+                    className={cn(
+                      selectedArtifact?.path === art.path ? "text-accent" : "text-muted/60",
+                      art.deleted && "text-red-500 opacity-100"
+                    )} 
+                    style={{ color: (selectedArtifact?.path === art.path && !art.deleted) ? accentColor : undefined }} 
+                  />
+                  <span className={cn(
+                    "text-[11px] truncate", 
+                    selectedArtifact?.path === art.path ? "text-foreground font-medium" : "text-muted",
+                    art.deleted && "text-red-400/80 italic line-through"
+                  )}>
+                    {art.name}
+                  </span>
+                  {art.deleted && (
+                    <AlertCircle size={10} className="text-red-500 shrink-0" title="File not found on disk" />
+                  )}
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onCloseArtifact(art.path); }} 
+                  className="p-1 rounded hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={10} className="text-muted" />
+                </button>
+              </div>
+            ))}
+            {openArtifacts.length === 0 && (
+              <div className="py-8 text-center">
+                <Files size={24} className="mx-auto mb-2 opacity-10" />
+                <p className="text-[10px] text-muted opacity-50 uppercase tracking-tighter">No open docs</p>
+              </div>
+            )}
           </div>
         </Accordion>
 
