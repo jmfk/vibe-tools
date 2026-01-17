@@ -104,19 +104,6 @@ export const PRDEditor = React.memo(({
     };
   }, [accentColor, isDark]);
 
-  // Keep callbacks in sync to avoid stale closures
-  useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.updateCallbacks(
-        (content) => {
-          setLastSyncedContent(content);
-          if (onChange) onChange(content);
-        },
-        handleSave
-      );
-    }
-  }, [onChange, handleSave]);
-
   // Handle external updates
   useEffect(() => {
     if (initialContent !== lastSyncedContent) {
