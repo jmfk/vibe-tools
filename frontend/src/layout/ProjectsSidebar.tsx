@@ -12,12 +12,14 @@ interface Project {
   id: string;
   name: string;
   path: string;
+  description?: string;
+  last_active?: string;
 }
 
 interface ProjectsSidebarProps {
   projects: Project[];
   activeProjectId: string | null;
-  onSwitchProject: (p: Project) => void;
+  onSwitchProject: (p: Project) => void | Promise<void>;
   isDark: boolean;
   accentColor: string;
 }

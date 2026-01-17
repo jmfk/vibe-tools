@@ -76,6 +76,8 @@ import { InterfaceDesigner } from './components/InterfaceDesigner';
 import { DatabaseDesigner } from './components/DatabaseDesigner';
 import { PRDEditor } from './components/PRDEditor';
 
+import { chatStore } from './ChatStore';
+
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -861,36 +863,9 @@ const App: React.FC = () => {
     }
   }, [showRight]);
 
-  const [plannerMessages, setPlannerMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Planner Architect. How can I help you with your PRDs today?"
-    }
-  ]);
-  const [setupMessages, setSetupMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Setup Agent. I can help you configure your project and environment. What would you like to set up first?"
-    }
-  ]);
-  const [issuesMessages, setIssuesMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Issues Agent. How can I help you with your bug tracking today?"
-    }
-  ]);
-  const [interfaceMessages, setInterfaceMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Interface Designer Agent. How can I help you design your UI today?"
-    }
-  ]);
-  const [databaseMessages, setDatabaseMessages] = useState<Message[]>([
-    {
-      role: 'Architect',
-      content: "Hello! I am the Database Designer Agent. How can I help you architect your schema today?"
-    }
-  ]);
+  const activeTabRef = useRef<Tab>(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
   useEffect(() => {
     if (selectedArtifact) {
       localStorage.setItem('vibe-selected-artifact', JSON.stringify(selectedArtifact));
@@ -924,7 +899,6 @@ const App: React.FC = () => {
   });
 
   const [editingPRD, setEditingPRD] = useState<any | null>(null);
-  const [editContent, setEditContent] = useState('');
 
   const handleEditPRD = useCallback(async (prd: any) => {
     try {
@@ -935,7 +909,8 @@ const App: React.FC = () => {
         path: prd.path,
         filename: prd.name,
         status: prd.status || '',
-        columnId: ''
+        columnId: '',
+        initialContent: content // Store initial content in local prdData
       };
 
       const artifact: Artifact = {
@@ -950,23 +925,21 @@ const App: React.FC = () => {
       addToOpenArtifacts(artifact);
       setSelectedArtifact(artifact);
       setEditingPRD(prdData);
-      setEditContent(content);
     } catch (err) {
       console.error('Failed to load PRD content:', err);
     }
   }, [workspaceRoot, addToOpenArtifacts]);
 
-  const handleSavePRD = useCallback(async () => {
+  const handleSavePRD = useCallback(async (content: string) => {
     if (!editingPRD) return;
     try {
-      await invoke('write_file_content', { path: editingPRD.path, content: editContent });
+      await invoke('write_file_content', { path: editingPRD.path, content });
       setEditingPRD(null);
-      setEditContent('');
     } catch (err) {
       console.error('Failed to save PRD:', err);
       alert('Failed to save PRD.');
     }
-  }, [editingPRD, editContent]);
+  }, [editingPRD]);
 
   useEffect(() => {
     localStorage.setItem('vibe-stats-period', statsPeriod);
@@ -1049,16 +1022,20 @@ const App: React.FC = () => {
 
     const unlistenServer = listen('vibe-server-event', (event: any) => {
       const payload = event.payload;
-      if (payload.type === 'stats_result') {
+      if (payload.type === 'prompt') {
+        pendingPromptRef.current = payload.message;
+      } else if (payload.type === 'result') {
+        pendingPromptRef.current = null;
+      } else if (payload.type === 'stats_result') {
         if (payload.total_cost !== undefined) {
           setTotalCost(payload.total_cost);
         }
       } else if (payload.type === 'error') {
-        const setMessages = activeTab === 'setup' ? setSetupMessages : activeTab === 'issues' ? setIssuesMessages : activeTab === 'interface-designer' ? setInterfaceMessages : activeTab === 'database-designer' ? setDatabaseMessages : setPlannerMessages;
-        setMessages((prev: Message[]) => [...prev, {
+        const context = activeTabRef.current === 'setup' ? 'setup' : activeTabRef.current === 'issues' ? 'issues' : activeTabRef.current === 'interface-designer' ? 'interface' : activeTabRef.current === 'database-designer' ? 'database' : 'planner';
+        chatStore.addMessage(context, {
           role: 'Architect',
           content: `❌ **Error**: ${payload.message}\n\n\`\`\`\n${payload.traceback || ''}\n\`\`\``
-        }]);
+        });
       }
     });
 
@@ -1096,13 +1073,33 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleSendMessage = useCallback((val: string, context: string) => {
-    const setMessages = context === 'setup' ? setSetupMessages : context === 'planner' ? setPlannerMessages : context === 'issues' ? setIssuesMessages : context === 'interface' ? setInterfaceMessages : setDatabaseMessages;
+  const pendingPromptRef = useRef<string | null>(null);
+
+  const handlePromptSubmit = useCallback(async (val: string, context: 'setup' | 'planner' | 'issues' | 'interface' | 'database') => {
+    if (!val.trim()) return;
+    const content = val.trim();
+    chatStore.addMessage(context, { role: 'User', content: content });
+    pendingPromptRef.current = null;
+    try {
+      await invoke('send_vibe_input', {
+        input: content,
+        context: context
+      });
+    } catch (e) {
+      console.error('Error sending prompt response:', e);
+    }
+  }, []);
+
+  const handleSendMessage = useCallback((val: string, context: 'setup' | 'planner' | 'issues' | 'interface' | 'database') => {
+    if (pendingPromptRef.current) {
+      handlePromptSubmit(val, context);
+      return;
+    }
 
     if (!val.trim()) return;
 
     const content = val.trim();
-    setMessages(prev => [...prev, { role: 'User', content }]);
+    chatStore.addMessage(context, { role: 'User', content });
 
     if (content.startsWith('/')) {
       const cmd = content.slice(1);
@@ -1112,10 +1109,10 @@ const App: React.FC = () => {
         args: [...args, `--context=${context}`, `--chat-id=${context}`]
       })
         .catch(err => {
-          setMessages(prev => [...prev, {
+          chatStore.addMessage(context, {
             role: 'Architect',
             content: `Error running command \`${cmd}\`: ${err}`
-          }]);
+          });
         });
     } else {
       invoke('send_vibe_input', {
@@ -1126,7 +1123,7 @@ const App: React.FC = () => {
         console.error(`Error sending message to ${context} agent:`, err);
       });
     }
-  }, []);
+  }, [handlePromptSubmit]);
 
   const [plannerView, setPlannerView] = useState<'board' | 'graph'>(() => {
     return (localStorage.getItem('vibe-planner-view') as 'board' | 'graph') || 'board';
@@ -1322,7 +1319,7 @@ const App: React.FC = () => {
 
           <Panel id="main-content" minSize={30} className="flex flex-col min-w-0">
             <main className="flex-1 overflow-y-auto relative p-6">
-              {editingPRD ? <PRDEditor prd={editingPRD} content={editContent} onContentChange={setEditContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
+              {editingPRD ? <PRDEditor prd={editingPRD} initialContent={editingPRD.initialContent} onSave={handleSavePRD} onCancel={() => setEditingPRD(null)} accentColor={accentColor} isDark={themeColors.isDark} /> :
                activeTab === 'setup' ? <div className="h-full flex flex-col items-center justify-center text-muted"><Wrench size={48} className="mb-4 opacity-10" /><h3 className="text-lg font-medium text-foreground">Initial Setup</h3><p className="text-sm mt-1">Configure your workspace and environment here</p></div> :
                activeTab === 'planner' ? <div className="h-full flex flex-col gap-6 relative">
                  <div className="flex items-center justify-between shrink-0">
@@ -1357,11 +1354,11 @@ const App: React.FC = () => {
             onResize={(size: any) => { if (size < 100 && showRight) rightPanelRef.current?.collapse(); }}
             className={cn("flex flex-col border-l transition-colors duration-300 bg-background border-border", !showRight && "hidden")}
           >
-            {activeTab === 'setup' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="setup-chat" messages={setupMessages} onClearChat={() => setSetupMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'setup')} /></div>}
-            {activeTab === 'planner' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="planner-chat" messages={plannerMessages} onClearChat={() => setPlannerMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'planner')} /></div>}
-            {activeTab === 'issues' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="issues-chat" messages={issuesMessages} onClearChat={() => setIssuesMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'issues')} /></div>}
-            {activeTab === 'interface-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="interface-designer-chat" messages={interfaceMessages} onClearChat={() => setInterfaceMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'interface')} /></div>}
-            {activeTab === 'database-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="database-designer-chat" messages={databaseMessages} onClearChat={() => setDatabaseMessages([])} interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'database')} /></div>}
+            {activeTab === 'setup' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="setup-chat" context="setup" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'setup')} /></div>}
+            {activeTab === 'planner' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="planner-chat" context="planner" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'planner')} /></div>}
+            {activeTab === 'issues' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="issues-chat" context="issues" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'issues')} /></div>}
+            {activeTab === 'interface-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="interface-designer-chat" context="interface" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'interface')} /></div>}
+            {activeTab === 'database-designer' && <div className="flex-1 flex flex-col overflow-hidden"><AgentInteraction id="database-designer-chat" context="database" interactionMode={interactionMode} setInteractionMode={(m: any) => setInteractionMode(m)} accentColor={accentColor} isDark={themeColors.isDark} activeAgents={activeAgents} onCancelCommand={handleCancelCommand} onSendMessage={(val: string) => handleSendMessage(val, 'database')} /></div>}
             {activeTab !== 'setup' && activeTab !== 'planner' && activeTab !== 'issues' && activeTab !== 'interface-designer' && activeTab !== 'database-designer' && (
               <div className="flex-1 flex items-center justify-center p-8 text-center text-muted">
                 <div><MessageSquare size={32} className="mx-auto mb-4 opacity-10" /><p className="text-xs font-medium uppercase tracking-widest opacity-40">Agent chat hidden</p><p className="text-[10px] mt-2 leading-relaxed">Agent interaction is currently only available in Setup, Planner, Issues, Interface and Database views.</p></div>

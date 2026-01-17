@@ -10,6 +10,7 @@ import rehypeHighlight from 'rehype-highlight';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { StatusMonitor } from './StatusMonitor';
+import { chatStore } from '../ChatStore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -28,9 +29,8 @@ export interface AgentProcess {
 }
 
 interface AgentInteractionProps {
-  id: string; // Added to distinguish between chat instances
-  messages: Message[];
-  onClearChat: () => void;
+  id: string; 
+  context: 'setup' | 'planner' | 'issues' | 'interface' | 'database';
   interactionMode: 'ASK' | 'AGENT';
   setInteractionMode: (mode: 'ASK' | 'AGENT') => void;
   accentColor: string;
@@ -41,8 +41,8 @@ interface AgentInteractionProps {
 }
 
 export const AgentInteraction: React.FC<AgentInteractionProps> = React.memo(({
-  messages,
-  onClearChat,
+  id,
+  context,
   interactionMode,
   setInteractionMode,
   accentColor,
@@ -51,13 +51,22 @@ export const AgentInteraction: React.FC<AgentInteractionProps> = React.memo(({
   onCancelCommand,
   onSendMessage
 }) => {
+  const [messages, setMessages] = React.useState<Message[]>(() => chatStore.getMessages(context));
   const [localInput, setLocalInput] = React.useState('');
+
+  React.useEffect(() => {
+    return chatStore.subscribe(context, setMessages);
+  }, [context]);
 
   const handleSend = () => {
     if (localInput.trim()) {
       onSendMessage(localInput.trim());
       setLocalInput('');
     }
+  };
+
+  const onClearChat = () => {
+    chatStore.clearChat(context);
   };
 
   return (

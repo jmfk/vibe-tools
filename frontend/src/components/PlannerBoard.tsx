@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -87,7 +87,7 @@ interface SortablePRDCardProps {
   isDark?: boolean;
 }
 
-const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor, isDark }: SortablePRDCardProps) => {
+const SortablePRDCard = React.memo(({ prd, onClick, onEdit, onTitleUpdate, accentColor, isDark }: SortablePRDCardProps) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(prd.title);
 
@@ -224,7 +224,7 @@ const SortablePRDCard = ({ prd, onClick, onEdit, onTitleUpdate, accentColor, isD
       </div>
     </div>
   );
-};
+});
 
 const DroppableColumn = ({ id, children, className }: { id: string, children: React.ReactNode, className?: string }) => {
   const { setNodeRef } = useDroppable({ id });
@@ -235,7 +235,7 @@ const DroppableColumn = ({ id, children, className }: { id: string, children: Re
   );
 };
 
-export const PlannerBoard = ({
+export const PlannerBoard = React.memo(({
   workspaceRoot,
   onSelectPRD,
   onEditPRD,
@@ -273,7 +273,7 @@ export const PlannerBoard = ({
     })
   );
 
-  const loadPRDs = async () => {
+  const loadPRDs = useCallback(async () => {
     if (!workspaceRoot) return;
     try {
       const allPRDs: PRD[] = [];
@@ -319,11 +319,14 @@ export const PlannerBoard = ({
     } catch (err) {
       console.error('Failed to load PRDs for board:', err);
     }
-  };
+  }, [workspaceRoot, isAddingPRD]);
 
   useEffect(() => {
-    loadPRDs();
-  }, [workspaceRoot]);
+    const timer = setTimeout(() => {
+      loadPRDs();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [loadPRDs]);
 
   const handleCreatePRD = async () => {
     if (!newPRDTitle.trim() || !workspaceRoot || isSubmitting) return;
@@ -737,4 +740,4 @@ updated_at: '${new Date().toISOString()}'
       </DndContext>
     </div>
   );
-};
+});

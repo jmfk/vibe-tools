@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Pencil,
   Eye,
@@ -65,7 +65,7 @@ const ToolbarButton = ({ onClick, icon, label, isDark, disabled }: ToolbarButton
   </button>
 );
 
-const InlineRowEditor = ({ 
+const InlineRowEditor = React.memo(({ 
   initialContent, 
   onChange, 
   onKeyDown, 
@@ -96,12 +96,13 @@ const InlineRowEditor = ({
         }
       }
     }
-  }, []);
+  }, [initialContent, isPlainText]);
 
   useEffect(() => {
     if (ref.current) {
-      ref.current.focus();
-      // Move cursor to end
+      // Only focus if this component just mounted and it's supposed to be focused
+      // We'll rely on the parent to manage focus if needed, 
+      // but for now, the existing logic moves cursor to end.
       const range = document.createRange();
       const selection = window.getSelection();
       range.selectNodeContents(ref.current);
@@ -128,7 +129,7 @@ const InlineRowEditor = ({
       data-placeholder={placeholder}
     />
   );
-};
+});
 
 interface ContextMenuItemProps {
   onClick?: () => void;
@@ -211,30 +212,64 @@ const ContextMenuSubMenu = ({
 };
 
 
-export const PRDEditor = ({
+const FastLineRenderer = React.memo(({ content }: { content: string }) => {
+  if (!content) return <span className="opacity-20 italic text-[10px]">Click to add text...</span>;
+
+  // Extremely basic markdown highlighting for editor performance
+  // Bold: **text**
+  // Italic: _text_
+  // Link: [text](url)
+  // Code: `code`
+  
+  const parts = content.split(/(\*\*.*?\*\*|_.*?_|`.*?`|\[.*?\]\(.*?\))/g);
+  
+  return (
+    <span>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('_') && part.endsWith('_')) {
+          return <em key={i}>{part.slice(1, -1)}</em>;
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <code key={i} className="bg-black/20 px-1 rounded">{part.slice(1, -1)}</code>;
+        }
+        if (part.startsWith('[') && part.includes('](')) {
+          const match = part.match(/\[(.*?)\]\((.*?)\)/);
+          if (match) return <span key={i} className="text-accent underline decoration-accent/30">{match[1]}</span>;
+        }
+        return part;
+      })}
+    </span>
+  );
+});
+
+export const PRDEditor = React.memo(({
   prd,
-  content,
-  onContentChange,
+  initialContent,
   onSave,
   onCancel,
   accentColor,
   isDark
 }: {
   prd: PRD;
-  content: string;
-  onContentChange: (content: string) => void;
-  onSave: () => void;
+  initialContent: string;
+  onSave: (content: string) => void;
   onCancel: () => void;
   accentColor?: string;
   isDark?: boolean;
 }) => {
+  const [lines, setLines] = useState<string[]>(initialContent.split('\n'));
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [copied, setCopied] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, index: number } | null>(null);
-  const lines = content.split('\n');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // We no longer sync back to parent on every change. 
+  // State is isolated until Save is clicked.
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
     e.preventDefault();
@@ -261,9 +296,12 @@ export const PRDEditor = ({
   }, []);
 
   const handleLineChange = (index: number, newText: string) => {
-    const newLines = [...lines];
-    newLines[index] = newText;
-    onContentChange(newLines.join('\n'));
+    setLines(prev => {
+      if (prev[index] === newText) return prev;
+      const next = [...prev];
+      next[index] = newText;
+      return next;
+    });
   };
 
   const mdToHtml = (md: string) => {
@@ -359,7 +397,7 @@ export const PRDEditor = ({
     return { type: 'paragraph' as const, prefix: '', content: line, suffix: '' };
   };
 
-  const getLineContexts = () => {
+  const lineContexts = useMemo(() => {
     let isInsideCodeBlock = false;
     let detailsDepth = 0;
     return lines.map(line => {
@@ -379,9 +417,7 @@ export const PRDEditor = ({
         isInsideDetails: wasInsideDetails || (parsed.type === 'details-open') || (parsed.type === 'details-close')
       };
     });
-  };
-
-  const lineContexts = getLineContexts();
+  }, [lines]);
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.ctrlKey || e.metaKey) {
@@ -435,7 +471,7 @@ export const PRDEditor = ({
       }
 
       newLines.splice(index + 1, 0, nextLinePrefix);
-      onContentChange(newLines.join('\n'));
+      setLines(newLines);
       setFocusedIndex(index + 1);
     } else if (e.key === 'Backspace') {
       const currentLine = lines[index];
@@ -448,7 +484,7 @@ export const PRDEditor = ({
       } else if (currentLine === '' && lines.length > 1) {
         e.preventDefault();
         const newLines = lines.filter((_, i) => i !== index);
-        onContentChange(newLines.join('\n'));
+        setLines(newLines);
         setFocusedIndex(index > 0 ? index - 1 : 0);
       }
     } else if (e.key === 'ArrowUp') {
@@ -570,7 +606,7 @@ export const PRDEditor = ({
     const newLines = [...lines];
     const targetIndex = index === -1 ? lines.length : index + 1;
     newLines.splice(targetIndex, 0, '<details>', '<summary>New Section</summary>', '', '</details>');
-    onContentChange(newLines.join('\n'));
+    setLines(newLines);
     setFocusedIndex(targetIndex + 1);
   };
 
@@ -597,7 +633,7 @@ export const PRDEditor = ({
     
     if (start !== -1 && end !== -1) {
       const newLines = lines.filter((_, i) => i < start || i > end);
-      onContentChange(newLines.join('\n'));
+      setLines(newLines);
       setFocusedIndex(Math.max(0, start - 1));
     }
   };
@@ -606,7 +642,7 @@ export const PRDEditor = ({
     const newLines = [...lines];
     const targetIndex = index === -1 ? lines.length : index + 1;
     newLines.splice(targetIndex, 0, '```', '', '```');
-    onContentChange(newLines.join('\n'));
+    setLines(newLines);
     setFocusedIndex(targetIndex + 1);
   };
 
@@ -632,7 +668,7 @@ export const PRDEditor = ({
     
     if (start !== -1 && end !== -1) {
       const newLines = lines.filter((_, i) => i < start || i > end);
-      onContentChange(newLines.join('\n'));
+      setLines(newLines);
       setFocusedIndex(Math.max(0, start - 1));
     }
   };
@@ -655,20 +691,19 @@ export const PRDEditor = ({
         key={i}
         className={cn(
           "group relative min-h-[1.5rem] px-2 rounded-md border border-transparent",
-          !isPreview && (focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : (parsed.type === 'details-open' || parsed.type === 'details-close' ? "" : "hover:bg-zinc-800/20")),
+          focusedIndex === i ? (isDark ? "bg-zinc-800/50" : "bg-zinc-100") : (parsed.type === 'details-open' || parsed.type === 'details-close' ? "" : "hover:bg-zinc-800/20"),
           !isPartofBlock && "my-0.5",
           isPartofBlock && "font-mono py-0",
           !isPartofBlock && context.isInsideCodeBlock && (isDark ? "bg-zinc-900/50 font-mono" : "bg-zinc-100 font-mono")
         )}
         onClick={(e) => {
-          if (isPreview) return;
           if (parsed.type === 'details-open' || parsed.type === 'details-close') return;
           e.stopPropagation();
           setFocusedIndex(i);
         }}
-        onContextMenu={(e) => !isPreview && handleContextMenu(e, i)}
+        onContextMenu={(e) => handleContextMenu(e, i)}
       >
-        {!isPreview && focusedIndex === i ? (
+        {focusedIndex === i ? (
           <div className="flex items-start gap-2 w-full">
             {(() => {
               let visualMarker = null;
@@ -855,7 +890,6 @@ export const PRDEditor = ({
                 let colorClass = "text-foreground opacity-90";
 
                 if (parsed.type === 'code-fence') {
-                  if (isPreview) return null;
                   displayLine = `\`\`\`${parsed.content}`;
                   colorClass = "text-accent font-bold opacity-50";
                 } else if (isPartofBlock && lines[renderLinesStartIdx(i)]?.match(/^```json/)) {
@@ -895,21 +929,7 @@ export const PRDEditor = ({
 
               return (
                 <div className={textStyle}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                      p: ({ node, ...props }) => <span {...props} />,
-                      h1: ({ node, ...props }) => <span {...props} />,
-                      h2: ({ node, ...props }) => <span {...props} />,
-                      h3: ({ node, ...props }) => <span {...props} />,
-                      h4: ({ node, ...props }) => <span {...props} />,
-                      h5: ({ node, ...props }) => <span {...props} />,
-                      h6: ({ node, ...props }) => <span {...props} />,
-                    }}
-                  >
-                    {line || 'Click to add text...'}
-                  </ReactMarkdown>
+                  <FastLineRenderer content={line} />
                 </div>
               );
             })()}
@@ -922,6 +942,16 @@ export const PRDEditor = ({
       </div>
     );
   };
+
+  const MemoizedLine = React.memo(({ index, isPartofBlock, line, isFocused, context }: { 
+    index: number, 
+    isPartofBlock: boolean,
+    line: string,
+    isFocused: boolean,
+    context: any
+  }) => {
+    return renderLine(index, isPartofBlock);
+  });
 
   const renderLines = () => {
     const rendered = [];
@@ -976,13 +1006,31 @@ export const PRDEditor = ({
                            {currentInnerCodeBlock.lang && (
                              <div className="px-3 py-1.5 bg-black/20 border-b border-white/5 text-[10px] font-bold uppercase tracking-widest text-muted opacity-50">{currentInnerCodeBlock.lang}</div>
                            )}
-                           <div className="p-0">{currentInnerCodeBlock.lines.map(lIdx => renderLine(lIdx, true))}</div>
+                           <div className="p-0">{currentInnerCodeBlock.lines.map(lIdx => (
+                             <MemoizedLine 
+                               key={lIdx} 
+                               index={lIdx} 
+                               isPartofBlock={true} 
+                               line={lines[lIdx]}
+                               isFocused={focusedIndex === lIdx}
+                               context={lineContexts[lIdx]}
+                             />
+                           ))}</div>
                          </div>
                        );
                        currentInnerCodeBlock = null;
                      }
                    } else {
-                     innerRendered.push(renderLine(idx, false));
+                     innerRendered.push(
+                       <MemoizedLine 
+                         key={idx} 
+                         index={idx} 
+                         isPartofBlock={false} 
+                         line={lines[idx]}
+                         isFocused={focusedIndex === idx}
+                         context={lineContexts[idx]}
+                       />
+                     );
                    }
                  }
                  return innerRendered;
@@ -1025,23 +1073,45 @@ export const PRDEditor = ({
                 </div>
               )}
               <div className="p-0">
-                {blockLines.map(idx => renderLine(idx, true))}
+                {blockLines.map(idx => (
+                  <MemoizedLine 
+                    key={idx} 
+                    index={idx} 
+                    isPartofBlock={true} 
+                    line={lines[idx]}
+                    isFocused={focusedIndex === idx}
+                    context={lineContexts[idx]}
+                  />
+                ))}
               </div>
             </div>
           );
           currentCodeBlock = null;
         }
       } else {
-        rendered.push(renderLine(i, false));
+        rendered.push(
+          <MemoizedLine 
+            key={i} 
+            index={i} 
+            isPartofBlock={false} 
+            line={lines[i]}
+            isFocused={focusedIndex === i}
+            context={lineContexts[i]}
+          />
+        );
       }
     }
     return rendered;
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(lines.join('\n'));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = () => {
+    onSave(lines.join('\n'));
   };
 
   return (
@@ -1121,7 +1191,7 @@ export const PRDEditor = ({
           </button>
 
           <button
-            onClick={onSave}
+            onClick={handleSave}
             className="px-4 py-2 bg-accent text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-accent/10 hover:brightness-110"
             style={{ backgroundColor: accentColor }}
           >
@@ -1142,7 +1212,18 @@ export const PRDEditor = ({
         }}
       >
         <div className="max-w-4xl mx-auto">
-          {renderLines()}
+          {isPreview ? (
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {lines.join('\n')}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            renderLines()
+          )}
         </div>
       </div>
 
@@ -1194,4 +1275,4 @@ export const PRDEditor = ({
       )}
     </div>
   );
-};
+});
