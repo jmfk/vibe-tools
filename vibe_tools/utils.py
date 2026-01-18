@@ -179,8 +179,11 @@ def ensure_git_safety():
     1. No uncommitted changes or untracked files.
     2. On the expected branch (if set).
     """
-    if os.environ.get("VIBE_AGENT_ACTIVE") == "1":
-        # Skip safety checks if an agent is already active (we are inside the loop)
+    if (
+        os.environ.get("VIBE_AGENT_ACTIVE") == "1"
+        or os.environ.get("VIBE_IGNORE_GIT_SAFETY") == "1"
+    ):
+        # Skip safety checks if an agent is already active or safety is explicitly ignored
         return
 
     if not is_git_repo():

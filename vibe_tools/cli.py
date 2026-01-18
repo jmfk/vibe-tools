@@ -45,6 +45,8 @@ if "--server" in sys.argv:
                     new_argv.append("--stream" if settings.get("stream") else "--no-stream")
                 if settings.get("agent"):
                     new_argv.extend(["--agent", settings.get("agent")])
+                if settings.get("ignore_git_safety"):
+                    new_argv.append("--ignore-git-safety")
 
                 if command and command != "vibe":
                     new_argv.append(command)
@@ -236,9 +238,19 @@ class OrderedGroup(click.Group):
     default=None,
     help="Select the agent to use.",
 )
+@click.option(
+    "--ignore-git-safety",
+    "-I",
+    is_flag=True,
+    default=False,
+    help="Ignore git safety checks (uncommitted changes, wrong branch).",
+)
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, server, debug, verbose, log, stream, agent):
+def cli(ctx, server, debug, verbose, log, stream, agent, ignore_git_safety):
+    if ignore_git_safety:
+        os.environ["VIBE_IGNORE_GIT_SAFETY"] = "1"
+
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
 
