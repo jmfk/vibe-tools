@@ -45,8 +45,6 @@ if "--server" in sys.argv:
                     new_argv.append("--stream" if settings.get("stream") else "--no-stream")
                 if settings.get("agent"):
                     new_argv.extend(["--agent", settings.get("agent")])
-                if settings.get("no_branch_switch"):
-                    new_argv.append("--no-branch-switch")
 
                 if command and command != "vibe":
                     new_argv.append(command)
@@ -238,15 +236,9 @@ class OrderedGroup(click.Group):
     default=None,
     help="Select the agent to use.",
 )
-@click.option(
-    "--no-branch-switch",
-    is_flag=True,
-    default=None,
-    help="Disable automatic branch switching.",
-)
 @click.version_option(version=__version__)
 @click.pass_context
-def cli(ctx, server, debug, verbose, log, stream, agent, no_branch_switch):
+def cli(ctx, server, debug, verbose, log, stream, agent):
     # Initialize logging for the invoked command
     command_name = ctx.invoked_subcommand or "info"
 
@@ -320,13 +312,9 @@ def cli(ctx, server, debug, verbose, log, stream, agent, no_branch_switch):
     if agent is None:
         agent = config.get("agent", {}).get("agent", "cursor-agent")
 
-    if no_branch_switch is None:
-        no_branch_switch = config.get("no_branch_switch", True)
-
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
     ctx.obj["stream"] = stream
-    ctx.obj["no_branch_switch"] = no_branch_switch
 
     if debug:
         enable_console_debug()

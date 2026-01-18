@@ -514,7 +514,6 @@ The tools use a `.vibe_config.json` file in the project root for configuration. 
     "tests": true,
     "auto_merge": false
   },
-  "no_branch_switch": true,
   "use_google_sheets": true,
   "google_sheet_id": "YOUR_SHEET_ID_HERE",
   "verbose": false,

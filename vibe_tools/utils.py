@@ -468,32 +468,6 @@ def save_project_state(state: Dict[str, Any]):
 
 def is_branch_switching_enabled() -> bool:
     """Checks if automatic branch switching is enabled."""
-    import click
-
-    # Check Click context first if available
-    try:
-        ctx = click.get_current_context(silent=True)
-        if ctx and ctx.obj and ctx.obj.get("no_branch_switch"):
-            return False
-    except Exception:
-        pass
-
-    # Fallback to config
-    config = load_config()
-
-    # Check both root and ralph level config
-    no_switch_root = config.get("no_branch_switch")
-    no_switch_ralph = config.get("ralph", {}).get("no_branch_switch")
-
-    # If explicitly set to False in either place, it's enabled
-    if no_switch_root is False or no_switch_ralph is False:
-        return True
-
-    # If explicitly set to True in either place, it's disabled
-    if no_switch_root is True or no_switch_ralph is True:
-        return False
-
-    # Default is disabled (no_branch_switch=True)
     return False
 
 
@@ -1529,7 +1503,6 @@ def perform_basic_init():
         default_config = {
             "repository": repo_info if repo_info else {},
             "ralph": {"review": True, "tests": True, "auto_merge": False},
-            "no_branch_switch": True,
             "default_budget": 5.0,
             "verbose": False,
             "coverage_targets": {
