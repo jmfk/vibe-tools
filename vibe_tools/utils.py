@@ -216,6 +216,7 @@ def run_command(
     command: List[str],
     cwd: Optional[str] = None,
     check: bool = True,
+    bypass_safety: bool = False,
 ) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
     intrusive_commands = {
@@ -235,7 +236,7 @@ def run_command(
     main_cmd = command[0] if command else ""
 
     # Intrusive command check and safety check
-    if main_cmd in intrusive_commands:
+    if main_cmd in intrusive_commands and not bypass_safety:
         # Exempt read-only git commands from safety check
         is_git_write = False
         if main_cmd == "git" and len(command) > 1:
@@ -665,11 +666,13 @@ def get_agent_command(agent: str, prompt: str) -> List[str]:
     return _get_agent_command(agent, prompt)
 
 
-def run_agent(command: List[str], stream: bool = False) -> Tuple[str, int]:
+def run_agent(
+    command: List[str], stream: bool = False, bypass_safety: bool = False
+) -> Tuple[str, int]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     from .agent import run_agent as _run_agent
 
-    output, code, _ = _run_agent(command, stream=stream)
+    output, code, _ = _run_agent(command, stream=stream, bypass_safety=bypass_safety)
 
     return output, code
 

@@ -59,7 +59,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
                 f"[COVERAGE LOOP] [PHASE: improve] (Iteration {i}) Calling agent to improve coverage..."
             )
             cmd = get_agent_command(agent, prompt)
-            output, _ = run_agent(cmd, stream=stream)
+            output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
 
             cost_logger.log_run(
                 agent=agent,
@@ -83,7 +83,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
                 )
                 fix_prompt = f"The tests are failing after your last changes. Please fix them.\n\nERROR:\n{output}"
                 cmd_fix = get_agent_command(agent, fix_prompt)
-                fix_output, _ = run_agent(cmd_fix, stream=stream)
+                fix_output, _ = run_agent(cmd_fix, stream=stream, bypass_safety=True)
                 cost_logger.log_run(
                     agent=agent,
                     model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
@@ -108,7 +108,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
 
             if new_cov > current_cov and test_exit_code == 0:
                 logger.info("Committing improvements...")
-                run_command(["git", "add", "."])
+                run_command(["git", "add", "."], bypass_safety=True)
                 run_command(
                     [
                         "git",
@@ -116,6 +116,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
                         "-m",
                         f"Improve test coverage from {current_cov}% to {new_cov}%",
                     ],
+                    bypass_safety=True,
                 )
     except KeyboardInterrupt:
         logger.warning("\n🛑 Coverage loop interrupted by user.")
@@ -124,7 +125,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
 
         if is_dirty():
             logger.info("Committing partial work before exit...")
-            run_command(["git", "add", "."])
+            run_command(["git", "add", "."], bypass_safety=True)
             run_command(
                 [
                     "git",
@@ -132,6 +133,7 @@ def improve_coverage_loop(agent="cursor-agent", stream=False):
                     "-m",
                     "vibe: partial work saved on interrupt (coverage)",
                 ],
+                bypass_safety=True,
             )
         logger.info("Run 'vibe coverage' again to resume.")
         return False

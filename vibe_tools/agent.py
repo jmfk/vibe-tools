@@ -234,16 +234,17 @@ def is_tool_available(tool: str) -> bool:
 
 
 def run_agent(
-    command: List[str], stream: bool = False
+    command: List[str], stream: bool = False, bypass_safety: bool = False
 ) -> Tuple[str, int, Optional[str]]:
     """Runs an agent command, optionally preventing sleep and streaming output."""
     from .utils import ensure_git_safety, GitSafetyError
 
-    try:
-        ensure_git_safety()
-    except GitSafetyError as e:
-        out_error(f"Git Safety Violation: {e}", source="vibe")
-        return str(e), 1, None
+    if not bypass_safety:
+        try:
+            ensure_git_safety()
+        except GitSafetyError as e:
+            out_error(f"Git Safety Violation: {e}", source="vibe")
+            return str(e), 1, None
 
     if os.environ.get("VIBE_AGENT_ACTIVE") == "1" or is_test_mode():
         logger.warning(

@@ -158,7 +158,7 @@ class RalphLoop:
 
             # Run Agent
             cmd = get_agent_command(self.agent, prompt)
-            output, code = run_agent(cmd, stream=self.stream)
+            output, code = run_agent(cmd, stream=self.stream, bypass_safety=True)
             last_output = output
 
             if code == 0 and COMPLETION_PROMISE in output:
@@ -168,7 +168,7 @@ class RalphLoop:
                 # Commit changes if dirty
                 if is_dirty():
                     logger.info(f"💾 Committing changes on {self.branch_name}...")
-                    run_command(["git", "add", "."], check=False)
+                    run_command(["git", "add", "."], check=False, bypass_safety=True)
                     run_command(
                         [
                             "git",
@@ -177,6 +177,7 @@ class RalphLoop:
                             f"vibe: reconciliation step '{self.name}' complete",
                         ],
                         check=False,
+                        bypass_safety=True,
                     )
 
                 return True
@@ -469,7 +470,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                     short_term_memory=short_term_memory or "No insights yet.",
                 )
                 cmd = get_agent_command(agent, prompt)
-                output, code = run_agent(cmd, stream=stream)
+                output, code = run_agent(cmd, stream=stream, bypass_safety=True)
 
                 # Extract Insights
                 insight_match = re.search(
@@ -492,7 +493,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                     continue
 
                 if is_dirty():
-                    run_command(["git", "add", "."], check=False)
+                    run_command(["git", "add", "."], check=False, bypass_safety=True)
                     run_command(
                         [
                             "git",
@@ -501,6 +502,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                             f"vibe: impl iteration {i} for {prd.id}",
                         ],
                         check=False,
+                        bypass_safety=True,
                     )
 
                 # Mark code as ready and persist
@@ -535,7 +537,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
 
                 if is_dirty():
                     logger.info("💾 Auto-fixes applied changes. Committing...")
-                    run_command(["git", "add", "."], check=False)
+                    run_command(["git", "add", "."], check=False, bypass_safety=True)
                     run_command(
                         [
                             "git",
@@ -544,6 +546,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                             f"vibe: automatic quality fixes for {prd.id}",
                         ],
                         check=False,
+                        bypass_safety=True,
                     )
 
                 # 3b-2. Full Quality Suite (with Agentic Debugging)

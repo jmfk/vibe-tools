@@ -893,7 +893,7 @@ def register_sync(cli):
 
         if not dry_run:
             # Commit sync changes
-            run_command(["git", "add", "product/"], check=False)
+            run_command(["git", "add", "product/"], check=False, bypass_safety=True)
             _, diff_code = run_command(
                 ["git", "diff", "--cached", "--quiet"], check=False
             )
@@ -911,6 +911,7 @@ def register_sync(cli):
                         "vibe: sync metadata",
                     ],
                     check=False,
+                    bypass_safety=True,
                 )
 
         click.echo("✅ Sync complete.")
