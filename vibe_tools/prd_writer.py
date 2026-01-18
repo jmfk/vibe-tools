@@ -11,6 +11,7 @@ from vibe_tools.utils import (
     get_agent_command,
     get_google_api_key,
     get_prompt,
+    load_config,
     run_agent,
 )
 

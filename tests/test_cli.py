@@ -3,8 +3,8 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from vibe_tools.cli import cli, load_config
-from vibe_tools.utils import save_config, save_memory, perform_basic_init
+from vibe_tools.cli import cli
+from vibe_tools.utils import load_config, save_config, save_memory, perform_basic_init
 
 
 @pytest.fixture

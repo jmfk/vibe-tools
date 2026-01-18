@@ -4,6 +4,7 @@ from typing import Any, Dict
 import click
 
 from vibe_tools.utils import (
+    load_config,
     load_global_servers,
     run_command,
     save_config,
