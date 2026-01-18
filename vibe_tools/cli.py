@@ -169,6 +169,7 @@ class OrderedGroup(click.Group):
         order = [
             "init",           # Phase 0
             "start",          # Product Bootstrap
+            "bootstrap",      # Phase 0-2: Preparation
             "setup",          # Phase 1: Reconcile Architecture
             "config",         # Phase 2: Configuration
             "deps",           # Phase 2: Dependencies

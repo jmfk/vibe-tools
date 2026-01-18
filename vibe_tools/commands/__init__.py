@@ -2,6 +2,7 @@ def register_all_commands(cli):
     """Register all commands with the CLI group."""
     from vibe_tools.commands import (
         billing_groups,
+        bootstrap,
         coverage,
         demo_data,
         deploy,
@@ -28,6 +29,7 @@ def register_all_commands(cli):
     )
 
     init.register_init(cli)
+    bootstrap.register_bootstrap(cli)
     migrate.register_migrate(cli)
     plan.register_plan(cli)
     # issue.register_issue(cli) # Integrated into plan
