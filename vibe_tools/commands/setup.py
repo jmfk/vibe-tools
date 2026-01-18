@@ -10,6 +10,7 @@ from vibe_tools.utils import (
     ensure_project_structure,
     get_agent_command,
     get_prompt,
+    load_config,
     load_project_state,
     run_agent,
     save_project_state,
