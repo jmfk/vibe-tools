@@ -67,7 +67,6 @@ Rules:
 - Preserve ambiguity; do not resolve it.
 - Use only the section headers defined below.
 - Output valid YAML only.
-- DO NOT wrap the output in markdown code blocks (e.g., no ```yaml).
 - No explanations.
 
 REQUIRED SECTIONS (in this exact order):
