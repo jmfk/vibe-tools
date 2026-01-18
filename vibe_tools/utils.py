@@ -1224,14 +1224,49 @@ def maybe_init_git():
             "\nNo git repository found. Would you like to initialize one?", default=True
         ):
             try:
-                subprocess.run(["git", "init"], check=True)
-                out_success("✅ Initialized empty Git repository.")
+                branch_name = click.prompt("Default branch name", default="main")
+                # Some git versions don't support --initial-branch
+                try:
+                    subprocess.run(
+                        ["git", "init", f"--initial-branch={branch_name}"],
+                        check=True,
+                        capture_output=True,
+                    )
+                except subprocess.CalledProcessError:
+                    subprocess.run(["git", "init"], check=True, capture_output=True)
+                    # If branch is not master, try to rename it
+                    subprocess.run(
+                        ["git", "branch", "-m", branch_name],
+                        check=True,
+                        capture_output=True,
+                    )
+                out_success(
+                    f"✅ Initialized empty Git repository with branch '{branch_name}'."
+                )
             except Exception as e:
                 out_error(f"❌ Failed to initialize Git repository: {e}")
+    else:
+        # Check if existing repo uses master and offer to rename
+        main_branch = get_main_branch()
+        if main_branch == "master":
+            if click.confirm(
+                "\nExisting repository uses 'master' branch. Would you like to rename it to 'main'?",
+                default=True,
+            ):
+                try:
+                    subprocess.run(
+                        ["git", "branch", "-m", "master", "main"],
+                        check=True,
+                        capture_output=True,
+                    )
+                    out_success("✅ Renamed 'master' to 'main'.")
+                except Exception as e:
+                    out_error(f"❌ Failed to rename branch: {e}")
 
 
 def setup_project_gitignore():
-    """Sets up the project's .gitignore file with default patterns."""
+    """Sets up the project's .gitignore file with dynamic patterns based on architecture."""
+    # Base patterns that apply to all projects
     patterns = [
         "__pycache__/",
         "*.py[cod]",
@@ -1261,12 +1296,44 @@ def setup_project_gitignore():
         "implementation/run-pids.json",
         "implementation/logs/",
         "implementation/costs/usage.csv",
-        "frontend/src-tauri/target/",
-        "frontend/src-tauri/implementation/",
-        "frontend/src-tauri/gen/",
-        "frontend/src-tauri/tauri-build/",
-        "frontend/dist/",
     ]
+
+    # Dynamically add patterns based on project structure and architecture
+    if pathlib.Path("frontend").exists():
+        patterns.extend(
+            [
+                "node_modules/",
+                "frontend/node_modules/",
+                "frontend/dist/",
+                "frontend/.env",
+            ]
+        )
+
+    # Tauri specific
+    if pathlib.Path("frontend/src-tauri").exists():
+        patterns.extend(
+            [
+                "frontend/src-tauri/target/",
+                "frontend/src-tauri/implementation/",
+                "frontend/src-tauri/gen/",
+                "frontend/src-tauri/tauri-build/",
+            ]
+        )
+
+    # Kubernetes/Skaffold specific
+    if pathlib.Path("skaffold.yaml").exists() or pathlib.Path("charts").exists():
+        patterns.extend(
+            [
+                ".skaffold/",
+                "*.kubeconfig",
+            ]
+        )
+
+    # Backend specific (Node.js/etc) if not in implementation/
+    if pathlib.Path("package.json").exists() and not pathlib.Path("frontend").exists():
+        if "node_modules/" not in patterns:
+            patterns.append("node_modules/")
+
     ensure_gitignore(patterns)
 
 
