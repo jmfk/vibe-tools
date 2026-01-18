@@ -176,16 +176,25 @@ def run_agent(
     env = os.environ.copy()
     env["VIBE_AGENT_ACTIVE"] = "1"
 
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True,
-        preexec_fn=os.setsid if sys.platform != "win32" else None,
-        env=env,
-    )
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+            preexec_fn=os.setsid if sys.platform != "win32" else None,
+            env=env,
+        )
+    except FileNotFoundError:
+        error_msg = f"❌ Agent binary not found: {command[0]}. Please ensure it is in your PATH."
+        out_error(error_msg, source="agent")
+        return error_msg, 127, None
+    except Exception as e:
+        error_msg = f"❌ Failed to start agent: {e}"
+        out_error(error_msg, source="agent")
+        return error_msg, 1, None
 
     agent_manager.register_agent(process.pid, command)
 

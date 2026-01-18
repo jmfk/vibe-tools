@@ -59,6 +59,7 @@ class RalphLoop:
         branch_name: str = None,
         prd: PRD = None,
         phase_id: str = None,
+        max_iterations: Optional[int] = None,
     ):
         self.name = name
         self.desired_content = desired_content
@@ -69,6 +70,7 @@ class RalphLoop:
         self.instructions = []
         self.prd = prd
         self.phase_id = phase_id
+        self.max_iterations = max_iterations
 
         config = load_config()
         if config.get("ralph", {}).get("auto_merge", False):
@@ -125,8 +127,9 @@ class RalphLoop:
 
         # 3. Iterative Reconciliation
         config = load_config()
-        max_iterations = config.get("iterations", {}).get(
-            "reconciliation", MAX_ITERATIONS
+        max_iterations = (
+            self.max_iterations
+            or config.get("iterations", {}).get("reconciliation", MAX_ITERATIONS)
         )
 
         last_output = ""
@@ -178,13 +181,24 @@ class RalphLoop:
 
                 return True
             else:
-                logger.warning(f"⚠️ {self.name} iteration {i} incomplete.")
+                if code == 127:
+                    reason = f"Agent binary '{self.agent}' not found."
+                elif code != 0:
+                    reason = f"Agent failed with exit code {code}."
+                elif not output.strip():
+                    reason = "Agent produced no output."
+                elif COMPLETION_PROMISE not in output:
+                    reason = f"Agent did not emit {COMPLETION_PROMISE}."
+                else:
+                    reason = "Unknown failure."
+
+                logger.warning(f"⚠️ {self.name} iteration {i} incomplete: {reason}")
 
         log_issue(
             self.name,
             max_iterations,
             max_iterations,
-            "Reconciliation failed after max iterations",
+            f"Reconciliation failed after {max_iterations} iterations.",
         )
         logger.error(
             f"❌ {self.name} reconciliation failed or incomplete after {max_iterations} iterations."
@@ -424,7 +438,13 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
         progress = int((i - 1) / max_impl_iterations * 100)
-        out_status(phase="implement", status="in_progress", progress=progress, iteration=i, prd_id=prd.id)
+        out_status(
+            phase="implement",
+            status="in_progress",
+            progress=progress,
+            iteration=i,
+            prd_id=prd.id,
+        )
 
         # 3a. Implementation Step
         if not prd.impl_code_ready:
@@ -452,7 +472,9 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                 output, code = run_agent(cmd, stream=stream)
 
                 # Extract Insights
-                insight_match = re.search(r"<INSIGHTS>(.*?)</INSIGHTS>", output, re.DOTALL)
+                insight_match = re.search(
+                    r"<INSIGHTS>(.*?)</INSIGHTS>", output, re.DOTALL
+                )
                 if insight_match:
                     new_insights = insight_match.group(1).strip()
                     logger.info("🧠 Merging new insights into short-term memory...")
@@ -506,10 +528,11 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
             if not prd.impl_tests_passed:
                 # 3b-1. Automatic Quality Fixes (Agent-less)
                 from vibe_tools.testing import ProjectTester
+
                 tester = ProjectTester()
                 logger.info("🛠️ Running automatic quality fixes (agent-less)...")
                 tester.run_fixes()
-                
+
                 if is_dirty():
                     logger.info("💾 Auto-fixes applied changes. Committing...")
                     run_command(["git", "add", "."], check=False)
@@ -525,7 +548,10 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
 
                 # 3b-2. Full Quality Suite (with Agentic Debugging)
                 success_tests, test_summary = debugging_loop(
-                    agent, ["test", "lint", "build-frontend"], stream=stream, iterations=max_debug_iterations
+                    agent,
+                    ["test", "lint", "build-frontend"],
+                    stream=stream,
+                    iterations=max_debug_iterations,
                 )
                 if not success_tests:
                     passed_gates = False
@@ -595,12 +621,12 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     # 4. Finalize
     if success:
         logger.info(f"✅ PRD {prd.id} completed successfully.")
-        
+
         # Update global knowledge based on short-term memory accumulated
         if short_term_memory:
             logger.info("🧠 Updating global knowledge base from PRD insights...")
             update_global_knowledge(prd.id, short_term_memory)
-            
+
         out_status(phase="implement", status="completed", progress=100, prd_id=prd.id)
         prd.status = "done"
         final_path = PRODUCT_HISTORY_DIR / prd.path.name
@@ -620,7 +646,13 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         return True
     else:
         logger.error(f"❌ PRD {prd.id} failed: {failure_reason}")
-        out_status(phase="implement", status="failed", progress=progress, prd_id=prd.id, error=failure_reason)
+        out_status(
+            phase="implement",
+            status="failed",
+            progress=progress,
+            prd_id=prd.id,
+            error=failure_reason,
+        )
 
         # 4b. Summarize failure for the new PRD
         from vibe_tools.utils import run_llm

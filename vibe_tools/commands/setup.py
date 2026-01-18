@@ -41,8 +41,12 @@ def register_setup(cli):
     def setup(ctx, import_code, only_arch, only_scaffold):
         """Phase 1: Architecture Reconciliation. Reconciles SRD-architecture.md with architecture-current.yaml."""
         state = load_project_state()
+        config = load_config()
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
+
+        # Iteration control for setup reconciliation
+        setup_iterations = config.get("iterations", {}).get("setup", 1)
 
         if import_code:
             # Ensure project directory exists before agent runs
@@ -67,10 +71,23 @@ def register_setup(cli):
             output, code = run_agent(cmd, stream=stream)
 
             if code == 0 and COMPLETION_PROMISE in output:
-                click.echo("✅ Generated current state and specification files.")
-                click.echo("\nNext Steps:")
-                click.echo(f"1. Review {ARCHITECTURE_SPEC} and {INFRA_SPEC}")
-                click.echo("2. Run 'vibe setup' (without --import-code) to reconcile.")
+                click.echo(
+                    click.style("\n✅ Discovery complete!", fg="green", bold=True)
+                )
+                click.echo("Generated current state and specification files.")
+
+                click.echo(
+                    click.style("\nNext Steps (REQUIRED):", fg="yellow", bold=True)
+                )
+                click.echo(
+                    f"1. Review {click.style(ARCHITECTURE_SPEC.name, fg='cyan')} and {click.style(INFRA_SPEC.name, fg='cyan')}"
+                )
+                click.echo(
+                    f"2. Run {click.style('vibe setup', fg='green', bold=True)} to reconcile the architecture."
+                )
+                click.echo(
+                    f"   (This is required before you can run {click.style('vibe implement', fg='blue')})"
+                )
             else:
                 click.echo("❌ Failed to generate discovery files.")
             return
@@ -107,6 +124,7 @@ def register_setup(cli):
                         current_file=ARCHITECTURE_CURRENT,
                         agent=agent,
                         stream=stream,
+                        max_iterations=setup_iterations,
                     )
 
                     loop.instructions = [
@@ -142,6 +160,7 @@ def register_setup(cli):
             click.echo("\n--- Running Development Environment Scaffolding Setup ---")
             try:
                 from vibe_tools.setup import scaffold
+
                 ctx.invoke(scaffold)
             except Exception as e:
                 click.echo(f"⚠️  Scaffold setup encountered an error: {e}")
