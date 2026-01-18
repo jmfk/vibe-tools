@@ -19,6 +19,7 @@ from .utils import (
     run_command,
     out_print,
     out_debug,
+    out_error,
 )
 
 logger = logging.getLogger("vibe_tools")
