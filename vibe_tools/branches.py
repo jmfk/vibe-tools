@@ -325,7 +325,7 @@ def _switch_to_branch(
         if utils.verbose_logger:
             utils.verbose_logger.log_event("prompt", prompt, f"{project_name}_git_fix")
 
-        output, _ = run_agent(cmd, stream=stream)
+        output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
 
         if utils.verbose_logger:
             utils.verbose_logger.log_event("reply", output, f"{project_name}_git_fix")

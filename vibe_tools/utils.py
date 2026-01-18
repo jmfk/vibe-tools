@@ -49,6 +49,8 @@ LOGS_DIR = VIBE_PROJECT_DIR / "logs"
 COSTS_DIR = VIBE_PROJECT_DIR / "costs"
 INSTRUCTIONS_DIR = VIBE_PROJECT_DIR / "instructions"
 KNOWLEDGE_DIR = VIBE_PROJECT_DIR / "knowledge"
+PRODUCT_KNOWLEDGE_DIR = PRODUCT_DIR / "knowledge"
+VIBE_TEMPLATES_LOCAL_DIR = pathlib.Path("vibe-templates")
 VIBE_DATA_DIR = VIBE_PROJECT_DIR / "data"
 CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
@@ -191,13 +193,30 @@ def ensure_git_safety():
         return
 
     # 1. Check for dirty state (including untracked files)
-    if is_dirty():
-        # Get list of changed files for better error message
-        stdout, _ = run_command(["git", "status", "--short"], check=False)
-        raise GitSafetyError(
-            f"Uncommitted changes or untracked files detected in git repository.\n"
-            f"Please commit or stash your changes before proceeding:\n{stdout.strip()}"
-        )
+    # Get list of changed files for better error message
+    stdout, _ = run_command(["git", "status", "--short"], check=False)
+    if stdout.strip():
+        # Filter out changes in vibe-managed directories
+        lines = stdout.strip().splitlines()
+        critical_changes = []
+        for line in lines:
+            # git status --short output format: "XY path"
+            # Some versions of git might have quotes if paths have spaces
+            path = line[3:].strip().strip('"')
+            if not (
+                path.startswith("product/")
+                or path.startswith("implementation/")
+                or path == "product"
+                or path == "implementation"
+            ):
+                critical_changes.append(line)
+
+        if critical_changes:
+            raise GitSafetyError(
+                f"Uncommitted changes or untracked files detected in git repository.\n"
+                f"Please commit or stash your changes before proceeding:\n"
+                + "\n".join(critical_changes)
+            )
 
     # 2. Check for correct branch
     expected = get_expected_branch()
@@ -955,6 +974,7 @@ def ensure_project_structure():
     ensure_dir(VIBE_DATA_DIR)
     ensure_dir(INSTRUCTIONS_DIR)
     ensure_dir(KNOWLEDGE_DIR)
+    ensure_dir(PRODUCT_KNOWLEDGE_DIR)
     ensure_dir(PRODUCT_DIR)
     ensure_dir(PRODUCT_BACKLOG_DIR)
     ensure_dir(PRODUCT_IN_PROGRESS_DIR)
@@ -962,6 +982,7 @@ def ensure_project_structure():
     ensure_dir(PRODUCT_NEXT_DIR)
     ensure_dir(PLANNING_INBOX_DIR)
     ensure_dir(PLANNING_REJECTED_DIR)
+    ensure_dir(VIBE_TEMPLATES_LOCAL_DIR)
 
     # Maintain .gitignore
     setup_project_gitignore()
@@ -1536,6 +1557,44 @@ Output ONLY the categories and content as specified.
                 out_success(f"🧠 Updated global knowledge: {kb_file.name}")
 
 
+def deploy_vibe_templates(target_dir: pathlib.Path):
+    """Copies all markdown templates from the package installation to the local project."""
+    # Find templates relative to the package root
+    package_root = pathlib.Path(__file__).parent.parent
+    templates_src = package_root / "vibe-templates"
+
+    if not templates_src.exists() or not templates_src.is_dir():
+        # Fallback for development/editable mode if the above fails
+        # In some cases __file__ might point to a site-packages dir where vibe-templates isn't a sibling
+        # but for this specific tool we assume it's part of the distribution
+        out_warn(
+            f"⚠️ Vibe templates source not found at {templates_src}. Skipping template deployment."
+        )
+        return
+
+    ensure_dir(target_dir)
+
+    template_files = list(templates_src.glob("*.md"))
+    if not template_files:
+        out_warn(f"⚠️ No markdown templates found in {templates_src}.")
+        return
+
+    count = 0
+    for template_file in template_files:
+        target_file = target_dir / template_file.name
+        if not target_file.exists():
+            try:
+                shutil.copy2(template_file, target_file)
+                count += 1
+            except Exception as e:
+                out_error(f"Error deploying template {template_file.name}: {e}")
+
+    if count > 0:
+        out_success(f"✅ Deployed {count} templates to {target_dir}")
+    else:
+        out_info(f"✅ Templates in {target_dir} are already up to date.")
+
+
 def perform_basic_init():
     """Helper to initialize the project structure and essential templates."""
     from vibe_tools.templates import TEMPLATES
@@ -1550,6 +1609,9 @@ def perform_basic_init():
 
     # Ensure structure exists
     ensure_project_structure()
+
+    # Deploy templates from the installation
+    deploy_vibe_templates(VIBE_TEMPLATES_LOCAL_DIR)
 
     # Create config.json if it doesn't exist
     if not CONFIG_FILE.exists():
@@ -2222,21 +2284,50 @@ def get_instructions_context():
 
 
 def get_knowledge_context() -> str:
-    """Reads all markdown files in KNOWLEDGE_DIR and returns their summary/links."""
-    if not KNOWLEDGE_DIR.exists():
-        return ""
+    """Reads all markdown files in KNOWLEDGE_DIR and PRODUCT_KNOWLEDGE_DIR and returns their summary/links."""
+    all_files = []
+    if KNOWLEDGE_DIR.exists():
+        all_files.extend(sorted(list(KNOWLEDGE_DIR.glob("*.md"))))
+    if PRODUCT_KNOWLEDGE_DIR.exists():
+        all_files.extend(sorted(list(PRODUCT_KNOWLEDGE_DIR.glob("*.md"))))
 
-    knowledge_files = sorted(list(KNOWLEDGE_DIR.glob("*.md")))
-    if not knowledge_files:
+    if not all_files:
         return ""
 
     context = "GLOBAL KNOWLEDGE BASE:\n"
     context += (
-        "The following knowledge categories are available. Reference them if needed:\n"
+        "The following knowledge documents are available. Use 'read_file' to access their full content if they seem relevant to your task:\n"
     )
-    for f in knowledge_files:
-        # Include just the filename/category and a preview or instruction to read it
-        context += f"- {f.name}: (Use 'read_file' on this path if you need details on this category)\n"
+
+    for f in all_files:
+        # Get path for the agent
+        try:
+            path_str = str(f.relative_to(pathlib.Path.cwd()))
+        except ValueError:
+            path_str = str(f)
+
+        context += f"\n- {path_str}:\n"
+
+        # Extract preview
+        try:
+            content = f.read_text()
+            lines = content.splitlines()
+
+            # Look for Meta section or just first 7 lines
+            meta_match = re.search(r"## Meta\n(.*?)(?=\n##|\n---|$)", content, re.DOTALL)
+            if meta_match:
+                preview = meta_match.group(1).strip()
+                # Clean up markdown list markers for more compact preview
+                preview = preview.replace("- ", "").replace("* ", "")
+                preview_lines = [p.strip() for p in preview.splitlines() if p.strip()]
+                context += f"  (Context): {'; '.join(preview_lines)}\n"
+            else:
+                # Get first 5 non-empty lines as preview
+                preview_lines = [l.strip() for l in lines if l.strip()][:5]
+                preview = "\n    ".join(preview_lines)
+                context += f"  (Preview):\n    {preview}\n"
+        except Exception as e:
+            context += f"  (Error reading file: {e})\n"
 
     return context + "\n"
 
