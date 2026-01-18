@@ -8,6 +8,7 @@ from vibe_tools.utils import (
     load_config,
     get_prompt,
     test_build_services,
+    commit_project_infrastructure,
 )
 from vibe_tools.ralph import COMPLETION_PROMISE
 
@@ -68,6 +69,9 @@ def register_start(cli):
         # Since 'build' is a group in cli.py, we might need to call its logic
         from vibe_tools.cli import _build_reconciliation
         _build_reconciliation(ctx, force=True)
+        
+        # Ensure infrastructure is committed before verification fix loop
+        commit_project_infrastructure("vibe: bootstrap build complete")
         
         # 6. Verification & AI-Driven Fix Loop
         click.echo("\n--- Step 5: Final Verification & Fix Loop ---")

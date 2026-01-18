@@ -471,6 +471,48 @@ def save_project_state(state: Dict[str, Any]):
     PROJECT_STATE_FILE.write_text(json.dumps(to_save, indent=2))
 
 
+def commit_project_infrastructure(message: str = "vibe: update project infrastructure"):
+    """Surgically commits project infrastructure and state files."""
+    if not is_git_repo():
+        return
+
+    # Infrastructure files that should always be tracked
+    infra_files = [
+        "Makefile",
+        str(PROJECT_STATE_FILE),
+        str(ARCHITECTURE_CURRENT),
+        str(INFRA_CURRENT),
+        str(CICD_CURRENT),
+        str(TESTING_CURRENT),
+        str(DEV_ENV_CURRENT),
+    ]
+
+    files_to_add = []
+    for f in infra_files:
+        path = pathlib.Path(f)
+        if path.exists():
+            files_to_add.append(f)
+
+    if not files_to_add:
+        return
+
+    # Stage only infrastructure files
+    run_command(["git", "add"] + files_to_add, check=False, bypass_safety=True)
+
+    # Check if there are any staged changes (to avoid empty commit error)
+    _, code = run_command(
+        ["git", "diff", "--cached", "--quiet"], check=False, bypass_safety=True
+    )
+
+    if code != 0:
+        logger.info(f"💾 Committing infrastructure changes: {message}")
+        run_command(
+            ["git", "commit", "-m", message],
+            check=False,
+            bypass_safety=True,
+        )
+
+
 def is_branch_switching_enabled() -> bool:
     """Checks if automatic branch switching is enabled."""
     return False

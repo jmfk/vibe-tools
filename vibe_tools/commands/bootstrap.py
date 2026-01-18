@@ -1,5 +1,6 @@
 import click
 from vibe_tools.agent import verify_agent_auth
+from vibe_tools.utils import commit_project_infrastructure
 
 def register_bootstrap(cli):
     @click.command()
@@ -58,6 +59,9 @@ def register_bootstrap(cli):
             ctx.invoke(build_group, only_makefile=True)
         else:
             click.echo("⚠️  Could not find 'build' command.")
+
+        # 5. Commit Infrastructure
+        commit_project_infrastructure("vibe: bootstrap complete")
 
         click.echo(click.style("\n✅ Bootstrap complete!", fg="green", bold=True))
         click.echo("Foundation ready. Run 'vibe implement' to start building features.")

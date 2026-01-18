@@ -123,6 +123,7 @@ from vibe_tools.utils import (
     get_services,
     test_build_services,
     check_and_install_build_tools,
+    commit_project_infrastructure,
     setup_logging,
     safe_yaml_load,
     safe_yaml_dump,
@@ -450,6 +451,7 @@ def _build_reconciliation(ctx, force, only_makefile=False):
             agent=ctx.obj.get("agent", "cursor-agent"),
             stream=ctx.obj.get("stream", False),
         )
+        commit_project_infrastructure("vibe: update Makefile")
         return
 
     # Normalize SRD-dev_environment.md just-in-time
@@ -484,6 +486,7 @@ def _build_reconciliation(ctx, force, only_makefile=False):
     sync_makefile(
         agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False)
     )
+    commit_project_infrastructure("vibe: update Makefile")
 
     # Try to run make build if Makefile exists
     makefile = pathlib.Path("Makefile")
@@ -520,6 +523,7 @@ def _build_reconciliation(ctx, force, only_makefile=False):
 
         # Save the normalized YAML to DEV_ENV_CURRENT to mark as successful
         DEV_ENV_CURRENT.write_text(dev_yaml)
+        commit_project_infrastructure("vibe: build verification complete")
 
         success = True
     else:

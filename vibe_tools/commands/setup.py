@@ -14,6 +14,7 @@ from vibe_tools.utils import (
     load_project_state,
     run_agent,
     save_project_state,
+    commit_project_infrastructure,
     safe_yaml_dump,
 )
 
@@ -151,6 +152,7 @@ def register_setup(cli):
                         state["phases"]["setup"]["status"] = "completed"
                         state["phases"]["setup"]["hash"] = arch_hash
                         save_project_state(state)
+                        commit_project_infrastructure("vibe: architecture setup complete")
                         click.echo(
                             "\n✅ Architecture setup complete. project-state.json updated."
                         )

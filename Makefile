@@ -8,7 +8,7 @@ help: ## Display this help message
 # Build Targets
 build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
 
-build-cli: install-backend ## Install the Python CLI in editable or standalone mode
+build-cli: install-backend ## Install the Python CLI
 	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
 	if [ "$$STANDALONE" = "false" ]; then \
 		echo "Installing in editable mode..."; \
