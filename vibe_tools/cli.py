@@ -98,7 +98,7 @@ if "--server" in sys.argv:
 
     builtins.input = server_input
 
-from vibe_tools.version import __version__
+from vibe_tools import __version__
 from vibe_tools.commands import register_all_commands
 from vibe_tools.cost import finalize_cost_report
 from vibe_tools.setup import SERVICE_DEFINITIONS

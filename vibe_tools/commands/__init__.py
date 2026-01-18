@@ -24,6 +24,7 @@ def register_all_commands(cli):
         test_fix,
         testing,
         usage,
+        version,
     )
 
     init.register_init(cli)
@@ -53,6 +54,7 @@ def register_all_commands(cli):
     billing_groups.register_billing_groups(cli)
     demo_data.register_demo_data(cli)
     usage.register_usage(cli)
+    version.register_version(cli)
 
     from vibe_tools.servers import servers_cli
 
