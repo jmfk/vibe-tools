@@ -7,6 +7,7 @@ import yaml
 from vibe_tools.cost import CostLogger
 from vibe_tools.utils import (
     get_prompt,
+    load_config,
     logger,
     safe_yaml_load,
     safe_yaml_dump,

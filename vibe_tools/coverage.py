@@ -5,6 +5,7 @@ from vibe_tools.testing import ProjectTester
 from vibe_tools.utils import (
     get_agent_command,
     get_prompt,
+    load_config,
     logger,
     run_agent,
     run_command,
@@ -21,8 +22,6 @@ def get_coverage_report(component=None):
 
 
 def improve_coverage_loop(agent="cursor-agent", stream=False):
-    from vibe_tools.cli import load_config
-
     logger.info("--- Starting Coverage Improvement Loop ---")
 
     config = load_config()

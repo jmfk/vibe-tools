@@ -7,6 +7,7 @@ from vibe_tools.testing import ProjectTester
 from vibe_tools.utils import (
     get_agent_command,
     get_prompt,
+    load_config,
     log_issue,
     log_start,
     log_success,
