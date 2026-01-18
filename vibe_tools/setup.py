@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import time
 import datetime
+import json
 from typing import Any, Dict, List, Optional
 
 import click
@@ -1183,24 +1184,6 @@ def scaffold(ctx):
 
     click.echo("\n--- Development Environment Scaffolding Setup ---")
 
-    # Warning for non-k8s projects
-    click.echo(
-        click.style(
-            "⚠️  Warning: This command is optimized for Kubernetes (k8s) environments.",
-            fg="yellow",
-            bold=True,
-        )
-    )
-    click.echo(
-        "It will generate build instructions and logging infrastructure (Loki/Grafana/Stern)"
-    )
-    click.echo(
-        "focused on containerized workflows. If you are building a CLI or Tauri project,"
-    )
-    click.echo(
-        "you should manually configure your 'product/SRD-dev_environment.md' instead."
-    )
-
     # Ensure project structure
     ensure_infrastructure()
 
@@ -1208,18 +1191,29 @@ def scaffold(ctx):
     agent = getattr(ctx.obj, "agent", "cursor-agent") if ctx.obj else "cursor-agent"
     stream = getattr(ctx.obj, "stream", False) if ctx.obj else False
 
+    # Detect architecture to customize scaffolding
+    arch_info = _detect_architecture(agent, stream)
+    is_k8s = arch_info["type"] == "kubernetes"
+    
+    if is_k8s:
+        click.echo(click.style("🌐 Kubernetes architecture detected.", fg="cyan"))
+    elif arch_info["type"] == "tauri":
+        click.echo(click.style("🖥️  Tauri architecture detected.", fg="cyan"))
+    else:
+        click.echo(click.style(f"🛠️  {arch_info['type'].capitalize()} architecture detected.", fg="cyan"))
+
     # Check if SRD-dev_environment.md already exists
     if DEV_SPEC.exists():
         click.echo(f"\n✅ {DEV_SPEC} already exists.")
         if not click.confirm(
-            "Regenerate SRD-dev_environment.md? (This will overwrite your current file with k8s-optimized instructions)",
+            f"Regenerate SRD-dev_environment.md? (This will overwrite your current file with {arch_info['type']}-optimized instructions)",
             default=False,
         ):
             click.echo("Aborted.")
             return
 
         # Regenerate
-        _generate_dev_spec(agent, stream)
+        _generate_dev_spec(agent, stream, arch_info)
     else:
         # Generate SRD-dev_environment.md from architecture
         if not ARCHITECTURE_SPEC.exists():
@@ -1228,25 +1222,26 @@ def scaffold(ctx):
             )
             return
 
-        _generate_dev_spec(agent, stream)
+        _generate_dev_spec(agent, stream, arch_info)
 
-    # Note: YAML normalization is now handled just-in-time by 'vibe build'
-    # No longer writing dev_environment.yaml here.
+    # Conditionally install build tools if docker/k8s is involved
+    if is_k8s or "docker" in arch_info["capabilities"]:
+        check_and_install_build_tools()
 
-    # Check and install build tools
-    check_and_install_build_tools()
-
-    # Setup logging infrastructure if Kubernetes is available
-    try:
-        _setup_logging_infrastructure()
-    except click.ClickException as e:
-        click.echo(f"\n❌ Logging infrastructure setup failed: {e}")
-        click.echo("   Continuing with scaffold, but logging will not be available.")
-    except Exception as e:
-        click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
-        click.echo(
-            "   Continuing with scaffold, but logging may not be fully configured."
-        )
+    # Setup logging infrastructure ONLY if Kubernetes is detected
+    if is_k8s:
+        try:
+            _setup_logging_infrastructure()
+        except click.ClickException as e:
+            click.echo(f"\n❌ Logging infrastructure setup failed: {e}")
+            click.echo("   Continuing with scaffold, but logging will not be available.")
+        except Exception as e:
+            click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
+            click.echo(
+                "   Continuing with scaffold, but logging may not be fully configured."
+            )
+    else:
+        click.echo("\nℹ️  Skipping K8s logging setup (not a Kubernetes project).")
 
     # Sync Makefile with the newly generated SRD-dev_environment.md
     sync_makefile(agent=agent, stream=stream)
@@ -1257,7 +1252,61 @@ def scaffold(ctx):
     click.echo("  - Run 'vibe build' to build and test the application")
 
 
-def _generate_dev_spec(agent, stream):
+def _detect_architecture(agent, stream) -> Dict[str, Any]:
+    """Analyze SRD-architecture.md to detect project type and required capabilities."""
+    from vibe_tools.utils import ARCHITECTURE_SPEC, run_llm
+
+    if not ARCHITECTURE_SPEC.exists():
+        return {"type": "unknown", "capabilities": []}
+
+    arch_content = ARCHITECTURE_SPEC.read_text()
+    
+    prompt = f"""Analyze the following architecture specification and categorize the project.
+Return a JSON object with two fields:
+1. "type": One of ["kubernetes", "tauri", "cli", "web-standard", "other"]
+2. "capabilities": A list of specific technologies detected (e.g., ["python", "react", "docker", "postgresql", "rust"])
+
+ARCHITECTURE:
+---
+{arch_content}
+---
+
+Output ONLY valid JSON.
+"""
+    
+    response = run_llm(prompt)
+    if not response:
+        return {"type": "unknown", "capabilities": []}
+    
+    # Extract JSON from response
+    try:
+        # Simple extraction in case of markdown fences
+        json_match = re.search(r"(\{.*\})", response, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group(1))
+        return json.loads(response)
+    except (json.JSONDecodeError, AttributeError):
+        # Fallback to simple keyword detection if LLM fails or returns garbage
+        capabilities = []
+        project_type = "cli"
+        
+        lower_content = arch_content.lower()
+        if "kubernetes" in lower_content or "skaffold" in lower_content:
+            project_type = "kubernetes"
+        elif "tauri" in lower_content:
+            project_type = "tauri"
+        elif "react" in lower_content or "next.js" in lower_content:
+            project_type = "web-standard"
+            
+        if "python" in lower_content: capabilities.append("python")
+        if "rust" in lower_content: capabilities.append("rust")
+        if "react" in lower_content: capabilities.append("react")
+        if "docker" in lower_content: capabilities.append("docker")
+        
+        return {"type": project_type, "capabilities": capabilities}
+
+
+def _generate_dev_spec(agent, stream, arch_info: Dict[str, Any]):
     """Generate SRD-dev_environment.md from SRD-architecture.md."""
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
@@ -1271,10 +1320,52 @@ def _generate_dev_spec(agent, stream):
         )
         return
 
-    click.echo("📋 Generating SRD-dev_environment.md from SRD-architecture.md...")
+    click.echo(f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project...")
 
     # Read SRD-architecture.md
     arch_content = ARCHITECTURE_SPEC.read_text()
+
+    # Build specialized prompt instructions based on architecture type
+    type_instructions = ""
+    if arch_info["type"] == "kubernetes":
+        type_instructions = """
+2. **Skaffold and Helm**:
+   - Include Skaffold configuration for local Kubernetes development
+   - Include Helm charts for deployment
+   - Document how to use `skaffold dev` for local development
+   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section
+   - IMPORTANT: If generating frontend Dockerfiles, use node:20-slim or node:22-slim.
+
+3. **Logging Solution (K8s-optimized)**:
+   - **Quick Log Streaming (Stern)**: `stern .` to tail logs from all pods.
+   - **Centralized Log Aggregation (Loki + Grafana)**: Aggregation service running in Kubernetes.
+   - **AI-Queryable Logs**: Grafana HTTP API endpoint details.
+"""
+    elif arch_info["type"] == "tauri":
+        type_instructions = """
+2. **Tauri Development**:
+   - Focus on `cargo tauri dev` for local development.
+   - Specify build requirements for both Rust (Cargo) and Frontend (npm/pnpm/yarn).
+   - Document how to handle sidecars if specified in the architecture.
+   - Testing: Specify dual-test harness using `cargo test` and `vitest`.
+
+3. **Logging Solution (Desktop/Local)**:
+   - Focus on standard output and local log files.
+   - Document where application logs are stored on different OS platforms.
+   - Include `make logs` to tail local log files.
+"""
+    else:  # CLI, Web-Standard, or Other
+        type_instructions = """
+2. **Standard Development**:
+   - Focus on local runtime environment (e.g., venv for Python, node_modules for JS).
+   - Specify `make dev` or `npm run dev` for starting the application.
+   - Document environment variable requirements in `.env`.
+
+3. **Logging Solution (Standard)**:
+   - Focus on structured logging to stdout/stderr.
+   - Document log file locations if applicable.
+   - Include `make logs` to tail logs.
+"""
 
     # Generate SRD-dev_environment.md using agent
     prompt = f"""You are generating a development environment specification based on the architecture.
@@ -1296,73 +1387,9 @@ IMPORTANT REQUIREMENTS:
    - Linting: `make lint`, `make lint-backend`, `make lint-frontend`
    - Coverage: `make coverage`, `make coverage-backend`, `make coverage-frontend`
    - Cleanup: `make clean`, `make clean-backend`, `make clean-frontend`
+   - Log Targets: `make logs`, `make logs-follow`
 
-2. **Skaffold and Helm**: If the architecture uses Kubernetes or container orchestration:
-   - Include Skaffold configuration for local Kubernetes development
-   - Include Helm charts for deployment
-   - Document how to use `skaffold dev` for local development
-   - Document Helm chart structure and values
-   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section to prevent push access errors
-   - IMPORTANT: If generating frontend Dockerfiles (e.g., deployment/Dockerfile.frontend), use node:20-slim or node:22-slim (not node:18-slim) to support modern Vite versions (7.3.0+ requires Node.js 20.19+ or 22.12+)
-   - IMPORTANT: For React 18 projects, ensure @testing-library/react is pinned to ^14 or ^15 (not v16).
-   - IMPORTANT: Prefer explicit imports in Vitest (import {{ describe, it, expect, vi }} from 'vitest') over globals.
-
-3. **Logging Solution**: ALWAYS include a comprehensive logging solution:
-   - **Quick Log Streaming (Stern)**: For instant log tailing during local debugging:
-     * Install: `brew install stern` (macOS) or download binary for Linux
-     * Usage: `stern .` to tail logs from all running pods
-     * This provides minimum-friction log streaming for developers
-     * Document in SRD-dev_environment.md under "Logging" → "Quick Log Streaming"
-     * Include in dev_environment.yaml under `logging.local.quickstream`:
-       - tool: stern
-       - install: "brew install stern" (or Linux equivalent)
-       - usage: "stern ."
-   
-   - **Centralized Log Aggregation (Loki + Grafana)**: For searchable, time-indexed logs suitable for AI querying:
-     * **Loki**: Log aggregation service running in Kubernetes (single-binary mode, filesystem storage)
-     * **Promtail**: Collects pod logs from all namespaces via Kubernetes service discovery
-     * **Grafana**: UI and API for querying logs
-     * Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
-     * Grafana credentials: Retrieved during setup (default: admin/admin for local dev)
-     * Log retention: 24-72 hours (configurable for local development)
-     * Document in SRD-dev_environment.md under "Logging" → "Centralized Log Aggregation"
-   
-   - **AI-Queryable Logs**: Ensure logs can be queried programmatically:
-     * Grafana HTTP API endpoint: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
-     * Authentication: Basic auth (username/password from setup) or API token
-     * Example query: `{{namespace!="kube-system"}}`
-     * Document in SRD-dev_environment.md under "Logging" → "AI-Queryable Logs"
-     * Include in dev_environment.yaml under `observability.logs`:
-       - provider: grafana-loki
-       - access: http-api
-       - grafana:
-         - url: "http://localhost:3000"
-         - port_forward: "kubectl port-forward svc/grafana -n monitoring 3000:3000"
-         - api_endpoint: "/api/datasources/proxy/{{id}}/loki/api/v1/query_range"
-         - auth_method: basic-auth
-       - loki:
-         - retention: "72h"
-         - storage: filesystem
-       - promtail:
-         - scrape_path: "/var/log/containers/*.log"
-   
-   - **Issue Handling**: Logs are essential for debugging and issue handling:
-     * Mention that `product/issues.md` (to be created) will guide issue handling workflows
-     * Issue handling command (to be built) will rely on logging infrastructure and Skaffold
-     * Document in SRD-dev_environment.md under "Logging" → "Issue Handling"
-   
-   - **Log Viewing**: Include tools/commands to view logs (e.g., `make logs`, `make logs-backend`, `make logs-frontend`, `make logs-follow`)
-   - **Log Management**: Add Makefile targets for log management:
-     * `make logs` - View all application logs
-     * `make logs-backend` - View backend logs
-     * `make logs-frontend` - View frontend logs
-     * `make logs-follow` - Follow logs in real-time (uses stern)
-     * `make logs-clean` - Clean old log files
-   - **Service Integration**: Ensure all services output logs in a structured format (JSON recommended)
-   - **Development Logging**: Configure development environment to output logs to both console and log files
-   - **Log Levels**: Document log level configuration (DEBUG, INFO, WARNING, ERROR)
-   - If using Docker/Kubernetes: Configure log drivers and log collection
-   - If using Skaffold: Include logging configuration in skaffold.yaml
+{type_instructions}
 
 4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
 
@@ -1375,87 +1402,24 @@ Generate a complete SRD-dev_environment.md file following this structure:
 # Development Environment Specification
 
 ## 1. Overview
-[High-level overview of the development environment and build system. Mention if using Skaffold/Helm for Kubernetes-based development.]
+[High-level overview. Mention if using Skaffold/Helm or specialized tools like Tauri.]
 
 ## 2. Build Components
-[For each component (backend, frontend, etc.), specify:
-- Build commands
-- Dependencies
-- Build outputs/artifacts
-- How to verify the build succeeded]
+[For each component, specify build commands, dependencies, and outputs.]
 
 ## 3. Development Environment
-
 ### 3.1 Services Required
-[List all services that must be running for development (PostgreSQL, Redis, etc.)]
-
 ### 3.2 Environment Variables
-[Required environment variables and .env file setup]
-
 ### 3.3 Startup Commands
-[Detailed startup commands for each service/component. Include both manual commands and Makefile targets.]
-
 ### 3.4 Logging
-
-#### Quick Log Streaming (Stern)
-- Install: `brew install stern` (macOS) or download binary (Linux)
-- Usage: `stern .` to tail logs from all pods
-- See `dev_environment.yaml` → `logging.local.quickstream` for details
-
-#### Centralized Log Aggregation (Loki + Grafana)
-- **Loki**: Log aggregation service running in Kubernetes
-- **Promtail**: Collects pod logs from all namespaces
-- **Grafana**: UI and API for querying logs
-- Access Grafana: `kubectl port-forward svc/grafana -n monitoring 3000:3000` then open http://localhost:3000
-- Grafana credentials: Retrieved during setup (stored securely)
-- Log retention: 24-72 hours (configurable for local dev)
-
-#### AI-Queryable Logs
-- Grafana HTTP API: `http://localhost:3000/api/datasources/proxy/{{datasource_id}}/loki/api/v1/query_range`
-- Authentication: Basic auth or API token (credentials from setup)
-- Example query: `{{namespace!="kube-system"}}`
-- See `dev_environment.yaml` → `observability.logs` for API details
-
-#### Issue Handling
-- Logs are essential for debugging and issue handling
-- See `product/issues.md` (to be created) for issue handling workflows
-- Issue handling command (to be built) will rely on logging infrastructure
-
-#### Log Viewing and Management
-- Commands and tools to view logs
-- Log format and structure
-- Log level configuration (DEBUG, INFO, WARNING, ERROR)
-- Integration with services]
-
 ### 3.5 Verification
-[How to verify the development environment is running correctly]
 
 ## 4. Build System
-
 ### 4.1 Makefile Targets
-[COMPREHENSIVE list of all Makefile targets. MUST include:
-- Build targets: build, build-backend, build-frontend
-- Test targets: test, test-backend, test-frontend, test-integration
-- Development targets: dev, dev-start, dev-stop, dev-restart
-- Lint targets: lint, lint-backend, lint-frontend
-- Coverage targets: coverage, coverage-backend, coverage-frontend
-- Clean targets: clean, clean-backend, clean-frontend
-- Install targets: install, install-backend, install-frontend
-- Log targets: logs, logs-backend, logs-frontend, logs-follow, logs-clean]
+### 4.2 Build Orchestration [Skaffold/Tauri/Manual]
+### 4.3 CI/CD Build Steps
 
-### 4.2 Container Orchestration
-[If using Kubernetes:
-- Skaffold configuration and usage (`skaffold dev`, `skaffold run`)
-- Helm chart structure and deployment
-- Local cluster setup (Minikube/Kind) instructions]
-
-### 4.3 Docker Builds
-[Docker build commands and Dockerfile locations if applicable]
-
-### 4.4 CI/CD Build Steps
-[CI/CD pipeline steps and automation]
-
-Output ONLY the markdown content for SRD-dev_environment.md, starting with the title and ending with the last section. Do not include code fences or explanations.
+Output ONLY the markdown content for SRD-dev_environment.md.
 """
 
     cmd = get_agent_command(agent, prompt)
@@ -1936,7 +1900,7 @@ def _validate_logging_setup() -> bool:
         check=False,
     )
     if result[1] != 0:
-        click.echo("  ⚠️  Could not check pod status")
+        click.echo("  ⚠️  Could not check_url_responds status")
         return False
 
     pods = result[0].split()
@@ -2485,6 +2449,201 @@ def _setup_logging_infrastructure():
         click.echo(
             "  ⚠️  Logging setup validation had issues, but components are deployed"
         )
+
+
+def _detect_architecture(agent, stream) -> Dict[str, Any]:
+    """Analyze SRD-architecture.md to detect project type and required capabilities."""
+    from vibe_tools.utils import ARCHITECTURE_SPEC, run_llm
+
+    if not ARCHITECTURE_SPEC.exists():
+        return {"type": "unknown", "capabilities": []}
+
+    arch_content = ARCHITECTURE_SPEC.read_text()
+    
+    prompt = f"""Analyze the following architecture specification and categorize the project.
+Return a JSON object with two fields:
+1. "type": One of ["kubernetes", "tauri", "cli", "web-standard", "other"]
+2. "capabilities": A list of specific technologies detected (e.g., ["python", "react", "docker", "postgresql", "rust"])
+
+ARCHITECTURE:
+---
+{arch_content}
+---
+
+Output ONLY valid JSON.
+"""
+    
+    response = run_llm(prompt)
+    if not response:
+        return {"type": "unknown", "capabilities": []}
+    
+    # Extract JSON from response
+    try:
+        # Simple extraction in case of markdown fences
+        json_match = re.search(r"(\{.*\})", response, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group(1))
+        return json.loads(response)
+    except (json.JSONDecodeError, AttributeError):
+        # Fallback to simple keyword detection if LLM fails or returns garbage
+        capabilities = []
+        project_type = "cli"
+        
+        lower_content = arch_content.lower()
+        if "kubernetes" in lower_content or "skaffold" in lower_content:
+            project_type = "kubernetes"
+        elif "tauri" in lower_content:
+            project_type = "tauri"
+        elif "react" in lower_content or "next.js" in lower_content:
+            project_type = "web-standard"
+            
+        if "python" in lower_content: capabilities.append("python")
+        if "rust" in lower_content: capabilities.append("rust")
+        if "react" in lower_content: capabilities.append("react")
+        if "docker" in lower_content: capabilities.append("docker")
+        
+        return {"type": project_type, "capabilities": capabilities}
+
+
+def _generate_dev_spec(agent, stream, arch_info: Dict[str, Any]):
+    """Generate SRD-dev_environment.md from SRD-architecture.md."""
+    from vibe_tools.utils import (
+        ARCHITECTURE_SPEC,
+        DEV_SPEC,
+        ensure_dir,
+    )
+
+    if not ARCHITECTURE_SPEC.exists():
+        click.echo(
+            f"❌ {ARCHITECTURE_SPEC} not found. Please create it first using 'vibe architect'."
+        )
+        return
+
+    click.echo(f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project...")
+
+    # Read SRD-architecture.md
+    arch_content = ARCHITECTURE_SPEC.read_text()
+
+    # Build specialized prompt instructions based on architecture type
+    type_instructions = ""
+    if arch_info["type"] == "kubernetes":
+        type_instructions = """
+2. **Skaffold and Helm**:
+   - Include Skaffold configuration for local Kubernetes development
+   - Include Helm charts for deployment
+   - Document how to use `skaffold dev` for local development
+   - IMPORTANT: When generating skaffold.yaml, ensure it includes `defaultRepo: ""` under the `build:` section
+   - IMPORTANT: If generating frontend Dockerfiles, use node:20-slim or node:22-slim.
+
+3. **Logging Solution (K8s-optimized)**:
+   - **Quick Log Streaming (Stern)**: `stern .` to tail logs from all pods.
+   - **Centralized Log Aggregation (Loki + Grafana)**: Aggregation service running in Kubernetes.
+   - **AI-Queryable Logs**: Grafana HTTP API endpoint details.
+"""
+    elif arch_info["type"] == "tauri":
+        type_instructions = """
+2. **Tauri Development**:
+   - Focus on `cargo tauri dev` for local development.
+   - Specify build requirements for both Rust (Cargo) and Frontend (npm/pnpm/yarn).
+   - Document how to handle sidecars if specified in the architecture.
+   - Testing: Specify dual-test harness using `cargo test` and `vitest`.
+
+3. **Logging Solution (Desktop/Local)**:
+   - Focus on standard output and local log files.
+   - Document where application logs are stored on different OS platforms.
+   - Include `make logs` to tail local log files.
+"""
+    else:  # CLI, Web-Standard, or Other
+        type_instructions = """
+2. **Standard Development**:
+   - Focus on local runtime environment (e.g., venv for Python, node_modules for JS).
+   - Specify `make dev` or `npm run dev` for starting the application.
+   - Document environment variable requirements in `.env`.
+
+3. **Logging Solution (Standard)**:
+   - Focus on structured logging to stdout/stderr.
+   - Document log file locations if applicable.
+   - Include `make logs` to tail logs.
+"""
+
+    # Generate SRD-dev_environment.md using agent
+    prompt = f"""You are generating a development environment specification based on the architecture.
+
+Analyze the architecture and create a comprehensive SRD-dev_environment.md file that specifies:
+- How to build each application part (backend, frontend, etc.)
+- Build dependencies and requirements
+- Build commands and scripts
+- Development environment setup
+- How to start the application in development mode
+- Build artifacts and outputs
+- Services that need to be started for development
+
+IMPORTANT REQUIREMENTS:
+1. **Makefile Targets**: ALWAYS include a comprehensive set of Makefile targets for:
+   - Building: `make build`, `make build-backend`, `make build-frontend`
+   - Testing: `make test`, `make test-backend`, `make test-frontend`
+   - Development: `make dev`, `make dev-start`, `make dev-stop`, `make dev-restart`
+   - Linting: `make lint`, `make lint-backend`, `make lint-frontend`
+   - Coverage: `make coverage`, `make coverage-backend`, `make coverage-frontend`
+   - Cleanup: `make clean`, `make clean-backend`, `make clean-frontend`
+   - Log Targets: `make logs`, `make logs-follow`
+
+{type_instructions}
+
+4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+
+The architecture specification is in product/SRD-architecture.md:
+
+{arch_content}
+
+Generate a complete SRD-dev_environment.md file following this structure:
+
+# Development Environment Specification
+
+## 1. Overview
+[High-level overview. Mention if using Skaffold/Helm or specialized tools like Tauri.]
+
+## 2. Build Components
+[For each component, specify build commands, dependencies, and outputs.]
+
+## 3. Development Environment
+### 3.1 Services Required
+### 3.2 Environment Variables
+### 3.3 Startup Commands
+### 3.4 Logging
+### 3.5 Verification
+
+## 4. Build System
+### 4.1 Makefile Targets
+### 4.2 Build Orchestration [Skaffold/Tauri/Manual]
+### 4.3 CI/CD Build Steps
+
+Output ONLY the markdown content for SRD-dev_environment.md.
+"""
+
+    cmd = get_agent_command(agent, prompt)
+    output, code = run_agent(cmd, stream=stream)
+
+    if code != 0 or not output.strip():
+        click.echo(
+            "❌ Failed to generate SRD-dev_environment.md. Please create it manually using 'vibe architect'."
+        )
+        return
+
+    # Clean output (remove code fences if present)
+    clean_output = output.strip()
+    if clean_output.startswith("```"):
+        lines = clean_output.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        clean_output = "\n".join(lines).strip()
+
+    # Write SRD-dev_environment.md
+    ensure_dir(DEV_SPEC.parent)
+    DEV_SPEC.write_text(clean_output)
+    click.echo(f"✅ Generated {DEV_SPEC}")
 
 
 if __name__ == "__main__":
