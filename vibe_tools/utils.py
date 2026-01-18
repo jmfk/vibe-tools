@@ -395,12 +395,21 @@ def is_branch_switching_enabled() -> bool:
 
     # Fallback to config
     config = load_config()
-    if config.get("no_branch_switch") or config.get("ralph", {}).get(
-        "no_branch_switch"
-    ):
+    
+    # Check both root and ralph level config
+    no_switch_root = config.get("no_branch_switch")
+    no_switch_ralph = config.get("ralph", {}).get("no_branch_switch")
+    
+    # If explicitly set to False in either place, it's enabled
+    if no_switch_root is False or no_switch_ralph is False:
+        return True
+        
+    # If explicitly set to True in either place, it's disabled
+    if no_switch_root is True or no_switch_ralph is True:
         return False
-
-    return True
+        
+    # Default is disabled (no_branch_switch=True)
+    return False
 
 
 def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
@@ -1435,6 +1444,7 @@ def perform_basic_init():
     if not CONFIG_FILE.exists():
         default_config = {
             "ralph": {"review": True, "tests": True, "auto_merge": False},
+            "no_branch_switch": True,
             "default_budget": 5.0,
             "verbose": False,
             "coverage_targets": {
@@ -2043,17 +2053,21 @@ def get_knowledge_context() -> str:
 
 
 def is_merged(branch_name):
-    """Checks if a branch is merged into main."""
+    """Checks if a branch is merged into the main branch."""
+    main_branch = get_main_branch()
     _, code = run_command(
-        ["git", "merge-base", "--is-ancestor", branch_name, "main"], check=False
+        ["git", "merge-base", "--is-ancestor", branch_name, main_branch], check=False
     )
     return code == 0
 
 
-def get_changed_files(base_branch="main"):
+def get_changed_files(base_branch=None):
     """Returns files changed relative to the base branch."""
     if not is_git_repo():
         return []
+
+    if base_branch is None:
+        base_branch = get_main_branch()
 
     stdout, code = run_command(["git", "merge-base", base_branch, "HEAD"], check=False)
     if code != 0:

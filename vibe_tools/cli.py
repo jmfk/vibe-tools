@@ -315,7 +315,7 @@ def cli(ctx, server, debug, verbose, log, stream, agent, no_branch_switch):
         agent = config.get("agent", {}).get("agent", "cursor-agent")
 
     if no_branch_switch is None:
-        no_branch_switch = config.get("no_branch_switch", False)
+        no_branch_switch = config.get("no_branch_switch", True)
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
