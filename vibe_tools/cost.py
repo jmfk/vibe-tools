@@ -1,6 +1,7 @@
 import csv
 import datetime
 import pathlib
+import sys
 from typing import Any, Dict, List
 
 from vibe_tools.utils import COSTS_DIR, logger
@@ -296,4 +297,4 @@ def finalize_cost_report():
     # Print total cost to terminal
     if "--server" not in sys.argv:
         import click
-        click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD")
+        click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD (Use 'vibe usage' for details)")

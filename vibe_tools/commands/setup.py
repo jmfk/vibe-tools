@@ -142,11 +142,7 @@ def register_setup(cli):
             click.echo("\n--- Running Development Environment Scaffolding Setup ---")
             try:
                 from vibe_tools.setup import scaffold
-
-                # Create a minimal context object for scaffold
-                scaffold_ctx = click.Context(click.Command("scaffold"))
-                scaffold_ctx.obj = ctx.obj
-                scaffold(scaffold_ctx)
+                ctx.invoke(scaffold)
             except Exception as e:
                 click.echo(f"⚠️  Scaffold setup encountered an error: {e}")
                 click.echo(
