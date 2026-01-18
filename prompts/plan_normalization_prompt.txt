@@ -8,7 +8,6 @@ Rules:
 - Ensure 'success_criteria' is an array of strings (specific, testable conditions).
 - Ensure 'test_targets' is an array of strings (Makefile targets).
 - Output valid YAML only.
-- DO NOT wrap the output in markdown code blocks.
 - No explanations.
 
 YAML SCHEMA:

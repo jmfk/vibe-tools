@@ -14,7 +14,6 @@ Rules:
 - Preserve ambiguity; do not resolve it.
 - Use only the section headers defined below.
 - Output valid YAML only.
-- DO NOT wrap the output in markdown code blocks (e.g., no ```yaml).
 - IMPORTANT: Use a flat or simple nested dictionary structure.
 - IMPORTANT: If a key or value contains a colon (":"), ampersand ("&"), or other special characters, it MUST be quoted.
 - IMPORTANT: Avoid nested lists unless they are simple string arrays. Use mappings (key-value pairs) for hierarchical data.
