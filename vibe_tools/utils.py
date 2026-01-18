@@ -326,7 +326,15 @@ def load_project_state() -> Dict[str, Any]:
 
     if PROJECT_STATE_FILE.exists():
         try:
-            state.update(json.loads(PROJECT_STATE_FILE.read_text()))
+            loaded = json.loads(PROJECT_STATE_FILE.read_text())
+            # Deep merge phases to avoid losing defaults if state.json is partial
+            if "phases" in loaded:
+                for phase_id, phase_data in loaded.pop("phases").items():
+                    if phase_id in state["phases"]:
+                        state["phases"][phase_id].update(phase_data)
+                    else:
+                        state["phases"][phase_id] = phase_data
+            state.update(loaded)
         except json.JSONDecodeError:
             pass
 
@@ -420,6 +428,35 @@ def check_dependencies(phase: str, state: Dict[str, Any]) -> List[str]:
                 missing.append("testing (vibe testing)")
 
     return missing
+
+
+def diagnose_setup_failure() -> str:
+    """Provides a detailed diagnostic message for setup failures."""
+    import click
+
+    messages = []
+
+    if not ARCHITECTURE_SPEC.exists():
+        messages.append(
+            f"❌ {click.style(ARCHITECTURE_SPEC.name, fg='yellow')} is missing."
+        )
+        messages.append(
+            f"   Run {click.style('vibe architect', fg='cyan')} to define your architecture or {click.style('vibe init', fg='cyan')} to start fresh."
+        )
+    elif not ARCHITECTURE_CURRENT.exists():
+        messages.append(
+            f"❌ {click.style(ARCHITECTURE_CURRENT.name, fg='yellow')} is missing."
+        )
+        messages.append(
+            f"   Run {click.style('vibe setup --import-code', fg='cyan')} if you have an existing codebase, or {click.style('vibe setup', fg='cyan')} to initialize it."
+        )
+    else:
+        messages.append(f"⚠️  Architecture reconciliation is pending.")
+        messages.append(
+            f"   Run {click.style('vibe setup', fg='cyan')} to reconcile {ARCHITECTURE_SPEC.name} with {ARCHITECTURE_CURRENT.name}."
+        )
+
+    return "\n".join(messages)
 
 
 # Global handlers for console and file
@@ -809,6 +846,9 @@ def ensure_project_structure():
     ensure_dir(PLANNING_INBOX_DIR)
     ensure_dir(PLANNING_REJECTED_DIR)
 
+    # Maintain .gitignore
+    setup_project_gitignore()
+
 
 def migrate_to_project_dir():
     """Migrates legacy files from root to the implementation/ directory."""
@@ -1193,17 +1233,39 @@ def maybe_init_git():
 def setup_project_gitignore():
     """Sets up the project's .gitignore file with default patterns."""
     patterns = [
-        "*.pyc",
         "__pycache__/",
-        "*.log",
+        "*.py[cod]",
+        "*$py.class",
+        "*.egg-info/",
+        ".DS_Store",
+        ".cursor/",
+        ".venv/",
+        "venv/",
+        "env/",
         ".env",
+        "build/",
+        "dist/",
+        "prds/",
+        ".vite/vitest/results.json",
+        ".coverage/",
+        "node_modules/",
+        "reports/",
+        "implementation/costs/",
+        "implementation/logs/*",
+        "vibe_tools/_version.py",
+        "vibe_tools/version.py",
+        "*.pyc",
+        "*.log",
         ".vibe_config.json",
+        "implementation/config.json",
         "implementation/run-pids.json",
         "implementation/logs/",
-        "implementation/costs/",
-        "node_modules/",
-        "dist/",
-        "build/",
+        "implementation/costs/usage.csv",
+        "frontend/src-tauri/target/",
+        "frontend/src-tauri/implementation/",
+        "frontend/src-tauri/gen/",
+        "frontend/src-tauri/tauri-build/",
+        "frontend/dist/",
     ]
     ensure_gitignore(patterns)
 
