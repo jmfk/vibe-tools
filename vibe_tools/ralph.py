@@ -265,7 +265,7 @@ def debugging_loop(
         prompt = prompt_template.format(test_output=agent_test_output)
         cmd = get_agent_command(agent, prompt)
 
-        agent_output, _ = run_agent(cmd, stream=stream)
+        agent_output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
 
         # Log costs
         cost_logger.log_run(
@@ -582,7 +582,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                     )
 
                     cmd = get_agent_command(agent, prompt)
-                    output, _ = run_agent(cmd, stream=stream)
+                    output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
                     if "<review>PASSED</review>" in output:
                         prd.impl_review_passed = True
                         prd.save()
