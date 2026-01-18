@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core dev dev-start run install install-deps dev-desktop lint lint-backend lint-frontend clean logs
+.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core dev install-deps dev-desktop lint lint-backend lint-frontend clean logs install-backend install-frontend
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -36,11 +36,7 @@ test-core: ## Run Rust-specific Cargo tests
 	cd frontend/src-tauri && cargo test
 
 # Development Targets
-dev: install-deps ## Install all dependencies for development
-
-dev-start: dev-desktop ## Start the persistent development server
-
-run: dev-desktop ## Alias for dev-start
+dev: install-deps dev-desktop ## Install all dependencies and start the desktop app for development
 
 install-deps: install-backend install-frontend ## Install backend and frontend dependencies
 

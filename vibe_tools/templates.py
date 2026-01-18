@@ -503,9 +503,9 @@ Global commands for Cursor Ralph loop and coverage improvement.
 
 ## Configuration
 
-The tools use a `.vibe_config.json` file in the project root for configuration. This file is automatically created and updated when running `vibe config google`.
+The tools use an `implementation/config.json` file for configuration. This file is automatically created and updated when running `vibe config google`.
 
-### Example `.vibe_config.json`
+### Example `implementation/config.json`
 
 ```json
 {
@@ -593,7 +593,7 @@ Use the `vibe config` command to record connection details for the supporting se
 - `vibe config google`
 - `vibe config test`: Verify connectivity for all configured services.
 
-Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `.vibe_config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
+Each command walks you through host, port, and credential prompts and attempts to detect a running Docker container for that service (`docker ps`/`docker inspect`) so the host and port default to what is already running locally. The answers are stored under the `services` map in `implementation/config.json` and can be reused by every tool that needs a database, queue, cache, or search backend.
 
 ## Installation
 

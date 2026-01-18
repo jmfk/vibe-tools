@@ -927,6 +927,9 @@ def ensure_project_structure():
 
 def migrate_to_project_dir():
     """Migrates legacy files from root to the implementation/ directory."""
+    # Ensure implementation/ exists before migration
+    ensure_dir(VIBE_PROJECT_DIR)
+
     legacy_files = [
         "architecture.yaml",
         "architecture-current.yaml",
@@ -934,6 +937,7 @@ def migrate_to_project_dir():
         "infrastructure-current.yaml",
         "project-state.json",
         "state.json",
+        ".vibe_config.json",
     ]
 
     for f in legacy_files:
@@ -942,6 +946,8 @@ def migrate_to_project_dir():
             new_path = VIBE_PROJECT_DIR / f
             if f == "project-state.json" or f == "state.json":
                 new_path = PROJECT_STATE_FILE
+            elif f == ".vibe_config.json":
+                new_path = CONFIG_FILE
 
             if not new_path.exists():
                 logger.info(f"Migrating {f} to {new_path}")
@@ -1502,14 +1508,19 @@ def perform_basic_init():
 
     # Ensure structure exists
     ensure_project_structure()
-    ensure_dir(VIBE_PROJECT_DIR)
 
     # Create config.json if it doesn't exist
     if not CONFIG_FILE.exists():
         repo_info = get_repository_info()
         default_config = {
             "repository": repo_info if repo_info else {},
-            "ralph": {"review": True, "tests": True, "auto_merge": False},
+            "ralph": {
+                "review": True,
+                "tests": True,
+                "auto_merge": False,
+                "automerge_branch": "main",
+                "include_html_logs": True,
+            },
             "default_budget": 5.0,
             "verbose": False,
             "coverage_targets": {
@@ -1519,17 +1530,13 @@ def perform_basic_init():
                 "infra": 85,
             },
             "iterations": {
+                "setup": 1,
+                "reconciliation": 10,
                 "implementation": 10,
                 "debug": 5,
                 "coverage": 5,
                 "test_fix": 10,
                 "prd_interview": 8,
-            },
-            "setup": {
-                "standalone": True,
-                "agent": {
-                    "agent": "cursor-agent"
-                },
             },
             "agent": {
                 "agent": "cursor-agent",

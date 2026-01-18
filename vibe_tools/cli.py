@@ -109,6 +109,7 @@ from vibe_tools.utils import (
     DEV_SPEC,
     LOGS_DIR,
     VIBE_PROJECT_DIR,
+    CONFIG_FILE as PROJECT_CONFIG_FILE,
     enable_console_debug,
     get_file_hash,
     get_google_api_key,
@@ -127,7 +128,7 @@ from vibe_tools.utils import (
     safe_yaml_dump,
 )
 
-CONFIG_FILE = pathlib.Path(".vibe_config.json")
+# CONFIG_FILE = pathlib.Path(".vibe_config.json")
 SPECS_DIR = pathlib.Path("product")
 
 
