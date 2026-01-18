@@ -515,6 +515,13 @@ def guide_setup():
 
 def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
     """Sync the Makefile with the development environment and architecture specifications."""
+    # Early health check for the agent
+    from vibe_tools.agent import verify_agent_auth
+    success, message = verify_agent_auth(agent)
+    if not success:
+        click.echo(click.style(message, fg="red", bold=True))
+        return
+
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
         DEV_SPEC,
@@ -964,7 +971,9 @@ def install_deps(
 @click.option("--python-version", default="3.11.10", help="Python version to install")
 def env(name, python_version):
     """Set up and verify a managed Python environment."""
-    click.echo(f"\n--- Environment Setup & Verification: {name} (Python {python_version}) ---")
+    click.echo(
+        f"\n--- Environment Setup & Verification: {name} (Python {python_version}) ---"
+    )
 
     # 1. Check for Homebrew
     try:
@@ -1139,7 +1148,7 @@ def desktop_init():
     )
 
     click.echo(f"\n--- Global Environment Setup (~/.vibe-tools) ---")
-    
+
     # 1. Ensure directory exists
     ensure_dir(GLOBAL_VIBE_TOOLS_DIR)
     click.echo(f"✅ Directory exists: {GLOBAL_VIBE_TOOLS_DIR}")
@@ -1154,9 +1163,10 @@ def desktop_init():
     # 3. Setup default templates
     templates_dir = GLOBAL_VIBE_TOOLS_DIR / "templates"
     ensure_dir(templates_dir)
-    
+
     # Eject some basic prompts if they don't exist
     from vibe_tools.templates import TEMPLATES
+
     count = 0
     for filename, content in TEMPLATES.items():
         if filename.endswith(".txt"):
@@ -1164,7 +1174,7 @@ def desktop_init():
             if not target_file.exists():
                 target_file.write_text(content)
                 count += 1
-    
+
     if count > 0:
         click.echo(f"✅ Initialized {count} default templates in {templates_dir}")
     else:
@@ -1194,13 +1204,17 @@ def scaffold(ctx):
     # Detect architecture to customize scaffolding
     arch_info = _detect_architecture(agent, stream)
     is_k8s = arch_info["type"] == "kubernetes"
-    
+
     if is_k8s:
         click.echo(click.style("🌐 Kubernetes architecture detected.", fg="cyan"))
     elif arch_info["type"] == "tauri":
         click.echo(click.style("🖥️  Tauri architecture detected.", fg="cyan"))
     else:
-        click.echo(click.style(f"🛠️  {arch_info['type'].capitalize()} architecture detected.", fg="cyan"))
+        click.echo(
+            click.style(
+                f"🛠️  {arch_info['type'].capitalize()} architecture detected.", fg="cyan"
+            )
+        )
 
     # Check if SRD-dev_environment.md already exists
     if DEV_SPEC.exists():
@@ -1234,7 +1248,9 @@ def scaffold(ctx):
             _setup_logging_infrastructure()
         except click.ClickException as e:
             click.echo(f"\n❌ Logging infrastructure setup failed: {e}")
-            click.echo("   Continuing with scaffold, but logging will not be available.")
+            click.echo(
+                "   Continuing with scaffold, but logging will not be available."
+            )
         except Exception as e:
             click.echo(f"\n⚠️  Logging infrastructure setup encountered an error: {e}")
             click.echo(
@@ -1260,7 +1276,7 @@ def _detect_architecture(agent, stream) -> Dict[str, Any]:
         return {"type": "unknown", "capabilities": []}
 
     arch_content = ARCHITECTURE_SPEC.read_text()
-    
+
     prompt = f"""Analyze the following architecture specification and categorize the project.
 Return a JSON object with two fields:
 1. "type": One of ["kubernetes", "tauri", "cli", "web-standard", "other"]
@@ -1273,11 +1289,11 @@ ARCHITECTURE:
 
 Output ONLY valid JSON.
 """
-    
+
     response = run_llm(prompt)
     if not response:
         return {"type": "unknown", "capabilities": []}
-    
+
     # Extract JSON from response
     try:
         # Simple extraction in case of markdown fences
@@ -1289,7 +1305,7 @@ Output ONLY valid JSON.
         # Fallback to simple keyword detection if LLM fails or returns garbage
         capabilities = []
         project_type = "cli"
-        
+
         lower_content = arch_content.lower()
         if "kubernetes" in lower_content or "skaffold" in lower_content:
             project_type = "kubernetes"
@@ -1297,12 +1313,16 @@ Output ONLY valid JSON.
             project_type = "tauri"
         elif "react" in lower_content or "next.js" in lower_content:
             project_type = "web-standard"
-            
-        if "python" in lower_content: capabilities.append("python")
-        if "rust" in lower_content: capabilities.append("rust")
-        if "react" in lower_content: capabilities.append("react")
-        if "docker" in lower_content: capabilities.append("docker")
-        
+
+        if "python" in lower_content:
+            capabilities.append("python")
+        if "rust" in lower_content:
+            capabilities.append("rust")
+        if "react" in lower_content:
+            capabilities.append("react")
+        if "docker" in lower_content:
+            capabilities.append("docker")
+
         return {"type": project_type, "capabilities": capabilities}
 
 
@@ -1320,7 +1340,9 @@ def _generate_dev_spec(agent, stream, arch_info: Dict[str, Any]):
         )
         return
 
-    click.echo(f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project...")
+    click.echo(
+        f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project..."
+    )
 
     # Read SRD-architecture.md
     arch_content = ARCHITECTURE_SPEC.read_text()
@@ -2459,7 +2481,7 @@ def _detect_architecture(agent, stream) -> Dict[str, Any]:
         return {"type": "unknown", "capabilities": []}
 
     arch_content = ARCHITECTURE_SPEC.read_text()
-    
+
     prompt = f"""Analyze the following architecture specification and categorize the project.
 Return a JSON object with two fields:
 1. "type": One of ["kubernetes", "tauri", "cli", "web-standard", "other"]
@@ -2472,11 +2494,11 @@ ARCHITECTURE:
 
 Output ONLY valid JSON.
 """
-    
+
     response = run_llm(prompt)
     if not response:
         return {"type": "unknown", "capabilities": []}
-    
+
     # Extract JSON from response
     try:
         # Simple extraction in case of markdown fences
@@ -2488,7 +2510,7 @@ Output ONLY valid JSON.
         # Fallback to simple keyword detection if LLM fails or returns garbage
         capabilities = []
         project_type = "cli"
-        
+
         lower_content = arch_content.lower()
         if "kubernetes" in lower_content or "skaffold" in lower_content:
             project_type = "kubernetes"
@@ -2496,12 +2518,16 @@ Output ONLY valid JSON.
             project_type = "tauri"
         elif "react" in lower_content or "next.js" in lower_content:
             project_type = "web-standard"
-            
-        if "python" in lower_content: capabilities.append("python")
-        if "rust" in lower_content: capabilities.append("rust")
-        if "react" in lower_content: capabilities.append("react")
-        if "docker" in lower_content: capabilities.append("docker")
-        
+
+        if "python" in lower_content:
+            capabilities.append("python")
+        if "rust" in lower_content:
+            capabilities.append("rust")
+        if "react" in lower_content:
+            capabilities.append("react")
+        if "docker" in lower_content:
+            capabilities.append("docker")
+
         return {"type": project_type, "capabilities": capabilities}
 
 
@@ -2519,7 +2545,9 @@ def _generate_dev_spec(agent, stream, arch_info: Dict[str, Any]):
         )
         return
 
-    click.echo(f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project...")
+    click.echo(
+        f"📋 Generating SRD-dev_environment.md for {arch_info['type']} project..."
+    )
 
     # Read SRD-architecture.md
     arch_content = ARCHITECTURE_SPEC.read_text()

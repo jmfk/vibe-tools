@@ -445,22 +445,37 @@ def register_plan(cli):
             if state["dep_select_mode"] or state["filter_mode"]:
                 return
             event.app.exit()
+            # Early health check for the agent
+            from vibe_tools.agent import verify_agent_auth
+            agent = ctx.obj.get("agent", "cursor-agent")
+            success, message = verify_agent_auth(agent)
+            if not success:
+                click.echo(click.style(message, fg="red", bold=True))
+                return
+
             # Run architect
             arch_tool = InteractiveArchitect(
-                agent_type=ctx.obj.get("agent", "cursor-agent"),
+                agent_type=agent,
                 stream=ctx.obj.get("stream", True),
             )
             arch_tool.run_loop()
-            # Rerun TUI? For now just exit TUI.
 
         @kb.add("P")  # Shift-P
         def _(event):
             if state["dep_select_mode"] or state["filter_mode"]:
                 return
             event.app.exit()
+            # Early health check for the agent
+            from vibe_tools.agent import verify_agent_auth
+            agent = ctx.obj.get("agent", "cursor-agent")
+            success, message = verify_agent_auth(agent)
+            if not success:
+                click.echo(click.style(message, fg="red", bold=True))
+                return
+
             # Run PM
             pm_tool = InteractivePM(
-                agent_type=ctx.obj.get("agent", "cursor-agent"),
+                agent_type=agent,
                 stream=ctx.obj.get("stream", True),
             )
             pm_tool.run()
@@ -470,6 +485,14 @@ def register_plan(cli):
             if state["dep_select_mode"] or state["filter_mode"]:
                 return
             event.app.exit()
+            # Early health check for the agent
+            from vibe_tools.agent import verify_agent_auth
+            agent = ctx.obj.get("agent", "cursor-agent")
+            success, message = verify_agent_auth(agent)
+            if not success:
+                click.echo(click.style(message, fg="red", bold=True))
+                return
+
             # Run Test Setup
             _run_test_setup_interactive(ctx)
 
@@ -737,8 +760,15 @@ def register_plan(cli):
     @click.pass_context
     def pm_command(ctx, query):
         """Phase 2: Interactive Product Manager for requirement and PRD management."""
+        agent = ctx.obj.get("agent", "cursor-agent")
+        from vibe_tools.agent import verify_agent_auth
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         pm_tool = InteractivePM(
-            agent_type=ctx.obj.get("agent", "cursor-agent"),
+            agent_type=agent,
             stream=ctx.obj.get("stream", True),
         )
         pm_tool.run(query)
@@ -748,8 +778,15 @@ def register_plan(cli):
     @click.pass_context
     def architect_command(ctx, query):
         """Phase 1: Interactive architecture and infrastructure spec manager."""
+        agent = ctx.obj.get("agent", "cursor-agent")
+        from vibe_tools.agent import verify_agent_auth
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         architect_tool = InteractiveArchitect(
-            agent_type=ctx.obj.get("agent", "cursor-agent"),
+            agent_type=agent,
             stream=ctx.obj.get("stream", True),
         )
         architect_tool.run_loop(query)
@@ -971,6 +1008,13 @@ def _run_test_setup_interactive(ctx, prompt: Optional[str] = None):
     
     agent = ctx.obj.get("agent", "cursor-agent")
     stream = ctx.obj.get("stream", True)
+
+    # Early health check for the agent
+    from vibe_tools.agent import verify_agent_auth
+    success, message = verify_agent_auth(agent)
+    if not success:
+        click.echo(click.style(message, fg="red", bold=True))
+        return
     
     # We use Ralph to actually implement the tests
     from vibe_tools.ralph import RalphLoop

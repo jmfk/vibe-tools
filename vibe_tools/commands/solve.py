@@ -74,6 +74,13 @@ def _solve_issue(issue: PRD, mode: str, agent: str, stream: bool = False):
 
 def solve_impl(ctx, issue_id=None, solve_next=False, solve_all=False, mode="solve", agent="cursor-agent", stream=False):
     """Internal implementation of solve."""
+    # Early health check for the agent
+    from vibe_tools.agent import verify_agent_auth
+    success, message = verify_agent_auth(agent)
+    if not success:
+        click.echo(click.style(message, fg="red", bold=True))
+        return
+
     if issue_id:
         issue = load_prd_by_id(issue_id)
         if not issue:

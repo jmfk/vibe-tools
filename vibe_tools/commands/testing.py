@@ -37,6 +37,14 @@ def register_testing(cli):
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
 
+        # Early health check for the agent
+        from vibe_tools.agent import verify_agent_auth
+
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         # Normalize SRD-testing.md just-in-time
         click.echo(f"🔄 Normalizing {TESTING_SPEC.name} in-memory...")
         testing_data = normalize_to_data(TESTING_SPEC.read_text(), "testing")

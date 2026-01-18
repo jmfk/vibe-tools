@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -158,6 +159,55 @@ def get_agent_command(
     return ["echo", "UNKNOWN_AGENT", prompt]
 
 
+def verify_agent_auth(agent_name: str) -> Tuple[bool, str]:
+    """
+    Minimal check to see if the agent is installed and authenticated.
+    Returns (success, message).
+    """
+    if agent_name == "cursor-agent":
+        # 1. Check for binary
+        if not is_tool_available("cursor-agent"):
+            return False, "❌ 'cursor-agent' not found in PATH. Install it via: npm install -g @cursor-agent/cli"
+
+        # 2. Check for API key in env
+        if os.environ.get("CURSOR_API_KEY"):
+            return True, "✅ Authenticated via CURSOR_API_KEY environment variable."
+
+        # 3. Check for login status (minimal execution)
+        try:
+            # We use a very simple prompt that shouldn't cost much if it works,
+            # but will fail fast if unauthenticated.
+            # We use subprocess directly to avoid the full run_agent overhead/logging.
+            result = subprocess.run(
+                ["cursor-agent", "-p", "echo 'ok'"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if "Authentication required" in result.stderr or "Authentication required" in result.stdout:
+                return False, "❌ 'cursor-agent' authentication required. Run 'agent login' or set CURSOR_API_KEY."
+            if result.returncode != 0 and ("Error" in result.stderr or "Unauthorized" in result.stderr):
+                return False, f"❌ 'cursor-agent' authentication failed: {result.stderr.strip()}"
+            
+            return True, "✅ Agent authenticated."
+        except subprocess.TimeoutExpired:
+            return False, "❌ 'cursor-agent' authentication check timed out."
+        except Exception as e:
+            return False, f"❌ 'cursor-agent' health check failed: {str(e)}"
+
+    elif agent_name == "claude":
+        if not is_tool_available("claude"):
+            return False, "❌ 'claude' not found in PATH. Install it via: npm install -g @anthropic-ai/claude-code"
+        return True, "✅ Claude available."
+
+    return True, f"✅ Agent '{agent_name}' checked."
+
+
+def is_tool_available(tool: str) -> bool:
+    """Checks if a tool is available in the system PATH."""
+    return shutil.which(tool) is not None
+
+
 def run_agent(
     command: List[str], stream: bool = False
 ) -> Tuple[str, int, Optional[str]]:
@@ -171,6 +221,7 @@ def run_agent(
     is_cursor_agent = command[0] == "cursor-agent" or (
         len(command) > 2 and command[2] == "cursor-agent"
     )
+    agent_source = command[0] if command else "agent"
 
     # Use os.setsid to create a new process group for robust cleanup
     env = os.environ.copy()
@@ -189,17 +240,17 @@ def run_agent(
         )
     except FileNotFoundError:
         error_msg = f"❌ Agent binary not found: {command[0]}. Please ensure it is in your PATH."
-        out_error(error_msg, source="agent")
+        out_error(error_msg, source=agent_source)
         return error_msg, 127, None
     except Exception as e:
         error_msg = f"❌ Failed to start agent: {e}"
-        out_error(error_msg, source="agent")
+        out_error(error_msg, source=agent_source)
         return error_msg, 1, None
 
     agent_manager.register_agent(process.pid, command)
 
     # Log the agent call details
-    out_debug(f"🤖 Starting agent: {command[0]}", source="agent", data={
+    out_debug(f"🤖 Starting agent: {command[0]}", source=agent_source, data={
         "command_line": f"$ {' '.join(command)}",
         "stdio": "", # Agent usually takes parameters via CLI
         "pid": process.pid,
@@ -247,11 +298,11 @@ def run_agent(
 
                         if event_type == "system":
                             model = data.get("model", "unknown")
-                            out_print(f"🤖 System: {model}", flush=True, source="agent", data=data)
+                            out_print(f"🤖 System: {model}", flush=True, source=agent_source, data=data)
                             log_large_output("system", json.dumps(data, indent=2))
 
                         elif event_type == "user":
-                            out_print("👤 User!", flush=True, source="agent", data=data)
+                            out_print("👤 User!", flush=True, source=agent_source, data=data)
                             message = data.get("message", {})
                             content_list = message.get("content", [])
                             for content in content_list:
@@ -260,7 +311,7 @@ def run_agent(
                             log_large_output("user", json.dumps(content_list, indent=2))
 
                         elif event_type == "assistant":
-                            out_print("🤖 Assistant!", flush=True, source="agent", data=data)
+                            out_print("🤖 Assistant!", flush=True, source=agent_source, data=data)
                             message = data.get("message", {})
                             content_list = message.get("content", [])
                             for content in content_list:
@@ -279,11 +330,11 @@ def run_agent(
                                     call_id = tool_info.get("call_id") or tool_name
                                     active_tool_calls[call_id] = tool_info.get("args", {})
                                 if stream:
-                                    _print_tool_call_start(tool_call, data)
+                                    _print_tool_call_start(tool_call, data, source=agent_source)
                             else:
                                 tool_call = data.get("tool_call", {})
                                 if stream:
-                                    _print_tool_call_done(tool_call, data, active_tool_calls)
+                                    _print_tool_call_done(tool_call, data, active_tool_calls, source=agent_source)
                                 for tool_name, tool_info in tool_call.items():
                                     call_id = tool_info.get("call_id") or tool_name
                                     if call_id in active_tool_calls:
@@ -293,30 +344,30 @@ def run_agent(
                             text = data.get("text", None)
                             if stream and text:
                                 # Thinking is usually suppressed in print mode but we handle it just in case
-                                out_print(f"🤔 {text}", flush=True, source="agent", data=data)
+                                out_print(f"🤔 {text}", flush=True, source=agent_source, data=data)
 
                         elif event_type == "result":
                             full_result_text = data.get("result", "")
                             is_error = data.get("is_error", False)
                             if subtype == "success" and not is_error:
                                 if stream:
-                                    out_print("\n✅ Done.", flush=True, source="agent", data=data)
+                                    out_print("\n✅ Done.", flush=True, source=agent_source, data=data)
                             else:
                                 if stream:
                                     out_print(
                                         f"\n❌ Error: {full_result_text}",
                                         flush=True,
-                                        source="agent",
+                                        source=agent_source,
                                         data=data,
                                     )
 
                     except json.JSONDecodeError:
                         if stream:
-                            out_print(line, flush=True, source="agent")
+                            out_print(line, flush=True, source=agent_source)
                         full_event_log.append(line)
                 else:
                     if stream:
-                        out_print(line, flush=True, source="agent")
+                        out_print(line, flush=True, source=agent_source)
                     full_event_log.append(line)
 
             process.wait()
@@ -344,7 +395,7 @@ def run_agent(
                 log_large_output("agent_output", final_output)
 
             # Log the final result with command_line/stdio/stdout/stderr
-            out_debug(f"Agent {command[0]} finished", source="agent", data={
+            out_debug(f"Agent {command[0]} finished", source=agent_source, data={
                 "command_line": f"$ {' '.join(command)}",
                 "stdio": "", 
                 "stdout": final_output,
@@ -358,7 +409,7 @@ def run_agent(
             log_large_output("agent_output", stdout)
 
             # Log the final result with command_line/stdio/stdout/stderr
-            out_debug(f"Agent {command[0]} finished", source="agent", data={
+            out_debug(f"Agent {command[0]} finished", source=agent_source, data={
                 "command_line": f"$ {' '.join(command)}",
                 "stdio": "",
                 "stdout": stdout,
@@ -377,7 +428,7 @@ def run_agent(
         agent_manager.unregister_agent(process.pid)
 
 
-def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
+def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any], source: str = "agent"):
     for key, value in tool_call.items():
         if key in ["readToolCall", "lsToolCall", "globToolCall"]:
             continue
@@ -387,27 +438,27 @@ def _print_tool_call_start(tool_call: Dict[str, Any], data: Dict[str, Any]):
     elif "writeToolCall" in tool_call:
         output = tool_call["writeToolCall"]
         path = output["args"].get("path")
-        out_print(f"🔧 Writing: {path}", flush=True, source="agent", data=data)
+        out_print(f"🔧 Writing: {path}", flush=True, source=source, data=data)
     elif "editToolCall" in tool_call:
         output = tool_call["editToolCall"]
         path = output["args"].get("path")
-        out_print(f"🔧 Editing: {path}", flush=True, source="agent", data=data)
+        out_print(f"🔧 Editing: {path}", flush=True, source=source, data=data)
     elif "lsToolCall" in tool_call:
         pass  # Silenced
     elif "shellToolCall" in tool_call:
         output = tool_call["shellToolCall"]
         commandText = output["args"].get("command")
-        out_print(f"🔧 Command: {commandText}", flush=True, source="agent", data=data)
+        out_print(f"🔧 Command: {commandText}", flush=True, source=source, data=data)
     elif "globToolCall" in tool_call:
         pass  # Silenced
     elif "function" in tool_call:
         output = tool_call["function"]
         name = output.get("name")
         arguments = output.get("arguments")
-        out_print(f"🛠️ Calling: {name} ({arguments})", flush=True, source="agent", data=data)
+        out_print(f"🛠️ Calling: {name} ({arguments})", flush=True, source=source, data=data)
 
 
-def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], active_tool_calls: Dict[str, Any] = None):
+def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], active_tool_calls: Dict[str, Any] = None, source: str = "agent"):
     for key, value in tool_call.items():
         if key in ["readToolCall", "lsToolCall", "globToolCall"]:
             result = value.get("result", {})
@@ -424,22 +475,22 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], activ
             call_id = tool_info.get("call_id") or "readToolCall"
             args = (active_tool_calls or {}).get(call_id, {})
             path = args.get("path") or "unknown path"
-            out_print(f"🚫 Read failed: {path}", flush=True, source="agent", data=data)
+            out_print(f"🚫 Read failed: {path}", flush=True, source=source, data=data)
     elif "writeToolCall" in tool_call:
         result = tool_call.get("writeToolCall", {}).get("result", {})
         success = result.get("success")
         if success:
             lines = success.get("linesCreated", 0)
-            out_print(f"✅ Wrote {lines} lines.", flush=True, source="agent", data=data)
+            out_print(f"✅ Wrote {lines} lines.", flush=True, source=source, data=data)
         else:
-            out_print("🚫 Write failed.", flush=True, source="agent", data=data)
+            out_print("🚫 Write failed.", flush=True, source=source, data=data)
     elif "editToolCall" in tool_call:
         result = tool_call.get("editToolCall", {}).get("result", {})
         success = result.get("success")
         if success:
-            out_print("✅ Edit complete.", flush=True, source="agent", data=data)
+            out_print("✅ Edit complete.", flush=True, source=source, data=data)
         else:
-            out_print("🚫 Edit failed.", flush=True, source="agent", data=data)
+            out_print("🚫 Edit failed.", flush=True, source=source, data=data)
     elif "lsToolCall" in tool_call:
         tool_info = tool_call.get("lsToolCall", {})
         result = tool_info.get("result", {})
@@ -450,18 +501,18 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], activ
             call_id = tool_info.get("call_id") or "lsToolCall"
             args = (active_tool_calls or {}).get(call_id, {})
             path = args.get("path") or "unknown path"
-            out_print(f"🚫 List failed: {path}", flush=True, source="agent", data=data)
+            out_print(f"🚫 List failed: {path}", flush=True, source=source, data=data)
     elif "shellToolCall" in tool_call:
         result = tool_call.get("shellToolCall", {}).get("result", {})
         success = result.get("success")
         if success:
             ms = success.get("executionTime", 0)
-            out_print(f"✅ Command successful ({ms}ms).", flush=True, source="agent", data=data)
+            out_print(f"✅ Command successful ({ms}ms).", flush=True, source=source, data=data)
         else:
             failure = result.get("failure", {})
             code = failure.get("exitCode", "unknown")
             out_print(
-                f"❌ Command failed (Exit code: {code}).", flush=True, source="agent", data=data
+                f"❌ Command failed (Exit code: {code}).", flush=True, source=source, data=data
             )
     elif "globToolCall" in tool_call:
         tool_info = tool_call.get("globToolCall", {})
@@ -473,10 +524,10 @@ def _print_tool_call_done(tool_call: Dict[str, Any], data: Dict[str, Any], activ
             call_id = tool_info.get("call_id") or "globToolCall"
             args = (active_tool_calls or {}).get(call_id, {})
             pattern = args.get("globPattern") or "unknown pattern"
-            out_print(f"🚫 Search failed: {pattern}", flush=True, source="agent", data=data)
+            out_print(f"🚫 Search failed: {pattern}", flush=True, source=source, data=data)
     elif "function" in tool_call:
         result = tool_call.get("function", {}).get("result", {})
-        out_print(f"🛠️ Done: {result}", flush=True, source="agent", data=data)
+        out_print(f"🛠️ Done: {result}", flush=True, source=source, data=data)
 
 
 def get_agent_processes() -> List[Dict[str, Any]]:

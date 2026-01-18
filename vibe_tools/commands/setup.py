@@ -45,6 +45,14 @@ def register_setup(cli):
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
 
+        # Early health check for the agent
+        from vibe_tools.agent import verify_agent_auth
+
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         # Iteration control for setup reconciliation
         setup_iterations = config.get("iterations", {}).get("setup", 1)
 

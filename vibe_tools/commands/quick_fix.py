@@ -88,6 +88,12 @@ def register_quick_fix(cli):
             )
             return 1
 
+        # Early health check for LLM
+        from vibe_tools.utils import get_google_api_key
+        if not get_google_api_key():
+            click.echo(click.style("❌ GOOGLE_API_KEY not found. Please run `vibe config api`.", fg="red", bold=True))
+            return 1
+
         # Read file contents
         file_contents = {}
         for file_path in files:

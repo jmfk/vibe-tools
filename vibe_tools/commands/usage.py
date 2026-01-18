@@ -102,6 +102,14 @@ def register_usage(cli):
             if not server_mode:
                 click.echo("📊 Downloading usage data...")
             
+            # Early health check for the agent if using cursor-agent
+            if agent_name == "cursor-agent":
+                from vibe_tools.agent import verify_agent_auth
+                success, message = verify_agent_auth(agent_name)
+                if not success:
+                    click.echo(click.style(message, fg="red", bold=True))
+                    return
+
             # If period or days specified, use those for download range
             backtrack = days
             if period:

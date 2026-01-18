@@ -3,6 +3,7 @@ import click
 from vibe_tools.utils import (
     check_dependencies,
     load_project_state,
+    diagnose_setup_failure,
 )
 
 
@@ -15,9 +16,12 @@ def register_implement(cli):
 
         missing = check_dependencies("implement", state)
         if missing:
-            click.echo(
-                f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
-            )
+            if "setup" in [m.split(" ")[0] for m in missing]:
+                click.echo(diagnose_setup_failure())
+            else:
+                click.echo(
+                    f"❌ Dependencies not met: {', '.join(missing)}. Please complete them first."
+                )
             return
 
         from vibe_tools.ralph import implementation_loop
@@ -25,6 +29,14 @@ def register_implement(cli):
 
         agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
+
+        # Early health check for the agent
+        from vibe_tools.agent import verify_agent_auth
+
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
 
         success = implementation_loop(agent, stream=stream)
         if success:

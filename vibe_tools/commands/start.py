@@ -20,9 +20,16 @@ def register_start(cli):
         Orchestrates initialization, architecture setup, scaffolding,
         dependency installation, and build verification in a single loop.
         """
+        agent = ctx.obj.get("agent", "cursor-agent")
+        # Early health check for the agent
+        from vibe_tools.agent import verify_agent_auth
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         click.echo(click.style("\n🚀 Starting product bootstrap loop...", fg="cyan", bold=True))
         
-        agent = ctx.obj.get("agent", "cursor-agent")
         stream = ctx.obj.get("stream", False)
         
         # Get the main CLI group to invoke other commands

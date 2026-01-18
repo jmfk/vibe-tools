@@ -200,6 +200,14 @@ class InteractiveArchitect:
 
     def run_loop(self, initial_prompt: Optional[str] = None):
         """Main interactive loop."""
+        # Early health check for the agent if using cursor-agent
+        if self.agent_type == "cursor-agent":
+            from vibe_tools.agent import verify_agent_auth
+            success, message = verify_agent_auth(self.agent_type)
+            if not success:
+                click.echo(click.style(message, fg="red", bold=True))
+                return
+
         click.echo(click.style("\n🏗️  VIBE ARCHITECT", fg="cyan", bold=True))
         click.echo("Refine your architecture and infrastructure specs interactively.")
         click.echo("Type /help for available commands.\n")
@@ -923,6 +931,13 @@ def generate_infrastructure_spec(
     agent: str = "cursor-agent",
 ):
     """Generate SRD-infrastructure.md from PRDs in the specs directory."""
+    # Early health check for the agent
+    from vibe_tools.agent import verify_agent_auth
+    success, message = verify_agent_auth(agent)
+    if not success:
+        click.echo(click.style(message, fg="red", bold=True))
+        return
+
     from vibe_tools.utils import (
         SPECS_DIR,
         get_agent_command,

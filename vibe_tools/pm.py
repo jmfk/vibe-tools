@@ -274,6 +274,14 @@ class InteractivePM:
 
     async def run_loop(self, initial_prompt: Optional[str] = None):
         """Main interactive loop."""
+        # Early health check for the agent if using cursor-agent
+        if self.agent_type == "cursor-agent":
+            from vibe_tools.agent import verify_agent_auth
+            success, message = verify_agent_auth(self.agent_type)
+            if not success:
+                click.echo(click.style(message, fg="red", bold=True))
+                return
+
         loop = asyncio.get_running_loop()
         click.echo(
             click.style(

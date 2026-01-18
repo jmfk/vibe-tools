@@ -38,12 +38,23 @@ def register_infra(cli):
             )
             return
 
+        agent = ctx.obj.get("agent", "cursor-agent")
+        stream = ctx.obj.get("stream", False)
+
+        # Early health check for the agent
+        from vibe_tools.agent import verify_agent_auth
+
+        success, message = verify_agent_auth(agent)
+        if not success:
+            click.echo(click.style(message, fg="red", bold=True))
+            return
+
         # Ensure infrastructure spec exists
         if not INFRA_SPEC.exists() or only_spec:
             # generate from PRDs if it doesn't exist
             click.echo(f"📝 Generating/Updating {INFRA_SPEC} from PRDs...")
             generate_infrastructure_spec(
-                agent=ctx.obj.get("agent", "cursor-agent"),
+                agent=agent,
             )
             if not INFRA_SPEC.exists():
                 click.echo(
@@ -70,8 +81,8 @@ def register_infra(cli):
             desired_content=infra_yaml,
             desired_file_name=INFRA_SPEC.name,
             current_file=INFRA_CURRENT,
-            agent=ctx.obj.get("agent", "cursor-agent"),
-            stream=ctx.obj.get("stream", False),
+            agent=agent,
+            stream=stream,
         )
         loop.run()
 
