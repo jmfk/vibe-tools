@@ -283,6 +283,10 @@ def run_agent(
     agent_manager.register_agent(process.pid, command)
 
     # Log the agent call details
+    if not stream:
+        import click
+        click.echo(f"🤖 Starting agent: {command[0]} (this may take a moment)...")
+
     out_debug(
         f"🤖 Starting agent: {command[0]}",
         source=agent_source,

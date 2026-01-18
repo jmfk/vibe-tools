@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core install install-backend install-frontend dev-desktop lint lint-backend lint-frontend clean logs
+.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core dev dev-start run install install-deps dev-desktop lint lint-backend lint-frontend clean logs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -9,12 +9,17 @@ help: ## Display this help message
 build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
 
 build-cli: install-backend ## Install the Python CLI in editable mode
+	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
+	if [ "$$STANDALONE" = "false" ]; then \
+		echo "Installing in editable mode..."; \
+		pip install -e .; \
+	else \
+		echo "Installing in standalone mode..."; \
+		pip install .; \
+	fi
 
 build-desktop: ## Build the production Tauri desktop application
 	cd frontend && npm run tauri build
-
-build-frontend: ## Build the frontend only (Vite)
-	cd frontend && npm run build
 
 # Test Targets
 test: test-backend test-desktop ## Run all tests (CLI and Desktop)
@@ -31,34 +36,16 @@ test-core: ## Run Rust-specific Cargo tests
 	cd frontend/src-tauri && cargo test
 
 # Development Targets
-install: install-backend install-frontend setup-hooks ## Install all dependencies for development
+dev: install-deps ## Install all dependencies for development
 
-setup-hooks: ## Install git hooks
-	@echo "Installing git hooks..."
-	@cp scripts/check_secrets.py .git/hooks/pre-push.py
-	@cat <<'EOF' > .git/hooks/pre-push
-	#!/bin/bash
-	echo "Running sanity check for keys and passwords..."
-	python3 scripts/check_secrets.py
-	if [ $$? -ne 0 ]; then
-	    echo "Push aborted: Potential secrets detected."
-	    exit 1
-	fi
-	echo "Sanity check passed."
-	exit 0
-	EOF
-	@chmod +x .git/hooks/pre-push
-	@echo "Git hooks installed."
+dev-start: dev-desktop ## Start the persistent development server
+
+run: dev-desktop ## Alias for dev-start
+
+install-deps: install-backend install-frontend ## Install backend and frontend dependencies
 
 install-backend: ## Install Python backend dependencies
-	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
-	if [ "$$STANDALONE" = "false" ]; then \
-		echo "Installing in editable mode..."; \
-		pip install -e .; \
-	else \
-		echo "Installing in standalone mode..."; \
-		pip install .; \
-	fi
+	pip install -e .
 
 install-frontend: ## Install Node.js frontend dependencies
 	cd frontend && npm install

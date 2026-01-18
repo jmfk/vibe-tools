@@ -15,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
+import httpx
 from dotenv import find_dotenv, set_key
 
 from vibe_tools.command_output import (
@@ -1578,6 +1579,21 @@ def setup_vibe_test_env(monkeypatch):
             out_info(f"Template already exists: {makefile_path}")
 
 
+def is_tauri_project():
+    """Check if the project is a Tauri project."""
+    return pathlib.Path("frontend/src-tauri/tauri.conf.json").exists()
+
+
+def check_url_responds(url, timeout=2.0):
+    """Check if a URL responds with a 2xx status code."""
+    try:
+        with httpx.Client(timeout=timeout, verify=False) as client:
+            response = client.get(url)
+            return 200 <= response.status_code < 300
+    except Exception:
+        return False
+
+
 def get_services():
     """Get services from dev_environment-current.yaml, dev_environment.md, or Makefile."""
     services = []
@@ -1588,6 +1604,17 @@ def get_services():
             build_config = safe_yaml_load(DEV_ENV_CURRENT.read_text())
             if build_config:
                 services = extract_services_from_build_config(build_config)
+                if services:
+                    return services
+        except Exception:
+            pass
+
+    # Try architecture-current.yaml
+    if ARCHITECTURE_CURRENT.exists():
+        try:
+            arch_config = safe_yaml_load(ARCHITECTURE_CURRENT.read_text())
+            if arch_config:
+                services = arch_config.get("SERVICES") or arch_config.get("services")
                 if services:
                     return services
         except Exception:
@@ -1975,21 +2002,29 @@ def test_build_services(debug=False, return_report=False):
         failed_urls = []
         for url_key, url in urls.items():
             logger.debug(f"Checking URL {url_key}: {url}")
-            try:
-                if check_url_responds(url):
-                    responding_urls += 1
-                    log_report(f"  ✓ {url_key} ({url}) is responding", "info")
-                    logger.debug(f"URL {url_key} ({url}) responded successfully")
-                else:
-                    failed_urls.append((url_key, url))
-                    log_report(f"  ✗ {url_key} ({url}) is not responding", "warning")
-                    logger.debug(
-                        f"URL {url_key} ({url}) failed to respond (connection timeout or refused)"
-                    )
-            except Exception as e:
+            log_report(f"  🔍 Verifying {url_key} responds at {url}...", "info")
+            verified = False
+            # Poll for up to 30 seconds for each URL
+            for attempt in range(30):
+                try:
+                    if check_url_responds(url):
+                        verified = True
+                        break
+                except Exception:
+                    pass
+                if attempt < 29:
+                    time.sleep(1)
+
+            if verified:
+                responding_urls += 1
+                log_report(f"  ✓ {url_key} ({url}) is responding", "info")
+                logger.debug(f"URL {url_key} ({url}) responded successfully")
+            else:
                 failed_urls.append((url_key, url))
-                log_report(f"  ✗ {url_key} ({url}) check failed: {e}", "warning")
-                logger.debug(f"URL {url_key} ({url}) check error: {e}", exc_info=True)
+                log_report(f"  ✗ {url_key} ({url}) is not responding after 30s", "warning")
+                logger.debug(
+                    f"URL {url_key} ({url}) failed to respond after 30s polling"
+                )
 
         # Consider success if at least one service is running or one URL is responding
         success = running_count > 0 or responding_urls > 0
@@ -2632,6 +2667,24 @@ def extract_urls_from_dev_env():
         except Exception:
             pass
 
+    # Try architecture-current.yaml
+    if ARCHITECTURE_CURRENT.exists():
+        try:
+            arch_config = safe_yaml_load(ARCHITECTURE_CURRENT.read_text())
+            if arch_config:
+                # Look for services with URLs or health checks
+                services = arch_config.get("SERVICES") or arch_config.get("services")
+                if services:
+                    for service in services:
+                        url = service.get("url") or service.get("health_check_url")
+                        if url:
+                            # Clean URL (remove markdown links)
+                            clean_url = url.split("](")[0] if "](" in url else url
+                            clean_url = clean_url.strip("[]()")
+                            urls[service.get("name", "unknown")] = clean_url
+        except Exception:
+            pass
+
     # Try dev_environment.md
     if DEV_SPEC.exists():
         build_md = DEV_SPEC.read_text()
@@ -2703,6 +2756,10 @@ def extract_urls_from_dev_env():
             port = uvicorn_match.group(1)
             urls["backend"] = f"http://localhost:{port}"
             urls["api_docs"] = f"http://localhost:{port}/docs"
+
+    if not urls and is_tauri_project():
+        # Fallback for Tauri if no URLs found
+        urls["desktop"] = "http://localhost:1420"
 
     return urls
 

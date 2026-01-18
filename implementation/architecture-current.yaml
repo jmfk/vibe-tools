@@ -46,4 +46,8 @@ SYSTEM_CONTRACT:
 DOMAIN_MODEL: MISSING
 CAPABILITIES: MISSING
 OUTPUT_TARGETS: MISSING
+SERVICES:
+  - name: desktop
+    start_command: make dev-desktop
+    health_check_url: http://localhost:1420
 ---

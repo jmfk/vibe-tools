@@ -525,15 +525,14 @@ def sync_makefile(agent: str = "cursor-agent", stream: bool = False):
     from vibe_tools.utils import (
         ARCHITECTURE_SPEC,
         DEV_SPEC,
-        run_agent,
-        get_agent_command,
+        run_llm,
     )
 
     if not DEV_SPEC.exists():
         click.echo(f"⚠️  {DEV_SPEC} not found. Skipping Makefile sync.")
         return
 
-    click.echo("🔄 Syncing Makefile with project specifications...")
+    click.echo("🔄 Syncing Makefile with project specifications (via Gemini)...")
 
     dev_spec_content = DEV_SPEC.read_text()
     arch_spec_content = (
@@ -589,10 +588,9 @@ TASK:
 Output ONLY the raw Makefile content.
 """
 
-    cmd = get_agent_command(agent, prompt)
-    output, code = run_agent(cmd, stream=stream)
+    output = run_llm(prompt)
 
-    if code == 0 and output.strip():
+    if output and output.strip():
         # Extraction logic: find the first .PHONY or first target
         # If the agent is messy, we try to find the cleanest block
         clean_output = output.strip()
@@ -904,6 +902,7 @@ def install_deps(
             return
 
     # Ensure basic infrastructure is present
+    click.echo("📁 Ensuring project infrastructure...")
     ensure_infrastructure()
 
     # If we are on main branch, switch to a dependencies branch
@@ -914,6 +913,7 @@ def install_deps(
     deps_branch_enabled = config.get("setup", {}).get("deps_branch_enabled", True)
 
     if current_branch.strip() == main_branch and deps_branch_enabled:
+        click.echo(f"🌿 On {main_branch} branch. Switching to a dependency management branch...")
         from vibe_tools.ralph import _switch_to_branch
 
         if config.get("ralph", {}).get("auto_merge", False):
@@ -1414,6 +1414,8 @@ IMPORTANT REQUIREMENTS:
 {type_instructions}
 
 4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+   - For persistent services (like web servers or Tauri apps), include a `health_check_url` field (e.g., `health_check_url: http://localhost:1420`).
+   - If a service is a Tauri app, explicitly mention its default dev URL (http://localhost:1420).
 
 The architecture specification is in product/SRD-architecture.md:
 
@@ -2619,6 +2621,8 @@ IMPORTANT REQUIREMENTS:
 {type_instructions}
 
 4. **Services Section**: Clearly list all services/components that need to run in development mode with their startup commands.
+   - For persistent services (like web servers or Tauri apps), include a `health_check_url` field (e.g., `health_check_url: http://localhost:1420`).
+   - If a service is a Tauri app, explicitly mention its default dev URL (http://localhost:1420).
 
 The architecture specification is in product/SRD-architecture.md:
 
