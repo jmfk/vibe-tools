@@ -1525,7 +1525,9 @@ def perform_basic_init():
 
     # Create config.json if it doesn't exist
     if not CONFIG_FILE.exists():
+        repo_info = get_repository_info()
         default_config = {
+            "repository": repo_info if repo_info else {},
             "ralph": {"review": True, "tests": True, "auto_merge": False},
             "no_branch_switch": True,
             "default_budget": 5.0,
@@ -1536,7 +1538,24 @@ def perform_basic_init():
                 "tauri": 85,
                 "infra": 85,
             },
-            "setup": {"standalone": True},
+            "iterations": {
+                "implementation": 10,
+                "debug": 5,
+                "coverage": 5,
+                "test_fix": 10,
+                "prd_interview": 8,
+            },
+            "setup": {
+                "standalone": True,
+                "agent": {
+                    "agent": "cursor-agent"
+                },
+            },
+            "agent": {
+                "agent": "cursor-agent",
+                "force": True,
+                "stream": True,
+            },
         }
         CONFIG_FILE.write_text(json.dumps(default_config, indent=2))
         out_success(f"✅ Created default configuration: {CONFIG_FILE}")
@@ -2083,6 +2102,28 @@ def get_project_name() -> str:
                 url = url[:-4]
             return url.split("/")[-1].split(":")[-1].lower().replace("-", "_")
     return pathlib.Path.cwd().name.lower().replace("-", "_")
+
+
+def get_repository_info() -> Optional[Dict[str, str]]:
+    """Returns basic repository info if available."""
+    if not is_git_repo():
+        return None
+
+    info = {
+        "root": str(pathlib.Path.cwd().resolve()),
+    }
+
+    # Get origin URL
+    stdout, code = run_command(["git", "remote", "get-url", "origin"], check=False)
+    if code == 0 and stdout.strip():
+        info["url"] = stdout.strip()
+
+    # Get current branch
+    stdout, code = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False)
+    if code == 0 and stdout.strip():
+        info["branch"] = stdout.strip()
+
+    return info
 
 
 def save_google_api_key(api_key: str):
