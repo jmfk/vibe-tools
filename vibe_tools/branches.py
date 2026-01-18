@@ -267,6 +267,9 @@ def _switch_to_branch(
     branch_name, agent, project_name, parent_branch=None, stream=False
 ):
     """Robustly switches to a feature branch, using AI rescue if needed."""
+    from vibe_tools import utils
+    utils.set_expected_branch(branch_name)
+
     if not is_branch_switching_enabled():
         logger.info(
             f"Branch switching is disabled. Staying on current branch instead of switching to '{branch_name}'."

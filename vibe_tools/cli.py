@@ -135,8 +135,14 @@ class OrderedGroup(click.Group):
     """Custom Click Group to order commands in the help menu."""
 
     def __call__(self, *args, **kwargs):
+        from vibe_tools.utils import GitSafetyError
+
         try:
             return super().__call__(*args, **kwargs)
+        except GitSafetyError as e:
+            from vibe_tools.command_output import out_error
+            out_error(f"Git Safety Violation: {e}", source="vibe")
+            sys.exit(1)
         except (Exception, KeyboardInterrupt) as e:
             if "--server" in sys.argv:
                 from vibe_tools.command_output import out_error, output_manager

@@ -52,6 +52,14 @@ VIBE_DATA_DIR = VIBE_PROJECT_DIR / "data"
 CONFIG_FILE = VIBE_PROJECT_DIR / "config.json"
 GLOBAL_VIBE_DIR = pathlib.Path.home() / ".vibe"
 
+_EXPECTED_BRANCH: Optional[str] = None
+
+
+class GitSafetyError(Exception):
+    """Exception raised when git safety checks fail."""
+
+    pass
+
 # Core lifecycle files
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
 # ... (rest of files)
@@ -153,31 +161,98 @@ def get_last_commit_hash() -> Optional[str]:
     return None
 
 
+def set_expected_branch(branch: Optional[str]):
+    """Sets the branch that the system is expected to be on."""
+    global _EXPECTED_BRANCH
+    _EXPECTED_BRANCH = branch
+
+
+def get_expected_branch() -> Optional[str]:
+    """Retrieves the currently expected branch."""
+    return _EXPECTED_BRANCH
+
+
+def ensure_git_safety():
+    """
+    Ensures the system is in a safe git state.
+    1. No uncommitted changes or untracked files.
+    2. On the expected branch (if set).
+    """
+    if os.environ.get("VIBE_AGENT_ACTIVE") == "1":
+        # Skip safety checks if an agent is already active (we are inside the loop)
+        return
+
+    if not is_git_repo():
+        return
+
+    # 1. Check for dirty state (including untracked files)
+    if is_dirty():
+        # Get list of changed files for better error message
+        stdout, _ = run_command(
+            ["git", "status", "--short"], check=False
+        )
+        raise GitSafetyError(
+            f"Uncommitted changes or untracked files detected in git repository.\n"
+            f"Please commit or stash your changes before proceeding:\n{stdout.strip()}"
+        )
+
+    # 2. Check for correct branch
+    expected = get_expected_branch()
+    if expected:
+        stdout, code = run_command(["git", "branch", "--show-current"], check=False)
+        if code == 0:
+            current = stdout.strip()
+            if current != expected:
+                raise GitSafetyError(
+                    f"Not on the expected branch. Current: '{current}', Expected: '{expected}'.\n"
+                    f"Please switch to the correct branch."
+                )
+
+
 def run_command(
     command: List[str],
     cwd: Optional[str] = None,
     check: bool = True,
 ) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
-    if is_test_mode():
-        intrusive_commands = {
-            "make",
-            "docker",
-            "skaffold",
-            "helm",
-            "pip",
-            "npm",
-            "npx",
-            "uvicorn",
-            "pytest",
-            "python",
-        }
-        main_cmd = command[0] if command else ""
-        if main_cmd in intrusive_commands:
+    intrusive_commands = {
+        "make",
+        "docker",
+        "skaffold",
+        "helm",
+        "pip",
+        "npm",
+        "npx",
+        "uvicorn",
+        "pytest",
+        "python",
+        "git",
+    }
+
+    main_cmd = command[0] if command else ""
+
+    # Intrusive command check and safety check
+    if main_cmd in intrusive_commands:
+        # Exempt read-only git commands from safety check
+        is_git_write = False
+        if main_cmd == "git" and len(command) > 1:
+            subcmd = command[1]
+            if subcmd not in ["status", "diff", "log", "branch", "rev-parse", "show-current", "ls-files", "remote", "merge-base", "show"]:
+                is_git_write = True
+
+        if is_test_mode() and main_cmd != "git":
             logger.warning(
                 f"Blocking intrusive command in test mode: {' '.join(command)}"
             )
             return f"Blocked intrusive command: {' '.join(command)}", 0
+
+        # Perform git safety check for any intrusive command (except read-only git)
+        if main_cmd != "git" or is_git_write:
+            try:
+                ensure_git_safety()
+            except GitSafetyError as e:
+                out_error(f"Git Safety Violation: {e}", source="vibe")
+                return str(e), 1
 
     try:
         # Log the command execution details
@@ -395,19 +470,19 @@ def is_branch_switching_enabled() -> bool:
 
     # Fallback to config
     config = load_config()
-    
+
     # Check both root and ralph level config
     no_switch_root = config.get("no_branch_switch")
     no_switch_ralph = config.get("ralph", {}).get("no_branch_switch")
-    
+
     # If explicitly set to False in either place, it's enabled
     if no_switch_root is False or no_switch_ralph is False:
         return True
-        
+
     # If explicitly set to True in either place, it's disabled
     if no_switch_root is True or no_switch_ralph is True:
         return False
-        
+
     # Default is disabled (no_branch_switch=True)
     return False
 
@@ -2044,7 +2119,9 @@ def get_knowledge_context() -> str:
         return ""
 
     context = "GLOBAL KNOWLEDGE BASE:\n"
-    context += "The following knowledge categories are available. Reference them if needed:\n"
+    context += (
+        "The following knowledge categories are available. Reference them if needed:\n"
+    )
     for f in knowledge_files:
         # Include just the filename/category and a preview or instruction to read it
         context += f"- {f.name}: (Use 'read_file' on this path if you need details on this category)\n"
