@@ -60,6 +60,7 @@ class GitSafetyError(Exception):
 
     pass
 
+
 # Core lifecycle files
 ARCHITECTURE_CURRENT = VIBE_PROJECT_DIR / "architecture-current.yaml"
 # ... (rest of files)
@@ -188,9 +189,7 @@ def ensure_git_safety():
     # 1. Check for dirty state (including untracked files)
     if is_dirty():
         # Get list of changed files for better error message
-        stdout, _ = run_command(
-            ["git", "status", "--short"], check=False
-        )
+        stdout, _ = run_command(["git", "status", "--short"], check=False)
         raise GitSafetyError(
             f"Uncommitted changes or untracked files detected in git repository.\n"
             f"Please commit or stash your changes before proceeding:\n{stdout.strip()}"
@@ -237,7 +236,18 @@ def run_command(
         is_git_write = False
         if main_cmd == "git" and len(command) > 1:
             subcmd = command[1]
-            if subcmd not in ["status", "diff", "log", "branch", "rev-parse", "show-current", "ls-files", "remote", "merge-base", "show"]:
+            if subcmd not in [
+                "status",
+                "diff",
+                "log",
+                "branch",
+                "rev-parse",
+                "show-current",
+                "ls-files",
+                "remote",
+                "merge-base",
+                "show",
+            ]:
                 is_git_write = True
 
         if is_test_mode() and main_cmd != "git":

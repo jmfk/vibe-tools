@@ -125,14 +125,14 @@ function SidebarTree({
                   </span>
                 )}
               </button>
-              {item.artifact?.type === 'prd' && onEdit && (
+              {(item.artifact?.type === 'prd' || item.artifact?.type === 'spec') && onEdit && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     if (item.artifact) onEdit(item.artifact);
                   }}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent/20 text-muted hover:text-accent opacity-0 group-hover/item:opacity-100 transition-all"
-                  title="Edit PRD"
+                  title="Edit Document"
                 >
                   <Pencil size={10} />
                 </button>
@@ -324,7 +324,7 @@ export const VibeSidebar: React.FC<VibeSidebarProps> = React.memo(({
                         </span>
                       )}
                     </button>
-                    {artifact.type === 'prd' && onEdit && (
+                    {(artifact.type === 'prd' || artifact.type === 'spec') && onEdit && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -335,7 +335,7 @@ export const VibeSidebar: React.FC<VibeSidebarProps> = React.memo(({
                           }
                         }}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent/20 text-muted hover:text-accent opacity-0 group-hover/item:opacity-100 transition-all"
-                        title="Edit PRD"
+                        title="Edit Document"
                       >
                         <Pencil size={10} />
                       </button>

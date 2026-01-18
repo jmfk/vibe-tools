@@ -217,11 +217,24 @@ class OutputManager:
             # Note: "debug" level is suppressed in server mode
 
         if self._print_to_stdout:
-            if flush:
-                sys.stdout.write(str(message) + "\n")
-                sys.stdout.flush()
-            else:
-                print(message)
+            # Suppress debug messages unless explicitly requested via console level
+            should_print = True
+            if level == "debug":
+                vibe_logger = logging.getLogger("vibe_tools")
+                console_level = logging.INFO
+                for handler in vibe_logger.handlers:
+                    if isinstance(handler, logging.StreamHandler):
+                        console_level = handler.level
+                        break
+                if console_level > logging.DEBUG:
+                    should_print = False
+
+            if should_print:
+                if flush:
+                    sys.stdout.write(str(message) + "\n")
+                    sys.stdout.flush()
+                else:
+                    print(message)
 
         if self._md_log_file:
             self._write_to_md_log(out_msg)
