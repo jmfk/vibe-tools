@@ -12,6 +12,12 @@ dependencies = [
     "rich",
     "pydantic",
     "prompt_toolkit",
+    "python-dotenv",
+    "httpx",
+    "gspread",
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
 ]
 
 [project.scripts]
