@@ -191,13 +191,30 @@ def ensure_git_safety():
         return
 
     # 1. Check for dirty state (including untracked files)
-    if is_dirty():
-        # Get list of changed files for better error message
-        stdout, _ = run_command(["git", "status", "--short"], check=False)
-        raise GitSafetyError(
-            f"Uncommitted changes or untracked files detected in git repository.\n"
-            f"Please commit or stash your changes before proceeding:\n{stdout.strip()}"
-        )
+    # Get list of changed files for better error message
+    stdout, _ = run_command(["git", "status", "--short"], check=False)
+    if stdout.strip():
+        # Filter out changes in vibe-managed directories
+        lines = stdout.strip().splitlines()
+        critical_changes = []
+        for line in lines:
+            # git status --short output format: "XY path"
+            # Some versions of git might have quotes if paths have spaces
+            path = line[3:].strip().strip('"')
+            if not (
+                path.startswith("product/")
+                or path.startswith("implementation/")
+                or path == "product"
+                or path == "implementation"
+            ):
+                critical_changes.append(line)
+
+        if critical_changes:
+            raise GitSafetyError(
+                f"Uncommitted changes or untracked files detected in git repository.\n"
+                f"Please commit or stash your changes before proceeding:\n"
+                + "\n".join(critical_changes)
+            )
 
     # 2. Check for correct branch
     expected = get_expected_branch()
