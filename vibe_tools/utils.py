@@ -1381,8 +1381,6 @@ def setup_project_gitignore():
         "reports/",
         "implementation/costs/",
         "implementation/logs/*",
-        "vibe_tools/_version.py",
-        "vibe_tools/version.py",
         "*.pyc",
         "*.log",
         ".vibe_config.json",
