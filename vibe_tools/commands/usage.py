@@ -13,6 +13,7 @@ from vibe_tools.stats import (
     get_date_range,
     generate_report,
     fetch_usage_events,
+    get_missing_days_backtrack,
 )
 from vibe_tools.cost import get_total_cost, get_cost_for_period, get_month_bounds
 from vibe_tools.utils import COSTS_DIR, load_config, get_cursor_api_key
@@ -110,12 +111,23 @@ def register_usage(cli):
                     click.echo(click.style(message, fg="red", bold=True))
                     return
 
-            # If period or days specified, use those for download range
-            backtrack = days
+            # Determine backtrack range
+            param_source = ctx.get_parameter_source("days")
+            is_default_days = param_source == click.core.ParameterSource.DEFAULT
+
             if period:
                 start, end = get_date_range(period)
                 backtrack = (end - start).days + 1
-            
+            elif not is_default_days:
+                backtrack = days
+            else:
+                # Default behavior: download all missing days for current month
+                backtrack = get_missing_days_backtrack(agent_name)
+                if not server_mode:
+                    click.echo(
+                        f"🔍 Checking for missing dates this month... backtrack: {backtrack} days"
+                    )
+
             if not download_and_process_usage(backtrack, agent_name):
                 return
 

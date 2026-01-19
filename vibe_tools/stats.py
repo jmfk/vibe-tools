@@ -16,6 +16,39 @@ import requests
 from vibe_tools.utils import COSTS_DIR, logger, get_cursor_api_key
 
 
+def get_missing_days_backtrack(agent_name: str = "cursor-agent") -> int:
+    """Calculate how many days to backtrack to cover all missing logs for the current month."""
+    now = datetime.datetime.now()
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Get existing dates for this agent
+    existing_files = list_usage_files(COSTS_DIR)
+    existing_dates = set()
+    for p in existing_files:
+        if p.name.startswith(f"{agent_name}-"):
+            d = _extract_date_from_file(p)
+            if d:
+                existing_dates.add(d.date())
+
+    # Find earliest missing date in current month
+    earliest_missing = None
+    curr = start_of_month
+    today_date = now.date()
+
+    while curr.date() <= today_date:
+        if curr.date() not in existing_dates:
+            earliest_missing = curr
+            break
+        curr += datetime.timedelta(days=1)
+
+    if earliest_missing is None:
+        return 1  # Just today if nothing is missing (but we usually want at least today)
+
+    backtrack = (now - earliest_missing).days + 1
+    # Cap backtrack to a reasonable maximum if needed, but for "current month" it's at most 31
+    return backtrack
+
+
 def download_and_process_usage(backtrack: int = 1, agent_name: str = "cursor-agent"):
     """Download usage CSV and process it."""
     end_date = datetime.datetime.now()
