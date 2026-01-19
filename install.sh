@@ -128,7 +128,10 @@ if [[ $DESKTOP_MODE == true ]]; then
     python3 -m pip install $INSTALL_FLAGS .
     python3 -m vibe_tools.setup desktop-init
 
-    # 3. Frontend Build
+    # 3. Backend & Frontend Build
+    echo "Building standalone backend..."
+    python3 scripts/bundle_backend.py
+
     echo "Building frontend assets..."
     cd frontend
     npm install

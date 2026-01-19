@@ -66,7 +66,7 @@ struct AppState {
     #[allow(dead_code)]
     workspace_root: PathBuf,
     terminal_buffers: Mutex<HashMap<String, LogBuffer>>,
-    active_process_stdin: AsyncMutex<Option<tokio::process::ChildStdin>>,
+    active_process_child: AsyncMutex<Option<tauri::api::process::Child>>,
     app_logs: Mutex<VecDeque<AppLog>>,
 }
 
@@ -127,34 +127,28 @@ fn log_vibe_command_call(state: &AppState, window: &Window, command: &str, args:
     }
 }
 
-async fn spawn_vibe_process(command: String, args: Vec<String>) -> Result<tokio::process::Child, String> {
-    use std::process::Stdio;
-    use tokio::process::Command;
-    use tokio::io::AsyncWriteExt;
+async fn spawn_vibe_process(command: String, args: Vec<String>) -> Result<(tauri::async_runtime::Receiver<tauri::api::process::CommandEvent>, tauri::api::process::Child), String> {
+    use tauri::api::process::Command;
 
-    let mut cmd = Command::new("vibe");
-    cmd.arg("--server")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .stdin(Stdio::piped());
+    let cmd = Command::new_sidecar("vibe")
+        .or_else(|_| Ok(Command::new("vibe"))).map_err(|e: tauri::Error| e.to_string())?;
+
+    let vibe_args = vec!["--server".to_string()];
     
-    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn vibe: {}", e))?;
-    
-    let mut stdin = child.stdin.take().ok_or("Failed to open stdin")?;
+    let (rx, mut child) = cmd
+        .args(vibe_args)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn vibe: {}", e))?;
     
     let payload = serde_json::json!({
         "command": command,
         "args": args
     });
     
-    stdin.write_all(payload.to_string().as_bytes()).await.map_err(|e| e.to_string())?;
-    stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
-    stdin.flush().await.map_err(|e| e.to_string())?;
+    child.write(payload.to_string().as_bytes()).map_err(|e| e.to_string())?;
+    child.write(b"\n").map_err(|e| e.to_string())?;
     
-    // Put stdin back so it can be used for interactive prompts if needed
-    child.stdin = Some(stdin);
-    
-    Ok(child)
+    Ok((rx, child))
 }
 
 #[tauri::command]
@@ -268,12 +262,10 @@ async fn get_workspace_root() -> Result<String, String> {
 
 #[tauri::command]
 async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<(), String> {
-    let mut stdin_lock = state.active_process_stdin.lock().await;
-    if let Some(stdin) = stdin_lock.as_mut() {
-        use tokio::io::AsyncWriteExt;
-        stdin.write_all(input.as_bytes()).await.map_err(|e| e.to_string())?;
-        stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
-        stdin.flush().await.map_err(|e| e.to_string())?;
+    let mut child_lock = state.active_process_child.lock().await;
+    if let Some(child) = child_lock.as_mut() {
+        child.write(input.as_bytes()).map_err(|e| e.to_string())?;
+        child.write(b"\n").map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("No active process".to_string())
@@ -282,99 +274,88 @@ async fn send_vibe_input(state: State<'_, AppState>, input: String) -> Result<()
 
 #[tauri::command]
 async fn run_vibe_command(window: Window, state: State<'_, AppState>, command: String, args: Vec<String>) -> Result<(), String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tauri::api::process::CommandEvent;
 
     log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
-    let mut child = spawn_vibe_process(command.clone(), args).await?;
-
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-    let stdin = child.stdin.take().unwrap();
+    let (mut rx, child) = spawn_vibe_process(command.clone(), args).await?;
 
     {
-        let mut stdin_lock = state.active_process_stdin.lock().await;
-        *stdin_lock = Some(stdin);
+        let mut child_lock = state.active_process_child.lock().await;
+        *child_lock = Some(child);
     }
 
-    let window_stdout = window.clone();
-    let handle_stdout = window.app_handle();
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            // Try to parse as JSON for server mode events
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                window_stdout.emit("vibe-server-event", json).unwrap();
-            }
-
-            {
-                let state = handle_stdout.state::<AppState>();
-                let mut buffers = state.terminal_buffers.lock().unwrap();
-                let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
-                buffer.push(line.clone());
-            }
-            window_stdout.emit("log-line", line).unwrap();
-        }
-    });
-
-    let window_stderr = window.clone();
-    let handle_stderr = window.app_handle();
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            let formatted_line = format!("ERR: {}", line);
-            {
-                let state = handle_stderr.state::<AppState>();
-                let mut logs = state.app_logs.lock().unwrap();
-                if logs.len() >= 1000 {
-                    logs.pop_front();
-                }
-                logs.push_back(AppLog {
-                    timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
-                    level: "ERROR".to_string(),
-                    source: "Command".to_string(),
-                    message: line.clone(),
-                    data: None,
-                });
-                
-                let mut buffers = state.terminal_buffers.lock().unwrap();
-                let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
-                buffer.push(formatted_line.clone());
-            }
-            window_stderr.emit("log-line", formatted_line).unwrap();
-            window_stderr.emit("app-log", AppLog {
-                timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
-                level: "ERROR".to_string(),
-                source: "Command".to_string(),
-                message: line,
-                data: None,
-            }).unwrap();
-        }
-    });
-
-    let handle_finished = window.app_handle();
-    let window_finished = window.clone();
+    let window_clone = window.clone();
+    let handle = window.app_handle();
     let command_name = command.clone();
+
     tokio::spawn(async move {
-        let status = child.wait().await;
-        {
-            let state = handle_finished.state::<AppState>();
-            let mut stdin_lock = state.active_process_stdin.lock().await;
-            *stdin_lock = None;
-        }
-        
-        {
-            let state = handle_finished.state::<AppState>();
-            match &status {
-                Ok(s) => log_to_app(&state, &window_finished, "INFO", "Command", &format!("Command {} finished with status {}", command_name, s), None),
-                Err(e) => log_to_app(&state, &window_finished, "ERROR", "Command", &format!("Command {} failed: {}", command_name, e), None),
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                        let _ = window_clone.emit("vibe-server-event", json);
+                    }
+
+                    {
+                        let state = handle.state::<AppState>();
+                        let mut buffers = state.terminal_buffers.lock().unwrap();
+                        let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
+                        buffer.push(line.clone());
+                    }
+                    let _ = window_clone.emit("log-line", line);
+                }
+                CommandEvent::Stderr(line) => {
+                    let formatted_line = format!("ERR: {}", line);
+                    {
+                        let state = handle.state::<AppState>();
+                        let mut logs = state.app_logs.lock().unwrap();
+                        if logs.len() >= 1000 {
+                            logs.pop_front();
+                        }
+                        logs.push_back(AppLog {
+                            timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+                            level: "ERROR".to_string(),
+                            source: "Command".to_string(),
+                            message: line.clone(),
+                            data: None,
+                        });
+                        
+                        let mut buffers = state.terminal_buffers.lock().unwrap();
+                        let buffer = buffers.entry("main".to_string()).or_insert_with(|| LogBuffer::new(5000));
+                        buffer.push(formatted_line.clone());
+                    }
+                    let _ = window_clone.emit("log-line", formatted_line);
+                    let _ = window_clone.emit("app-log", AppLog {
+                        timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+                        level: "ERROR".to_string(),
+                        source: "Command".to_string(),
+                        message: line,
+                        data: None,
+                    });
+                }
+                CommandEvent::Terminated(payload) => {
+                    {
+                        let state = handle.state::<AppState>();
+                        let mut child_lock = state.active_process_child.lock().await;
+                        *child_lock = None;
+                    }
+
+                    let status = payload.code;
+                    {
+                        let state = handle.state::<AppState>();
+                        log_to_app(&state, &window_clone, "INFO", "Command", &format!("Command {} finished with status {:?}", command_name, status), None);
+                    }
+
+                    let _ = window_clone.emit("command-finished", serde_json::json!({
+                        "command": command_name,
+                        "status": status.map(|s| s.to_string())
+                    }));
+                    break;
+                }
+                _ => {}
             }
         }
-
-        window_finished.emit("command-finished", serde_json::json!({
-            "command": command_name,
-            "status": status.map(|s| s.to_string()).ok()
-        })).unwrap();
     });
 
     Ok(())
@@ -574,44 +555,37 @@ fn update_project_registry(
 
 #[tauri::command]
 async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, command: String, args: Vec<String>) -> Result<serde_json::Value, String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tauri::api::process::CommandEvent;
 
     log_vibe_command_call(&state, &window, &command, &args, "INFO", true);
 
-    let mut child = spawn_vibe_process(command.clone(), args.clone()).await?;
-    
-    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
-    
-    let mut reader = BufReader::new(stdout).lines();
-    let mut err_reader = BufReader::new(stderr).lines();
+    let (mut rx, _child) = spawn_vibe_process(command.clone(), args.clone()).await?;
     
     let mut result_json: Option<serde_json::Value> = None;
-    let error_msg;
+    let mut error_msg = String::new();
+    let mut success = false;
 
-    // Spawn a task to capture stderr
-    let error_capture = tokio::spawn(async move {
-        let mut errs = String::new();
-        while let Ok(Some(line)) = err_reader.next_line().await {
-            if !errs.is_empty() { errs.push('\n'); }
-            errs.push_str(&line);
-        }
-        errs
-    });
-
-    while let Ok(Some(line)) = reader.next_line().await {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-            // Check if it's the final result
-            if json["type"] == "result" {
-                result_json = Some(json["data"].clone());
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if json["type"] == "result" {
+                        result_json = Some(json["data"].clone());
+                    }
+                    let _ = window.emit("vibe-server-event", json);
+                }
             }
-            // Also emit it so the UI can see progress if it wants to
-            window.emit("vibe-server-event", json).unwrap();
+            CommandEvent::Stderr(line) => {
+                if !error_msg.is_empty() { error_msg.push('\n'); }
+                error_msg.push_str(&line);
+            }
+            CommandEvent::Terminated(payload) => {
+                success = payload.code == Some(0);
+                break;
+            }
+            _ => {}
         }
     }
-
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-    error_msg = error_capture.await.map_err(|e| e.to_string())?;
 
     if let Some(res) = result_json {
         log_to_app(&state, &window, "INFO", "Command", &format!("Command {} finished with result", command), Some(serde_json::json!({
@@ -623,7 +597,7 @@ async fn run_vibe_command_json(state: State<'_, AppState>, window: Window, comma
         return Ok(res);
     }
 
-    if !status.success() {
+    if !success {
         log_to_app(&state, &window, "ERROR", "Command", &format!("Command {} failed: {}", command, error_msg), Some(serde_json::json!({
             "command_line": format!("vibe --server {} {}", command, args.join(" ")),
             "stdio": serde_json::json!({ "command": command, "args": args }),
@@ -645,7 +619,7 @@ fn main() {
         .manage(AppState {
             workspace_root: workspace_root_path.clone(),
             terminal_buffers: Mutex::new(HashMap::new()),
-            active_process_stdin: AsyncMutex::new(None),
+            active_process_child: AsyncMutex::new(None),
             app_logs: Mutex::new(VecDeque::with_capacity(1000)),
         })
         .setup(move |app| {

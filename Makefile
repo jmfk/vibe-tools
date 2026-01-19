@@ -5,7 +5,7 @@
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
+build: bundle-backend build-desktop ## Build the entire project (Standalone CLI and Desktop)
 
 build-cli: install-backend ## Build the Python CLI (editable or standalone, based on config)
 	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
@@ -17,7 +17,10 @@ build-cli: install-backend ## Build the Python CLI (editable or standalone, base
 		pip install .; \
 	fi
 
-build-desktop: ## Build the production Tauri desktop application
+bundle-backend: ## Bundle the Python backend into a standalone executable for Tauri sidecar
+	python3 scripts/bundle_backend.py
+
+build-desktop: bundle-backend ## Build the production Tauri desktop application (includes bundled backend)
 	cd frontend && npm run tauri build
 
 test: test-backend test-desktop ## Run all tests (CLI and Desktop)

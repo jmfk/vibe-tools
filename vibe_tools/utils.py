@@ -28,6 +28,17 @@ from vibe_tools.command_output import (
     output_manager,
 )
 
+def get_resource_path(relative_path: str) -> pathlib.Path:
+    """Get the absolute path to a resource, works for dev and for PyInstaller."""
+    if hasattr(sys, "_MEIPASS"):
+        # PyInstaller extracts data to sys._MEIPASS
+        return pathlib.Path(sys._MEIPASS) / relative_path
+
+    # Dev mode: resource is relative to the package root
+    package_root = pathlib.Path(__file__).parent.parent
+    return package_root / relative_path
+
+
 VIBE_PROJECT_DIR = pathlib.Path("implementation")
 PRODUCT_DIR = pathlib.Path("product")
 PLANNING_DIR = PRODUCT_DIR
@@ -1560,8 +1571,7 @@ Output ONLY the categories and content as specified.
 def deploy_vibe_templates(target_dir: pathlib.Path):
     """Copies all markdown templates from the package installation to the local project."""
     # Find templates relative to the package root
-    package_root = pathlib.Path(__file__).parent.parent
-    templates_src = package_root / "vibe-templates"
+    templates_src = get_resource_path("vibe-templates")
 
     if not templates_src.exists() or not templates_src.is_dir():
         # Fallback for development/editable mode if the above fails
