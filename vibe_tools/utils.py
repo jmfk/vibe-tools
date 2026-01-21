@@ -2463,44 +2463,62 @@ def log_success(tag, *args):
 verbose_logger = None
 
 
-def run_llm(prompt, model="gemini-3-flash", debug=False):
-    """Runs an LLM call using the google-genai library."""
-    try:
-        from google import genai
+def run_llm(prompt, model="gemini-3-flash", debug=False, max_retries=3):
+    """Runs an LLM call using the google-genai library with retries."""
+    import time
+    import random
 
-        api_key = get_google_api_key()
-        if not api_key:
-            logger.error("GOOGLE_API_KEY not found. Please run `vibe config api`.")
+    for attempt in range(max_retries):
+        try:
+            from google import genai
+            from google.genai import errors
+
+            api_key = get_google_api_key()
+            if not api_key:
+                logger.error("GOOGLE_API_KEY not found. Please run `vibe config api`.")
+                return None
+
+            # Map aliases
+            actual_model = model
+            if model == "gemini-3-flash":
+                actual_model = "gemini-2.0-flash-exp"
+
+            client = genai.Client(api_key=api_key)
+
+            if debug:
+                out_debug(f"\n--- DEBUG: LLM PROMPT ({actual_model}) (Attempt {attempt + 1}/{max_retries}) ---", source="llm")
+                out_debug(prompt, source="llm")
+                out_debug("--- END DEBUG ---\n", source="llm")
+
+            response = client.models.generate_content(
+                model=actual_model,
+                contents=prompt,
+            )
+
+            log_large_output(f"llm_prompt_{actual_model}", prompt)
+            log_large_output(f"llm_response_{actual_model}", response.text)
+
+            if debug:
+                out_debug("\n--- DEBUG: LLM RESPONSE ---", source="llm")
+                out_debug(response.text, source="llm")
+                out_debug("--- END DEBUG ---\n", source="llm")
+
+            return response.text
+        except Exception as e:
+            is_retriable = False
+            # Check for resource exhaustion or rate limits
+            error_msg = str(e).lower()
+            if "resource_exhausted" in error_msg or "429" in error_msg or "rate limit" in error_msg:
+                is_retriable = True
+            
+            if is_retriable and attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + (random.random() * 1)
+                logger.warning(f"⚠️ LLM call failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time:.2f}s...")
+                time.sleep(wait_time)
+                continue
+            
+            logger.error(f"Error in run_llm after {attempt + 1} attempts: {e}")
             return None
-
-        # Map aliases
-        if model == "gemini-3-flash":
-            model = "gemini-2.0-flash-exp"
-
-        client = genai.Client(api_key=api_key)
-
-        if debug:
-            out_debug(f"\n--- DEBUG: LLM PROMPT ({model}) ---", source="llm")
-            out_debug(prompt, source="llm")
-            out_debug("--- END DEBUG ---\n", source="llm")
-
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-        )
-
-        log_large_output(f"llm_prompt_{model}", prompt)
-        log_large_output(f"llm_response_{model}", response.text)
-
-        if debug:
-            out_debug("\n--- DEBUG: LLM RESPONSE ---", source="llm")
-            out_debug(response.text, source="llm")
-            out_debug("--- END DEBUG ---\n", source="llm")
-
-        return response.text
-    except Exception as e:
-        logger.error(f"Error in run_llm: {e}")
-        return None
 
 
 def switch_to_main():

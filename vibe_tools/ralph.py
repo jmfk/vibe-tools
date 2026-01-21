@@ -42,6 +42,7 @@ from vibe_tools.utils import (
 )
 
 MAX_ITERATIONS = 10
+RETRY_ITERATIONS = 3
 COMPLETION_PROMISE = "<promise>DONE</promise>"
 
 

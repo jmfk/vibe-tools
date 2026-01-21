@@ -56,7 +56,7 @@ def register_setup(cli):
             return
 
         # Iteration control for setup reconciliation
-        setup_iterations = config.get("iterations", {}).get("setup", 1)
+        setup_iterations = config.get("iterations", {}).get("setup", 3)
 
         if import_code:
             # Ensure project directory exists before agent runs

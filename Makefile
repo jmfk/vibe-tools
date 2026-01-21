@@ -1,11 +1,11 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-cli build-desktop test test-backend test-desktop test-frontend test-core dev install install-backend install-frontend dev-desktop lint lint-backend lint-frontend clean logs
+.PHONY: help build build-cli bundle-backend build-desktop test test-backend test-desktop test-frontend test-core dev install install-backend install-frontend dev-desktop lint lint-backend lint-frontend clean logs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: bundle-backend build-desktop ## Build the entire project (Standalone CLI and Desktop)
+build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
 
 build-cli: install-backend ## Build the Python CLI (editable or standalone, based on config)
 	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
@@ -36,9 +36,9 @@ test-frontend: ## Run frontend-specific Vitest tests
 test-core: ## Run Rust-specific Cargo tests
 	cd frontend/src-tauri && cargo test
 
-dev: install dev-desktop ## Install all dependencies and start the desktop app for development
+dev: install-deps dev-desktop ## Install dependencies and start the desktop app for development
 
-install: install-backend install-frontend ## Install backend and frontend dependencies
+install-deps: install-backend install-frontend ## Install backend and frontend dependencies
 
 install-backend: ## Install Python backend dependencies
 	pip install -e .

@@ -234,9 +234,62 @@ def is_tool_available(tool: str) -> bool:
 
 
 def run_agent(
+    command: List[str], stream: bool = False, bypass_safety: bool = False, max_retries: int = 3
+) -> Tuple[str, int, Optional[str]]:
+    """Runs an agent command with retries, optionally preventing sleep and streaming output."""
+    import random
+    from .utils import ensure_git_safety, GitSafetyError
+
+    last_output = ""
+    last_code = 1
+    last_chat_id = None
+
+    for attempt in range(max_retries):
+        if attempt > 0:
+            # If we have a chat_id from a previous attempt, use it to resume
+            if last_chat_id and "--resume" not in command:
+                # Find where to insert --resume. Usually after the binary name or after --force
+                new_command = [command[0]]
+                idx = 1
+                if idx < len(command) and command[idx] == "--force":
+                    new_command.append("--force")
+                    idx += 1
+                new_command.extend(["--resume", last_chat_id])
+                new_command.extend(command[idx:])
+                command = new_command
+                logger.info(f"🔄 Attempting to resume agent session {last_chat_id} (Attempt {attempt + 1}/{max_retries})")
+            else:
+                logger.info(f"🔄 Retrying agent command (Attempt {attempt + 1}/{max_retries})")
+
+        output, code, chat_id = _run_agent_once(command, stream=stream, bypass_safety=bypass_safety)
+        last_output = output
+        last_code = code
+        if chat_id:
+            last_chat_id = chat_id
+
+        if code == 0:
+            return output, code, chat_id
+
+        # Check for retriable errors
+        is_retriable = False
+        error_msg = output.lower()
+        if "retriableerror" in error_msg or "resource_exhausted" in error_msg or "rate limit" in error_msg or "429" in error_msg:
+            is_retriable = True
+        
+        if not is_retriable or attempt == max_retries - 1:
+            break
+            
+        wait_time = (2 ** attempt) + (random.random() * 2)
+        logger.warning(f"⚠️ Agent failed with retriable error: {output[:200]}... Retrying in {wait_time:.2f}s...")
+        time.sleep(wait_time)
+
+    return last_output, last_code, last_chat_id
+
+
+def _run_agent_once(
     command: List[str], stream: bool = False, bypass_safety: bool = False
 ) -> Tuple[str, int, Optional[str]]:
-    """Runs an agent command, optionally preventing sleep and streaming output."""
+    """Internal helper to run an agent command once."""
     from .utils import ensure_git_safety, GitSafetyError
 
     if not bypass_safety:
