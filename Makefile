@@ -1,72 +1,48 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build build-cli build-desktop bundle-backend test test-backend test-desktop test-frontend test-core dev install install-deps install-backend install-frontend dev-desktop lint lint-backend lint-frontend clean logs
+.PHONY: help install install-app reinstall-app uninstall-app install-dev-global build-dist clean-dist check-pipx check-build test lint clean logs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: build-cli build-desktop ## Build the entire project (CLI and Desktop)
+install: install-dev-global ## Install the editable global dev CLI via pipx
 
-build-cli: install-backend ## Build the Python CLI
-	@STANDALONE=$$(python3 -c "import json, pathlib; p = pathlib.Path('implementation/config.json'); print('true' if json.loads(p.read_text()).get('setup', {}).get('standalone', True) else 'false')" 2>/dev/null || echo "true"); \
-	if [ "$$STANDALONE" = "false" ]; then \
-		echo "Installing in editable mode..."; \
-		pip install -e .; \
-	else \
-		echo "Installing in standalone mode..."; \
-		pip install .; \
-	fi
+check-pipx: ## Verify pipx is installed
+	@command -v pipx >/dev/null 2>&1 || (echo "pipx is required. Install it first: python3 -m pip install --user pipx && python3 -m pipx ensurepath" && exit 1)
 
-bundle-backend: ## Bundle the Python backend into a standalone executable for Tauri sidecar
-	python3 scripts/bundle_backend.py
+check-build: ## Ensure the Python build package is available
+	@python -c "import build" >/dev/null 2>&1 || python -m pip install build
 
-build-desktop: bundle-backend ## Build the production Tauri desktop application
-	cd frontend && npm run tauri build
+install-app: check-pipx build-dist ## Install the packaged CLI globally via pipx from a built wheel
+	@WHEEL=$$(ls -t dist/*.whl 2>/dev/null | head -n 1); \
+	if [ -z "$$WHEEL" ]; then echo "No wheel found in dist/"; exit 1; fi; \
+	pipx uninstall vibe-tools >/dev/null 2>&1 || true; \
+	pipx install --python python3 "$$WHEEL"
 
-test: test-backend test-desktop ## Run all tests (CLI and Desktop)
+reinstall-app: uninstall-app install-app ## Reinstall the packaged global CLI
 
-test-backend: ## Run pytest for the Python CLI
+uninstall-app: check-pipx ## Remove the globally installed CLI from pipx
+	@pipx uninstall vibe-tools >/dev/null 2>&1 || true
+
+install-dev-global: check-pipx ## Install the repo as a global editable CLI via pipx
+	@pipx uninstall vibe-tools >/dev/null 2>&1 || true
+	pipx install --python python3 --editable .
+
+build-dist: check-build clean-dist ## Build wheel and sdist artifacts into dist/
+	python -m build
+
+clean-dist: ## Remove distribution build artifacts
+	rm -rf build dist *.egg-info
+
+test: ## Run the Python test suite
 	pytest tests/
 
-test-desktop: test-frontend test-core ## Run all desktop tests (Frontend and Rust core)
+lint: ## Run Python lint checks
+	python -m compileall vibe_tools tests
 
-test-frontend: ## Run frontend-specific Vitest tests
-	cd frontend && npm test
+clean: ## Remove Python build and cache artifacts
+	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache
+	python -c "import pathlib, shutil; [shutil.rmtree(path, ignore_errors=True) for path in pathlib.Path('.').rglob('__pycache__')]"
 
-test-core: ## Run Rust-specific Cargo tests
-	cd frontend/src-tauri && cargo test
-
-dev: install-deps dev-desktop ## Install dependencies and start the desktop app for development
-
-install: ## Install the vibe-tools CLI (editable)
-	pip install -e .
-
-install-deps: install-backend install-frontend ## Install backend and frontend dependencies
-
-install-backend: ## Install Python backend dependencies
-	pip install -e .
-
-install-frontend: ## Install Node.js frontend dependencies
-	cd frontend && npm install
-
-dev-desktop: ## Start the Tauri development environment
-	cd frontend && npm run tauri dev
-
-lint: lint-backend lint-frontend ## Run all linters (CLI and Frontend)
-
-lint-backend: ## Run ruff and mypy on the Python codebase
-	ruff check .
-	mypy .
-
-lint-frontend: ## Run linting for the frontend
-	cd frontend && npm run lint
-
-clean: ## Remove build artifacts and temporary files
-	rm -rf build/ dist/ *.egg-info .pytest_cache .ruff_cache .mypy_cache
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf frontend/dist/
-	rm -rf frontend/src-tauri/target/
-	rm -rf implementation/logs/*
-
-logs: ## List implementation logs
-	ls -R implementation/logs/
+logs: ## List repo-local vibe logs
+	ls -R .vibe-tools/logs 2>/dev/null || true
