@@ -98,10 +98,8 @@ class OutputManager:
 
                 if msg_type == "cancel":
                     # Handle cancellation
-                    from vibe_tools.agent import agent_manager
                     import _thread
 
-                    agent_manager.cleanup_session()
                     self.set_final_result(0, {"status": "cancelled"})
                     # Signal the main thread to exit
                     _thread.interrupt_main()

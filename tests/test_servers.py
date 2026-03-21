@@ -1,116 +1,53 @@
+import json
 from unittest.mock import patch
 
-import pytest
 from click.testing import CliRunner
 
 from vibe_tools.servers import servers_cli
+from vibe_tools import utils
 
 
-@pytest.fixture
-def runner():
-    return CliRunner()
+def test_list_servers_shows_known_services():
+    runner = CliRunner()
 
-
-@pytest.fixture
-def mock_global_servers(tmp_path, monkeypatch):
-    global_vibe = tmp_path / ".vibe"
-    global_vibe.mkdir()
-    servers_file = global_vibe / "servers.json"
-    config_file = global_vibe / "config.json"
-
-    monkeypatch.setattr("vibe_tools.utils.GLOBAL_VIBE_DIR", global_vibe)
-    monkeypatch.setattr("vibe_tools.utils.GLOBAL_SERVERS_FILE", servers_file)
-    monkeypatch.setattr("vibe_tools.utils.GLOBAL_CONFIG_FILE", config_file)
-
-    return global_vibe
-
-
-def test_list_servers(runner, mock_global_servers):
     def mock_run_command(cmd, **kwargs):
-        if cmd[0:2] == ["docker", "info"]:
-            return ("", 0) # Docker is running
-        if cmd[0:2] == ["docker", "inspect"]:
-            return ("", 1) # Container not found
+        if cmd[:2] == ["docker", "info"]:
+            return ("", 0)
+        if cmd[:2] == ["docker", "inspect"]:
+            return ("", 1)
         return ("", 0)
 
     with patch("vibe_tools.servers.run_command", side_effect=mock_run_command):
         result = runner.invoke(servers_cli, ["list"])
 
-        assert result.exit_code == 0
-        assert "Service" in result.output
-        assert "postgres" in result.output
-        assert "⚪ Not Installed" in result.output
-        assert (mock_global_servers / "servers.json").exists()
+    assert result.exit_code == 0
+    assert "postgres" in result.output
+    assert "Not Installed" in result.output
 
 
-def test_install_server(runner, mock_global_servers):
-    with patch("vibe_tools.servers.run_command") as mock_run:
-        # 1. inspect (not created)
-        # 2. docker run (success)
-        mock_run.side_effect = [
-            ("", 1),  # inspect fails -> not created
-            ("container_id", 0),  # docker run succeeds
-        ]
+def test_install_server_updates_global_config():
+    runner = CliRunner()
 
-        result = runner.invoke(servers_cli, ["install", "redis"])
+    with patch("vibe_tools.servers.get_container_status", return_value="not_created"):
+        with patch("vibe_tools.servers.run_command", return_value=("container-id", 0)):
+            result = runner.invoke(servers_cli, ["install", "redis"])
 
-        assert result.exit_code == 0
-        assert "Installing redis..." in result.output
-        assert "✅ redis installed and started successfully." in result.output
-        assert "✅ Saved connection details to global config." in result.output
-
-        # Verify global config was updated
-        import json
-
-        config_data = json.loads((mock_global_servers / "config.json").read_text())
-        assert "redis" in config_data["services"]
-        assert config_data["services"]["redis"]["port"] == 6379
+    assert result.exit_code == 0
+    config = json.loads(utils.GLOBAL_CONFIG_FILE.read_text())
+    assert config["services"]["redis"]["port"] == 6379
 
 
-def test_start_server(runner, mock_global_servers):
-    with patch("vibe_tools.servers.run_command") as mock_run:
-        # 1. inspect (exited)
-        # 2. docker start (success)
-        mock_run.side_effect = [("exited", 0), ("", 0)]
+def test_start_and_stop_server_call_docker():
+    runner = CliRunner()
 
-        result = runner.invoke(servers_cli, ["start", "postgres"])
+    with patch("vibe_tools.servers.get_container_status", return_value="exited"):
+        with patch("vibe_tools.servers.run_command", return_value=("", 0)) as mock_run:
+            start_result = runner.invoke(servers_cli, ["start", "postgres"])
+    assert start_result.exit_code == 0
+    mock_run.assert_called_with(["docker", "start", "vibe-postgres"], check=False)
 
-        assert result.exit_code == 0
-        assert "Starting postgres..." in result.output
-        assert "✅ postgres started." in result.output
-
-        # Check docker start call
-        mock_run.assert_any_call(["docker", "start", "vibe-postgres"], check=False)
-
-
-def test_stop_server(runner):
-    with patch("vibe_tools.servers.run_command") as mock_run:
-        # 1. inspect (running)
-        # 2. docker stop (success)
-        mock_run.side_effect = [("running", 0), ("", 0)]
-
-        result = runner.invoke(servers_cli, ["stop", "rabbitmq"])
-
-        assert result.exit_code == 0
-        assert "Stopping rabbitmq..." in result.output
-        assert "✅ rabbitmq stopped." in result.output
-
-        # Check docker stop call
-        mock_run.assert_any_call(["docker", "stop", "vibe-rabbitmq"], check=False)
-
-
-def test_remove_server(runner):
-    with patch("vibe_tools.servers.run_command") as mock_run:
-        # 1. inspect (exited)
-        # 2. docker rm (success)
-        mock_run.side_effect = [("exited", 0), ("", 0)]
-
-        # Provide 'y' to the confirmation prompt
-        result = runner.invoke(servers_cli, ["remove", "mailhog"], input="y\n")
-
-        assert result.exit_code == 0
-        assert "Removing mailhog..." in result.output
-        assert "✅ mailhog removed." in result.output
-
-        # Check docker rm call
-        mock_run.assert_any_call(["docker", "rm", "-f", "vibe-mailhog"], check=False)
+    with patch("vibe_tools.servers.get_container_status", return_value="running"):
+        with patch("vibe_tools.servers.run_command", return_value=("", 0)) as mock_run:
+            stop_result = runner.invoke(servers_cli, ["stop", "postgres"])
+    assert stop_result.exit_code == 0
+    mock_run.assert_called_with(["docker", "stop", "vibe-postgres"], check=False)

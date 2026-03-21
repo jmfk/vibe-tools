@@ -135,7 +135,7 @@ class CostLogger:
         file_exists = USAGE_LOG_CSV.exists()
         header = [
             "Timestamp",
-            "PRD",
+            "Context",
             "Phase",
             "Iteration",
             "Agent",
@@ -275,7 +275,7 @@ def finalize_cost_report():
         "\n" + "=" * 80,
         "SESSION COST REPORT",
         "=" * 80,
-        f"{'PRD':<20} {'Phase':<10} {'Iter':<5} {'Model':<20} {'Cost (USD)':<10}",
+        f"{'Context':<20} {'Phase':<10} {'Iter':<5} {'Model':<20} {'Cost (USD)':<10}",
         "-" * 80,
     ]
 
@@ -299,5 +299,5 @@ def finalize_cost_report():
         import click
 
         click.echo(
-            f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD (Use 'vibe usage' for details)"
+            f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD"
         )

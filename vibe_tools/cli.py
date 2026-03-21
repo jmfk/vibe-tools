@@ -1,22 +1,40 @@
 import atexit
+import builtins
 import logging
 import os
 import pathlib
 import sys
-import traceback
-import builtins
 from typing import List
 
 import click
 from dotenv import find_dotenv, load_dotenv
 
-# Load environment variables from .env file at startup
+import vibe_tools
+from vibe_tools import __version__
+from vibe_tools.command_output import output_manager
+from vibe_tools.commands import register_all_commands
+from vibe_tools.cost import finalize_cost_report
+from vibe_tools.setup import SERVICE_DEFINITIONS
+from vibe_tools.utils import (
+    CONFIG_FILE,
+    COSTS_DIR,
+    LOGS_DIR,
+    VIBE_PROJECT_DIR,
+    enable_console_debug,
+    get_cursor_api_key,
+    get_google_api_key,
+    get_project_root,
+    load_config,
+    logger,
+    set_console_level,
+    setup_logging,
+)
+
 load_dotenv(find_dotenv() or ".env")
 
-# Global check for server mode to monkeypatch early
+
 if "--server" in sys.argv:
-    # Check for initial payload if no subcommand is provided
-    if len([a for a in sys.argv if not a.startswith("-")]) <= 1:
+    if len([arg for arg in sys.argv if not arg.startswith("-")]) <= 1:
         import json
 
         try:
@@ -27,41 +45,29 @@ if "--server" in sys.argv:
                 args = payload.get("args", [])
                 settings = payload.get("settings", {})
 
-                # Reconstruct sys.argv for click
-                # Put --server first so it's recognized as a global option
                 new_argv = [sys.argv[0], "--server"]
-                
-                # Add other global flags if they were in original sys.argv
                 for arg in sys.argv[1:]:
                     if arg.startswith("-") and arg != "--server":
                         new_argv.append(arg)
-                
-                # Apply settings from payload as flags
+
                 if settings.get("debug") or payload.get("debug"):
                     new_argv.append("--debug")
                 if settings.get("verbose") or payload.get("verbose"):
                     new_argv.append("--verbose")
                 if settings.get("stream") is not None:
-                    new_argv.append("--stream" if settings.get("stream") else "--no-stream")
+                    new_argv.append("--stream" if settings["stream"] else "--no-stream")
                 if settings.get("agent"):
-                    new_argv.extend(["--agent", settings.get("agent")])
-                if settings.get("ignore_git_safety"):
-                    new_argv.append("--ignore-git-safety")
+                    new_argv.extend(["--agent", settings["agent"]])
 
                 if command and command != "vibe":
                     new_argv.append(command)
                 new_argv.extend(args)
-                
                 sys.argv = new_argv
         except Exception:
             pass
 
-    from vibe_tools.command_output import output_manager
-    import builtins
-
     output_manager.set_server_mode(True)
 
-    # Monkeypatch click.prompt
     def server_prompt(
         text,
         default=None,
@@ -74,11 +80,10 @@ if "--server" in sys.argv:
         err=False,
         show_choices=True,
     ):
+        del default, hide_input, confirmation_prompt, type, value_proc
+        del prompt_suffix, show_default, err, show_choices
         return output_manager.get_input(text)
 
-    click.prompt = server_prompt
-
-    # Also monkeypatch confirm
     def server_confirm(
         text,
         default=False,
@@ -87,208 +92,67 @@ if "--server" in sys.argv:
         show_default=True,
         err=False,
     ):
-        res = output_manager.get_input(f"{text} (y/n)")
-        return res.lower() in ("y", "yes", "true", "1")
+        del default, abort, prompt_suffix, show_default, err
+        return output_manager.get_input(f"{text} (y/n)").lower() in {
+            "y",
+            "yes",
+            "true",
+            "1",
+        }
 
+    click.prompt = server_prompt
     click.confirm = server_confirm
-
-    # Monkeypatch builtins.input
-    def server_input(prompt=""):
-        return output_manager.get_input(prompt)
-
-    builtins.input = server_input
-
-import vibe_tools
-from vibe_tools import __version__
-from vibe_tools.commands import register_all_commands
-from vibe_tools.cost import finalize_cost_report
-from vibe_tools.setup import SERVICE_DEFINITIONS
-from vibe_tools.normalize import normalize_to_data
-from vibe_tools.utils import (
-    ARCHITECTURE_SPEC,
-    DEV_ENV_CURRENT,
-    DEV_SPEC,
-    LOGS_DIR,
-    VIBE_PROJECT_DIR,
-    CONFIG_FILE as PROJECT_CONFIG_FILE,
-    enable_console_debug,
-    get_file_hash,
-    get_google_api_key,
-    is_test_mode,
-    load_config,
-    logger,
-    run_command,
-    output_manager,
-    load_pids,
-    save_pids,
-    get_services,
-    test_build_services,
-    check_and_install_build_tools,
-    commit_project_infrastructure,
-    setup_logging,
-    safe_yaml_load,
-    safe_yaml_dump,
-)
-
-# CONFIG_FILE = pathlib.Path(".vibe_config.json")
-SPECS_DIR = pathlib.Path("product")
+    builtins.input = lambda prompt="": output_manager.get_input(prompt)
 
 
 class OrderedGroup(click.Group):
-    """Custom Click Group to order commands in the help menu."""
-
-    def __call__(self, *args, **kwargs):
-        from vibe_tools.utils import GitSafetyError
-
-        try:
-            return super().__call__(*args, **kwargs)
-        except GitSafetyError as e:
-            from vibe_tools.command_output import out_error
-            out_error(f"Git Safety Violation: {e}", source="vibe")
-            sys.exit(1)
-        except (Exception, KeyboardInterrupt) as e:
-            if "--server" in sys.argv:
-                from vibe_tools.command_output import out_error, output_manager
-                import traceback
-
-                if isinstance(e, KeyboardInterrupt):
-                    # Check if it was a cancellation
-                    code, data = output_manager.get_final_result()
-                    if data.get("status") == "cancelled":
-                        # Already handled, just exit
-                        sys.exit(0)
-                    out_error("Interrupted by user")
-                else:
-                    out_error(str(e), traceback=traceback.format_exc())
-                
-                output_manager.set_final_result(1 if not isinstance(e, KeyboardInterrupt) else 0)
-                # Ensure the exit handler knows it failed
-                sys.exit(1 if not isinstance(e, KeyboardInterrupt) else 0)
-            raise
-
     def list_commands(self, ctx: click.Context) -> List[str]:
-        # Define the desired order of commands based on Phases 0-9
         order = [
-            "init",           # Phase 0
-            "start",          # Product Bootstrap
-            "bootstrap",      # Phase 0-2: Preparation
-            "setup",          # Phase 1: Reconcile Architecture
-            "config",         # Phase 2: Configuration
-            "deps",           # Phase 2: Dependencies
-            "plan",           # Phase 3: Planning & Issues
-            "implement",      # Phase 4: Implementation Loop
-            "build",          # Phase 5: Build & Verify
-            "infra",          # Phase 6: Infrastructure
-            "testing",        # Phase 6: Testing Loop
-            "cicd",           # Phase 8: CI/CD
-            "deploy",         # Phase 9: Deployment
-            # Supporting tools
             "status",
-            "usage",
+            "config",
+            "servers",
+            "project",
             "docs",
-            "memory",
             "ps",
             "kill",
-            "test-fix",
-            "coverage",
-            "billing-groups",
-            "demo-data",
-            "project",
-            "sync",
-            "history",
+            "version",
         ]
-
-        # Get the actual commands available
         commands = super().list_commands(ctx)
-
-        # Order the commands based on the defined order, putting any unknown commands at the end
-        ordered_commands = [cmd for cmd in order if cmd in commands]
-        other_commands = sorted([cmd for cmd in commands if cmd not in order])
-
-        return ordered_commands + other_commands
+        ordered = [command for command in order if command in commands]
+        return ordered + sorted(command for command in commands if command not in order)
 
 
 @click.group(invoke_without_command=True, cls=OrderedGroup)
-@click.option(
-    "--server",
-    is_flag=True,
-    default=False,
-    help="Enable server mode (JSON-based protocol).",
-)
-@click.option(
-    "--debug",
-    is_flag=True,
-    default=False,
-    help="Enable debug logging to console.",
-)
-@click.option(
-    "--verbose/--no-verbose",
-    default=None,
-    help="Output verbose information (like prompts) to the terminal.",
-)
-@click.option(
-    "--log/--no-log",
-    default=None,
-    help="Enable or disable file logging (default is enabled only for 'implement').",
-)
-@click.option(
-    "--stream/--no-stream",
-    default=None,
-    help="Stream agent output in real-time to the console.",
-)
+@click.option("--server", is_flag=True, default=False, help="Enable JSON server mode.")
+@click.option("--debug", is_flag=True, default=False, help="Enable debug logging.")
+@click.option("--verbose/--no-verbose", default=None, help="Show extra terminal output.")
+@click.option("--log/--no-log", default=None, help="Write logs under .vibe-tools/logs.")
+@click.option("--stream/--no-stream", default=None, help="Default agent stream mode.")
 @click.option(
     "--agent",
     type=click.Choice(["cursor-agent", "claude", "antigravity", "gemini"]),
     default=None,
-    help="Select the agent to use.",
+    help="Default agent.",
 )
-@click.option(
-    "--model",
-    default=None,
-    help="Override the model for the selected agent.",
-)
-@click.option(
-    "--ignore-git-safety",
-    "-I",
-    is_flag=True,
-    default=False,
-    help="Ignore git safety checks (uncommitted changes, wrong branch).",
-)
+@click.option("--model", default=None, help="Override model.")
 @click.version_option(
     version=__version__,
-    message="%(prog)s, version %(version)s\n(package: " + str(getattr(vibe_tools, "__file__", "?")) + ")",
+    message="%(prog)s, version %(version)s\n(package: "
+    + str(getattr(vibe_tools, "__file__", "?"))
+    + ")",
 )
 @click.pass_context
-def cli(ctx, server, debug, verbose, log, stream, agent, model, ignore_git_safety):
-    if ignore_git_safety:
-        os.environ["VIBE_IGNORE_GIT_SAFETY"] = "1"
+def cli(ctx, server, debug, verbose, log, stream, agent, model):
+    project_root = get_project_root()
+    if project_root != pathlib.Path.cwd():
+        os.chdir(project_root)
+        logger.debug(f"Changed cwd to {project_root}")
 
-    # Initialize logging for the invoked command
-    command_name = ctx.invoked_subcommand or "info"
-
-    # Determine if we should log to file
-    if log is not None:
-        should_log = log
-    else:
-        # Only implement command creates a log by default
-        should_log = command_name == "implement"
-
-    setup_logging(command_name, log=should_log)
-
-    def emit_final_result():
-        # This will be called at exit
-        # Check if there was an exception?
-        # Click handles most of it.
-        pass
-
-    # Register session cost reporting at exit
+    setup_logging(ctx.invoked_subcommand or "info", log=bool(log) if log is not None else True)
     atexit.register(finalize_cost_report)
 
     if server:
-
         def server_exit_handler():
-            # If we're here, the command finished
-            # Flush any remaining output in JSONStream
             try:
                 sys.stdout.flush()
             except Exception:
@@ -298,480 +162,61 @@ def cli(ctx, server, debug, verbose, log, stream, agent, model, ignore_git_safet
 
         atexit.register(server_exit_handler)
 
-    # Ensure files are in the right place
-    from vibe_tools.utils import (
-        migrate_to_project_dir,
-        get_project_root,
-        GlobalProjectRegistry,
-    )
-
-    # Auto-detect project root and change CWD if found in registry
-    project_root = get_project_root()
-    if project_root != pathlib.Path.cwd():
-        os.chdir(project_root)
-        logger.debug(f"Changed CWD to project root: {project_root}")
-
-    # Update last active if found in registry
-    project = GlobalProjectRegistry.get_project_by_path(str(pathlib.Path.cwd()))
-    if project:
-        GlobalProjectRegistry.set_active_project(project["id"])
-        # Load project-specific secrets into environment
-        if "secrets" in project:
-            for key, value in project["secrets"].items():
-                if value:
-                    os.environ[key] = value
-
-    if not is_test_mode():
-        migrate_to_project_dir()
-        from vibe_tools.utils import migrate_env_to_config
-        migrate_env_to_config()
-
     config = load_config()
-
     if stream is None:
-        stream = config.get("agent", {}).get("stream")
-        if stream is None:
-            stream = config.get("stream", False)
-
+        stream = config.get("agent", {}).get("stream", config.get("stream", False))
     if agent is None:
         agent = config.get("agent", {}).get("agent", "cursor-agent")
+
+    if debug:
+        enable_console_debug()
+        verbose = True if verbose is None else verbose
+    elif verbose:
+        set_console_level(logging.INFO)
+    else:
+        set_console_level(logging.WARNING)
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
     ctx.obj["model"] = model
     ctx.obj["stream"] = stream
-
-    if debug:
-        enable_console_debug()
-    else:
-        # Default to WARNING level for terminal if not verbose
-        if verbose is None:
-            # In server mode, default to non-verbose unless specified
-            if server:
-                verbose = False
-            else:
-                verbose = config.get("verbose", False)
-
-        from vibe_tools.utils import set_console_level
-
-        if verbose:
-            set_console_level(logging.INFO)
-        else:
-            set_console_level(logging.WARNING)
-
-    ctx.obj["verbose"] = verbose
-
-    default_budget = config.get("default_budget", 5.0)
-    ctx.obj["default_budget"] = default_budget
+    ctx.obj["verbose"] = verbose if verbose is not None else False
+    ctx.obj["default_budget"] = config.get("default_budget", 5.0)
 
     if ctx.invoked_subcommand is None:
-        click.echo("vibe-tools configuration:")
-        click.echo(f"  Agent: {agent}")
+        click.echo("vibe-tools")
+        click.echo(f"  Project Root:  {project_root}")
+        click.echo(f"  Runtime Dir:   {project_root / VIBE_PROJECT_DIR}")
+        click.echo(f"  Config File:   {project_root / CONFIG_FILE}")
+        click.echo(f"  Logs Dir:      {project_root / LOGS_DIR}")
+        click.echo(f"  Costs Dir:     {project_root / COSTS_DIR}")
+        click.echo(f"  Agent:         {agent}")
         if model:
-            click.echo(f"  Model: {model}")
-        click.echo(f"  Stream: {'ON' if stream else 'OFF'}")
-        click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
-        click.echo(f"  Default Budget: ${default_budget:.2f} USD")
+            click.echo(f"  Model:         {model}")
+        click.echo(f"  Stream:        {'ON' if stream else 'OFF'}")
+        click.echo(f"  Default Budget:${ctx.obj['default_budget']:.2f}")
+        click.echo(f"  Google API:    {'SET' if get_google_api_key() else 'NOT SET'}")
+        click.echo(f"  Cursor API:    {'SET' if get_cursor_api_key() else 'NOT SET'}")
 
-        project_init = VIBE_PROJECT_DIR.exists()
-        click.echo(f"  Initialized: {'Yes' if project_init else 'No'}")
-
-        google_api_key = get_google_api_key()
-        click.echo(f"  Google API Key: {'SET' if google_api_key else 'NOT SET'}")
-
-        coverage_targets = config.get(
-            "coverage_targets", {"backend": 85, "frontend": 85, "infra": 85}
-        )
-        click.echo("  Coverage Targets:")
-        click.echo(f"    Backend:    {coverage_targets.get('backend', 85)}%")
-        click.echo(f"    Frontend:   {coverage_targets.get('frontend', 85)}%")
-        click.echo(f"    Infra:      {coverage_targets.get('infra', 85)}%")
-
-        services_config = config.get("services", {})
-        if services_config:
+        services = config.get("services", {})
+        if services:
             click.echo("  Services:")
-            for service_key in sorted(services_config):
-                service_data = services_config[service_key]
+            for service_key in sorted(services):
                 metadata = SERVICE_DEFINITIONS.get(service_key, {})
-                display_name = metadata.get("display", service_key.capitalize())
-                host = service_data.get("host", "localhost")
-                port = service_data.get("port", "n/a")
+                display_name = metadata.get("display", service_key)
+                host = services[service_key].get("host", "localhost")
+                port = services[service_key].get("port", "n/a")
                 click.echo(f"    {display_name}: {host}:{port}")
-
-        specs_dir = (
-            pathlib.Path("product")
-            if pathlib.Path("product").exists()
-            else pathlib.Path("product")
-        )
-        click.echo(
-            f"  Planning Directory: {specs_dir if specs_dir.exists() else 'Not found (defaults to product/)'}"
-        )
-
-        if not project_init:
-            click.echo("\nRun 'vibe init' to set up templates.")
-            click.echo("Run 'vibe config api' to configure LLM access.")
 
         click.echo("\nAvailable commands:")
         for command in cli.list_commands(ctx):
-            cmd_obj = cli.get_command(ctx, command)
-            if cmd_obj:
-                click.echo(f"  {command:<10} {cmd_obj.get_short_help_str()}")
-
+            command_obj = cli.get_command(ctx, command)
+            if command_obj:
+                click.echo(f"  {command:<10} {command_obj.get_short_help_str()}")
         click.echo("\nRun 'vibe --help' for full options.")
 
 
-# Register all commands from the commands module
-
-
 register_all_commands(cli)
-
-
-@cli.group(invoke_without_command=True)
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    help="Force build even if dev_environment.yaml and dev_environment-current.yaml are identical.",
-)
-@click.option(
-    "--makefile",
-    "only_makefile",
-    is_flag=True,
-    help="Only synchronize the Makefile.",
-)
-@click.pass_context
-def build(ctx, force, only_makefile):
-    """Build the application and verify it runs."""
-    if ctx.invoked_subcommand is None:
-        _build_reconciliation(ctx, force, only_makefile)
-
-
-def _build_reconciliation(ctx, force, only_makefile=False):
-    """Build the application and verify it runs."""
-    if not DEV_SPEC.exists():
-        click.echo(f"❌ {DEV_SPEC} not found.")
-        click.echo(
-            "   Please run 'vibe config scaffold' first to generate development environment scaffolding."
-        )
-        return
-
-    # 1. Sync Makefile
-    if only_makefile:
-        from vibe_tools.setup import sync_makefile
-
-        sync_makefile(
-            agent=ctx.obj.get("agent", "cursor-agent"),
-            stream=ctx.obj.get("stream", False),
-        )
-        commit_project_infrastructure("vibe: update Makefile")
-        return
-
-    # Normalize SRD-dev_environment.md just-in-time
-    click.echo(f"🔄 Normalizing {DEV_SPEC.name} in-memory...")
-    dev_data = normalize_to_data(DEV_SPEC.read_text(), "dev_environment")
-    if not dev_data:
-        click.echo(
-            "❌ Normalization failed. Please check the content of SRD-dev_environment.md."
-        )
-        return
-
-    dev_yaml = safe_yaml_dump(dev_data)
-    import hashlib
-
-    dev_hash = hashlib.sha256(dev_yaml.encode()).hexdigest()
-
-    # Check if SRD-dev_environment.md and dev_environment-current.yaml are identical (skip if so, unless forced)
-    if not force and DEV_ENV_CURRENT.exists():
-        if dev_hash == get_file_hash(DEV_ENV_CURRENT):
-            click.echo("✅ Development environment is up-to-date. Skipping build.")
-            click.echo("   Use --force to rebuild anyway.")
-            return
-
-    click.echo("\n--- Building Application ---")
-
-    # Run actual build commands from Makefile or dev_environment.yaml
-    click.echo("Running build commands...")
-
-    # Sync Makefile before building to ensure we have the latest targets
-    from vibe_tools.setup import sync_makefile
-
-    sync_makefile(
-        agent=ctx.obj.get("agent", "cursor-agent"), stream=ctx.obj.get("stream", False)
-    )
-    commit_project_infrastructure("vibe: update Makefile")
-
-    # Try to run make build if Makefile exists
-    makefile = pathlib.Path("Makefile")
-    if makefile.exists():
-        click.echo("  Running 'make build'...")
-        result = run_command(["make", "build"], check=False)
-        if result[1] != 0:
-            click.echo("  ⚠️  'make build' failed. Trying individual build steps...")
-            # Try backend build
-            result = run_command(["make", "build-backend"], check=False)
-            if result[1] == 0:
-                click.echo("  ✅ Backend build succeeded")
-            # Try frontend build
-            result = run_command(["make", "build-frontend"], check=False)
-            if result[1] == 0:
-                click.echo("  ✅ Frontend build succeeded")
-        else:
-            click.echo("  ✅ Build completed successfully")
-    else:
-        # Fallback: install dependencies
-        click.echo("  No Makefile found. Installing dependencies...")
-        if pathlib.Path("pyproject.toml").exists():
-            run_command(["pip", "install", "-e", "."], check=False)
-        if pathlib.Path("frontend/package.json").exists():
-            run_command(["npm", "install", "--prefix", "frontend"], check=False)
-            run_command(["npm", "run", "build", "--prefix", "frontend"], check=False)
-
-    # Test that services can start
-    click.echo("\n🧪 Testing that application can start...")
-    test_success = test_build_services(debug=ctx.obj.get("debug", False))
-
-    if test_success:
-        click.echo("✅ Build complete and application verified working.")
-
-        # Save the normalized YAML to DEV_ENV_CURRENT to mark as successful
-        DEV_ENV_CURRENT.write_text(dev_yaml)
-        commit_project_infrastructure("vibe: build verification complete")
-
-        success = True
-    else:
-        click.echo("❌ Application failed to start after build.")
-        success = False
-
-    if success:
-        click.echo("\nNext Steps:")
-
-        # Check what services are available and provide appropriate instructions
-        services = get_services()
-        has_skaffold = any(
-            s.get("name") == "skaffold-dev"
-            or "skaffold" in s.get("start_command", "").lower()
-            for s in services
-        )
-        has_make_dev = any(
-            "make dev" in s.get("start_command", "")
-            or "make dev-start" in s.get("start_command", "")
-            for s in services
-        )
-
-        if has_skaffold:
-            click.echo("[ ] Start development with Skaffold:")
-            click.echo("     skaffold dev")
-            click.echo(
-                "     (This will build and deploy to your local Kubernetes cluster)"
-            )
-        elif has_make_dev:
-            make_cmd = next(
-                (
-                    s.get("start_command")
-                    for s in services
-                    if "make dev" in s.get("start_command", "")
-                ),
-                "make dev-start",
-            )
-            click.echo("[ ] Start development services:")
-            click.echo(f"     {make_cmd}")
-        else:
-            click.echo(
-                "[ ] Start development services using the commands from your Makefile"
-            )
-    else:
-        click.echo("❌ Development environment reconciliation failed.")
-
-
-@build.command(name="debug")
-@click.pass_context
-def build_debug(ctx):
-    """Debug the development environment scaffolding process."""
-    click.echo("🔍 Debugging development environment scaffolding...")
-
-    # Check build files
-    click.echo("\n📋 Development Environment Files Status:")
-    click.echo(
-        f"  DEV_SPEC ({DEV_SPEC}): {'✅ exists' if DEV_SPEC.exists() else '❌ missing'}"
-    )
-    click.echo(
-        f"  DEV_ENV_CURRENT ({DEV_ENV_CURRENT}): {'✅ exists' if DEV_ENV_CURRENT.exists() else '❌ missing'}"
-    )
-    click.echo(
-        f"  ARCHITECTURE_SPEC ({ARCHITECTURE_SPEC}): {'✅ exists' if ARCHITECTURE_SPEC.exists() else '❌ missing'}"
-    )
-
-    # Check scaffolding-related files
-    click.echo("\n🏗️  Scaffolding Files:")
-    skaffold_yaml = pathlib.Path("skaffold.yaml")
-    click.echo(
-        f"  skaffold.yaml: {'✅ exists' if skaffold_yaml.exists() else '❌ missing'}"
-    )
-
-    makefile = pathlib.Path("Makefile")
-    click.echo(f"  Makefile: {'✅ exists' if makefile.exists() else '❌ missing'}")
-
-    # Check logging setup
-    click.echo("\n📊 Logging Solution:")
-    logs_dir = LOGS_DIR
-    click.echo(
-        f"  Logs directory ({logs_dir}): {'✅ exists' if logs_dir.exists() else '❌ missing'}"
-    )
-
-    if makefile.exists():
-        try:
-            makefile_content = makefile.read_text()
-            has_logs_target = (
-                "logs:" in makefile_content
-                or "logs-backend:" in makefile_content
-                or "logs-frontend:" in makefile_content
-            )
-            click.echo(
-                f"  Makefile log targets: {'✅ found' if has_logs_target else '❌ missing'}"
-            )
-
-            # Check for specific log targets
-            log_targets = []
-            if "logs:" in makefile_content:
-                log_targets.append("logs")
-            if "logs-backend:" in makefile_content:
-                log_targets.append("logs-backend")
-            if "logs-frontend:" in makefile_content:
-                log_targets.append("logs-frontend")
-            if "logs-follow:" in makefile_content:
-                log_targets.append("logs-follow")
-            if "logs-clean:" in makefile_content:
-                log_targets.append("logs-clean")
-
-            if log_targets:
-                click.echo(f"    Found targets: {', '.join(log_targets)}")
-        except Exception as e:
-            click.echo(f"  ⚠️  Error checking Makefile: {e}")
-    else:
-        click.echo("  ⚠️  Makefile not found, cannot check log targets")
-
-    # Check for log aggregation services
-    if DEV_ENV_CURRENT.exists():
-        try:
-            build_config = safe_yaml_load(DEV_ENV_CURRENT.read_text())
-            if build_config:
-                services = build_config.get("services", [])
-                log_services = [
-                    s
-                    for s in services
-                    if "log" in s.get("name", "").lower()
-                    or "loki" in s.get("name", "").lower()
-                    or "elastic" in s.get("name", "").lower()
-                ]
-                if log_services:
-                    click.echo(
-                        f"  Log aggregation services: ✅ found {len(log_services)}"
-                    )
-                    for svc in log_services:
-                        click.echo(f"    - {svc.get('name', 'unknown')}")
-                else:
-                    click.echo("  Log aggregation services: ⚠️  none detected")
-        except Exception as e:
-            click.echo(f"  ⚠️  Error checking build config: {e}")
-
-    # Check build tools
-    click.echo("\n🔧 Build Tools:")
-    check_and_install_build_tools()
-
-    # Show services if dev_environment-current.yaml exists
-    if DEV_ENV_CURRENT.exists():
-        click.echo("\n📦 Detected Services:")
-        try:
-            services = get_services()
-            if services:
-                for i, service in enumerate(services, 1):
-                    click.echo(f"  {i}. {service.get('name', 'unknown')}")
-                    click.echo(f"     Command: {service.get('start_command', 'N/A')}")
-                    if service.get("port"):
-                        click.echo(f"     Port: {service.get('port')}")
-                    if service.get("url"):
-                        click.echo(f"     URL: {service.get('url')}")
-            else:
-                click.echo("  No services detected")
-        except Exception as e:
-            click.echo(f"  ⚠️  Error detecting services: {e}")
-
-    # Show SRD-dev_environment.md content if it exists
-    if DEV_SPEC.exists():
-        click.echo(
-            "\n📄 Development Environment Specification Preview (first 20 lines):"
-        )
-        try:
-            content = DEV_SPEC.read_text()
-            lines = content.splitlines()[:20]
-            for line in lines:
-                click.echo(f"  {line}")
-            if len(content.splitlines()) > 20:
-                click.echo(f"  ... ({len(content.splitlines()) - 20} more lines)")
-
-            # Check if logging section exists
-            if "logging" in content.lower() or "log" in content.lower():
-                click.echo(
-                    "\n  ✅ Logging section found in development environment specification"
-                )
-            else:
-                click.echo("\n  ⚠️  No logging section found in build specification")
-        except Exception as e:
-            click.echo(f"  ⚠️  Error reading SRD-dev_environment.md: {e}")
-
-
-@cli.command()
-@click.pass_context
-def stop(ctx):
-    """Stop all active services."""
-    from vibe_tools.utils import get_services, run_command
-
-    services = get_services()
-    if not services:
-        click.echo("No services found to stop.")
-        return
-
-    stopped_count = 0
-    pids = load_pids()
-
-    for service in services:
-        service_name = service.get("name", "unknown")
-        pid_info = pids.get(service_name, {})
-
-        # Kill background services
-        background_services = pid_info.get("background_services", {})
-        for service_type, bg_pid in background_services.items():
-            try:
-                run_command(["kill", str(bg_pid)], check=False)
-                click.echo(
-                    f"Stopped background service {service_name} ({service_type})"
-                )
-            except Exception:
-                pass
-
-        # Kill main PID
-        main_pid = pid_info.get("main_pid")
-        if main_pid:
-            try:
-                run_command(["kill", str(main_pid)], check=False)
-                click.echo(f"Stopped {service_name}")
-                stopped_count += 1
-            except Exception:
-                pass
-
-        # Kill child PIDs
-        child_pids = pid_info.get("child_pids", [])
-        for child_pid in child_pids:
-            try:
-                run_command(["kill", str(child_pid)], check=False)
-            except Exception:
-                pass
-
-    save_pids({})
-    if stopped_count > 0:
-        click.echo(f"Stopped {stopped_count} service(s)")
-    else:
-        click.echo("No active services found to stop.")
 
 
 if __name__ == "__main__":
