@@ -1,3 +1,4 @@
+import os
 import pathlib
 import re
 import shutil
@@ -987,7 +988,7 @@ def env(name, python_version):
         subprocess.run(["pyenv", "--version"], check=True, capture_output=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         if click.confirm("pyenv not found. Install it via Homebrew?", default=True):
-            run_command(["brew", "install", "pyenv"])
+            _run_infra_cmd(["brew", "install", "pyenv"])
         else:
             return
 
@@ -1000,7 +1001,7 @@ def env(name, python_version):
         if click.confirm(
             "pyenv-virtualenv not found. Install it via Homebrew?", default=True
         ):
-            run_command(["brew", "install", "pyenv-virtualenv"])
+            _run_infra_cmd(["brew", "install", "pyenv-virtualenv"])
         else:
             return
 
@@ -1447,7 +1448,8 @@ Output ONLY the markdown content for SRD-dev_environment.md.
 """
 
     cmd = get_agent_command(agent, prompt)
-    output, code = run_agent(cmd, stream=stream)
+    bypass_safety = bool(os.environ.get("VIBE_IGNORE_GIT_SAFETY"))
+    output, code = run_agent(cmd, stream=stream, bypass_safety=bypass_safety)
 
     if code != 0 or not output.strip():
         click.echo(
@@ -1471,11 +1473,19 @@ Output ONLY the markdown content for SRD-dev_environment.md.
     click.echo(f"✅ Generated {DEV_SPEC}")
 
 
+def _run_infra_cmd(*args, **kwargs):
+    """Wrapper around run_command that bypasses git safety for infrastructure operations."""
+    from vibe_tools.utils import run_command
+
+    kwargs.setdefault("bypass_safety", True)
+    return run_command(*args, **kwargs)
+
+
 def _install_stern() -> bool:
     """Install Stern for live log tailing. Returns True if successful."""
     import platform
 
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     # Check if already installed
     result = run_command(["stern", "--version"], check=False)
@@ -1545,7 +1555,7 @@ def _install_stern() -> bool:
 
 def _ensure_helm_installed() -> bool:
     """Ensure Helm is installed. Returns True if available."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     result = run_command(["helm", "version"], check=False)
     if result[1] == 0:
@@ -1577,7 +1587,7 @@ def _ensure_helm_installed() -> bool:
 
 def _setup_helm_repos() -> bool:
     """Add Grafana and Loki Helm repos. Returns True if successful."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     repos = [
         ("grafana", "https://grafana.github.io/helm-charts"),
@@ -1611,7 +1621,7 @@ def _setup_helm_repos() -> bool:
 
 def _deploy_loki_stack() -> bool:
     """Deploy Loki, Promtail, and Grafana via Helm. Returns True if successful."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     namespace = "monitoring"
 
@@ -1873,7 +1883,7 @@ def _deploy_loki_stack() -> bool:
 
 def _get_grafana_credentials() -> Dict[str, str]:
     """Retrieve Grafana admin credentials. Returns dict with username and password."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     namespace = "monitoring"
     credentials = {"username": "admin", "password": "admin"}
@@ -1905,7 +1915,7 @@ def _get_grafana_credentials() -> Dict[str, str]:
 
 def _validate_logging_setup() -> bool:
     """Validate logging setup with a test query. Returns True if successful."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     namespace = "monitoring"
 
@@ -1959,7 +1969,7 @@ def _validate_logging_setup() -> bool:
 
 def _check_cluster_tool_installed(tool: str) -> bool:
     """Check if a cluster tool (kind/k3d/minikube) is installed. Returns True if available."""
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     check_commands = {
         "kind": ["kind", "--version"],
@@ -1991,7 +2001,8 @@ def _ensure_kubectl_installed() -> bool:
     import platform
 
     from vibe_tools.staging import has_kubectl
-    from vibe_tools.utils import run_command
+
+    run_command = _run_infra_cmd
 
     if has_kubectl():
         return True
@@ -2037,7 +2048,7 @@ def _install_kind() -> bool:
     """Install Kind. Returns True if successful."""
     import platform
 
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     if _check_cluster_tool_installed("kind"):
         click.echo("  ✅ Kind is already installed")
@@ -2104,7 +2115,7 @@ def _install_k3d() -> bool:
     """Install k3d. Returns True if successful."""
     import platform
 
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     if _check_cluster_tool_installed("k3d"):
         click.echo("  ✅ k3d is already installed")
@@ -2160,7 +2171,7 @@ def _install_minikube() -> bool:
     """Install Minikube. Returns True if successful."""
     import platform
 
-    from vibe_tools.utils import run_command
+    run_command = _run_infra_cmd
 
     if _check_cluster_tool_installed("minikube"):
         click.echo("  ✅ Minikube is already installed")
@@ -2226,7 +2237,8 @@ def _install_minikube() -> bool:
 def _create_kind_cluster(name: str = "vibe-dev") -> bool:
     """Create a Kind cluster. Returns True if successful."""
     from vibe_tools.staging import has_k8s_cluster
-    from vibe_tools.utils import run_command
+
+    run_command = _run_infra_cmd
 
     # Check if cluster already exists
     result = run_command(["kind", "get", "clusters"], check=False)
@@ -2262,7 +2274,8 @@ def _create_kind_cluster(name: str = "vibe-dev") -> bool:
 def _create_k3d_cluster(name: str = "vibe-dev") -> bool:
     """Create a k3d cluster. Returns True if successful."""
     from vibe_tools.staging import has_k8s_cluster
-    from vibe_tools.utils import run_command
+
+    run_command = _run_infra_cmd
 
     # Check if cluster already exists
     result = run_command(["k3d", "cluster", "list"], check=False)
@@ -2298,7 +2311,8 @@ def _create_k3d_cluster(name: str = "vibe-dev") -> bool:
 def _create_minikube_cluster() -> bool:
     """Start Minikube cluster. Returns True if successful."""
     from vibe_tools.staging import has_k8s_cluster
-    from vibe_tools.utils import run_command
+
+    run_command = _run_infra_cmd
 
     # Check if minikube is already running
     result = run_command(["minikube", "status"], check=False)
@@ -2654,7 +2668,8 @@ Output ONLY the markdown content for SRD-dev_environment.md.
 """
 
     cmd = get_agent_command(agent, prompt)
-    output, code = run_agent(cmd, stream=stream)
+    bypass_safety = bool(os.environ.get("VIBE_IGNORE_GIT_SAFETY"))
+    output, code = run_agent(cmd, stream=stream, bypass_safety=bypass_safety)
 
     if code != 0 or not output.strip():
         click.echo(

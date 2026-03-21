@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibe-tools"
-version = "0.0.64"
+version = "0.0.66"
 dependencies = [
     "click",
     "google-genai",
