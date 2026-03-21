@@ -398,7 +398,7 @@ class ProjectTester:
 
         return "Unknown test type", False
 
-    def run_tests(self, targets=None, changed_only=False, parallel=False):
+    def run_tests(self, targets=None, changed_only=False, parallel=False, bypass_safety=False):
         """Runs test and lint targets, optionally filtered by changed files."""
         # Force parallel=False by default for debugging loops to keep output clean
         if targets is None:
@@ -461,7 +461,9 @@ class ProjectTester:
                 try:
                     os.environ["CI"] = "true"
                     os.environ["VITE_CI"] = "true"
-                    output, code = run_command(cmd, check=False)
+                    output, code = run_command(
+                        cmd, check=False, bypass_safety=bypass_safety, timeout=300
+                    )
                 finally:
                     # Restore original env
                     for k in ["CI", "VITE_CI"]:
@@ -481,6 +483,7 @@ class ProjectTester:
                     "no module named": "A Python module is missing.",
                     "sh: ": "Shell command error.",
                     "pyenv: ": "Pyenv environment error.",
+                    "git safety violation": "Git has uncommitted changes blocking execution.",
                 }
 
                 detected_reason = None

@@ -247,6 +247,7 @@ def run_command(
     cwd: Optional[str] = None,
     check: bool = True,
     bypass_safety: bool = False,
+    timeout: Optional[int] = None,
 ) -> Tuple[str, int]:
     """Runs a shell command and returns its stdout and exit code."""
     intrusive_commands = {
@@ -264,6 +265,8 @@ def run_command(
     }
 
     main_cmd = command[0] if command else ""
+    if os.environ.get("VIBE_IGNORE_GIT_SAFETY"):
+        bypass_safety = True
 
     # Intrusive command check and safety check
     if main_cmd in intrusive_commands and not bypass_safety:
@@ -316,6 +319,7 @@ def run_command(
             capture_output=True,
             text=True,
             check=check,
+            timeout=timeout,
         )
         if len(result.stdout.splitlines()) > 5:
             log_large_output(f"command_{command[0]}", result.stdout)
@@ -334,6 +338,30 @@ def run_command(
         )
 
         return result.stdout, result.returncode
+    except subprocess.TimeoutExpired as e:
+        output = (e.stdout.decode() if e.stdout else "") + (
+            e.stderr.decode() if e.stderr else ""
+        )
+        if len(output.splitlines()) > 5:
+            log_large_output(f"command_{command[0]}_timeout", output)
+
+        # Log timeout
+        out_error(
+            f"Command {command[0]} timed out after {timeout} seconds",
+            source="vibe",
+            data={
+                "command_line": f"$ {' '.join(command)}",
+                "stdio": "",
+                "stdout": output,
+                "stderr": "",
+                "code": 124,  # Standard timeout exit code
+            },
+        )
+
+        return (
+            f"Error: Command timed out after {timeout} seconds.\nPartial output:\n{output}",
+            124,
+        )
     except subprocess.CalledProcessError as e:
         output = (e.stdout or "") + (e.stderr or "")
         if len(output.splitlines()) > 5:
@@ -595,6 +623,9 @@ def diagnose_setup_failure() -> str:
         messages.append(
             f"   Run {click.style('vibe setup --import-code', fg='cyan')} if you have an existing codebase, or {click.style('vibe setup', fg='cyan')} to initialize it."
         )
+        messages.append(
+            f"   Use {click.style('--ignore-git-safety', fg='cyan')} (-I) if you have uncommitted changes."
+        )
     else:
         messages.append(f"⚠️  Architecture reconciliation is pending.")
         messages.append(
@@ -731,11 +762,13 @@ def get_prompt(filename: str) -> str:
         raise FileNotFoundError(f"Prompt template '{filename}' not found.")
 
 
-def get_agent_command(agent: str, prompt: str) -> List[str]:
+def get_agent_command(
+    agent: str, prompt: str, model: Optional[str] = None
+) -> List[str]:
     """Constructs the command to invoke the specified AI agent."""
     from .agent import get_agent_command as _get_agent_command
 
-    return _get_agent_command(agent, prompt)
+    return _get_agent_command(agent, prompt, model=model)
 
 
 def run_agent(
@@ -2481,7 +2514,7 @@ def run_llm(prompt, model="gemini-3-flash", debug=False, max_retries=3):
             # Map aliases
             actual_model = model
             if model == "gemini-3-flash":
-                actual_model = "gemini-2.0-flash-exp"
+                actual_model = "gemini-3-flash-preview"
 
             client = genai.Client(api_key=api_key)
 
