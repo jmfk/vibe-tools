@@ -135,7 +135,7 @@ atexit.register(agent_manager.cleanup_session)
 
 
 def get_agent_command(
-    agent: str, prompt: str, chat_id: Optional[str] = None
+    agent: str, prompt: str, chat_id: Optional[str] = None, model: Optional[str] = None
 ) -> List[str]:
     """Constructs the command to invoke the specified AI agent."""
     if agent == "cursor-agent":
@@ -146,6 +146,9 @@ def get_agent_command(
         cmd = ["cursor-agent", "-p"]
         if force:
             cmd.append("--force")
+
+        if model:
+            cmd.extend(["--model", model])
 
         if chat_id:
             cmd.extend(["--resume", chat_id])

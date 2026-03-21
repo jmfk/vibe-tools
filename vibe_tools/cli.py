@@ -98,6 +98,7 @@ if "--server" in sys.argv:
 
     builtins.input = server_input
 
+import vibe_tools
 from vibe_tools import __version__
 from vibe_tools.commands import register_all_commands
 from vibe_tools.cost import finalize_cost_report
@@ -242,15 +243,23 @@ class OrderedGroup(click.Group):
     help="Select the agent to use.",
 )
 @click.option(
+    "--model",
+    default=None,
+    help="Override the model for the selected agent.",
+)
+@click.option(
     "--ignore-git-safety",
     "-I",
     is_flag=True,
     default=False,
     help="Ignore git safety checks (uncommitted changes, wrong branch).",
 )
-@click.version_option(version=__version__)
+@click.version_option(
+    version=__version__,
+    message="%(prog)s, version %(version)s\n(package: " + str(getattr(vibe_tools, "__file__", "?")) + ")",
+)
 @click.pass_context
-def cli(ctx, server, debug, verbose, log, stream, agent, ignore_git_safety):
+def cli(ctx, server, debug, verbose, log, stream, agent, model, ignore_git_safety):
     if ignore_git_safety:
         os.environ["VIBE_IGNORE_GIT_SAFETY"] = "1"
 
@@ -329,6 +338,7 @@ def cli(ctx, server, debug, verbose, log, stream, agent, ignore_git_safety):
 
     ctx.ensure_object(dict)
     ctx.obj["agent"] = agent
+    ctx.obj["model"] = model
     ctx.obj["stream"] = stream
 
     if debug:
@@ -357,6 +367,8 @@ def cli(ctx, server, debug, verbose, log, stream, agent, ignore_git_safety):
     if ctx.invoked_subcommand is None:
         click.echo("vibe-tools configuration:")
         click.echo(f"  Agent: {agent}")
+        if model:
+            click.echo(f"  Model: {model}")
         click.echo(f"  Stream: {'ON' if stream else 'OFF'}")
         click.echo(f"  Verbose: {'ON' if verbose else 'OFF'}")
         click.echo(f"  Default Budget: ${default_budget:.2f} USD")

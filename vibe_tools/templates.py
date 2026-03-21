@@ -230,6 +230,9 @@ Output code only. No extra text.
 """,
     "implementation_prompt.txt": """You are the Implementation Agent. Your task is to execute a specific plan.
 
+PROJECT ARCHITECTURE:
+{architecture_type}
+
 PLAN TO EXECUTE:
 Title: {title}
 Description: {description}
@@ -240,6 +243,11 @@ Success Criteria:
 
 SHORT-TERM MEMORY (Current PRD Progress):
 {short_term_memory}
+
+ENVIRONMENT RULES:
+- Do NOT install system tools (helm, kubectl, kind, minikube, stern, skaffold) via Homebrew or any package manager. Assume infrastructure tools are pre-installed.
+- Do NOT create shim package.json files in Python directories to satisfy npm commands. If a Makefile target runs npm against a Python component, fix the Makefile target to use the correct tool (e.g., pytest, ruff).
+- Match test/build commands to the actual stack: use pytest/ruff for Python, npm/vitest for Node.js/React.
 
 TASK:
 1. Implement the code and configuration required for THIS PLAN.

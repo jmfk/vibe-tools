@@ -245,7 +245,7 @@ class PRDWriter:
 
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash-exp",
+                model="gemini-3-flash-preview",
                 contents=f"Analyzes project context and generates follow-up questions or signals completion.\n\nContext: {json.dumps(payload)}",
                 config={
                     "response_mime_type": "application/json",

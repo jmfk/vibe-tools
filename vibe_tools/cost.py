@@ -23,7 +23,7 @@ PRICING = {
 }
 
 AGENT_DEFAULT_MODEL = {
-    "cursor-agent": "gemini-3-flash",
+    "cursor-agent": "gemini-3-flash-preview",
     "claude": "claude-3-5-sonnet",
     "antigravity": "gpt-4o",
 }
@@ -56,7 +56,7 @@ class CostLogger:
     ) -> float:
         # Exact match first
         pricing = PRICING.get(model)
-        
+
         # Fuzzy match if not found
         if not pricing:
             if "gemini-3-flash" in model:
@@ -71,7 +71,7 @@ class CostLogger:
                 pricing = PRICING["gpt-4o"]
             else:
                 pricing = DEFAULT_PRICING
-                
+
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
         return input_cost + output_cost
@@ -297,4 +297,7 @@ def finalize_cost_report():
     # Print total cost to terminal
     if "--server" not in sys.argv:
         import click
-        click.echo(f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD (Use 'vibe usage' for details)")
+
+        click.echo(
+            f"\n✅ Command completed. Total session cost: ${total_cost:.6f} USD (Use 'vibe usage' for details)"
+        )

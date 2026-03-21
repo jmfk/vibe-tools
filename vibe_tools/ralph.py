@@ -15,6 +15,7 @@ from vibe_tools.normalize import normalize_to_data
 from vibe_tools.branches import _switch_to_branch
 from vibe_tools.command_output import out_status, out_info, out_error, out_success
 from vibe_tools.utils import (
+    ARCHITECTURE_SPEC,
     PRODUCT_BACKLOG_DIR,
     PRODUCT_NEXT_DIR,
     PRODUCT_IN_PROGRESS_DIR,
@@ -44,6 +45,20 @@ from vibe_tools.utils import (
 MAX_ITERATIONS = 10
 RETRY_ITERATIONS = 3
 COMPLETION_PROMISE = "<promise>DONE</promise>"
+
+
+def _get_architecture_summary() -> str:
+    """Load a short architecture summary for agent context."""
+    if ARCHITECTURE_SPEC.exists():
+        try:
+            content = ARCHITECTURE_SPEC.read_text()
+            # Truncate to first ~2000 chars to keep prompt concise
+            if len(content) > 2000:
+                content = content[:2000] + "\n... (truncated)"
+            return content
+        except Exception:
+            pass
+    return "Architecture specification not available."
 
 
 class RalphLoop:
@@ -145,13 +160,15 @@ class RalphLoop:
 
             feedback = ""
             if i > 1:
-                feedback = f"\n\nPREVIOUS ATTEMPT INCOMPLETE OR FAILED. Output was:\n{last_output}\nPlease ensure you update '{self.current_file.name}' correctly and emit the promise."
+                feedback = f"\n\nPREVIOUS ATTEMPT INCOMPLETE OR FAILED. Output was:\n{last_output}\nPlease ensure you update '{self.current_file}' correctly and emit the promise."
 
+            # Use path relative to cwd so the agent writes to implementation/architecture-current.yaml
+            current_file_for_prompt = str(self.current_file)
             prompt = prompt_template.format(
                 name=self.name,
                 mode=mode,
                 desired_file=self.desired_file_name,
-                current_file=self.current_file.name,
+                current_file=current_file_for_prompt,
                 desired_content=self.desired_content,
                 current_content=current_content + feedback,
                 custom_instructions=custom_instructions,
@@ -209,7 +226,11 @@ class RalphLoop:
 
 
 def debugging_loop(
-    agent: str, targets: List[str], stream: bool = False, iterations: int = 5
+    agent: str,
+    targets: List[str],
+    stream: bool = False,
+    iterations: int = 5,
+    model: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """Runs a set of test targets in a loop until they pass or max iterations reached."""
     from vibe_tools.testing import ProjectTester
@@ -217,6 +238,7 @@ def debugging_loop(
     tester = ProjectTester()
     config = load_config()
     cost_logger = CostLogger(config)
+    architecture_summary = _get_architecture_summary()
 
     log_start("debug_loop", f"Running targets: {', '.join(targets)}")
 
@@ -228,12 +250,23 @@ def debugging_loop(
         )
 
         test_output, tests_passed, env_failures, failed_targets = tester.run_tests(
-            targets=targets, parallel=False
+            targets=targets, parallel=False, bypass_safety=True
         )
 
         if tests_passed:
             log_success("debug_loop", f"Targets {', '.join(targets)} passed!")
             return True, ""
+
+        # Bail out early if all failures are environmental (missing tools,
+        # wrong runtime, git safety violations) — agent fixes won't help.
+        if env_failures and not failed_targets:
+            env_msg = (
+                f"All failures are environmental (not fixable by agent): "
+                f"{', '.join(env_failures)}. "
+                f"Fix the environment or Makefile targets manually."
+            )
+            logger.error(f"🚫 {env_msg}")
+            return False, env_msg
 
         # Parse individual failures and re-run to get clean output
         failures = tester.parse_failures(test_output)
@@ -263,15 +296,18 @@ def debugging_loop(
             logger.error(f"Error: {e}")
             return False, str(e)
 
-        prompt = prompt_template.format(test_output=agent_test_output)
-        cmd = get_agent_command(agent, prompt)
+        prompt = prompt_template.format(
+            test_output=agent_test_output,
+            architecture_type=architecture_summary,
+        )
+        cmd = get_agent_command(agent, prompt, model=model)
 
         agent_output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
 
         # Log costs
         cost_logger.log_run(
             agent=agent,
-            model=AGENT_DEFAULT_MODEL.get(agent, "unknown"),
+            model=model or AGENT_DEFAULT_MODEL.get(agent, "unknown"),
             prompt=prompt,
             output=agent_output,
             prd_name="N/A",
@@ -279,6 +315,16 @@ def debugging_loop(
             phase="debug_loop",
             purpose=f"fixing_{'_'.join(targets)}",
         )
+
+        # Auto-commit any changes the fix agent made so the next iteration
+        # doesn't hit git safety violations when running tests.
+        if is_dirty():
+            run_command(["git", "add", "."], check=False, bypass_safety=True)
+            run_command(
+                ["git", "commit", "-m", f"vibe: debug loop fix iteration {i}"],
+                check=False,
+                bypass_safety=True,
+            )
 
         if COMPLETION_PROMISE not in agent_output:
             logger.warning(
@@ -380,7 +426,9 @@ def _restore_prd_to_next(prd: PRD):
         prd.path.unlink()
 
 
-def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> bool:
+def _implement_single_prd(
+    prd: PRD, agent: str, stream: bool, config: dict, model: Optional[str] = None
+) -> bool:
     """Internal implementation logic for a single PRD."""
     # 2. In-Memory Normalization
     logger.info(f"🔄 Normalizing {prd.id} in-memory...")
@@ -436,6 +484,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
     failure_reason = ""
     failure_context = ""
     short_term_memory = prd.metadata.get("short_term_memory", "")
+    architecture_summary = _get_architecture_summary()
 
     for i in range(1, max_impl_iterations + 1):
         logger.info(f"🛠️ [IMPLEMENTATION] Iteration {i}/{max_impl_iterations}")
@@ -469,8 +518,9 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                     success_criteria=success_criteria_str,
                     global_knowledge=knowledge_context,
                     short_term_memory=short_term_memory or "No insights yet.",
+                    architecture_type=architecture_summary,
                 )
-                cmd = get_agent_command(agent, prompt)
+                cmd = get_agent_command(agent, prompt, model=model)
                 output, code = run_agent(cmd, stream=stream, bypass_safety=True)
 
                 # Extract Insights
@@ -556,6 +606,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                     ["test", "lint", "build-frontend"],
                     stream=stream,
                     iterations=max_debug_iterations,
+                    model=model,
                 )
                 if not success_tests:
                     passed_gates = False
@@ -582,7 +633,7 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
                         success_criteria=success_criteria_str,
                     )
 
-                    cmd = get_agent_command(agent, prompt)
+                    cmd = get_agent_command(agent, prompt, model=model)
                     output, _ = run_agent(cmd, stream=stream, bypass_safety=True)
                     if "<review>PASSED</review>" in output:
                         prd.impl_review_passed = True
@@ -716,7 +767,9 @@ def _implement_single_prd(prd: PRD, agent: str, stream: bool, config: dict) -> b
         return False
 
 
-def implementation_loop(agent: str, stream: bool = False) -> bool:
+def implementation_loop(
+    agent: str, stream: bool = False, model: Optional[str] = None
+) -> bool:
     """Unified implementation loop working on Markdown PRDs in product/."""
     from vibe_tools.utils import ensure_project_structure
 
@@ -734,7 +787,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
         if in_progress_files:
             prd = load_prd(in_progress_files[0])
             logger.info(f"📍 Resuming PRD: {prd.title} ({prd.id})")
-            _implement_single_prd(prd, agent, stream, config)
+            _implement_single_prd(prd, agent, stream, config, model=model)
 
         while True:
             # 1. Try to pick from 'next' directory (planned for implementation)
@@ -787,7 +840,7 @@ def implementation_loop(agent: str, stream: bool = False) -> bool:
             prd.path.unlink()
             prd.path = new_path
 
-            _implement_single_prd(prd, agent, stream, config)
+            _implement_single_prd(prd, agent, stream, config, model=model)
 
             # If branch switching is enabled, make sure we are back on main before next iteration
             if is_branch_switching_enabled():

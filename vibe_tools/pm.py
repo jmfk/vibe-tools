@@ -58,7 +58,7 @@ class StreamingLLM:
     def __init__(self, model_name: str = "gemini-3-flash"):
         # Map aliases
         if model_name == "gemini-3-flash":
-            model_name = "gemini-2.0-flash-exp"
+            model_name = "gemini-3-flash-preview"
 
         api_key = get_google_api_key()
         if not api_key:

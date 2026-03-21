@@ -1,3 +1,5 @@
+import os
+
 import click
 
 from vibe_tools.ralph import COMPLETION_PROMISE, RalphLoop
@@ -78,7 +80,8 @@ def register_setup(cli):
                 infra_spec=INFRA_SPEC,
             )
             cmd = get_agent_command(agent, prompt)
-            output, code = run_agent(cmd, stream=stream)
+            bypass_safety = bool(os.environ.get("VIBE_IGNORE_GIT_SAFETY"))
+            output, code = run_agent(cmd, stream=stream, bypass_safety=bypass_safety)
 
             if code == 0 and COMPLETION_PROMISE in output:
                 click.echo(
@@ -114,57 +117,57 @@ def register_setup(cli):
             else:
                 # Normalize SRD-architecture.md just-in-time
                 click.echo(f"🔄 Normalizing {ARCHITECTURE_SPEC.name} in-memory...")
-                arch_data = normalize_to_data(
-                    ARCHITECTURE_SPEC.read_text(), "architecture"
-                )
+                spec_text = ARCHITECTURE_SPEC.read_text()
+                arch_data = normalize_to_data(spec_text, "architecture")
                 if not arch_data:
                     click.echo(
-                        "❌ Normalization failed. Please check the content of SRD-architecture.md."
+                        "⚠️  LLM normalization failed (e.g. API error). Using spec content as fallback so reconciliation can run."
                     )
+                    arch_data = {
+                        "SPEC": spec_text,
+                        "SERVICES": [],
+                    }
+                arch_yaml = safe_yaml_dump(arch_data)
+
+                # Run the reconciliation loop
+                loop = RalphLoop(
+                    name="Architecture Setup",
+                    desired_content=arch_yaml,
+                    desired_file_name=ARCHITECTURE_SPEC.name,
+                    current_file=ARCHITECTURE_CURRENT,
+                    agent=agent,
+                    stream=stream,
+                    max_iterations=setup_iterations,
+                )
+
+                loop.instructions = [
+                    "Initialize or update the testing infrastructure for both frontend and backend.",
+                    "Ensure the Makefile has working 'test-backend' and 'test-frontend' targets that match the architecture.",
+                    "Create dummy test files (e.g., tests/test_initial.py, frontend/src/initial.test.ts) to verify the harness. Use explicit imports in frontend tests (import from 'vitest').",
+                    "Ensure test dependencies and scripts are present in pyproject.toml and package.json. For React 18, use @testing-library/react ^14 or ^15.",
+                ]
+
+                success = loop.run()
+                if success:
+                    import hashlib
+
+                    arch_hash = hashlib.sha256(arch_yaml.encode()).hexdigest()
+                    state["phases"]["setup"]["status"] = "completed"
+                    state["phases"]["setup"]["hash"] = arch_hash
+                    save_project_state(state)
+                    commit_project_infrastructure("vibe: architecture setup complete")
+                    click.echo(
+                        "\n✅ Architecture setup complete. project-state.json updated."
+                    )
+
+                    # Generate the project plan based on PRDs
+                    from vibe_tools.ralph import generate_prd_plan
+
+                    generate_prd_plan()
+                else:
+                    click.echo("❌ Architecture setup failed.")
                     if only_arch:
                         return
-                else:
-                    arch_yaml = safe_yaml_dump(arch_data)
-
-                    # Run the reconciliation loop
-                    loop = RalphLoop(
-                        name="Architecture Setup",
-                        desired_content=arch_yaml,
-                        desired_file_name=ARCHITECTURE_SPEC.name,
-                        current_file=ARCHITECTURE_CURRENT,
-                        agent=agent,
-                        stream=stream,
-                        max_iterations=setup_iterations,
-                    )
-
-                    loop.instructions = [
-                        "Initialize or update the testing infrastructure for both frontend and backend.",
-                        "Ensure the Makefile has working 'test-backend' and 'test-frontend' targets that match the architecture.",
-                        "Create dummy test files (e.g., tests/test_initial.py, frontend/src/initial.test.ts) to verify the harness. Use explicit imports in frontend tests (import from 'vitest').",
-                        "Ensure test dependencies and scripts are present in pyproject.toml and package.json. For React 18, use @testing-library/react ^14 or ^15.",
-                    ]
-
-                    success = loop.run()
-                    if success:
-                        import hashlib
-
-                        arch_hash = hashlib.sha256(arch_yaml.encode()).hexdigest()
-                        state["phases"]["setup"]["status"] = "completed"
-                        state["phases"]["setup"]["hash"] = arch_hash
-                        save_project_state(state)
-                        commit_project_infrastructure("vibe: architecture setup complete")
-                        click.echo(
-                            "\n✅ Architecture setup complete. project-state.json updated."
-                        )
-
-                        # Generate the project plan based on PRDs
-                        from vibe_tools.ralph import generate_prd_plan
-
-                        generate_prd_plan()
-                    else:
-                        click.echo("❌ Architecture setup failed.")
-                        if only_arch:
-                            return
 
         if run_all or only_scaffold:
             # Run scaffold to set up development environment infrastructure and logging

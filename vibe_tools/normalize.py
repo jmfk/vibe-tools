@@ -43,7 +43,7 @@ def _run_normalization_llm(
         # Use 'gemini' as the internal agent name for logging direct LLM calls
         cost_logger.log_run(
             agent="gemini",
-            model="gemini-2.0-flash-exp",
+            model="gemini-3-flash-preview",
             prompt=prompt,
             output=output,
             prd_name=stem,
